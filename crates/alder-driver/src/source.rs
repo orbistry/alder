@@ -196,12 +196,12 @@ impl FileSource for InMemorySource {
                     return false;
                 }
 
-                // Simple pattern matching: *.alder matches any .alder file
-                if pattern == "*.alder" {
-                    return uri_str.ends_with(".alder");
+                // Simple pattern matching: *.ald matches any .ald file
+                if pattern == "*.ald" {
+                    return uri_str.ends_with(".ald");
                 }
-                if pattern == "**/*.alder" {
-                    return uri_str.ends_with(".alder");
+                if pattern == "**/*.ald" {
+                    return uri_str.ends_with(".ald");
                 }
 
                 // Default: check if pattern is contained
@@ -294,7 +294,7 @@ mod tests {
     #[tokio::test]
     async fn test_in_memory_source() {
         let source = InMemorySource::new();
-        let uri = Url::parse("file:///test/Main.alder").unwrap();
+        let uri = Url::parse("file:///test/Main.ald").unwrap();
 
         // Initially not found
         assert!(!source.exists(&uri).await.unwrap());
@@ -321,7 +321,7 @@ mod tests {
         let primary = InMemorySource::new();
         let fallback = InMemorySource::new();
 
-        let uri = Url::parse("file:///test/Main.alder").unwrap();
+        let uri = Url::parse("file:///test/Main.ald").unwrap();
 
         // Put content in fallback
         fallback.write(&uri, "fallback content").await.unwrap();

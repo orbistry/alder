@@ -3,7 +3,7 @@
 //! This crate handles parsing and validation of `alder.jsonc` configuration files.
 //! Alder supports three types of configurations:
 //!
-//! - **Application**: A project that compiles to UPLC validators
+//! - **Application**: A project that compiles to a JavaScript application
 //! - **Package**: A publishable library with version constraints
 //! - **Workspace**: A collection of related projects sharing dependencies
 //!

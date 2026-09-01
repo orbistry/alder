@@ -138,7 +138,7 @@ mod tests {
     #[tokio::test]
     async fn test_database_source_caching() {
         let mem = InMemorySource::new();
-        let uri = Url::parse("file:///test/Main.alder").unwrap();
+        let uri = Url::parse("file:///test/Main.ald").unwrap();
         mem.insert(uri.clone(), "module Main exposing (..)".to_string());
 
         let mut db = Database::new(mem);
@@ -157,9 +157,9 @@ mod tests {
         let mem = InMemorySource::new();
         let mut db = Database::new(mem);
 
-        let main = Url::parse("file:///test/Main.alder").unwrap();
-        let utils = Url::parse("file:///test/Utils.alder").unwrap();
-        let helpers = Url::parse("file:///test/Helpers.alder").unwrap();
+        let main = Url::parse("file:///test/Main.ald").unwrap();
+        let utils = Url::parse("file:///test/Utils.ald").unwrap();
+        let helpers = Url::parse("file:///test/Helpers.ald").unwrap();
 
         // Main imports Utils and Helpers
         db.record_import(&main, utils.clone());
@@ -178,7 +178,7 @@ mod tests {
     #[tokio::test]
     async fn test_database_invalidation() {
         let mem = InMemorySource::new();
-        let uri = Url::parse("file:///test/Main.alder").unwrap();
+        let uri = Url::parse("file:///test/Main.ald").unwrap();
         mem.insert(uri.clone(), "original".to_string());
 
         let mut db = Database::new(mem);

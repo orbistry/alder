@@ -22,7 +22,7 @@ Alder supports three configuration types:
 
 ### Application
 
-An application compiles to UPLC validators for the Cardano blockchain.
+An application compiles to a JavaScript application (Cloudflare is the primary target).
 
 ```jsonc
 {

@@ -20,7 +20,7 @@ pub enum Config {
 
 /// An application project configuration.
 ///
-/// Applications are executables that compile to UPLC validators.
+/// Applications are executables that compile to a JavaScript application.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Application {

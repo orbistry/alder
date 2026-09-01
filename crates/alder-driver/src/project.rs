@@ -73,7 +73,7 @@ impl Project {
         for member in &self.members {
             for source_dir in &member.source_dirs {
                 let base_uri = path_to_uri(source_dir)?;
-                let mut found = db.glob(&base_uri, "**/*.alder").await?;
+                let mut found = db.glob(&base_uri, "**/*.ald").await?;
                 modules.append(&mut found);
             }
         }

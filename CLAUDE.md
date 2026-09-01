@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Alder is a programming language compiler being ported from the Elm compiler. We are translating Haskell to Rust while adapting to Rust idioms where appropriate.
+Alder is a programming language compiler forked from the Elm compiler and ported from Haskell to Rust, adapting to Rust idioms where appropriate. It compiles to JavaScript with a focus on targeting Cloudflare. Unlike Elm it has no TEA (the runtime is React-like), supports SSR, ships a built-in Drizzle-like data layer, and uses curly-brace syntax. Source files use the `.ald` extension.
 
 ## Reference Material
 

@@ -11,7 +11,7 @@
   "$defs": {
     "application": {
       "type": "object",
-      "description": "An application project that compiles to UPLC validators",
+      "description": "An application project that compiles to a JavaScript application",
       "properties": {
         "type": {
           "const": "application"

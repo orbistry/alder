@@ -147,9 +147,9 @@ impl InterfaceCache {
 
     /// Get the cache path for a module.
     pub fn cache_path(&self, module_name: &str) -> PathBuf {
-        // Convert module name to path: "Json.Decode" -> "Json/Decode.alderi"
+        // Convert module name to path: "Json.Decode" -> "Json/Decode.aldi"
         let relative = module_name.replace('.', "/");
-        self.cache_dir.join(format!("{}.alderi", relative))
+        self.cache_dir.join(format!("{}.aldi", relative))
     }
 
     /// Load a cached interface for a module.
@@ -231,12 +231,12 @@ mod tests {
 
         assert_eq!(
             cache.cache_path("Main"),
-            PathBuf::from("/project/.alder/interfaces/Main.alderi")
+            PathBuf::from("/project/.alder/interfaces/Main.aldi")
         );
 
         assert_eq!(
             cache.cache_path("Json.Decode"),
-            PathBuf::from("/project/.alder/interfaces/Json/Decode.alderi")
+            PathBuf::from("/project/.alder/interfaces/Json/Decode.aldi")
         );
     }
 }

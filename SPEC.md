@@ -8,16 +8,16 @@
 
 ## Compilation Target
 
-Alder compiles to **Untyped Plutus Core (UPLC)** - Cardano's smart contract language.
+Alder compiles to **JavaScript**, with a special focus on targeting **Cloudflare** (Workers and the surrounding platform).
 
 **Key concepts:**
-- **Validators:** Entry points that compile to UPLC blobs
-- **Inlining:** All dependent code is inlined into a single UPLC blob per validator
-- **CEK Machine:** Cardano's abstract machine for UPLC execution
-- **alder-plutus:** Rust implementation of the CEK machine for local testing
-- **Tests:** Unit and property tests compile to UPLC and run on alder-plutus
+- **Fork of Elm:** The compiler is a Rust port of the Elm compiler, but the language diverges deliberately.
+- **No TEA:** The runtime model is React-like rather than The Elm Architecture.
+- **SSR:** Server-side rendering is a first-class target.
+- **Built-in data layer:** A Drizzle-like query layer ships with the language.
+- **Curly-brace syntax:** Surface syntax uses braces instead of Elm's layout-sensitive syntax.
 
-Modules do NOT individually compile to UPLC - only validators produce UPLC output.
+Source files use the `.ald` extension.
 
 ---
 
@@ -42,7 +42,7 @@ Modules do NOT individually compile to UPLC - only validators produce UPLC outpu
 **Config Types:**
 
 ```jsonc
-// Application - compiles to UPLC validators
+// Application - compiles to a JavaScript app
 {
     "type": "application",
     "sourceDirectories": ["src"],
@@ -105,7 +105,7 @@ Modules do NOT individually compile to UPLC - only validators produce UPLC outpu
   solved module's interface into a build-wide arena for its dependents.
   Sources are fetched in parallel, but type checking is
   dependency-ordered.
-- **Caching:** Interface-only (always regenerate UPLC), bincode serialization
+- **Caching:** Interface-only (always regenerate JavaScript), bincode serialization
 - **Invalidation:** Reverse dependency tracking for LSP
 - **Arenas:** Per-module bumpalo arenas
 
@@ -166,29 +166,17 @@ rank-based solving, ported from Elm's `Type/*`.
 
 ---
 
-### Phase 5: UPLC Compilation
+### Phase 5: JavaScript Code Generation
 
-**Goal:** Compile typed AST to Untyped Plutus Core.
+**Goal:** Compile typed AST to JavaScript suitable for Cloudflare Workers, including SSR output.
 
-**Architecture:**
-- Validators are entry points
-- All dependencies inlined into single UPLC blob per validator
-- No separate module compilation - monolithic per-validator output
-
-**Crate:** TBD (alder-uplc? alder-codegen?)
+**Crate:** TBD (alder-codegen? alder-js?)
 
 ---
 
-### Phase 6: Plutus VM (`alder-plutus`)
+### Phase 6: Runtime
 
-**Goal:** Rust implementation of Cardano's CEK machine for UPLC.
-
-**Purpose:**
-- Run unit tests locally without Cardano node
-- Run property-based tests
-- Fast iteration during development
-
-**Reference:** Cardano's CEK machine specification
+**Goal:** React-like runtime (no TEA), SSR support, and the built-in Drizzle-like data layer.
 
 ---
 
@@ -197,9 +185,9 @@ rank-based solving, ported from Elm's `Type/*`.
 **Goal:** Full developer toolkit CLI — a single `alder` binary.
 
 **Commands:**
-- `alder check` - Type-check without generating UPLC
-- `alder build` - Compile validators to UPLC
-- `alder test` - Run tests via alder-plutus CEK machine
+- `alder check` - Type-check without generating JavaScript
+- `alder build` - Compile to JavaScript
+- `alder test` - Run tests
 - `alder lsp` - Start language server
 - `alder init` - Initialize new project
 - `alder repl` - True stateful REPL
@@ -276,8 +264,7 @@ orbistry/alder/
 │   ├── alder-solve/            # Constraint solving (type inference)
 │   ├── alder-config/           # Project configuration (JSONC)
 │   ├── alder-driver/           # Build orchestration, FileSource
-│   ├── alder-uplc/             # UPLC code generation (TBD)
-│   ├── alder-plutus/           # CEK machine for UPLC (TBD)
+│   ├── alder-codegen/          # JavaScript code generation (TBD)
 │   ├── alder-language-server/  # LSP implementation
 │   └── alder-cli/              # CLI binary (`alder`)
 ├── web/                       # Playground (TBD)

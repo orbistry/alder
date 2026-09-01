@@ -223,7 +223,7 @@ impl DepGraph {
 fn module_name_from_uri(uri: &Url) -> String {
     uri.path_segments()
         .and_then(|mut segments| segments.next_back())
-        .map(|s| s.trim_end_matches(".alder"))
+        .map(|s| s.trim_end_matches(".ald"))
         .unwrap_or("unknown")
         .to_string()
 }
@@ -241,8 +241,8 @@ mod tests {
         let mut graph = DepGraph::new();
 
         // Main imports Utils
-        graph.add_module(url("Main.alder"), vec![url("Utils.alder")]);
-        graph.add_module(url("Utils.alder"), vec![]);
+        graph.add_module(url("Main.ald"), vec![url("Utils.ald")]);
+        graph.add_module(url("Utils.ald"), vec![]);
 
         graph.compute_order().unwrap();
 
@@ -250,12 +250,12 @@ mod tests {
         let main_idx = graph
             .order
             .iter()
-            .position(|u| u == &url("Main.alder"))
+            .position(|u| u == &url("Main.ald"))
             .unwrap();
         let utils_idx = graph
             .order
             .iter()
-            .position(|u| u == &url("Utils.alder"))
+            .position(|u| u == &url("Utils.ald"))
             .unwrap();
         assert!(utils_idx < main_idx);
     }
@@ -265,9 +265,9 @@ mod tests {
         let mut graph = DepGraph::new();
 
         // A -> B -> C -> A (cycle)
-        graph.add_module(url("A.alder"), vec![url("B.alder")]);
-        graph.add_module(url("B.alder"), vec![url("C.alder")]);
-        graph.add_module(url("C.alder"), vec![url("A.alder")]);
+        graph.add_module(url("A.ald"), vec![url("B.ald")]);
+        graph.add_module(url("B.ald"), vec![url("C.ald")]);
+        graph.add_module(url("C.ald"), vec![url("A.ald")]);
 
         let result = graph.compute_order();
         assert!(result.is_err());
@@ -283,10 +283,10 @@ mod tests {
         let mut graph = DepGraph::new();
 
         // Diamond dependency: Main -> (A, B) -> Core
-        graph.add_module(url("Main.alder"), vec![url("A.alder"), url("B.alder")]);
-        graph.add_module(url("A.alder"), vec![url("Core.alder")]);
-        graph.add_module(url("B.alder"), vec![url("Core.alder")]);
-        graph.add_module(url("Core.alder"), vec![]);
+        graph.add_module(url("Main.ald"), vec![url("A.ald"), url("B.ald")]);
+        graph.add_module(url("A.ald"), vec![url("Core.ald")]);
+        graph.add_module(url("B.ald"), vec![url("Core.ald")]);
+        graph.add_module(url("Core.ald"), vec![]);
 
         graph.compute_order().unwrap();
         let levels = graph.levels();

@@ -286,8 +286,8 @@ fn extract_imports(source: &str, current: &Url, known_modules: &[Url]) -> Vec<Ur
 /// - Module naming conventions
 fn resolve_import(name: &str, _current: &Url, known_modules: &[Url]) -> Option<Url> {
     // Convert module name to file path pattern
-    // e.g., "Json.Decode" -> "Json/Decode.alder"
-    let path_pattern = format!("{}.alder", name.replace('.', "/"));
+    // e.g., "Json.Decode" -> "Json/Decode.ald"
+    let path_pattern = format!("{}.ald", name.replace('.', "/"));
 
     // Find matching module
     known_modules
@@ -308,7 +308,7 @@ mod tests {
     #[tokio::test]
     async fn test_compile_single_module() {
         let mem = InMemorySource::new();
-        let uri = url("Main.alder");
+        let uri = url("Main.ald");
         mem.insert(
             uri.clone(),
             r#"
@@ -332,7 +332,7 @@ main = 42
     #[tokio::test]
     async fn test_compile_invalid_module() {
         let mem = InMemorySource::new();
-        let uri = url("Bad.alder");
+        let uri = url("Bad.ald");
         mem.insert(
             uri.clone(),
             "this is not valid alder syntax {{{{".to_string(),
@@ -352,7 +352,7 @@ main = 42
         let mem = InMemorySource::new();
 
         mem.insert(
-            url("Utils.alder"),
+            url("Utils.ald"),
             r#"
 module Utils exposing (..)
 
@@ -362,7 +362,7 @@ helper = 1
         );
 
         mem.insert(
-            url("Main.alder"),
+            url("Main.ald"),
             r#"
 module Main exposing (..)
 
@@ -374,7 +374,7 @@ main = Utils.helper
         );
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let modules = vec![url("Utils.alder"), url("Main.alder")];
+        let modules = vec![url("Utils.ald"), url("Main.ald")];
 
         let graph = build_graph(db.clone(), &modules).await.unwrap();
         let result = build(db, &graph).await;
@@ -391,7 +391,7 @@ main = Utils.helper
         let mem = InMemorySource::new();
 
         mem.insert(
-            url("Utils.alder"),
+            url("Utils.ald"),
             r#"
 module Utils exposing (..)
 
@@ -401,7 +401,7 @@ helper = 1
         );
 
         mem.insert(
-            url("Main.alder"),
+            url("Main.ald"),
             r#"
 module Main exposing (..)
 
@@ -413,7 +413,7 @@ main = Utils.helper "not a function argument"
         );
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let modules = vec![url("Utils.alder"), url("Main.alder")];
+        let modules = vec![url("Utils.ald"), url("Main.ald")];
 
         let graph = build_graph(db.clone(), &modules).await.unwrap();
         let result = build(db, &graph).await;
@@ -424,7 +424,7 @@ main = Utils.helper "not a function argument"
         assert_eq!(result.success, 1);
         assert_eq!(result.failed, 1);
         assert!(matches!(
-            result.modules[&url("Main.alder")],
+            result.modules[&url("Main.ald")],
             ModuleResult::Failed { .. }
         ));
     }
@@ -439,7 +439,7 @@ main = Utils.helper "not a function argument"
         let mem = InMemorySource::new();
 
         mem.insert(
-            url("Utils.alder"),
+            url("Utils.ald"),
             r#"
 module Utils exposing (..)
 
@@ -451,7 +451,7 @@ pong x = ping x
         );
 
         mem.insert(
-            url("Main.alder"),
+            url("Main.ald"),
             r#"
 module Main exposing (..)
 
@@ -463,7 +463,7 @@ main = Utils.pong 1
         );
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let modules = vec![url("Utils.alder"), url("Main.alder")];
+        let modules = vec![url("Utils.ald"), url("Main.ald")];
 
         let graph = build_graph(db.clone(), &modules).await.unwrap();
         let result = build(db, &graph).await;
