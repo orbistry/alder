@@ -1,0 +1,57 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Code:\n\nMaybe Int"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 10,
+        },
+    },
+    value: Type {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 6,
+            },
+        },
+        name: "Maybe",
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 7,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                },
+                value: Type {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    name: "Int",
+                    args: [],
+                },
+            },
+        ],
+    },
+}

@@ -1,0 +1,83 @@
+---
+source: crates/alder-parse/src/declaration/value.rs
+description: add x y = x
+---
+Value(
+    None,
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: Value {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 4,
+                    },
+                },
+                value: "add",
+            },
+            arguments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                    },
+                    value: Var(
+                        "x",
+                    ),
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Var(
+                        "y",
+                    ),
+                },
+            ],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: Var {
+                    kind: LowVar,
+                    name: "x",
+                },
+            },
+            annotation: None,
+        },
+    },
+)

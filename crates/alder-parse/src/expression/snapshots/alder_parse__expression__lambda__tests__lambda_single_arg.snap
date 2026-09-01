@@ -1,0 +1,51 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: "Code:\n\n\\x -> x"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 8,
+        },
+    },
+    value: Lambda {
+        parameters: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 2,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 3,
+                    },
+                },
+                value: Var(
+                    "x",
+                ),
+            },
+        ],
+        body: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Var {
+                kind: LowVar,
+                name: "x",
+            },
+        },
+    },
+}

@@ -1,0 +1,75 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: "Code:\n\nhead :: tail as list"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 21,
+        },
+    },
+    value: Alias {
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 13,
+                },
+            },
+            value: Cons {
+                head: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Var(
+                        "head",
+                    ),
+                },
+                tail: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                    },
+                    value: Var(
+                        "tail",
+                    ),
+                },
+            },
+        },
+        name: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 17,
+                },
+                end: Position {
+                    line: 1,
+                    column: 21,
+                },
+            },
+            value: "list",
+        },
+    },
+}

@@ -1,0 +1,192 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (Maybe(..), Wrapped)\n\ntype alias Wrapped a = Main.Maybe a\n\ntype Maybe a\n    = Just a\n    | Nothing\n"
+---
+Module {
+    name: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    exports: Explicit(
+        [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 23,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 28,
+                    },
+                },
+                value: UnionOpen(
+                    "Maybe",
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 34,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 41,
+                    },
+                },
+                value: Alias(
+                    "Wrapped",
+                ),
+            },
+        ],
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 8,
+                column: 1,
+            },
+        },
+    ),
+    decls: Empty,
+    unions: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 5,
+                    column: 1,
+                },
+                end: Position {
+                    line: 8,
+                    column: 1,
+                },
+            },
+            value: Union {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 11,
+                        },
+                    },
+                    value: "Maybe",
+                },
+                parameters: [
+                    "a",
+                ],
+                ctors: [
+                    Ctor {
+                        name: "Just",
+                        index: 0,
+                        arity: 1,
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 6,
+                                        column: 12,
+                                    },
+                                    end: Position {
+                                        line: 6,
+                                        column: 13,
+                                    },
+                                },
+                                value: Var(
+                                    "a",
+                                ),
+                            },
+                        ],
+                    },
+                    Ctor {
+                        name: "Nothing",
+                        index: 1,
+                        arity: 0,
+                        arguments: [],
+                    },
+                ],
+                alternatives: 2,
+                options: Normal,
+            },
+        },
+    ],
+    aliases: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 5,
+                    column: 1,
+                },
+            },
+            value: Alias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 19,
+                        },
+                    },
+                    value: "Wrapped",
+                },
+                parameters: [
+                    "a",
+                ],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 24,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 36,
+                        },
+                    },
+                    value: Named {
+                        reference: QualifiedName {
+                            home: ModuleName {
+                                package: None,
+                                name: "Main",
+                            },
+                            name: "Maybe",
+                        },
+                        args: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 35,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 36,
+                                    },
+                                },
+                                value: Var(
+                                    "a",
+                                ),
+                            },
+                        ],
+                    },
+                },
+            },
+        },
+    ],
+    binops: [],
+}

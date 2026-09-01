@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/number.rs
+description: "Code:\n\n007"
+---
+Number(
+    NoLeadingZero,
+    1,
+    2,
+)

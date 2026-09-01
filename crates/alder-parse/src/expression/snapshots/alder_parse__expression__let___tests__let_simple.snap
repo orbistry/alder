@@ -1,0 +1,80 @@
+---
+source: crates/alder-parse/src/expression/let_.rs
+description: "Code:\n\nlet x = 1 in x"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 15,
+        },
+    },
+    value: Let {
+        defs: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                },
+                value: Define {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                        },
+                        value: "x",
+                    },
+                    args: [],
+                    body: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                        },
+                        value: Int(
+                            1,
+                        ),
+                    },
+                    annotation: None,
+                },
+            },
+        ],
+        body: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 14,
+                },
+                end: Position {
+                    line: 1,
+                    column: 15,
+                },
+            },
+            value: Var {
+                kind: LowVar,
+                name: "x",
+            },
+        },
+    },
+}

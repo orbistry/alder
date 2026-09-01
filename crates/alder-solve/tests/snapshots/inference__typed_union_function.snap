@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (Shape(..), rotate)\n\ntype Shape\n    = Circle\n    | Square\n\nrotate : Shape -> Shape\nrotate shape = shape\n"
+---
+rotate : Shape -> Shape

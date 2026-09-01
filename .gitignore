@@ -1,0 +1,13 @@
+dist-newstyle/
+.claude/settings.local.json
+
+.pre-commit-config.yaml
+
+tests/output/
+_out
+/target
+target/
+
+elm/
+polarity/
+scratch/

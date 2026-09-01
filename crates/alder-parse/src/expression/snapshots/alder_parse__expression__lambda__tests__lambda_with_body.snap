@@ -1,0 +1,83 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: "Code:\n\n\\x -> f x"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 10,
+        },
+    },
+    value: Lambda {
+        parameters: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 2,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 3,
+                    },
+                },
+                value: Var(
+                    "x",
+                ),
+            },
+        ],
+        body: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 10,
+                },
+            },
+            value: Call {
+                function: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "f",
+                    },
+                },
+                arguments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                        },
+                        value: Var {
+                            kind: LowVar,
+                            name: "x",
+                        },
+                    },
+                ],
+            },
+        },
+    },
+}

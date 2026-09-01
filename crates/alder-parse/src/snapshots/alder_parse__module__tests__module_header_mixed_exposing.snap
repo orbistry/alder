@@ -1,0 +1,77 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "Code:\n\nmodule Main exposing (main, Msg(..))"
+---
+(
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: "Main",
+    },
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 22,
+            },
+            end: Position {
+                line: 1,
+                column: 37,
+            },
+        },
+        value: Explicit(
+            [
+                Lower(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 27,
+                            },
+                        },
+                        value: "main",
+                    },
+                ),
+                Upper {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 29,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 32,
+                            },
+                        },
+                        value: "Msg",
+                    },
+                    privacy: Public(
+                        Region {
+                            start: Position {
+                                line: 1,
+                                column: 33,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 35,
+                            },
+                        },
+                    ),
+                },
+            ],
+        ),
+    },
+)

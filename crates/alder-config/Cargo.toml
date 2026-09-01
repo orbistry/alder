@@ -1,0 +1,19 @@
+[package]
+name = "alder-config"
+version = "0.1.0"
+edition.workspace = true
+description = "Alder project configuration file parsing"
+readme = "README.md"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+jsonc-parser.workspace = true
+pubgrub.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+indoc.workspace = true
+insta.workspace = true

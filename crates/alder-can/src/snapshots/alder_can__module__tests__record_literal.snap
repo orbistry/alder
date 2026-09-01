@@ -1,0 +1,132 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nf = { x = 1, y = 2 }\n"
+---
+Module {
+    name: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    exports: Everything(
+        Region {
+            start: Position {
+                line: 1,
+                column: 22,
+            },
+            end: Position {
+                line: 1,
+                column: 26,
+            },
+        },
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 4,
+                column: 1,
+            },
+        },
+    ),
+    decls: Declare {
+        definition: Def {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 2,
+                    },
+                },
+                value: "f",
+            },
+            args: [],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 21,
+                    },
+                },
+                value: Record(
+                    [
+                        FieldValue {
+                            field: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 7,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 8,
+                                    },
+                                },
+                                value: "x",
+                            },
+                            value: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 11,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 12,
+                                    },
+                                },
+                                value: Int(
+                                    1,
+                                ),
+                            },
+                        },
+                        FieldValue {
+                            field: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 14,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 15,
+                                    },
+                                },
+                                value: "y",
+                            },
+                            value: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 18,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 19,
+                                    },
+                                },
+                                value: Int(
+                                    2,
+                                ),
+                            },
+                        },
+                    ],
+                ),
+            },
+        },
+        next: Empty,
+    },
+    unions: [],
+    aliases: [],
+    binops: [],
+}

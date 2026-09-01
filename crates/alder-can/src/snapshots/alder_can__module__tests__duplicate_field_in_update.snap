@@ -1,0 +1,29 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nf r = { r | x = 1, x = 2 }\n"
+---
+[
+    DuplicateField {
+        name: "x",
+        first: Region {
+            start: Position {
+                line: 3,
+                column: 13,
+            },
+            end: Position {
+                line: 3,
+                column: 14,
+            },
+        },
+        second: Region {
+            start: Position {
+                line: 3,
+                column: 20,
+            },
+            end: Position {
+                line: 3,
+                column: 21,
+            },
+        },
+    },
+]

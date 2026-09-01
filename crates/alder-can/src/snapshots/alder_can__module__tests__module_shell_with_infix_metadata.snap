@@ -1,0 +1,161 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing ((|>))\n\ninfix left 6 (|>) = apR\n\napR x f = f x\n"
+---
+Module {
+    name: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    exports: Explicit(
+        [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 23,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 27,
+                    },
+                },
+                value: Binop(
+                    "|>",
+                ),
+            },
+        ],
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 6,
+                column: 1,
+            },
+        },
+    ),
+    decls: Declare {
+        definition: Def {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 5,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 5,
+                        column: 4,
+                    },
+                },
+                value: "apR",
+            },
+            args: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 6,
+                        },
+                    },
+                    value: Var(
+                        "x",
+                    ),
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 8,
+                        },
+                    },
+                    value: Var(
+                        "f",
+                    ),
+                },
+            ],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 5,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 5,
+                        column: 14,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 12,
+                            },
+                        },
+                        value: VarLocal(
+                            "f",
+                        ),
+                    },
+                    arguments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 13,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 14,
+                                },
+                            },
+                            value: VarLocal(
+                                "x",
+                            ),
+                        },
+                    ],
+                },
+            },
+        },
+        next: Empty,
+    },
+    unions: [],
+    aliases: [],
+    binops: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 5,
+                    column: 1,
+                },
+            },
+            value: Binop {
+                symbol: "|>",
+                associativity: Left,
+                precedence: Precedence(
+                    6,
+                ),
+                function: "apR",
+            },
+        },
+    ],
+}

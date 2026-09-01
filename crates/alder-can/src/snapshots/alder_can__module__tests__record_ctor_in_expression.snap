@@ -1,0 +1,347 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\ntype alias Pair a b = { first : a, second : b }\n\np = Pair\n"
+---
+Module {
+    name: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    exports: Everything(
+        Region {
+            start: Position {
+                line: 1,
+                column: 22,
+            },
+            end: Position {
+                line: 1,
+                column: 26,
+            },
+        },
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 6,
+                column: 1,
+            },
+        },
+    ),
+    decls: Declare {
+        definition: Def {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 5,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 5,
+                        column: 2,
+                    },
+                },
+                value: "p",
+            },
+            args: [],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 5,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 5,
+                        column: 9,
+                    },
+                },
+                value: VarConstructor {
+                    options: Normal,
+                    reference: ConstructorName {
+                        home: ModuleName {
+                            package: None,
+                            name: "Main",
+                        },
+                        union: "Pair",
+                        name: "Pair",
+                    },
+                    index: 0,
+                    annotation: Annotation {
+                        free_vars: [
+                            "a",
+                            "b",
+                        ],
+                        typ: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 0,
+                                    column: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    column: 0,
+                                },
+                            },
+                            value: Lambda {
+                                from: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 33,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 34,
+                                        },
+                                    },
+                                    value: Var(
+                                        "a",
+                                    ),
+                                },
+                                to: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 0,
+                                            column: 0,
+                                        },
+                                        end: Position {
+                                            line: 0,
+                                            column: 0,
+                                        },
+                                    },
+                                    value: Lambda {
+                                        from: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 3,
+                                                    column: 45,
+                                                },
+                                                end: Position {
+                                                    line: 3,
+                                                    column: 46,
+                                                },
+                                            },
+                                            value: Var(
+                                                "b",
+                                            ),
+                                        },
+                                        to: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 0,
+                                                    column: 0,
+                                                },
+                                                end: Position {
+                                                    line: 0,
+                                                    column: 0,
+                                                },
+                                            },
+                                            value: Alias {
+                                                reference: QualifiedName {
+                                                    home: ModuleName {
+                                                        package: None,
+                                                        name: "Main",
+                                                    },
+                                                    name: "Pair",
+                                                },
+                                                arguments: [
+                                                    AliasArgument {
+                                                        name: "a",
+                                                        typ: Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 0,
+                                                                    column: 0,
+                                                                },
+                                                                end: Position {
+                                                                    line: 0,
+                                                                    column: 0,
+                                                                },
+                                                            },
+                                                            value: Var(
+                                                                "a",
+                                                            ),
+                                                        },
+                                                    },
+                                                    AliasArgument {
+                                                        name: "b",
+                                                        typ: Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 0,
+                                                                    column: 0,
+                                                                },
+                                                                end: Position {
+                                                                    line: 0,
+                                                                    column: 0,
+                                                                },
+                                                            },
+                                                            value: Var(
+                                                                "b",
+                                                            ),
+                                                        },
+                                                    },
+                                                ],
+                                                target: Filled(
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 3,
+                                                                column: 23,
+                                                            },
+                                                            end: Position {
+                                                                line: 3,
+                                                                column: 48,
+                                                            },
+                                                        },
+                                                        value: Record {
+                                                            fields: [
+                                                                FieldType {
+                                                                    index: 0,
+                                                                    field: "first",
+                                                                    typ: Located {
+                                                                        region: Region {
+                                                                            start: Position {
+                                                                                line: 3,
+                                                                                column: 33,
+                                                                            },
+                                                                            end: Position {
+                                                                                line: 3,
+                                                                                column: 34,
+                                                                            },
+                                                                        },
+                                                                        value: Var(
+                                                                            "a",
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                FieldType {
+                                                                    index: 1,
+                                                                    field: "second",
+                                                                    typ: Located {
+                                                                        region: Region {
+                                                                            start: Position {
+                                                                                line: 3,
+                                                                                column: 45,
+                                                                            },
+                                                                            end: Position {
+                                                                                line: 3,
+                                                                                column: 46,
+                                                                            },
+                                                                        },
+                                                                        value: Var(
+                                                                            "b",
+                                                                        ),
+                                                                    },
+                                                                },
+                                                            ],
+                                                            ext: None,
+                                                        },
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        next: Empty,
+    },
+    unions: [],
+    aliases: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 5,
+                    column: 1,
+                },
+            },
+            value: Alias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 16,
+                        },
+                    },
+                    value: "Pair",
+                },
+                parameters: [
+                    "a",
+                    "b",
+                ],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 23,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 48,
+                        },
+                    },
+                    value: Record {
+                        fields: [
+                            FieldType {
+                                index: 0,
+                                field: "first",
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 33,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 34,
+                                        },
+                                    },
+                                    value: Var(
+                                        "a",
+                                    ),
+                                },
+                            },
+                            FieldType {
+                                index: 1,
+                                field: "second",
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 45,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 46,
+                                        },
+                                    },
+                                    value: Var(
+                                        "b",
+                                    ),
+                                },
+                            },
+                        ],
+                        ext: None,
+                    },
+                },
+            },
+        },
+    ],
+    binops: [],
+}

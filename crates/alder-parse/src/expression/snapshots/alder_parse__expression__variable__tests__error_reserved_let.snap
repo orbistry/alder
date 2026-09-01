@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/expression/variable.rs
+description: "Code:\n\nlet"
+---
+Start(
+    1,
+    1,
+)

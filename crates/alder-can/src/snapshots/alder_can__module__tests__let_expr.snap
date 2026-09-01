@@ -1,0 +1,116 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nf =\n    let\n        x = 1\n    in\n    x\n"
+---
+Module {
+    name: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    exports: Everything(
+        Region {
+            start: Position {
+                line: 1,
+                column: 22,
+            },
+            end: Position {
+                line: 1,
+                column: 26,
+            },
+        },
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 8,
+                column: 1,
+            },
+        },
+    ),
+    decls: Declare {
+        definition: Def {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 2,
+                    },
+                },
+                value: "f",
+            },
+            args: [],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 4,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 8,
+                        column: 1,
+                    },
+                },
+                value: Let {
+                    definition: Def {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 9,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 10,
+                                },
+                            },
+                            value: "x",
+                        },
+                        args: [],
+                        body: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 13,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 14,
+                                },
+                            },
+                            value: Int(
+                                1,
+                            ),
+                        },
+                    },
+                    body: Located {
+                        region: Region {
+                            start: Position {
+                                line: 7,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 7,
+                                column: 6,
+                            },
+                        },
+                        value: VarLocal(
+                            "x",
+                        ),
+                    },
+                },
+            },
+        },
+        next: Empty,
+    },
+    unions: [],
+    aliases: [],
+    binops: [],
+}

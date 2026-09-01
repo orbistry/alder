@@ -1,0 +1,144 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Code (indented inside a declaration):\n\n    {\n        name : String,\n        age : Int,\n        active : Bool\n    }\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 5,
+        },
+        end: Position {
+            line: 5,
+            column: 6,
+        },
+    },
+    value: Record {
+        fields: [
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 13,
+                        },
+                    },
+                    value: "name",
+                },
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 22,
+                        },
+                    },
+                    value: Type {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 16,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 22,
+                            },
+                        },
+                        name: "String",
+                        args: [],
+                    },
+                },
+            },
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 12,
+                        },
+                    },
+                    value: "age",
+                },
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 15,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 18,
+                        },
+                    },
+                    value: Type {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 15,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 18,
+                            },
+                        },
+                        name: "Int",
+                        args: [],
+                    },
+                },
+            },
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 4,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 4,
+                            column: 15,
+                        },
+                    },
+                    value: "active",
+                },
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 4,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 4,
+                            column: 22,
+                        },
+                    },
+                    value: Type {
+                        region: Region {
+                            start: Position {
+                                line: 4,
+                                column: 18,
+                            },
+                            end: Position {
+                                line: 4,
+                                column: 22,
+                            },
+                        },
+                        name: "Bool",
+                        args: [],
+                    },
+                },
+            },
+        ],
+        ext: None,
+    },
+}

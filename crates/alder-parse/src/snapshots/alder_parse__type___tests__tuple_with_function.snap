@@ -1,0 +1,78 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Code:\n\n(a -> b, c)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 12,
+        },
+    },
+    value: Tuple {
+        first: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Lambda {
+                from: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+                to: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Var(
+                        "b",
+                    ),
+                },
+            },
+        },
+        second: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 10,
+                },
+                end: Position {
+                    line: 1,
+                    column: 11,
+                },
+            },
+            value: Var(
+                "c",
+            ),
+        },
+        rest: [],
+    },
+}

@@ -1,0 +1,47 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: "Code:\n\nMaybe.Just x"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 13,
+        },
+    },
+    value: CtorQual {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 11,
+            },
+        },
+        module: "Maybe",
+        name: "Just",
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                },
+                value: Var(
+                    "x",
+                ),
+            },
+        ],
+    },
+}

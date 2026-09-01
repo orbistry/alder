@@ -1,0 +1,26 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (Foo, Foo)\n\ntype alias Foo = Int\n"
+---
+[
+    NotFoundType {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 18,
+            },
+            end: Position {
+                line: 3,
+                column: 21,
+            },
+        },
+        prefix: None,
+        name: "Int",
+        suggestions: PossibleNames {
+            locals: [
+                "List",
+            ],
+            qualified: [],
+        },
+    },
+]

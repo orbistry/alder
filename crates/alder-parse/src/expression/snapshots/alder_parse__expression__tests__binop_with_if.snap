@@ -1,0 +1,117 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: "Code:\n\na + if b then c else d"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: BinOps {
+        operands: [
+            BinOpOperand {
+                expr: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "a",
+                    },
+                },
+                op: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: "+",
+                },
+            },
+        ],
+        last: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 5,
+                },
+                end: Position {
+                    line: 1,
+                    column: 23,
+                },
+            },
+            value: If {
+                branches: [
+                    IfBranch {
+                        condition: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 9,
+                                },
+                            },
+                            value: Var {
+                                kind: LowVar,
+                                name: "b",
+                            },
+                        },
+                        then_branch: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 15,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                            },
+                            value: Var {
+                                kind: LowVar,
+                                name: "c",
+                            },
+                        },
+                    },
+                ],
+                final_else: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 22,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 23,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "d",
+                    },
+                },
+            },
+        },
+    },
+}

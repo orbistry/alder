@@ -1,0 +1,33 @@
+# Invoked by the dist-generated release workflow (post-announce-jobs in
+# dist-workspace.toml) after the GitHub Release exists. Replaces the
+# release body (which dist fills from alder-cli's CHANGELOG.md alone) with
+# notes aggregated across every crate co-released at this tag. If this job
+# fails, the release simply keeps alder-cli's notes.
+name: aggregate-release-notes
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # All history and tags: co-released crates are found via the
+          # release tags pointing at this commit.
+          fetch-depth: 0
+      - name: Aggregate per-crate changelogs
+        run: |
+          python3 .github/scripts/aggregate_release_notes.py > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+      - name: Update release notes
+        run: gh release edit "${{ github.ref_name }}" --notes-file "$RUNNER_TEMP/notes.md"

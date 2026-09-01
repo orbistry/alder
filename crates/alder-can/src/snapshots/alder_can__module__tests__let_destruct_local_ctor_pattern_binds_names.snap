@@ -1,0 +1,279 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\ntype Wrap a\n    = Wrap a\n\nf w = let (Wrap x) = w in x\n"
+---
+Module {
+    name: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    exports: Everything(
+        Region {
+            start: Position {
+                line: 1,
+                column: 22,
+            },
+            end: Position {
+                line: 1,
+                column: 26,
+            },
+        },
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 7,
+                column: 1,
+            },
+        },
+    ),
+    decls: Declare {
+        definition: Def {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 6,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 6,
+                        column: 2,
+                    },
+                },
+                value: "f",
+            },
+            args: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 6,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 6,
+                            column: 4,
+                        },
+                    },
+                    value: Var(
+                        "w",
+                    ),
+                },
+            ],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 6,
+                        column: 7,
+                    },
+                    end: Position {
+                        line: 7,
+                        column: 1,
+                    },
+                },
+                value: LetDestruct {
+                    pattern: Located {
+                        region: Region {
+                            start: Position {
+                                line: 6,
+                                column: 12,
+                            },
+                            end: Position {
+                                line: 6,
+                                column: 18,
+                            },
+                        },
+                        value: Constructor(
+                            PatternCtor {
+                                reference: ConstructorName {
+                                    home: ModuleName {
+                                        package: None,
+                                        name: "Main",
+                                    },
+                                    union: "Wrap",
+                                    name: "Wrap",
+                                },
+                                union: Union {
+                                    name: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 6,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 10,
+                                            },
+                                        },
+                                        value: "Wrap",
+                                    },
+                                    parameters: [
+                                        "a",
+                                    ],
+                                    ctors: [
+                                        Ctor {
+                                            name: "Wrap",
+                                            index: 0,
+                                            arity: 1,
+                                            arguments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 4,
+                                                            column: 12,
+                                                        },
+                                                        end: Position {
+                                                            line: 4,
+                                                            column: 13,
+                                                        },
+                                                    },
+                                                    value: Var(
+                                                        "a",
+                                                    ),
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                    alternatives: 1,
+                                    options: Unbox,
+                                },
+                                index: 0,
+                                arguments: [
+                                    PatternCtorArg {
+                                        index: 0,
+                                        typ: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 4,
+                                                    column: 12,
+                                                },
+                                                end: Position {
+                                                    line: 4,
+                                                    column: 13,
+                                                },
+                                            },
+                                            value: Var(
+                                                "a",
+                                            ),
+                                        },
+                                        pattern: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 6,
+                                                    column: 17,
+                                                },
+                                                end: Position {
+                                                    line: 6,
+                                                    column: 18,
+                                                },
+                                            },
+                                            value: Var(
+                                                "x",
+                                            ),
+                                        },
+                                    },
+                                ],
+                                options: Unbox,
+                                alternatives: 1,
+                            },
+                        ),
+                    },
+                    value: Located {
+                        region: Region {
+                            start: Position {
+                                line: 6,
+                                column: 22,
+                            },
+                            end: Position {
+                                line: 6,
+                                column: 23,
+                            },
+                        },
+                        value: VarLocal(
+                            "w",
+                        ),
+                    },
+                    body: Located {
+                        region: Region {
+                            start: Position {
+                                line: 6,
+                                column: 27,
+                            },
+                            end: Position {
+                                line: 6,
+                                column: 28,
+                            },
+                        },
+                        value: VarLocal(
+                            "x",
+                        ),
+                    },
+                },
+            },
+        },
+        next: Empty,
+    },
+    unions: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 6,
+                    column: 1,
+                },
+            },
+            value: Union {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 10,
+                        },
+                    },
+                    value: "Wrap",
+                },
+                parameters: [
+                    "a",
+                ],
+                ctors: [
+                    Ctor {
+                        name: "Wrap",
+                        index: 0,
+                        arity: 1,
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 4,
+                                        column: 12,
+                                    },
+                                    end: Position {
+                                        line: 4,
+                                        column: 13,
+                                    },
+                                },
+                                value: Var(
+                                    "a",
+                                ),
+                            },
+                        ],
+                    },
+                ],
+                alternatives: 1,
+                options: Unbox,
+            },
+        },
+    ],
+    aliases: [],
+    binops: [],
+}

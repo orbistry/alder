@@ -1,0 +1,18 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nf = ( 1, 2, 3, 4 )\n"
+---
+[
+    TupleLargerThanThree {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 5,
+            },
+            end: Position {
+                line: 3,
+                column: 19,
+            },
+        },
+    },
+]

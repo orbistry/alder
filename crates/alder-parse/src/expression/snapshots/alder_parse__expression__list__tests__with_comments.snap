@@ -1,0 +1,65 @@
+---
+source: crates/alder-parse/src/expression/list.rs
+description: "Code (indented inside a def):\n\n    [\n        1, -- first\n        2, -- second\n        3  -- third\n    ]\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 5,
+        },
+        end: Position {
+            line: 5,
+            column: 6,
+        },
+    },
+    value: List(
+        [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 10,
+                    },
+                },
+                value: Int(
+                    1,
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 10,
+                    },
+                },
+                value: Int(
+                    2,
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 4,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 4,
+                        column: 10,
+                    },
+                },
+                value: Int(
+                    3,
+                ),
+            },
+        ],
+    ),
+}

@@ -1,0 +1,98 @@
+---
+source: crates/alder-can/src/pattern.rs
+description: "(x, y) as pair"
+---
+(
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 15,
+            },
+        },
+        value: Alias {
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 7,
+                    },
+                },
+                value: Tuple {
+                    first: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 2,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 3,
+                            },
+                        },
+                        value: Var(
+                            "x",
+                        ),
+                    },
+                    second: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                        },
+                        value: Var(
+                            "y",
+                        ),
+                    },
+                    rest: [],
+                },
+            },
+            name: "pair",
+        },
+    },
+    {
+        "pair": Region {
+            start: Position {
+                line: 1,
+                column: 11,
+            },
+            end: Position {
+                line: 1,
+                column: 15,
+            },
+        },
+        "x": Region {
+            start: Position {
+                line: 1,
+                column: 2,
+            },
+            end: Position {
+                line: 1,
+                column: 3,
+            },
+        },
+        "y": Region {
+            start: Position {
+                line: 1,
+                column: 5,
+            },
+            end: Position {
+                line: 1,
+                column: 6,
+            },
+        },
+    },
+)

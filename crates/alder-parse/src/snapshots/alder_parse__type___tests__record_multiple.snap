@@ -1,0 +1,103 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Code:\n\n{ name : String, age : Int }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 29,
+        },
+    },
+    value: Record {
+        fields: [
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: "name",
+                },
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                    },
+                    value: Type {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                        },
+                        name: "String",
+                        args: [],
+                    },
+                },
+            },
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                    },
+                    value: "age",
+                },
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 24,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 27,
+                        },
+                    },
+                    value: Type {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 24,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 27,
+                            },
+                        },
+                        name: "Int",
+                        args: [],
+                    },
+                },
+            },
+        ],
+        ext: None,
+    },
+}

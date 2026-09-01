@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (numbers)\n\nnumbers = [ 1, 2, 3 ]\n"
+---
+numbers : forall number. List number

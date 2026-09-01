@@ -1,0 +1,101 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "Code:\n\nif a then 1 else if b then 2 else 3"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 36,
+        },
+    },
+    value: If {
+        branches: [
+            IfBranch {
+                condition: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "a",
+                    },
+                },
+                then_branch: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                    },
+                    value: Int(
+                        1,
+                    ),
+                },
+            },
+            IfBranch {
+                condition: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 22,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "b",
+                    },
+                },
+                then_branch: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 28,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 29,
+                        },
+                    },
+                    value: Int(
+                        2,
+                    ),
+                },
+            },
+        ],
+        final_else: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 35,
+                },
+                end: Position {
+                    line: 1,
+                    column: 36,
+                },
+            },
+            value: Int(
+                3,
+            ),
+        },
+    },
+}

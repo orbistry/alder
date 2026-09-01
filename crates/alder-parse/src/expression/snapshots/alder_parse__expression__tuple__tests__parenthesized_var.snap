@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/expression/tuple.rs
+description: "Code:\n\n(foo)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 2,
+        },
+        end: Position {
+            line: 1,
+            column: 5,
+        },
+    },
+    value: Var {
+        kind: LowVar,
+        name: "foo",
+    },
+}

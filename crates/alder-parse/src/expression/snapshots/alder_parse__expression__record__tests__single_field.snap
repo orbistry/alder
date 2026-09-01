@@ -1,0 +1,50 @@
+---
+source: crates/alder-parse/src/expression/record.rs
+description: "Code:\n\n{ x = 1 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 10,
+        },
+    },
+    value: Record(
+        [
+            FieldAssign {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: "x",
+                },
+                value: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Int(
+                        1,
+                    ),
+                },
+            },
+        ],
+    ),
+}

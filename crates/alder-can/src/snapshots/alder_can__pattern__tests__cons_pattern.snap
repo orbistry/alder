@@ -1,0 +1,72 @@
+---
+source: crates/alder-can/src/pattern.rs
+description: "x :: xs"
+---
+(
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: Cons {
+            head: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 2,
+                    },
+                },
+                value: Var(
+                    "x",
+                ),
+            },
+            tail: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                },
+                value: Var(
+                    "xs",
+                ),
+            },
+        },
+    },
+    {
+        "x": Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 2,
+            },
+        },
+        "xs": Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+    },
+)

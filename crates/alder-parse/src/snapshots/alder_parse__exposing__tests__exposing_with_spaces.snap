@@ -1,0 +1,38 @@
+---
+source: crates/alder-parse/src/exposing.rs
+description: "Code:\n\n( foo , bar )"
+---
+Explicit(
+    [
+        Lower(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 3,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                },
+                value: "foo",
+            },
+        ),
+        Lower(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: "bar",
+            },
+        ),
+    ],
+)

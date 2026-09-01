@@ -1,0 +1,54 @@
+---
+source: crates/alder-can/src/pattern.rs
+description: "True"
+---
+(
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 5,
+            },
+        },
+        value: Bool {
+            union: Union {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 0,
+                            column: 0,
+                        },
+                        end: Position {
+                            line: 0,
+                            column: 0,
+                        },
+                    },
+                    value: "Bool",
+                },
+                parameters: [],
+                ctors: [
+                    Ctor {
+                        name: "True",
+                        index: 0,
+                        arity: 0,
+                        arguments: [],
+                    },
+                    Ctor {
+                        name: "False",
+                        index: 1,
+                        arity: 0,
+                        arguments: [],
+                    },
+                ],
+                alternatives: 2,
+                options: Enum,
+            },
+            value: true,
+        },
+    },
+    {},
+)

@@ -1,0 +1,76 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: "Code:\n\nNode left value right"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 22,
+        },
+    },
+    value: Ctor {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 5,
+            },
+        },
+        name: "Node",
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                },
+                value: Var(
+                    "left",
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                },
+                value: Var(
+                    "value",
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 22,
+                    },
+                },
+                value: Var(
+                    "right",
+                ),
+            },
+        ],
+    },
+}

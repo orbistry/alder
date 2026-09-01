@@ -1,0 +1,51 @@
+---
+source: crates/alder-parse/src/declaration/value.rs
+description: foo = 1
+---
+Value(
+    None,
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: Value {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 4,
+                    },
+                },
+                value: "foo",
+            },
+            arguments: [],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 7,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                },
+                value: Int(
+                    1,
+                ),
+            },
+            annotation: None,
+        },
+    },
+)

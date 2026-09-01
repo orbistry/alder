@@ -1,0 +1,33 @@
+[package]
+name = "alder-driver"
+version = "0.1.0"
+edition.workspace = true
+description = "Build system and driver for Alder projects"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+bincode.workspace = true
+bumpalo.workspace = true
+glob.workspace = true
+miette.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "fs"] }
+url.workspace = true
+
+alder-config = { path = "../alder-config", version = "0.1.0" }
+alder-ast = { path = "../alder-ast", version = "0.1.0" }
+alder-can = { path = "../alder-can", version = "0.1.0" }
+alder-constrain = { path = "../alder-constrain", version = "0.1.0" }
+alder-parse = { path = "../alder-parse", version = "0.1.0" }
+alder-region = { path = "../alder-region", version = "0.1.0" }
+alder-solve = { path = "../alder-solve", version = "0.1.0" }
+alder-source = { path = "../alder-source", version = "0.1.0" }
+
+[dev-dependencies]
+indoc.workspace = true
+insta.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

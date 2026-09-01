@@ -1,0 +1,30 @@
+---
+source: crates/alder-can/src/pattern.rs
+description: "( x, x )"
+---
+[
+    DuplicatePattern {
+        context: CaseBranch,
+        name: "x",
+        first: Region {
+            start: Position {
+                line: 1,
+                column: 3,
+            },
+            end: Position {
+                line: 1,
+                column: 4,
+            },
+        },
+        second: Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 7,
+            },
+        },
+    },
+]

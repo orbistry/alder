@@ -1,0 +1,66 @@
+---
+source: crates/alder-parse/src/expression/case.rs
+description: "Code:\n\ncase x of\n    _ -> 1"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 2,
+            column: 11,
+        },
+    },
+    value: Case {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 6,
+                },
+                end: Position {
+                    line: 1,
+                    column: 7,
+                },
+            },
+            value: Var {
+                kind: LowVar,
+                name: "x",
+            },
+        },
+        arms: [
+            CaseArm {
+                pattern: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 6,
+                        },
+                    },
+                    value: Anything,
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 11,
+                        },
+                    },
+                    value: Int(
+                        1,
+                    ),
+                },
+            },
+        ],
+    },
+}

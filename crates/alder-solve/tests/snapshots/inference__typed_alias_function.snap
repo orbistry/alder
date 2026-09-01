@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (Point, getX)\n\ntype alias Point =\n    { x : Int }\n\ntype Int\n    = Int\n\ngetX : Point -> Int\ngetX point = point.x\n"
+---
+getX : Point -> Int

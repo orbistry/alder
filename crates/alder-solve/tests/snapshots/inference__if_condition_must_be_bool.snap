@@ -1,0 +1,44 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (main)\n\nmain = if 1 then 2 else 3\n"
+---
+[
+    BadExpr(
+        Region {
+            start: Position {
+                line: 3,
+                column: 11,
+            },
+            end: Position {
+                line: 3,
+                column: 12,
+            },
+        },
+        Number,
+        FlexSuper(
+            Number,
+            "number",
+        ),
+        FromContext(
+            Region {
+                start: Position {
+                    line: 3,
+                    column: 8,
+                },
+                end: Position {
+                    line: 3,
+                    column: 26,
+                },
+            },
+            IfCondition,
+            Type {
+                home: ModuleName {
+                    package: None,
+                    name: "Basics",
+                },
+                name: "Bool",
+                args: [],
+            },
+        ),
+    ),
+]

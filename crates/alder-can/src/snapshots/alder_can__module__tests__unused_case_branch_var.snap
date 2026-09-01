@@ -1,0 +1,20 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nimport Maybe exposing (Maybe(..))\n\nf x =\n    case x of\n        Just y -> 1\n        Nothing -> 0\n"
+---
+[
+    UnusedVariable {
+        region: Region {
+            start: Position {
+                line: 7,
+                column: 14,
+            },
+            end: Position {
+                line: 7,
+                column: 15,
+            },
+        },
+        context: Pattern,
+        name: "y",
+    },
+]

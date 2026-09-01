@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (getX)\n\ngetX r = r.x\n"
+---
+getX : forall a b. { b | x : a } -> a

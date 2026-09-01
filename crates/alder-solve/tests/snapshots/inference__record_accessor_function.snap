@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (getName)\n\ngetName = .name\n"
+---
+getName : forall a b. { b | name : a } -> a

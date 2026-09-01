@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/pattern/record.rs
+description: "Code:\n\n{ x, y, }"
+---
+Record(
+    Field(
+        1,
+        9,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,20 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nf x = 42\n"
+---
+[
+    UnusedVariable {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 3,
+            },
+            end: Position {
+                line: 3,
+                column: 4,
+            },
+        },
+        context: Pattern,
+        name: "x",
+    },
+]

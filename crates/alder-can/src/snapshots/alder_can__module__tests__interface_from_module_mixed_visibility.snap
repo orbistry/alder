@@ -1,0 +1,81 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (PublicAlias)\n\ntype alias PublicAlias a = a\n\ntype alias PrivateAlias a = a\n\ntype PrivateUnion\n    = Foo\n    | Bar\n"
+---
+Interface {
+    home: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    values: [],
+    aliases: [
+        InterfaceAlias {
+            name: "PublicAlias",
+            parameters: [
+                "a",
+            ],
+            typ: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 28,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 29,
+                    },
+                },
+                value: Var(
+                    "a",
+                ),
+            },
+            visibility: Public,
+        },
+        InterfaceAlias {
+            name: "PrivateAlias",
+            parameters: [
+                "a",
+            ],
+            typ: Located {
+                region: Region {
+                    start: Position {
+                        line: 5,
+                        column: 29,
+                    },
+                    end: Position {
+                        line: 5,
+                        column: 30,
+                    },
+                },
+                value: Var(
+                    "a",
+                ),
+            },
+            visibility: Private,
+        },
+    ],
+    unions: [
+        InterfaceUnion {
+            name: "PrivateUnion",
+            parameters: [],
+            ctors: [
+                Ctor {
+                    name: "Foo",
+                    index: 0,
+                    arity: 0,
+                    arguments: [],
+                },
+                Ctor {
+                    name: "Bar",
+                    index: 1,
+                    arity: 0,
+                    arguments: [],
+                },
+            ],
+            alternatives: 2,
+            options: Enum,
+            visibility: Private,
+        },
+    ],
+    binops: [],
+}

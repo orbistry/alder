@@ -1,0 +1,51 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n"
+---
+Module {
+    name: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 8,
+                },
+                end: Position {
+                    line: 1,
+                    column: 12,
+                },
+            },
+            value: "Main",
+        },
+    ),
+    exports: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 22,
+            },
+            end: Position {
+                line: 1,
+                column: 26,
+            },
+        },
+        value: Open,
+    },
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 2,
+                column: 1,
+            },
+        },
+    ),
+    imports: [],
+    values: [],
+    unions: [],
+    aliases: [],
+    binops: [],
+}

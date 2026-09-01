@@ -1,0 +1,33 @@
+[package]
+name = "alder-cli"
+version = "0.1.0"
+edition.workspace = true
+description = "The Alder programming language"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[lib]
+name = "alder_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "alder"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+color-print.workspace = true
+dirs.workspace = true
+futures.workspace = true
+miette.workspace = true
+alder-config = { path = "../alder-config", version = "0.1.0" }
+alder-driver = { path = "../alder-driver", version = "0.1.0" }
+alder-language-server = { path = "../alder-language-server", version = "0.1.0" }
+octocrab.workspace = true
+tar.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
+tokio-util = { version = "0.7.18", features = ["compat"] }
+tower-lsp-server.workspace = true
+xz2.workspace = true
+zip.workspace = true

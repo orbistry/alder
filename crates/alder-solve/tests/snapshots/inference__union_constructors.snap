@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (Maybe(..), just, nothing)\n\ntype Maybe a\n    = Just a\n    | Nothing\n\njust = Just\n\nnothing = Nothing\n"
+---
+just : forall a. a -> Maybe a
+nothing : forall a. Maybe a

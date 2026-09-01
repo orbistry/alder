@@ -1,0 +1,48 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "tasks/*"]
+
+[workspace.package]
+edition = "2024"
+homepage = "https://github.com/orbistry/alder"
+repository = "https://github.com/orbistry/alder"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+async-trait = "0.1"
+bincode = "1"
+bumpalo = { version = "3.19.1", features = ["collections"] }
+clap = { version = "4.5.60", features = ["derive"] }
+color-print = "0.3.7"
+dirs = "6.0.0"
+futures = "0.3"
+glob = "0.3"
+hex = "0.4.3"
+indoc = "2"
+insta = { version = "1.43.1", features = ["yaml"] }
+jsonc-parser = "0.24"
+miette = { version = "7", features = ["fancy"] }
+num-bigint = "0.4"
+octocrab = { version = "0.49.5", features = ["stream"] }
+pretty_assertions = "1.4.0"
+pubgrub = { version = "0.3", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+tar = "0.4"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "macros", "rt-multi-thread", "sync"] }
+tower-lsp-server = { version = "0.23.0", default-features = false, features = [
+  "runtime-agnostic"
+] }
+url = "2"
+xz2 = "0.1"
+zip = "2"
+
+# Optimize insta/similar in dev for faster diffs
+[profile.dev.package]
+insta.opt-level = 3
+similar.opt-level = 3
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

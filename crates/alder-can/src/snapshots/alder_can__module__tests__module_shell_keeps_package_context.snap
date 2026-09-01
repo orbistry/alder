@@ -1,0 +1,43 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Json.Decode exposing (..)\n"
+---
+Module {
+    name: ModuleName {
+        package: Some(
+            PackageName {
+                author: "alder",
+                project: "compiler",
+            },
+        ),
+        name: "Json.Decode",
+    },
+    exports: Everything(
+        Region {
+            start: Position {
+                line: 1,
+                column: 29,
+            },
+            end: Position {
+                line: 1,
+                column: 33,
+            },
+        },
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 2,
+                column: 1,
+            },
+        },
+    ),
+    decls: Empty,
+    unions: [],
+    aliases: [],
+    binops: [],
+}

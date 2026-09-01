@@ -1,0 +1,30 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Code:\n\nString"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 7,
+        },
+    },
+    value: Type {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 7,
+            },
+        },
+        name: "String",
+        args: [],
+    },
+}

@@ -1,0 +1,125 @@
+---
+source: crates/alder-parse/src/declaration/type_alias.rs
+description: "{-| The application model -}\ntype alias Model = { count : Int }\n"
+---
+Alias(
+    Some(
+        Comment(
+            Snippet {
+                data: [
+                    32,
+                    84,
+                    104,
+                    101,
+                    32,
+                    97,
+                    112,
+                    112,
+                    108,
+                    105,
+                    99,
+                    97,
+                    116,
+                    105,
+                    111,
+                    110,
+                    32,
+                    109,
+                    111,
+                    100,
+                    101,
+                    108,
+                    32,
+                ],
+                off_row: 1,
+                off_col: 4,
+            },
+        ),
+    ),
+    Located {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 1,
+            },
+            end: Position {
+                line: 3,
+                column: 1,
+            },
+        },
+        value: Alias {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 17,
+                    },
+                },
+                value: "Model",
+            },
+            arguments: [],
+            typ: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 20,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 35,
+                    },
+                },
+                value: Record {
+                    fields: [
+                        FieldType {
+                            field: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 22,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 27,
+                                    },
+                                },
+                                value: "count",
+                            },
+                            typ: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 30,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 33,
+                                    },
+                                },
+                                value: Type {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 30,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 33,
+                                        },
+                                    },
+                                    name: "Int",
+                                    args: [],
+                                },
+                            },
+                        },
+                    ],
+                    ext: None,
+                },
+            },
+        },
+    },
+)

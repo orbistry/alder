@@ -1,0 +1,31 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Code:\n\nData.Map.Map"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 13,
+        },
+    },
+    value: TypeQual {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 13,
+            },
+        },
+        module: "Data.Map",
+        name: "Map",
+        args: [],
+    },
+}

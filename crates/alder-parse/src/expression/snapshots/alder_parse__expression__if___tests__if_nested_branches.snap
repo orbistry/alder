@@ -1,0 +1,134 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "Code:\n\nif a then f x else g y"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: If {
+        branches: [
+            IfBranch {
+                condition: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "a",
+                    },
+                },
+                then_branch: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 11,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 12,
+                                },
+                            },
+                            value: Var {
+                                kind: LowVar,
+                                name: "f",
+                            },
+                        },
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                },
+                                value: Var {
+                                    kind: LowVar,
+                                    name: "x",
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+        final_else: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 20,
+                },
+                end: Position {
+                    line: 1,
+                    column: 23,
+                },
+            },
+            value: Call {
+                function: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 20,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "g",
+                    },
+                },
+                arguments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 22,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                        },
+                        value: Var {
+                            kind: LowVar,
+                            name: "y",
+                        },
+                    },
+                ],
+            },
+        },
+    },
+}

@@ -1,0 +1,36 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (Bool(..))\n\ntype Bool\n    = True\n    | False\n"
+---
+Interface {
+    home: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    values: [],
+    aliases: [],
+    unions: [
+        InterfaceUnion {
+            name: "Bool",
+            parameters: [],
+            ctors: [
+                Ctor {
+                    name: "True",
+                    index: 0,
+                    arity: 0,
+                    arguments: [],
+                },
+                Ctor {
+                    name: "False",
+                    index: 1,
+                    arity: 0,
+                    arguments: [],
+                },
+            ],
+            alternatives: 2,
+            options: Enum,
+            visibility: Open,
+        },
+    ],
+    binops: [],
+}

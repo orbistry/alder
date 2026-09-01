@@ -1,0 +1,23 @@
+---
+source: crates/alder-parse/src/import.rs
+description: "Code:\n\nimport Platform.Cmd.Extra\n"
+---
+Import {
+    import: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 26,
+            },
+        },
+        value: "Platform.Cmd.Extra",
+    },
+    alias: None,
+    exposing: Explicit(
+        [],
+    ),
+}

@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/list.rs
+description: "Code:\n\n[1, 2"
+---
+List(
+    End(
+        1,
+        6,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,81 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: "Code:\n\n\\(a, b) -> a"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 13,
+        },
+    },
+    value: Lambda {
+        parameters: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 2,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                },
+                value: Tuple {
+                    first: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 3,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                        },
+                        value: Var(
+                            "a",
+                        ),
+                    },
+                    second: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 7,
+                            },
+                        },
+                        value: Var(
+                            "b",
+                        ),
+                    },
+                    rest: [],
+                },
+            },
+        ],
+        body: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 12,
+                },
+                end: Position {
+                    line: 1,
+                    column: 13,
+                },
+            },
+            value: Var {
+                kind: LowVar,
+                name: "a",
+            },
+        },
+    },
+}

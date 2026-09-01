@@ -1,0 +1,22 @@
+---
+source: crates/alder-can/src/pattern.rs
+description: True x
+---
+[
+    BadArity {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 7,
+            },
+        },
+        context: PatternArity,
+        name: "True",
+        expected: 0,
+        actual: 1,
+    },
+]

@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/string.rs
+description: "Code:\n\n\"hello"
+---
+String(
+    EndlessSingle,
+    1,
+    2,
+)

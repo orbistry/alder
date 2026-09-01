@@ -1,0 +1,52 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\ntype alias Bad a = b\n"
+---
+[
+    TypeVarsMessedUpInAlias {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 1,
+            },
+            end: Position {
+                line: 4,
+                column: 1,
+            },
+        },
+        name: "Bad",
+        args: [
+            "a",
+        ],
+        unused: [
+            (
+                "a",
+                Region {
+                    start: Position {
+                        line: 3,
+                        column: 16,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 17,
+                    },
+                },
+            ),
+        ],
+        unbound: [
+            (
+                "b",
+                Region {
+                    start: Position {
+                        line: 3,
+                        column: 20,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 21,
+                    },
+                },
+            ),
+        ],
+    },
+]

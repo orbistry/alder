@@ -1,0 +1,68 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "Code:\n\nif True then 1 else 2"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 22,
+        },
+    },
+    value: If {
+        branches: [
+            IfBranch {
+                condition: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Var {
+                        kind: CapVar,
+                        name: "True",
+                    },
+                },
+                then_branch: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                    },
+                    value: Int(
+                        1,
+                    ),
+                },
+            },
+        ],
+        final_else: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 21,
+                },
+                end: Position {
+                    line: 1,
+                    column: 22,
+                },
+            },
+            value: Int(
+                2,
+            ),
+        },
+    },
+}

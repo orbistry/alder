@@ -1,0 +1,24 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nimport Maybe exposing (Maybe(..))\n\nx = Just\n"
+---
+[
+    NotFoundCtor {
+        region: Region {
+            start: Position {
+                line: 5,
+                column: 5,
+            },
+            end: Position {
+                line: 5,
+                column: 9,
+            },
+        },
+        prefix: None,
+        name: "Just",
+        suggestions: PossibleNames {
+            locals: [],
+            qualified: [],
+        },
+    },
+]

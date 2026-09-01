@@ -1,0 +1,19 @@
+---
+source: crates/alder-parse/src/expression/number.rs
+description: "Code:\n\n0"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 2,
+        },
+    },
+    value: Int(
+        0,
+    ),
+}

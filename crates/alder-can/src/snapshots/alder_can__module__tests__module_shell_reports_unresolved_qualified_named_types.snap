@@ -1,0 +1,28 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (Wrapped)\n\ntype alias Wrapped = Missing.Maybe\n"
+---
+[
+    NotFoundType {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 22,
+            },
+            end: Position {
+                line: 3,
+                column: 35,
+            },
+        },
+        prefix: Some(
+            "Missing",
+        ),
+        name: "Maybe",
+        suggestions: PossibleNames {
+            locals: [
+                "List",
+            ],
+            qualified: [],
+        },
+    },
+]

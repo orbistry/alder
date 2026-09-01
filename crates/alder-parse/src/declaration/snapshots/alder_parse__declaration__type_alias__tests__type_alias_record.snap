@@ -1,0 +1,93 @@
+---
+source: crates/alder-parse/src/declaration/type_alias.rs
+description: "type alias Model = { count : Int }"
+---
+Alias(
+    None,
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 35,
+            },
+        },
+        value: Alias {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                },
+                value: "Model",
+            },
+            arguments: [],
+            typ: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 20,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 35,
+                    },
+                },
+                value: Record {
+                    fields: [
+                        FieldType {
+                            field: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 22,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 27,
+                                    },
+                                },
+                                value: "count",
+                            },
+                            typ: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 30,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 33,
+                                    },
+                                },
+                                value: Type {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 30,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 33,
+                                        },
+                                    },
+                                    name: "Int",
+                                    args: [],
+                                },
+                            },
+                        },
+                    ],
+                    ext: None,
+                },
+            },
+        },
+    },
+)

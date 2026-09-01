@@ -1,0 +1,30 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Code:\n\n(Int)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 2,
+        },
+        end: Position {
+            line: 1,
+            column: 5,
+        },
+    },
+    value: Type {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 2,
+            },
+            end: Position {
+                line: 1,
+                column: 5,
+            },
+        },
+        name: "Int",
+        args: [],
+    },
+}

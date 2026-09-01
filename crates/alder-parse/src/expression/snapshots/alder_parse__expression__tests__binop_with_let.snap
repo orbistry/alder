@@ -1,0 +1,127 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: "Code:\n\na + let x = 1 in x"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 19,
+        },
+    },
+    value: BinOps {
+        operands: [
+            BinOpOperand {
+                expr: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "a",
+                    },
+                },
+                op: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: "+",
+                },
+            },
+        ],
+        last: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 5,
+                },
+                end: Position {
+                    line: 1,
+                    column: 19,
+                },
+            },
+            value: Let {
+                defs: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                        },
+                        value: Define {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 9,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 10,
+                                    },
+                                },
+                                value: "x",
+                            },
+                            args: [],
+                            body: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                },
+                                value: Int(
+                                    1,
+                                ),
+                            },
+                            annotation: None,
+                        },
+                    },
+                ],
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "x",
+                    },
+                },
+            },
+        },
+    },
+}

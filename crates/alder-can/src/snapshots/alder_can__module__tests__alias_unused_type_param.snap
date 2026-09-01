@@ -1,0 +1,38 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\ntype alias Phantom a = Int\n"
+---
+[
+    TypeVarsMessedUpInAlias {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 1,
+            },
+            end: Position {
+                line: 4,
+                column: 1,
+            },
+        },
+        name: "Phantom",
+        args: [
+            "a",
+        ],
+        unused: [
+            (
+                "a",
+                Region {
+                    start: Position {
+                        line: 3,
+                        column: 20,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 21,
+                    },
+                },
+            ),
+        ],
+        unbound: [],
+    },
+]

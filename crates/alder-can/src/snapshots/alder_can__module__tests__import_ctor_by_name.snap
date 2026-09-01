@@ -1,0 +1,20 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nimport Maybe exposing (Just)\n\nx = 1\n"
+---
+[
+    ImportCtorByName {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 24,
+            },
+            end: Position {
+                line: 3,
+                column: 28,
+            },
+        },
+        name: "Just",
+        type_name: "Maybe",
+    },
+]

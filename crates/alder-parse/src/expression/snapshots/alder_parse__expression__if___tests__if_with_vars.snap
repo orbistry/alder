@@ -1,0 +1,70 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "Code:\n\nif x then y else z"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 19,
+        },
+    },
+    value: If {
+        branches: [
+            IfBranch {
+                condition: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "x",
+                    },
+                },
+                then_branch: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "y",
+                    },
+                },
+            },
+        ],
+        final_else: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 18,
+                },
+                end: Position {
+                    line: 1,
+                    column: 19,
+                },
+            },
+            value: Var {
+                kind: LowVar,
+                name: "z",
+            },
+        },
+    },
+}

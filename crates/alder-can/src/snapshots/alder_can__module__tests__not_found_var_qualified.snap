@@ -1,0 +1,35 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nimport Foo\n\nx = Foo.nonexistent\n"
+---
+[
+    NotFoundVar {
+        region: Region {
+            start: Position {
+                line: 5,
+                column: 5,
+            },
+            end: Position {
+                line: 5,
+                column: 20,
+            },
+        },
+        prefix: Some(
+            "Foo",
+        ),
+        name: "nonexistent",
+        suggestions: PossibleNames {
+            locals: [
+                "x",
+            ],
+            qualified: [
+                (
+                    "Foo",
+                    [
+                        "bar",
+                    ],
+                ),
+            ],
+        },
+    },
+]

@@ -1,0 +1,128 @@
+---
+source: crates/alder-parse/src/declaration/union.rs
+description: type Result e a = Ok a | Err e
+---
+Union(
+    None,
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 31,
+            },
+        },
+        value: Union {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: "Result",
+            },
+            arguments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                    },
+                    value: "e",
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                    },
+                    value: "a",
+                },
+            ],
+            ctors: [
+                Ctor {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 19,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 21,
+                            },
+                        },
+                        value: "Ok",
+                    },
+                    arguments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 22,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 23,
+                                },
+                            },
+                            value: Var(
+                                "a",
+                            ),
+                        },
+                    ],
+                },
+                Ctor {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 26,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 29,
+                            },
+                        },
+                        value: "Err",
+                    },
+                    arguments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 30,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 31,
+                                },
+                            },
+                            value: Var(
+                                "e",
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+    },
+)

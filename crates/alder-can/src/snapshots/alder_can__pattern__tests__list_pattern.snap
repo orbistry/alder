@@ -1,0 +1,74 @@
+---
+source: crates/alder-can/src/pattern.rs
+description: "[ a, b ]"
+---
+(
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 9,
+            },
+        },
+        value: List(
+            [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: Var(
+                        "b",
+                    ),
+                },
+            ],
+        ),
+    },
+    {
+        "a": Region {
+            start: Position {
+                line: 1,
+                column: 3,
+            },
+            end: Position {
+                line: 1,
+                column: 4,
+            },
+        },
+        "b": Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 7,
+            },
+        },
+    },
+)

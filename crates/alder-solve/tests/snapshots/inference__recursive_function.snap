@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (forever)\n\nforever x = forever x\n"
+---
+forever : forall a b. a -> b

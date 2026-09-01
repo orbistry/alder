@@ -1,0 +1,46 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: "Code:\n\nJust x"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 7,
+        },
+    },
+    value: Ctor {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 5,
+            },
+        },
+        name: "Just",
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 7,
+                    },
+                },
+                value: Var(
+                    "x",
+                ),
+            },
+        ],
+    },
+}

@@ -1,0 +1,181 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\ninfix left 6 (|>) = apR\n\napR f x = f x\n"
+---
+Module {
+    name: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 8,
+                },
+                end: Position {
+                    line: 1,
+                    column: 12,
+                },
+            },
+            value: "Main",
+        },
+    ),
+    exports: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 22,
+            },
+            end: Position {
+                line: 1,
+                column: 26,
+            },
+        },
+        value: Open,
+    },
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 6,
+                column: 1,
+            },
+        },
+    ),
+    imports: [],
+    values: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 5,
+                    column: 1,
+                },
+                end: Position {
+                    line: 6,
+                    column: 1,
+                },
+            },
+            value: Value {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 4,
+                        },
+                    },
+                    value: "apR",
+                },
+                arguments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 6,
+                            },
+                        },
+                        value: Var(
+                            "f",
+                        ),
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 7,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 8,
+                            },
+                        },
+                        value: Var(
+                            "x",
+                        ),
+                    },
+                ],
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 14,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 11,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 12,
+                                },
+                            },
+                            value: Var {
+                                kind: LowVar,
+                                name: "f",
+                            },
+                        },
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 5,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 5,
+                                        column: 14,
+                                    },
+                                },
+                                value: Var {
+                                    kind: LowVar,
+                                    name: "x",
+                                },
+                            },
+                        ],
+                    },
+                },
+                annotation: None,
+            },
+        },
+    ],
+    unions: [],
+    aliases: [],
+    binops: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 5,
+                    column: 1,
+                },
+            },
+            value: Infix {
+                op: "|>",
+                associativity: Left,
+                precedence: Precedence(
+                    6,
+                ),
+                name: "apR",
+            },
+        },
+    ],
+}

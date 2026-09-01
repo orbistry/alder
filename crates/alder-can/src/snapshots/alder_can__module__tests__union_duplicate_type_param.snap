@@ -1,0 +1,30 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\ntype Bad a a\n    = Foo\n"
+---
+[
+    DuplicateUnionArg {
+        type_name: "Bad",
+        arg_name: "a",
+        first: Region {
+            start: Position {
+                line: 3,
+                column: 12,
+            },
+            end: Position {
+                line: 3,
+                column: 13,
+            },
+        },
+        second: Region {
+            start: Position {
+                line: 3,
+                column: 10,
+            },
+            end: Position {
+                line: 3,
+                column: 11,
+            },
+        },
+    },
+]

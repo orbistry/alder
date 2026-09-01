@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (nothing)\n\nnothing = ()\n"
+---
+nothing : ()

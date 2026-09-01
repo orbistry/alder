@@ -1,0 +1,21 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (Missing)\n"
+---
+[
+    ExportNotFound {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 23,
+            },
+            end: Position {
+                line: 1,
+                column: 30,
+            },
+        },
+        kind: BadType,
+        name: "Missing",
+        suggestions: [],
+    },
+]

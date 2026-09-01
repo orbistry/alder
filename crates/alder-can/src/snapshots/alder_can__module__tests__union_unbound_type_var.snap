@@ -1,0 +1,36 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\ntype MyType a\n    = MyTag b\n"
+---
+[
+    TypeVarsUnboundInUnion {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 1,
+            },
+            end: Position {
+                line: 5,
+                column: 1,
+            },
+        },
+        name: "MyType",
+        args: [
+            "a",
+        ],
+        unbound: (
+            "b",
+            Region {
+                start: Position {
+                    line: 4,
+                    column: 13,
+                },
+                end: Position {
+                    line: 4,
+                    column: 14,
+                },
+            },
+        ),
+        more_unbound: [],
+    },
+]

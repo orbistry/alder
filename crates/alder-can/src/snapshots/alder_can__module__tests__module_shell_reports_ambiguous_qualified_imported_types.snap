@@ -1,0 +1,32 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (Wrapped)\n\nimport Json.Decode as Decode\n\nimport Html.Decode as Decode\n\ntype alias Wrapped msg = Decode.Decoder msg\n"
+---
+[
+    AmbiguousType {
+        region: Region {
+            start: Position {
+                line: 7,
+                column: 26,
+            },
+            end: Position {
+                line: 7,
+                column: 40,
+            },
+        },
+        prefix: Some(
+            "Decode",
+        ),
+        name: "Decoder",
+        first_module: ModuleName {
+            package: None,
+            name: "Json.Decode",
+        },
+        other_modules: [
+            ModuleName {
+                package: None,
+                name: "Html.Decode",
+            },
+        ],
+    },
+]

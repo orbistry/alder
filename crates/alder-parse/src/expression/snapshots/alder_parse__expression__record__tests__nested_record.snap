@@ -1,0 +1,81 @@
+---
+source: crates/alder-parse/src/expression/record.rs
+description: "Code:\n\n{ inner = { x = 1 } }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 22,
+        },
+    },
+    value: Record(
+        [
+            FieldAssign {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: "inner",
+                },
+                value: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 20,
+                        },
+                    },
+                    value: Record(
+                        [
+                            FieldAssign {
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 13,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 14,
+                                        },
+                                    },
+                                    value: "x",
+                                },
+                                value: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 17,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 18,
+                                        },
+                                    },
+                                    value: Int(
+                                        1,
+                                    ),
+                                },
+                            },
+                        ],
+                    ),
+                },
+            },
+        ],
+    ),
+}

@@ -1,0 +1,48 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: "Code:\n\n\\_ -> 42"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 9,
+        },
+    },
+    value: Lambda {
+        parameters: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 2,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 3,
+                    },
+                },
+                value: Anything,
+            },
+        ],
+        body: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 9,
+                },
+            },
+            value: Int(
+                42,
+            ),
+        },
+    },
+}

@@ -1,0 +1,73 @@
+---
+source: crates/alder-can/src/types.rs
+description: "{ z : Int, a : Int }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 21,
+        },
+    },
+    value: Record {
+        fields: [
+            FieldType {
+                index: 1,
+                field: "a",
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                    },
+                    value: Named {
+                        reference: QualifiedName {
+                            home: ModuleName {
+                                package: None,
+                                name: "Basics",
+                            },
+                            name: "Int",
+                        },
+                        args: [],
+                    },
+                },
+            },
+            FieldType {
+                index: 0,
+                field: "z",
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: Named {
+                        reference: QualifiedName {
+                            home: ModuleName {
+                                package: None,
+                                name: "Basics",
+                            },
+                            name: "Int",
+                        },
+                        args: [],
+                    },
+                },
+            },
+        ],
+        ext: None,
+    },
+}

@@ -1,0 +1,14 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n"
+---
+Interface {
+    home: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    values: [],
+    aliases: [],
+    unions: [],
+    binops: [],
+}

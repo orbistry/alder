@@ -1,0 +1,243 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\ntype alias Transform a = a -> a\n\nf : Transform (List b)\nf x = x\n"
+---
+Module {
+    name: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    exports: Everything(
+        Region {
+            start: Position {
+                line: 1,
+                column: 22,
+            },
+            end: Position {
+                line: 1,
+                column: 26,
+            },
+        },
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 7,
+                column: 1,
+            },
+        },
+    ),
+    decls: Declare {
+        definition: TypedDef {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 6,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 6,
+                        column: 2,
+                    },
+                },
+                value: "f",
+            },
+            free_vars: [
+                "b",
+            ],
+            args: [
+                TypedPattern {
+                    pattern: Located {
+                        region: Region {
+                            start: Position {
+                                line: 6,
+                                column: 3,
+                            },
+                            end: Position {
+                                line: 6,
+                                column: 4,
+                            },
+                        },
+                        value: Var(
+                            "x",
+                        ),
+                    },
+                    typ: Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 16,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 22,
+                            },
+                        },
+                        value: Named {
+                            reference: QualifiedName {
+                                home: ModuleName {
+                                    package: None,
+                                    name: "List",
+                                },
+                                name: "List",
+                            },
+                            args: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 5,
+                                            column: 21,
+                                        },
+                                        end: Position {
+                                            line: 5,
+                                            column: 22,
+                                        },
+                                    },
+                                    value: Var(
+                                        "b",
+                                    ),
+                                },
+                            ],
+                        },
+                    },
+                },
+            ],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 6,
+                        column: 7,
+                    },
+                    end: Position {
+                        line: 6,
+                        column: 8,
+                    },
+                },
+                value: VarLocal(
+                    "x",
+                ),
+            },
+            typ: Located {
+                region: Region {
+                    start: Position {
+                        line: 5,
+                        column: 16,
+                    },
+                    end: Position {
+                        line: 5,
+                        column: 22,
+                    },
+                },
+                value: Named {
+                    reference: QualifiedName {
+                        home: ModuleName {
+                            package: None,
+                            name: "List",
+                        },
+                        name: "List",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 21,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 22,
+                                },
+                            },
+                            value: Var(
+                                "b",
+                            ),
+                        },
+                    ],
+                },
+            },
+        },
+        next: Empty,
+    },
+    unions: [],
+    aliases: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 5,
+                    column: 1,
+                },
+            },
+            value: Alias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 21,
+                        },
+                    },
+                    value: "Transform",
+                },
+                parameters: [
+                    "a",
+                ],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 26,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 32,
+                        },
+                    },
+                    value: Lambda {
+                        from: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 26,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 27,
+                                },
+                            },
+                            value: Var(
+                                "a",
+                            ),
+                        },
+                        to: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 31,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 32,
+                                },
+                            },
+                            value: Var(
+                                "a",
+                            ),
+                        },
+                    },
+                },
+            },
+        },
+    ],
+    binops: [],
+}

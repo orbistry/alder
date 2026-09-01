@@ -1,0 +1,61 @@
+---
+source: crates/alder-parse/src/declaration/type_alias.rs
+description: type alias Name = String
+---
+Alias(
+    None,
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 25,
+            },
+        },
+        value: Alias {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                },
+                value: "Name",
+            },
+            arguments: [],
+            typ: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 25,
+                    },
+                },
+                value: Type {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 25,
+                        },
+                    },
+                    name: "String",
+                    args: [],
+                },
+            },
+        },
+    },
+)

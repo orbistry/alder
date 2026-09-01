@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (always)\n\nalways x y = x\n"
+---
+always : forall a b. a -> b -> a

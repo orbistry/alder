@@ -1,0 +1,11 @@
+[package]
+name = "alder-language-server"
+version = "0.1.0"
+edition.workspace = true
+description = "Language server for the alder programming language"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+tower-lsp-server.workspace = true

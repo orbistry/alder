@@ -1,0 +1,84 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Code:\n\nDict.Dict String Int"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 21,
+        },
+    },
+    value: TypeQual {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 10,
+            },
+        },
+        module: "Dict",
+        name: "Dict",
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                },
+                value: Type {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                    },
+                    name: "String",
+                    args: [],
+                },
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 18,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 21,
+                    },
+                },
+                value: Type {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                    },
+                    name: "Int",
+                    args: [],
+                },
+            },
+        ],
+    },
+}

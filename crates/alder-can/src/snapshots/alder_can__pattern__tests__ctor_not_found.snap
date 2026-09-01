@@ -1,0 +1,24 @@
+---
+source: crates/alder-can/src/pattern.rs
+description: Foo
+---
+[
+    NotFoundCtor {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 4,
+            },
+        },
+        prefix: None,
+        name: "Foo",
+        suggestions: PossibleNames {
+            locals: [],
+            qualified: [],
+        },
+    },
+]

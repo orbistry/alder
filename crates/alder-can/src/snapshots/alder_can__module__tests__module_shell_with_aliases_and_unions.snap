@@ -1,0 +1,200 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (Pair, Maybe(..))\n\ntype alias Pair a b = (a, b)\n\ntype Maybe a\n    = Just a\n    | Nothing\n"
+---
+Module {
+    name: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    exports: Explicit(
+        [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 29,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 34,
+                    },
+                },
+                value: UnionOpen(
+                    "Maybe",
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 23,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 27,
+                    },
+                },
+                value: Alias(
+                    "Pair",
+                ),
+            },
+        ],
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 8,
+                column: 1,
+            },
+        },
+    ),
+    decls: Empty,
+    unions: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 5,
+                    column: 1,
+                },
+                end: Position {
+                    line: 8,
+                    column: 1,
+                },
+            },
+            value: Union {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 11,
+                        },
+                    },
+                    value: "Maybe",
+                },
+                parameters: [
+                    "a",
+                ],
+                ctors: [
+                    Ctor {
+                        name: "Just",
+                        index: 0,
+                        arity: 1,
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 6,
+                                        column: 12,
+                                    },
+                                    end: Position {
+                                        line: 6,
+                                        column: 13,
+                                    },
+                                },
+                                value: Var(
+                                    "a",
+                                ),
+                            },
+                        ],
+                    },
+                    Ctor {
+                        name: "Nothing",
+                        index: 1,
+                        arity: 0,
+                        arguments: [],
+                    },
+                ],
+                alternatives: 2,
+                options: Normal,
+            },
+        },
+    ],
+    aliases: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 5,
+                    column: 1,
+                },
+            },
+            value: Alias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 16,
+                        },
+                    },
+                    value: "Pair",
+                },
+                parameters: [
+                    "a",
+                    "b",
+                ],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 23,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 29,
+                        },
+                    },
+                    value: Tuple {
+                        first: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 24,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 25,
+                                },
+                            },
+                            value: Var(
+                                "a",
+                            ),
+                        },
+                        second: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 27,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 28,
+                                },
+                            },
+                            value: Var(
+                                "b",
+                            ),
+                        },
+                        rest: [],
+                    },
+                },
+            },
+        },
+    ],
+    binops: [],
+}

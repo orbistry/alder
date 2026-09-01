@@ -1,0 +1,5 @@
+---
+source: crates/alder-can/src/module.rs
+expression: alias.to_public()
+---
+None

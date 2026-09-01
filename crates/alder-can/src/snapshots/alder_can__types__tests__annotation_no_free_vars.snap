@@ -1,0 +1,29 @@
+---
+source: crates/alder-can/src/types.rs
+description: Int
+---
+Annotation {
+    free_vars: [],
+    typ: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 4,
+            },
+        },
+        value: Named {
+            reference: QualifiedName {
+                home: ModuleName {
+                    package: None,
+                    name: "Basics",
+                },
+                name: "Int",
+            },
+            args: [],
+        },
+    },
+}

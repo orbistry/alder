@@ -1,0 +1,105 @@
+---
+source: crates/alder-parse/src/declaration/value.rs
+description: "{-| A simple greeting function -}\ngreet name = name\n"
+---
+Value(
+    Some(
+        Comment(
+            Snippet {
+                data: [
+                    32,
+                    65,
+                    32,
+                    115,
+                    105,
+                    109,
+                    112,
+                    108,
+                    101,
+                    32,
+                    103,
+                    114,
+                    101,
+                    101,
+                    116,
+                    105,
+                    110,
+                    103,
+                    32,
+                    102,
+                    117,
+                    110,
+                    99,
+                    116,
+                    105,
+                    111,
+                    110,
+                    32,
+                ],
+                off_row: 1,
+                off_col: 4,
+            },
+        ),
+    ),
+    Located {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 1,
+            },
+            end: Position {
+                line: 3,
+                column: 1,
+            },
+        },
+        value: Value {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 6,
+                    },
+                },
+                value: "greet",
+            },
+            arguments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 11,
+                        },
+                    },
+                    value: Var(
+                        "name",
+                    ),
+                },
+            ],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 14,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 18,
+                    },
+                },
+                value: Var {
+                    kind: LowVar,
+                    name: "name",
+                },
+            },
+            annotation: None,
+        },
+    },
+)

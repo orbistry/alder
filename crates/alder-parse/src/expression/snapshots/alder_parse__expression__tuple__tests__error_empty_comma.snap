@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/tuple.rs
+description: "Code:\n\n(,)"
+---
+Tuple(
+    IndentExpr1(
+        1,
+        2,
+    ),
+    1,
+    1,
+)

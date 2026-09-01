@@ -1,0 +1,134 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (Decoder)\n\nimport Json.Decode as Decode\n\ntype alias Decoder msg = Decode.Decoder msg\n"
+---
+Module {
+    name: ModuleName {
+        package: None,
+        name: "Main",
+    },
+    exports: Explicit(
+        [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 23,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 30,
+                    },
+                },
+                value: Alias(
+                    "Decoder",
+                ),
+            },
+        ],
+    ),
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 6,
+                column: 1,
+            },
+        },
+    ),
+    decls: Empty,
+    unions: [],
+    aliases: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 5,
+                    column: 1,
+                },
+                end: Position {
+                    line: 6,
+                    column: 1,
+                },
+            },
+            value: Alias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 19,
+                        },
+                    },
+                    value: "Decoder",
+                },
+                parameters: [
+                    "msg",
+                ],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 26,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 44,
+                        },
+                    },
+                    value: Alias {
+                        reference: QualifiedName {
+                            home: ModuleName {
+                                package: None,
+                                name: "Json.Decode",
+                            },
+                            name: "Decoder",
+                        },
+                        arguments: [
+                            AliasArgument {
+                                name: "msg",
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 5,
+                                            column: 41,
+                                        },
+                                        end: Position {
+                                            line: 5,
+                                            column: 44,
+                                        },
+                                    },
+                                    value: Var(
+                                        "msg",
+                                    ),
+                                },
+                            },
+                        ],
+                        target: Open(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 0,
+                                        column: 0,
+                                    },
+                                    end: Position {
+                                        line: 0,
+                                        column: 0,
+                                    },
+                                },
+                                value: Var(
+                                    "msg",
+                                ),
+                            },
+                        ),
+                    },
+                },
+            },
+        },
+    ],
+    binops: [],
+}

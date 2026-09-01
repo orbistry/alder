@@ -1,0 +1,139 @@
+---
+source: crates/alder-parse/src/expression/case.rs
+description: "Code:\n\ncase x of\n    Just y -> y\n    Nothing -> 0"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 3,
+            column: 17,
+        },
+    },
+    value: Case {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 6,
+                },
+                end: Position {
+                    line: 1,
+                    column: 7,
+                },
+            },
+            value: Var {
+                kind: LowVar,
+                name: "x",
+            },
+        },
+        arms: [
+            CaseArm {
+                pattern: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 12,
+                        },
+                    },
+                    value: Ctor {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 9,
+                            },
+                        },
+                        name: "Just",
+                        args: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 10,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 11,
+                                    },
+                                },
+                                value: Var(
+                                    "y",
+                                ),
+                            },
+                        ],
+                    },
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 15,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 16,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "y",
+                    },
+                },
+            },
+            CaseArm {
+                pattern: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 13,
+                        },
+                    },
+                    value: Ctor {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 12,
+                            },
+                        },
+                        name: "Nothing",
+                        args: [],
+                    },
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 17,
+                        },
+                    },
+                    value: Int(
+                        0,
+                    ),
+                },
+            },
+        ],
+    },
+}

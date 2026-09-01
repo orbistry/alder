@@ -1,0 +1,110 @@
+---
+source: crates/alder-parse/src/expression/record.rs
+description: "Code:\n\n{ a = 1, b = 2, c = 3 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 24,
+        },
+    },
+    value: Record(
+        [
+            FieldAssign {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: "a",
+                },
+                value: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Int(
+                        1,
+                    ),
+                },
+            },
+            FieldAssign {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                    },
+                    value: "b",
+                },
+                value: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                    },
+                    value: Int(
+                        2,
+                    ),
+                },
+            },
+            FieldAssign {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                    },
+                    value: "c",
+                },
+                value: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 22,
+                        },
+                    },
+                    value: Int(
+                        3,
+                    ),
+                },
+            },
+        ],
+    ),
+}

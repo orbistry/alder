@@ -1,0 +1,183 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Code:\n\n{ model : Model, update : Msg -> Model -> Model }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 50,
+        },
+    },
+    value: Record {
+        fields: [
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: "model",
+                },
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                    },
+                    value: Type {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                        },
+                        name: "Model",
+                        args: [],
+                    },
+                },
+            },
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 24,
+                        },
+                    },
+                    value: "update",
+                },
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 27,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 48,
+                        },
+                    },
+                    value: Lambda {
+                        from: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 27,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 30,
+                                },
+                            },
+                            value: Type {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 27,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 30,
+                                    },
+                                },
+                                name: "Msg",
+                                args: [],
+                            },
+                        },
+                        to: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 34,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 48,
+                                },
+                            },
+                            value: Lambda {
+                                from: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 34,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 39,
+                                        },
+                                    },
+                                    value: Type {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 34,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 39,
+                                            },
+                                        },
+                                        name: "Model",
+                                        args: [],
+                                    },
+                                },
+                                to: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 43,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 48,
+                                        },
+                                    },
+                                    value: Type {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 43,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 48,
+                                            },
+                                        },
+                                        name: "Model",
+                                        args: [],
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        ],
+        ext: None,
+    },
+}

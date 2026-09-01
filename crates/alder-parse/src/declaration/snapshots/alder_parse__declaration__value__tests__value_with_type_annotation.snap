@@ -1,0 +1,190 @@
+---
+source: crates/alder-parse/src/declaration/value.rs
+description: "add : Int -> Int -> Int\nadd x y = x\n"
+---
+Value(
+    None,
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 3,
+                column: 1,
+            },
+        },
+        value: Value {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 4,
+                    },
+                },
+                value: "add",
+            },
+            arguments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 6,
+                        },
+                    },
+                    value: Var(
+                        "x",
+                    ),
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 8,
+                        },
+                    },
+                    value: Var(
+                        "y",
+                    ),
+                },
+            ],
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 12,
+                    },
+                },
+                value: Var {
+                    kind: LowVar,
+                    name: "x",
+                },
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 24,
+                        },
+                    },
+                    value: Lambda {
+                        from: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 7,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                            },
+                            value: Type {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 7,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 10,
+                                    },
+                                },
+                                name: "Int",
+                                args: [],
+                            },
+                        },
+                        to: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 14,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 24,
+                                },
+                            },
+                            value: Lambda {
+                                from: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 14,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 17,
+                                        },
+                                    },
+                                    value: Type {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 14,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 17,
+                                            },
+                                        },
+                                        name: "Int",
+                                        args: [],
+                                    },
+                                },
+                                to: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 21,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 24,
+                                        },
+                                    },
+                                    value: Type {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 21,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 24,
+                                            },
+                                        },
+                                        name: "Int",
+                                        args: [],
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            ),
+        },
+    },
+)

@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/orbistry/alder/main/crates/alder-config/alder.schema.json",
+  "title": "Alder Configuration",
+  "description": "Configuration file for Alder projects (alder.jsonc)",
+  "oneOf": [
+    { "$ref": "#/$defs/application" },
+    { "$ref": "#/$defs/package" },
+    { "$ref": "#/$defs/workspace" }
+  ],
+  "$defs": {
+    "application": {
+      "type": "object",
+      "description": "An application project that compiles to UPLC validators",
+      "properties": {
+        "type": {
+          "const": "application"
+        },
+        "sourceDirectories": {
+          "type": "array",
+          "description": "Source directories (defaults to [\"src\"])",
+          "items": { "type": "string" },
+          "default": ["src"]
+        },
+        "dependencies": {
+          "$ref": "#/$defs/dependencies"
+        },
+        "testDependencies": {
+          "$ref": "#/$defs/dependencies"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    "package": {
+      "type": "object",
+      "description": "A publishable library package",
+      "properties": {
+        "type": {
+          "const": "package"
+        },
+        "name": {
+          "$ref": "#/$defs/packageName"
+        },
+        "version": {
+          "type": "string",
+          "description": "Package version (semver)",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?(\\+[a-zA-Z0-9.-]+)?$",
+          "examples": ["1.0.0", "2.1.0-beta.1"]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short description (under 80 characters)",
+          "maxLength": 80
+        },
+        "license": {
+          "type": "string",
+          "description": "SPDX license identifier",
+          "examples": ["MIT", "Apache-2.0", "BSD-3-Clause"]
+        },
+        "exposedModules": {
+          "$ref": "#/$defs/exposedModules"
+        },
+        "dependencies": {
+          "$ref": "#/$defs/dependencies"
+        },
+        "testDependencies": {
+          "$ref": "#/$defs/dependencies"
+        }
+      },
+      "required": ["type", "name", "version", "summary", "license", "exposedModules"],
+      "additionalProperties": false
+    },
+    "workspace": {
+      "type": "object",
+      "description": "A collection of related projects sharing dependencies",
+      "properties": {
+        "type": {
+          "const": "workspace"
+        },
+        "members": {
+          "type": "array",
+          "description": "Glob patterns for workspace members",
+          "items": { "type": "string" },
+          "examples": [["packages/*", "apps/my-app"]]
+        },
+        "dependencies": {
+          "$ref": "#/$defs/workspaceDependencies"
+        }
+      },
+      "required": ["type", "members"],
+      "additionalProperties": false
+    },
+    "packageName": {
+      "type": "string",
+      "description": "Package name in author/project format",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*/[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+      "examples": ["alder/core", "alice/json-parser", "bob123/my-lib2"]
+    },
+    "exposedModules": {
+      "oneOf": [
+        {
+          "type": "array",
+          "description": "Flat list of exposed module names",
+          "items": { "type": "string" },
+          "examples": [["Json", "Json.Decode", "Json.Encode"]]
+        },
+        {
+          "type": "object",
+          "description": "Modules organized by category",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "examples": [{
+            "Decoding": ["Json.Decode"],
+            "Encoding": ["Json.Encode"]
+          }]
+        }
+      ]
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "Package dependencies",
+      "additionalProperties": {
+        "$ref": "#/$defs/dependency"
+      }
+    },
+    "workspaceDependencies": {
+      "type": "object",
+      "description": "Workspace dependencies (cannot use { \"workspace\": true })",
+      "additionalProperties": {
+        "$ref": "#/$defs/workspaceDependency"
+      }
+    },
+    "dependency": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Version constraint",
+          "examples": ["1.0.0 <= v < 2.0.0", "1.0.0"]
+        },
+        { "$ref": "#/$defs/workspaceDep" },
+        { "$ref": "#/$defs/pathDep" },
+        { "$ref": "#/$defs/gitDep" }
+      ]
+    },
+    "workspaceDependency": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Version constraint",
+          "examples": ["1.0.0 <= v < 2.0.0", "1.0.0"]
+        },
+        { "$ref": "#/$defs/pathDep" },
+        { "$ref": "#/$defs/gitDep" }
+      ]
+    },
+    "workspaceDep": {
+      "type": "object",
+      "description": "Inherit dependency from workspace root",
+      "properties": {
+        "workspace": {
+          "const": true
+        }
+      },
+      "required": ["workspace"],
+      "additionalProperties": false
+    },
+    "pathDep": {
+      "type": "object",
+      "description": "Local path dependency",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path to the package"
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    },
+    "gitDep": {
+      "type": "object",
+      "description": "Git repository dependency",
+      "properties": {
+        "git": {
+          "type": "string",
+          "description": "Git repository URL",
+          "format": "uri"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch to use"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Tag to use"
+        },
+        "rev": {
+          "type": "string",
+          "description": "Specific revision (commit hash)"
+        }
+      },
+      "required": ["git"],
+      "additionalProperties": false
+    }
+  }
+}

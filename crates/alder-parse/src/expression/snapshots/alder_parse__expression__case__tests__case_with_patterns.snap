@@ -1,0 +1,179 @@
+---
+source: crates/alder-parse/src/expression/case.rs
+description: "Code:\n\ncase list of\n    [] -> 0\n    [x] -> x\n    x :: xs -> x\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 5,
+            column: 1,
+        },
+    },
+    value: Case {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 6,
+                },
+                end: Position {
+                    line: 1,
+                    column: 10,
+                },
+            },
+            value: Var {
+                kind: LowVar,
+                name: "list",
+            },
+        },
+        arms: [
+            CaseArm {
+                pattern: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 7,
+                        },
+                    },
+                    value: List(
+                        [],
+                    ),
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 12,
+                        },
+                    },
+                    value: Int(
+                        0,
+                    ),
+                },
+            },
+            CaseArm {
+                pattern: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 8,
+                        },
+                    },
+                    value: List(
+                        [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 6,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 7,
+                                    },
+                                },
+                                value: Var(
+                                    "x",
+                                ),
+                            },
+                        ],
+                    ),
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 13,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "x",
+                    },
+                },
+            },
+            CaseArm {
+                pattern: Located {
+                    region: Region {
+                        start: Position {
+                            line: 4,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 4,
+                            column: 12,
+                        },
+                    },
+                    value: Cons {
+                        head: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 6,
+                                },
+                            },
+                            value: Var(
+                                "x",
+                            ),
+                        },
+                        tail: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 10,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 12,
+                                },
+                            },
+                            value: Var(
+                                "xs",
+                            ),
+                        },
+                    },
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 4,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 4,
+                            column: 17,
+                        },
+                    },
+                    value: Var {
+                        kind: LowVar,
+                        name: "x",
+                    },
+                },
+            },
+        ],
+    },
+}

@@ -1,0 +1,20 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nimport Basics exposing (..)\n\nx a b c = a == b == c\n"
+---
+[
+    BinopConflict {
+        region: Region {
+            start: Position {
+                line: 5,
+                column: 11,
+            },
+            end: Position {
+                line: 5,
+                column: 22,
+            },
+        },
+        op1: "==",
+        op2: "==",
+    },
+]

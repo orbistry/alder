@@ -1,0 +1,22 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nf =\n    let\n        x = x\n    in\n    x\n"
+---
+[
+    RecursiveLet {
+        name: Located {
+            region: Region {
+                start: Position {
+                    line: 5,
+                    column: 9,
+                },
+                end: Position {
+                    line: 5,
+                    column: 10,
+                },
+            },
+            value: "x",
+        },
+        others: [],
+    },
+]

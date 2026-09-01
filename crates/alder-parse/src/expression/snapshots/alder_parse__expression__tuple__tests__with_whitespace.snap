@@ -1,0 +1,65 @@
+---
+source: crates/alder-parse/src/expression/tuple.rs
+description: "Code:\n\n( 1 , 2 , 3 )"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 14,
+        },
+    },
+    value: Tuple {
+        first: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 3,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+            value: Int(
+                1,
+            ),
+        },
+        second: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Int(
+                2,
+            ),
+        },
+        rest: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: Int(
+                    3,
+                ),
+            },
+        ],
+    },
+}

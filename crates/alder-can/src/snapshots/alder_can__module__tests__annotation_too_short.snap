@@ -1,0 +1,21 @@
+---
+source: crates/alder-can/src/module.rs
+description: "Code:\n\nmodule Main exposing (..)\n\nf : a\nf x = x\n"
+---
+[
+    AnnotationTooShort {
+        region: Region {
+            start: Position {
+                line: 4,
+                column: 3,
+            },
+            end: Position {
+                line: 4,
+                column: 4,
+            },
+        },
+        name: "f",
+        index: 0,
+        leftovers: 1,
+    },
+]

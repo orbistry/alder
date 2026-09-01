@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/expression/variable.rs
+description: "Code:\n\nfoo_bar"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 8,
+        },
+    },
+    value: Var {
+        kind: LowVar,
+        name: "foo_bar",
+    },
+}

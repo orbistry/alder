@@ -1,0 +1,82 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "Code:\n\nx = 1\n"
+---
+Module {
+    name: None,
+    exports: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 1,
+            },
+        },
+        value: Open,
+    },
+    docs: NoDocs(
+        Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 2,
+                column: 1,
+            },
+        },
+    ),
+    imports: [],
+    values: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 2,
+                    column: 1,
+                },
+            },
+            value: Value {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                    },
+                    value: "x",
+                },
+                arguments: [],
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                    },
+                    value: Int(
+                        1,
+                    ),
+                },
+                annotation: None,
+            },
+        },
+    ],
+    unions: [],
+    aliases: [],
+    binops: [],
+}

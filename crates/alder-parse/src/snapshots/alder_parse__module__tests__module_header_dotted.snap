@@ -1,0 +1,50 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "Code:\n\nmodule Foo.Bar exposing (baz)"
+---
+(
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 15,
+            },
+        },
+        value: "Foo.Bar",
+    },
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 25,
+            },
+            end: Position {
+                line: 1,
+                column: 30,
+            },
+        },
+        value: Explicit(
+            [
+                Lower(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 26,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 29,
+                            },
+                        },
+                        value: "baz",
+                    },
+                ),
+            ],
+        ),
+    },
+)

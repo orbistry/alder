@@ -1,0 +1,62 @@
+---
+source: crates/alder-can/src/types.rs
+description: Maybe a
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 8,
+        },
+    },
+    value: Alias {
+        reference: QualifiedName {
+            home: ModuleName {
+                package: None,
+                name: "Maybe",
+            },
+            name: "Maybe",
+        },
+        arguments: [
+            AliasArgument {
+                name: "a",
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+            },
+        ],
+        target: Open(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 0,
+                        column: 0,
+                    },
+                    end: Position {
+                        line: 0,
+                        column: 0,
+                    },
+                },
+                value: Var(
+                    "a",
+                ),
+            },
+        ),
+    },
+}

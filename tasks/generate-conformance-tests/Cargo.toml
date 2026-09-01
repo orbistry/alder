@@ -1,0 +1,11 @@
+[package]
+name = "generate-conformance-tests"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
+walkdir = "0.1"

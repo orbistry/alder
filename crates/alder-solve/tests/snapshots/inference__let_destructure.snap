@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (main)\n\nmain =\n    let\n        ( a, b ) = ( 1, \"two\" )\n    in\n    b\n"
+---
+main : String

@@ -1,0 +1,21 @@
+---
+source: crates/alder-parse/src/exposing.rs
+description: "Code:\n\n((+))"
+---
+Explicit(
+    [
+        Operator {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 5,
+                },
+            },
+            op: "+",
+        },
+    ],
+)

@@ -1,0 +1,40 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (Msg(..), broken)\n\ntype Msg\n    = Ping\n\nbroken : Msg\nbroken = \"not a msg\"\n"
+---
+[
+    BadExpr(
+        Region {
+            start: Position {
+                line: 7,
+                column: 10,
+            },
+            end: Position {
+                line: 7,
+                column: 21,
+            },
+        },
+        String,
+        Type {
+            home: ModuleName {
+                package: None,
+                name: "String",
+            },
+            name: "String",
+            args: [],
+        },
+        FromAnnotation(
+            "broken",
+            0,
+            TypedBody,
+            Type {
+                home: ModuleName {
+                    package: None,
+                    name: "Main",
+                },
+                name: "Msg",
+                args: [],
+            },
+        ),
+    ),
+]

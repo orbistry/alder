@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (bump)\n\nbump r = { r | x = 1 }\n"
+---
+bump : forall a number. { a | x : number } -> { a | x : number }

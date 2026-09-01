@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "Code:\n\nmodule Main exposing (pick)\n\npick b x y = if b then x else y\n"
+---
+pick : forall a. Bool -> a -> a -> a

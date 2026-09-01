@@ -1,0 +1,30 @@
+name: Sampo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sampo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Configure git identity
+        run: |
+          git config user.name "rvcas"
+          git config user.email "x@rvcas.dev"
+      - name: Sampo
+        id: sampo
+        uses: bruits/sampo/crates/sampo-github-action@main
+        with:
+          cargo-token: ${{ secrets.CARGO_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
