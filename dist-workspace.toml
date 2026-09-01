@@ -18,7 +18,7 @@ targets = [
   "x86_64-pc-windows-msvc"
 ]
 # A GitHub repo to push Homebrew formulas to
-tap = "utxo-company/homebrew-tap"
+tap = "orbistry/homebrew-tap"
 formula = "alder"
 # A namespace to use when publishing this package to the npm registry
 npm-scope = "@alder-script"

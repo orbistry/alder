@@ -30,7 +30,7 @@ Only list crates you actually changed -- sampo automatically bumps dependents.
 4. Sampo publishes crates to crates.io and pushes version tags
 5. Tags trigger cargo-dist to build and publish:
    - GitHub Releases with platform binaries
-   - Homebrew formula (`brew install utxo-company/tap/alder`)
+   - Homebrew formula (`brew install orbistry/tap/alder`)
    - npm package (`npx @alder-script/cli`)
 
 ## Docs
