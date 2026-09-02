@@ -1,0 +1,106 @@
+---
+source: crates/alder-parse/src/expression/array.rs
+description: "[[1, 2], [3]]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 14,
+        },
+    },
+    value: Array(
+        [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 2,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                },
+                value: Array(
+                    [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 3,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 4,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 1.0,
+                                    text: "1",
+                                },
+                            ),
+                        },
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 6,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 7,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 2.0,
+                                    text: "2",
+                                },
+                            ),
+                        },
+                    ],
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                },
+                value: Array(
+                    [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 11,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 12,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 3.0,
+                                    text: "3",
+                                },
+                            ),
+                        },
+                    ],
+                ),
+            },
+        ],
+    ),
+}

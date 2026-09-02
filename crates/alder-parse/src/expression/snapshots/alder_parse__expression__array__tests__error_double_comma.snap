@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/expression/array.rs
+description: "[1,,2]"
+---
+Array(
+    Expr(
+        Start(
+            1,
+            4,
+        ),
+        1,
+        4,
+    ),
+    1,
+    1,
+)
