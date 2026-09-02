@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/component.rs
+description: "component App {}"
+---
+Params(
+    Open(
+        1,
+        15,
+    ),
+    1,
+    15,
+)

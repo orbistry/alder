@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Show[User] { let x = 1 }"
+---
+Item(
+    1,
+    19,
+)

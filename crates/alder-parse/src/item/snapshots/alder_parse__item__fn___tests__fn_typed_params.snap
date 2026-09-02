@@ -1,0 +1,240 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn add(a: Number, b: Number) -> Number { a + b }"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 7,
+            },
+        },
+        value: "add",
+    },
+    params: [
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                },
+                value: Var(
+                    "a",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 11,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 17,
+                                        },
+                                    },
+                                    value: "Number",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+        },
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 20,
+                    },
+                },
+                value: Var(
+                    "b",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 22,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 28,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 22,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 28,
+                                        },
+                                    },
+                                    value: "Number",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+        },
+    ],
+    ret: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 33,
+                },
+                end: Position {
+                    line: 1,
+                    column: 39,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 33,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 39,
+                                },
+                            },
+                            value: "Number",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    ),
+    where_clause: [],
+    body: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 40,
+                },
+                end: Position {
+                    line: 1,
+                    column: 49,
+                },
+            },
+            value: Block {
+                stmts: [],
+                tail: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 42,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 47,
+                            },
+                        },
+                        value: BinOps {
+                            operands: [
+                                BinOpOperand {
+                                    expr: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 42,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 43,
+                                            },
+                                        },
+                                        value: Var(
+                                            "a",
+                                        ),
+                                    },
+                                    op: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 44,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 45,
+                                            },
+                                        },
+                                        value: Add,
+                                    },
+                                },
+                            ],
+                            last: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 46,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 47,
+                                    },
+                                },
+                                value: Var(
+                                    "b",
+                                ),
+                            },
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

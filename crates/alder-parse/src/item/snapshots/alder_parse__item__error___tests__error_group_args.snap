@@ -1,0 +1,151 @@
+---
+source: crates/alder-parse/src/item/error_.rs
+description: "error AuthError { :expired(Timestamp), :bad(Number, String) }"
+---
+ErrorDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 16,
+            },
+        },
+        value: "AuthError",
+    },
+    tags: [
+        TagVariant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 27,
+                    },
+                },
+                value: "expired",
+            },
+            args: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 28,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 37,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 28,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 37,
+                                        },
+                                    },
+                                    value: "Timestamp",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ],
+        },
+        TagVariant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 40,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 44,
+                    },
+                },
+                value: "bad",
+            },
+            args: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 45,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 51,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 45,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 51,
+                                        },
+                                    },
+                                    value: "Number",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 53,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 59,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 53,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 59,
+                                        },
+                                    },
+                                    value: "String",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ],
+        },
+    ],
+}

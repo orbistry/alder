@@ -1,0 +1,247 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn lookup(cache: Cache[k, v], key: k) -> Option[v]\n    where k: Eq + Hash\n"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 10,
+            },
+        },
+        value: "lookup",
+    },
+    params: [
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                },
+                value: Var(
+                    "cache",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 29,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 18,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 23,
+                                        },
+                                    },
+                                    value: "Cache",
+                                },
+                            ],
+                        },
+                        args: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 24,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 25,
+                                    },
+                                },
+                                value: Var {
+                                    name: "k",
+                                    args: [],
+                                },
+                            },
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 27,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 28,
+                                    },
+                                },
+                                value: Var {
+                                    name: "v",
+                                    args: [],
+                                },
+                            },
+                        ],
+                    },
+                },
+            ),
+        },
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 31,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 34,
+                    },
+                },
+                value: Var(
+                    "key",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 36,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 37,
+                        },
+                    },
+                    value: Var {
+                        name: "k",
+                        args: [],
+                    },
+                },
+            ),
+        },
+    ],
+    ret: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 42,
+                },
+                end: Position {
+                    line: 1,
+                    column: 51,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 42,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 48,
+                                },
+                            },
+                            value: "Option",
+                        },
+                    ],
+                },
+                args: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 49,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 50,
+                            },
+                        },
+                        value: Var {
+                            name: "v",
+                            args: [],
+                        },
+                    },
+                ],
+            },
+        },
+    ),
+    where_clause: [
+        Bound {
+            var: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 12,
+                    },
+                },
+                value: "k",
+            },
+            bounds: [
+                Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 14,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 16,
+                                },
+                            },
+                            value: "Eq",
+                        },
+                    ],
+                },
+                Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 19,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 23,
+                                },
+                            },
+                            value: "Hash",
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+    body: None,
+}

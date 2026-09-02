@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Shape { Circle(Number Number) }"
+---
+VariantArgEnd(
+    1,
+    28,
+)

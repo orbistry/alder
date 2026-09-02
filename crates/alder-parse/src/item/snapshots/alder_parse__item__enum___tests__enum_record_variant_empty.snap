@@ -1,0 +1,40 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Shape { Empty {} }"
+---
+EnumDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 11,
+            },
+        },
+        value: "Shape",
+    },
+    params: [],
+    variants: [
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                },
+                value: "Empty",
+            },
+            payload: Record(
+                [],
+            ),
+        },
+    ],
+}

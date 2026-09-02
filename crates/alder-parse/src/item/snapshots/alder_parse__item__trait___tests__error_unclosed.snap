@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Show[a] {\n    fn show(value: a) -> String\n"
+---
+Item(
+    3,
+    1,
+)

@@ -20,20 +20,109 @@
 //! (§5.11: "may be empty"); after a `,` the clause continues only when a
 //! non-reserved lowercase word follows, so a trailing comma before the
 //! next item (`where a: Show,` then `fn …` on the next line) is fine.
+//!
+//! `fn_decl` (after `fn`) reads `name ( params ) [-> type] [where …]` and
+//! then a body only when a `{` follows; otherwise the declaration is
+//! bodiless (`body: None`, §10.26: extern functions and trait signatures —
+//! the `#[extern]` requirement is canonicalization's). The body may start
+//! on a later line: nothing else that follows a bodiless declaration in a
+//! module, trait or impl body starts with `{`. The cursor is left where the
+//! last sub-parser left it (past trailing whitespace after a body or a
+//! return type, right after the `)` otherwise). `fn_decl_with_end` also
+//! returns the position right after the declaration's last byte, which
+//! `trait_decl` / `impl_decl` need for the item-separation rule (§2.1 rule
+//! 3) because `block()` and `type_expr()` chomp past it.
 // OWNER: item/fn_.rs (Wave 3; `params` / `where_clause` may land in Wave 2, see §9 step 2.4)
 
-use alder_region::Region;
+use alder_region::{Position, Region};
 use alder_source::{Constraint, FnDecl, Param};
 use bumpalo::collections::Vec as BumpVec;
 
 use crate::keyword::is_reserved;
 use crate::{Parser, error};
 
+// Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
+// Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
 #[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `fn`; body optional.
     pub(crate) fn fn_decl(&mut self) -> Result<&'a FnDecl<'a>, error::Fn<'a>> {
-        todo!()
+        self.fn_decl_with_end().map(|(decl, _)| decl)
+    }
+}
+
+impl<'a> Parser<'a> {
+    /// After `fn`. Like `fn_decl`, plus the position right after the
+    /// declaration's last byte (the body's `}`, the last `where`
+    /// constraint, the return type, or the params' `)`), computed before any
+    /// trailing whitespace was chomped.
+    pub(super) fn fn_decl_with_end(&mut self) -> Result<(&'a FnDecl<'a>, Position), error::Fn<'a>> {
+        self.chomp();
+        let name = self.located_lower(error::Fn::Name)?;
+        self.chomp();
+        let params = self.specialize(
+            |bump, e, row, col| error::Fn::Params(bump.alloc(e), row, col),
+            |p| p.params(),
+        )?;
+        // `params()` stops right after the `)`.
+        let mut end = self.get_position();
+        self.chomp();
+        let ret = if self.peek() == Some(b'-') && self.peek_at(1) == Some(b'>') {
+            self.advance_by(2);
+            self.chomp();
+            let typ = self.specialize(
+                |bump, e, row, col| error::Fn::Ret(bump.alloc(e), row, col),
+                |p| p.type_expr(),
+            )?;
+            end = typ.region.end;
+            Some(typ)
+        } else {
+            None
+        };
+        let where_clause = if self.peek_keyword(b"where") {
+            self.advance_by(5);
+            end = self.get_position();
+            let constraints = self.specialize(
+                |bump, e, row, col| error::Fn::Where(bump.alloc(e), row, col),
+                |p| p.where_clause(),
+            )?;
+            if let Some(last) = constraints.last() {
+                end = constraint_end(last);
+            }
+            constraints
+        } else {
+            &[]
+        };
+        let body = if self.peek() == Some(b'{') {
+            let block = self.specialize(
+                |bump, e, row, col| error::Fn::Body(bump.alloc(e), row, col),
+                |p| p.block(),
+            )?;
+            end = block.region.end;
+            Some(block)
+        } else {
+            None
+        };
+        let decl = self.alloc(FnDecl {
+            name,
+            params,
+            ret,
+            where_clause,
+            body,
+        });
+        Ok((decl, end))
+    }
+}
+
+/// The position right after a `where` constraint's last byte. A trailing
+/// comma consumed by `where_clause()` is not included; it sits on the
+/// constraint's line in any layout the formatter emits.
+fn constraint_end(constraint: &Constraint<'_>) -> Position {
+    match constraint {
+        Constraint::Bound { var, bounds } => bounds
+            .last()
+            .map_or(var.region.end, |bound| bound.region().end),
+        Constraint::AssocEq { typ, .. } => typ.region.end,
     }
 }
 
@@ -102,9 +191,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-// Called by `fn_decl`, `trait_decl` and `impl_decl` (Wave 3); the allow goes
-// away with the Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `where`; may be empty.
     pub(crate) fn where_clause(&mut self) -> Result<&'a [Constraint<'a>], error::Where<'a>> {
@@ -170,16 +256,17 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{assert_item_error_snapshot, assert_item_snapshot};
+    use super::super::assert_item_snapshot;
 
     // Deviation from §7.1 (one `assert_<thing>` pair per module, defined at
-    // module level): the four macros below drive `params()` and
-    // `where_clause()` directly. They exist because the §7.2-named tests at
-    // the bottom go through `item()` and stay ignored until item/mod.rs
-    // lands, while these two helpers are already live for lambdas. They are
-    // private to this `mod tests` (not re-exported) and pin positions the
-    // item-level tests cannot isolate (`Params::End`, `Where::AssocEq`, …).
-    // Wave 4 decides whether to keep or fold them; recorded for §10.
+    // module level): the macros below drive `fn_decl()`, `params()` and
+    // `where_clause()` directly. They exist because the §7.2-named tests go
+    // through `item()` otherwise and would stay ignored until item/mod.rs
+    // lands; the `params` / `where` pairs also pin positions the item-level
+    // tests cannot isolate (`Params::End`, `Where::AssocEq`, …). They are
+    // private to this `mod tests` (not re-exported). Only the `pub` and
+    // attribute forms still go through `item()`. Wave 4 decides whether to
+    // keep or fold them; recorded for §10.
 
     /// Snapshot test macro for a successful `params()` parse (input starts at `(`).
     macro_rules! assert_params_snapshot {
@@ -262,6 +349,60 @@ mod tests {
             let mut parser = $crate::Parser::new(&bump, src.as_bytes());
             let err = parser
                 .where_clause()
+                .err()
+                .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
+            insta::with_settings!({
+                description => code,
+                omit_expression => true,
+            }, {
+                insta::assert_debug_snapshot!(err);
+            });
+        }};
+    }
+
+    /// Snapshot test macro for a successful `fn_decl()` parse (input starts
+    /// at `fn`, which the macro consumes).
+    macro_rules! assert_fn_decl_snapshot {
+        ($code:expr) => {{
+            let bump = bumpalo::Bump::new();
+            let code = indoc::indoc!($code);
+            let src = bump.alloc_str(code);
+            let mut parser = $crate::Parser::new(&bump, src.as_bytes());
+            if let Err((row, col)) = parser.keyword(b"fn", |row, col| (row, col)) {
+                panic!("input must start with `fn` ({row}:{col})\n\nSource:\n{code}");
+            }
+            let result = parser
+                .fn_decl()
+                .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
+            // A bodiless `fn` stops at the `)`; `item()` chomps.
+            parser.chomp();
+            assert!(
+                parser.is_eof(),
+                "unconsumed input at {:?}\n\nSource:\n{code}",
+                parser.position()
+            );
+            insta::with_settings!({
+                description => code,
+                omit_expression => true,
+            }, {
+                insta::assert_debug_snapshot!(result);
+            });
+        }};
+    }
+
+    /// Snapshot test macro for a `fn_decl()` parse error (input starts at
+    /// `fn`, which the macro consumes).
+    macro_rules! assert_fn_decl_error_snapshot {
+        ($code:expr) => {{
+            let bump = bumpalo::Bump::new();
+            let code = indoc::indoc!($code);
+            let src = bump.alloc_str(code);
+            let mut parser = $crate::Parser::new(&bump, src.as_bytes());
+            if let Err((row, col)) = parser.keyword(b"fn", |row, col| (row, col)) {
+                panic!("input must start with `fn` ({row}:{col})\n\nSource:\n{code}");
+            }
+            let err = parser
+                .fn_decl()
                 .err()
                 .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
             insta::with_settings!({
@@ -435,36 +576,41 @@ mod tests {
         assert_where_error_snapshot!(" i.Item == )");
     }
 
-    // ---- through `item()` (§7.2 names) -------------------------------------
+    // ---- fn_decl() directly (§7.2 names) -----------------------------------
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
+    fn fn_no_params() {
+        assert_fn_decl_snapshot!("fn main() { run() }");
+    }
+
+    #[test]
     fn fn_params() {
-        assert_item_snapshot!("fn add(a, b) { a + b }");
+        assert_fn_decl_snapshot!("fn add(a, b) { a + b }");
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn fn_typed_params() {
-        assert_item_snapshot!("fn add(a: Number, b: Number) -> Number { a + b }");
+        assert_fn_decl_snapshot!("fn add(a: Number, b: Number) -> Number { a + b }");
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
+    fn fn_ret() {
+        assert_fn_decl_snapshot!("fn name() -> String { \"x\" }");
+    }
+
+    #[test]
     fn fn_mut_param() {
-        assert_item_snapshot!("fn bump(mut n: Number) { n += 1 }");
+        assert_fn_decl_snapshot!("fn bump(mut n: Number) { n += 1 }");
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn fn_pattern_param() {
-        assert_item_snapshot!("fn swap((a, b)) { (b, a) }");
+        assert_fn_decl_snapshot!("fn swap((a, b)) { (b, a) }");
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn fn_trailing_comma_params() {
-        assert_item_snapshot!(
+        assert_fn_decl_snapshot!(
             r#"
             fn add(
                 a: Number,
@@ -477,9 +623,21 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
+    fn fn_multiline_body() {
+        assert_fn_decl_snapshot!(
+            r#"
+            fn classify(n: Number) -> String {
+                let sign = if n < 0 { "neg" } else { "pos" }
+                sign
+            }
+        "#
+        );
+    }
+
+    /// language.md "Traits".
+    #[test]
     fn fn_where_single() {
-        assert_item_snapshot!(
+        assert_fn_decl_snapshot!(
             r#"
             fn describe(xs: Array[a]) -> String where a: Show {
                 xs |> Array.map(show) |> String.join(", ")
@@ -489,9 +647,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn fn_where_multi() {
-        assert_item_snapshot!(
+        assert_fn_decl_snapshot!(
             r#"
             fn show2(a: a, b: b) -> String where a: Show, b: Show {
                 show(a)
@@ -500,10 +657,10 @@ mod tests {
         );
     }
 
+    /// language.md "Type application and variables" (bodiless).
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn fn_where_plus() {
-        assert_item_snapshot!(
+        assert_fn_decl_snapshot!(
             r#"
             fn lookup(cache: Cache[k, v], key: k) -> Option[v]
                 where k: Eq + Hash
@@ -512,9 +669,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn fn_where_assoc() {
-        assert_item_snapshot!(
+        assert_fn_decl_snapshot!(
             r#"
             fn sum(it: i) -> Number where i: Iterator, i.Item == Number {
                 0
@@ -523,10 +679,10 @@ mod tests {
         );
     }
 
+    /// language.md "Type application and variables" (bodiless).
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn fn_where_multiline_trailing_comma() {
-        assert_item_snapshot!(
+        assert_fn_decl_snapshot!(
             r#"
             fn traverse(xs: t[f[a]], g: fn(a) -> f[b]) -> f[t[b]]
                 where
@@ -537,14 +693,105 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
-    fn error_params_unclosed() {
-        assert_item_error_snapshot!("fn add(a, b { a }");
+    fn fn_where_then_body_on_next_line() {
+        assert_fn_decl_snapshot!(
+            r#"
+            fn describe(xs: Array[a]) -> String
+                where a: Show
+            {
+                show(xs)
+            }
+        "#
+        );
+    }
+
+    /// language.md "JavaScript interop" (the attribute form is `fn_bodiless_with_extern_attr`).
+    #[test]
+    fn fn_bodiless() {
+        assert_fn_decl_snapshot!("fn randomUUID() -> String");
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
+    fn fn_bodiless_no_ret() {
+        assert_fn_decl_snapshot!("fn next(it: i)");
+    }
+
+    #[test]
+    fn fn_body_on_next_line() {
+        assert_fn_decl_snapshot!(
+            r#"
+            fn main()
+            {
+                run()
+            }
+        "#
+        );
+    }
+
+    #[test]
+    fn error_no_name() {
+        assert_fn_decl_error_snapshot!("fn (a) { a }");
+    }
+
+    #[test]
+    fn error_name_reserved() {
+        assert_fn_decl_error_snapshot!("fn for() { 1 }");
+    }
+
+    #[test]
+    fn error_params_missing() {
+        assert_fn_decl_error_snapshot!("fn add { 1 }");
+    }
+
+    #[test]
+    fn error_params_unclosed() {
+        assert_fn_decl_error_snapshot!("fn add(a, b { a }");
+    }
+
+    #[test]
+    fn error_ret() {
+        assert_fn_decl_error_snapshot!("fn add() -> { 1 }");
+    }
+
+    #[test]
     fn error_where_bad_bound() {
-        assert_item_error_snapshot!("fn f(x: a) where a: 1 { x }");
+        assert_fn_decl_error_snapshot!("fn f(x: a) where a: 1 { x }");
+    }
+
+    #[test]
+    fn error_body() {
+        assert_fn_decl_error_snapshot!("fn f() { let }");
+    }
+
+    #[test]
+    fn error_body_unclosed() {
+        assert_fn_decl_error_snapshot!("fn f() { 1");
+    }
+
+    // ---- through `item()` ---------------------------------------------------
+
+    /// language.md "Functions".
+    #[test]
+    #[ignore = "waits for item/mod.rs"]
+    fn fn_pub() {
+        assert_item_snapshot!(
+            r#"
+            pub fn add(a: Number, b: Number) -> Number {
+                a + b
+            }
+        "#
+        );
+    }
+
+    /// language.md "JavaScript interop".
+    #[test]
+    #[ignore = "waits for item/mod.rs"]
+    fn fn_bodiless_with_extern_attr() {
+        assert_item_snapshot!(
+            r#"
+            #[extern("node:crypto", "randomUUID")]
+            fn randomUUID() -> String
+        "#
+        );
     }
 }

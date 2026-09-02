@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/error_.rs
+description: "error E { :a :b }"
+---
+End(
+    1,
+    14,
+)

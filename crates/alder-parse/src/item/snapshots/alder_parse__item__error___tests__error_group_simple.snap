@@ -1,0 +1,53 @@
+---
+source: crates/alder-parse/src/item/error_.rs
+description: "error AuthError { :invalid_token, :expired }"
+---
+ErrorDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 16,
+            },
+        },
+        value: "AuthError",
+    },
+    tags: [
+        TagVariant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 33,
+                    },
+                },
+                value: "invalid_token",
+            },
+            args: [],
+        },
+        TagVariant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 35,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 43,
+                    },
+                },
+                value: "expired",
+            },
+            args: [],
+        },
+    ],
+}

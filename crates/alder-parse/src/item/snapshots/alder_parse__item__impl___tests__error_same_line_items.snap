@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Show[User] {\n    fn show(user: User) -> String { user.name } fn other() {}\n}\n"
+---
+SameLine(
+    2,
+    49,
+)

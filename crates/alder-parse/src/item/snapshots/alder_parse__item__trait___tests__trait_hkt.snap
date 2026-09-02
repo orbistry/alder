@@ -1,0 +1,214 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Functor[f] {\n    fn map(fa: f[a], g: fn(a) -> b) -> f[b]\n}\n"
+---
+TraitDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "Functor",
+    },
+    params: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 15,
+                },
+                end: Position {
+                    line: 1,
+                    column: 16,
+                },
+            },
+            value: "f",
+        },
+    ],
+    where_clause: [],
+    items: [
+        Fn(
+            FnDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 11,
+                        },
+                    },
+                    value: "map",
+                },
+                params: [
+                    Param {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 14,
+                                },
+                            },
+                            value: Var(
+                                "fa",
+                            ),
+                        },
+                        annotation: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 16,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 20,
+                                    },
+                                },
+                                value: Var {
+                                    name: "f",
+                                    args: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 2,
+                                                    column: 18,
+                                                },
+                                                end: Position {
+                                                    line: 2,
+                                                    column: 19,
+                                                },
+                                            },
+                                            value: Var {
+                                                name: "a",
+                                                args: [],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ),
+                    },
+                    Param {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 22,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 23,
+                                },
+                            },
+                            value: Var(
+                                "g",
+                            ),
+                        },
+                        annotation: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 25,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 35,
+                                    },
+                                },
+                                value: Fn {
+                                    params: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 2,
+                                                    column: 28,
+                                                },
+                                                end: Position {
+                                                    line: 2,
+                                                    column: 29,
+                                                },
+                                            },
+                                            value: Var {
+                                                name: "a",
+                                                args: [],
+                                            },
+                                        },
+                                    ],
+                                    ret: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 34,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 35,
+                                            },
+                                        },
+                                        value: Var {
+                                            name: "b",
+                                            args: [],
+                                        },
+                                    },
+                                },
+                            },
+                        ),
+                    },
+                ],
+                ret: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 40,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 44,
+                            },
+                        },
+                        value: Var {
+                            name: "f",
+                            args: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 42,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 43,
+                                        },
+                                    },
+                                    value: Var {
+                                        name: "b",
+                                        args: [],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ),
+                where_clause: [],
+                body: None,
+            },
+        ),
+    ],
+}

@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Iterator[i] { type Item fn next(it: i) -> Item }"
+---
+SameLine(
+    1,
+    31,
+)

@@ -1,0 +1,178 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn bump(mut n: Number) { n += 1 }"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: "bump",
+    },
+    params: [
+        Param {
+            mutable: Some(
+                Region {
+                    start: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+            ),
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                },
+                value: Var(
+                    "n",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 22,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 16,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 22,
+                                        },
+                                    },
+                                    value: "Number",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+        },
+    ],
+    ret: None,
+    where_clause: [],
+    body: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 24,
+                },
+                end: Position {
+                    line: 1,
+                    column: 34,
+                },
+            },
+            value: Block {
+                stmts: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 26,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 32,
+                            },
+                        },
+                        value: Assign {
+                            place: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 26,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 27,
+                                    },
+                                },
+                                value: Place {
+                                    root: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 26,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 27,
+                                            },
+                                        },
+                                        value: "n",
+                                    },
+                                    steps: [],
+                                },
+                            },
+                            op: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 28,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 30,
+                                    },
+                                },
+                                value: Add,
+                            },
+                            value: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 31,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 32,
+                                    },
+                                },
+                                value: Number(
+                                    NumberLit {
+                                        value: 1.0,
+                                        text: "1",
+                                    },
+                                ),
+                            },
+                        },
+                    },
+                ],
+                tail: None,
+            },
+        },
+    ),
+}

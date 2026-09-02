@@ -1,0 +1,141 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn add(a, b) { a + b }"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 7,
+            },
+        },
+        value: "add",
+    },
+    params: [
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                },
+                value: Var(
+                    "a",
+                ),
+            },
+            annotation: None,
+        },
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: Var(
+                    "b",
+                ),
+            },
+            annotation: None,
+        },
+    ],
+    ret: None,
+    where_clause: [],
+    body: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 14,
+                },
+                end: Position {
+                    line: 1,
+                    column: 23,
+                },
+            },
+            value: Block {
+                stmts: [],
+                tail: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 21,
+                            },
+                        },
+                        value: BinOps {
+                            operands: [
+                                BinOpOperand {
+                                    expr: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 16,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 17,
+                                            },
+                                        },
+                                        value: Var(
+                                            "a",
+                                        ),
+                                    },
+                                    op: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 18,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 19,
+                                            },
+                                        },
+                                        value: Add,
+                                    },
+                                },
+                            ],
+                            last: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 20,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 21,
+                                    },
+                                },
+                                value: Var(
+                                    "b",
+                                ),
+                            },
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

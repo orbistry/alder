@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Show[a] { let x = 1 }"
+---
+Item(
+    1,
+    17,
+)

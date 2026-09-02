@@ -1,0 +1,59 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Marker[User] {}"
+---
+ImplDecl {
+    trait_: Path {
+        segments: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: "Marker",
+            },
+        ],
+    },
+    args: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 13,
+                },
+                end: Position {
+                    line: 1,
+                    column: 17,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 13,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 17,
+                                },
+                            },
+                            value: "User",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    ],
+    where_clause: [],
+    items: [],
+}

@@ -1,0 +1,71 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn main() { run() }"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: "main",
+    },
+    params: [],
+    ret: None,
+    where_clause: [],
+    body: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 11,
+                },
+                end: Position {
+                    line: 1,
+                    column: 20,
+                },
+            },
+            value: Block {
+                stmts: [],
+                tail: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 18,
+                            },
+                        },
+                        value: Call {
+                            function: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 16,
+                                    },
+                                },
+                                value: Var(
+                                    "run",
+                                ),
+                            },
+                            arguments: [],
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

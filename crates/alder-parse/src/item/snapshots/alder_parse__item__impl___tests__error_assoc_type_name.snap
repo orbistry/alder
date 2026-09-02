@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Iterator[Foo] { type item = Number }"
+---
+AssocType(
+    1,
+    27,
+)

@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn (a) { a }"
+---
+Name(
+    1,
+    4,
+)

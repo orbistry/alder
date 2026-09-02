@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/error_.rs
+description: "error E { expired }"
+---
+Tag(
+    Name(
+        1,
+        11,
+    ),
+    1,
+    11,
+)

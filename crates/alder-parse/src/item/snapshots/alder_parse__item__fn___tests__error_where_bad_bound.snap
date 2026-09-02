@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn f(x: a) where a: 1 { x }"
+---
+Where(
+    Bound(
+        1,
+        21,
+    ),
+    1,
+    17,
+)

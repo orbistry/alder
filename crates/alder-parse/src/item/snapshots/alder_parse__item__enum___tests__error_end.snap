@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Color { Red Green }"
+---
+End(
+    1,
+    18,
+)

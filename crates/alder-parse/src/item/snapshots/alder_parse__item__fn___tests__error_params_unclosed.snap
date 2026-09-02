@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn add(a, b { a }"
+---
+Params(
+    End(
+        1,
+        13,
+    ),
+    1,
+    7,
+)

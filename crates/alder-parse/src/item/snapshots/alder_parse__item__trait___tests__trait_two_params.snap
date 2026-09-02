@@ -1,0 +1,125 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Convert[a, b] {\n    fn convert(x: a) -> b\n}\n"
+---
+TraitDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "Convert",
+    },
+    params: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 15,
+                },
+                end: Position {
+                    line: 1,
+                    column: 16,
+                },
+            },
+            value: "a",
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 18,
+                },
+                end: Position {
+                    line: 1,
+                    column: 19,
+                },
+            },
+            value: "b",
+        },
+    ],
+    where_clause: [],
+    items: [
+        Fn(
+            FnDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 15,
+                        },
+                    },
+                    value: "convert",
+                },
+                params: [
+                    Param {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 16,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 17,
+                                },
+                            },
+                            value: Var(
+                                "x",
+                            ),
+                        },
+                        annotation: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 19,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 20,
+                                    },
+                                },
+                                value: Var {
+                                    name: "a",
+                                    args: [],
+                                },
+                            },
+                        ),
+                    },
+                ],
+                ret: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 25,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 26,
+                            },
+                        },
+                        value: Var {
+                            name: "b",
+                            args: [],
+                        },
+                    },
+                ),
+                where_clause: [],
+                body: None,
+            },
+        ),
+    ],
+}

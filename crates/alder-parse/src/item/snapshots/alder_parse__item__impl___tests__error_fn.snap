@@ -1,0 +1,28 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Show[User] { fn show(user: User) -> String { let } }"
+---
+Fn(
+    Body(
+        Stmt(
+            Let(
+                Pattern(
+                    Start(
+                        1,
+                        55,
+                    ),
+                    1,
+                    55,
+                ),
+                1,
+                51,
+            ),
+            1,
+            51,
+        ),
+        1,
+        49,
+    ),
+    1,
+    19,
+)
