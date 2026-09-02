@@ -1,0 +1,337 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table users {\n    id: integer() primaryKey autoIncrement\n    email: text() notNull unique\n    name: text() notNull\n    created: timestamp() notNull default(now)\n}\n"
+---
+TableDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: "users",
+    },
+    columns: [
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 7,
+                    },
+                },
+                value: "id",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 18,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 16,
+                            },
+                        },
+                        value: Var(
+                            "integer",
+                        ),
+                    },
+                    arguments: [],
+                },
+            },
+            modifiers: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 19,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 29,
+                            },
+                        },
+                        value: "primaryKey",
+                    },
+                    args: [],
+                },
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 30,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 43,
+                            },
+                        },
+                        value: "autoIncrement",
+                    },
+                    args: [],
+                },
+            ],
+        },
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 10,
+                    },
+                },
+                value: "email",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 18,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 12,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 16,
+                            },
+                        },
+                        value: Var(
+                            "text",
+                        ),
+                    },
+                    arguments: [],
+                },
+            },
+            modifiers: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 19,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 26,
+                            },
+                        },
+                        value: "notNull",
+                    },
+                    args: [],
+                },
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 27,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 33,
+                            },
+                        },
+                        value: "unique",
+                    },
+                    args: [],
+                },
+            ],
+        },
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 4,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 4,
+                        column: 9,
+                    },
+                },
+                value: "name",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 4,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 4,
+                        column: 17,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 4,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 4,
+                                column: 15,
+                            },
+                        },
+                        value: Var(
+                            "text",
+                        ),
+                    },
+                    arguments: [],
+                },
+            },
+            modifiers: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 4,
+                                column: 18,
+                            },
+                            end: Position {
+                                line: 4,
+                                column: 25,
+                            },
+                        },
+                        value: "notNull",
+                    },
+                    args: [],
+                },
+            ],
+        },
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 5,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 5,
+                        column: 12,
+                    },
+                },
+                value: "created",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 5,
+                        column: 14,
+                    },
+                    end: Position {
+                        line: 5,
+                        column: 25,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 14,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 23,
+                            },
+                        },
+                        value: Var(
+                            "timestamp",
+                        ),
+                    },
+                    arguments: [],
+                },
+            },
+            modifiers: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 26,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 33,
+                            },
+                        },
+                        value: "notNull",
+                    },
+                    args: [],
+                },
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 34,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 41,
+                            },
+                        },
+                        value: "default",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 42,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 45,
+                                },
+                            },
+                            value: Var(
+                                "now",
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

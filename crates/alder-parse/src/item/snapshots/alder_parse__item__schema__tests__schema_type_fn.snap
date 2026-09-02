@@ -1,0 +1,137 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S { check: fn(String) -> Bool, required }"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 9,
+            },
+        },
+        value: "S",
+    },
+    from: None,
+    items: [
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                },
+                value: "check",
+            },
+            typ: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 37,
+                        },
+                    },
+                    value: Fn {
+                        params: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 22,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 28,
+                                    },
+                                },
+                                value: Named {
+                                    path: Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 22,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 28,
+                                                    },
+                                                },
+                                                value: "String",
+                                            },
+                                        ],
+                                    },
+                                    args: [],
+                                },
+                            },
+                        ],
+                        ret: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 33,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 37,
+                                },
+                            },
+                            value: Named {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 33,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 37,
+                                                },
+                                            },
+                                            value: "Bool",
+                                        },
+                                    ],
+                                },
+                                args: [],
+                            },
+                        },
+                    },
+                },
+            ),
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 39,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 47,
+                            },
+                        },
+                        value: "required",
+                    },
+                    args: [],
+                },
+            ],
+        },
+    ],
+}

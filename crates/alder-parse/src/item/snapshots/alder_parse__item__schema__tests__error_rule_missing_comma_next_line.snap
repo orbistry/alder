@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S {\n    name: min(3)\n        max(10)\n}\n"
+---
+End(
+    3,
+    9,
+)

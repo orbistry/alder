@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S { 5 }"
+---
+Item(
+    1,
+    12,
+)

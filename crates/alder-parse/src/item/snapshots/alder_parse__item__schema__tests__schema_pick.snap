@@ -1,0 +1,66 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema SignUp from users {\n    pick email, name\n}\n"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "SignUp",
+    },
+    from: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 20,
+                },
+                end: Position {
+                    line: 1,
+                    column: 25,
+                },
+            },
+            value: "users",
+        },
+    ),
+    items: [
+        Pick(
+            [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 15,
+                        },
+                    },
+                    value: "email",
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 17,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 21,
+                        },
+                    },
+                    value: "name",
+                },
+            ],
+        ),
+    ],
+}

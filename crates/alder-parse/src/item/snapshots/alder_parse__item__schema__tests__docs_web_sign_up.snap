@@ -1,0 +1,288 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema SignUp from users {\n    pick email, name\n    name: min(3)\n    password: String, min(12)\n    confirm: String, equals(password)\n}\n"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "SignUp",
+    },
+    from: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 20,
+                },
+                end: Position {
+                    line: 1,
+                    column: 25,
+                },
+            },
+            value: "users",
+        },
+    ),
+    items: [
+        Pick(
+            [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 15,
+                        },
+                    },
+                    value: "email",
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 17,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 21,
+                        },
+                    },
+                    value: "name",
+                },
+            ],
+        ),
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 9,
+                    },
+                },
+                value: "name",
+            },
+            typ: None,
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 14,
+                            },
+                        },
+                        value: "min",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 15,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 16,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 3.0,
+                                    text: "3",
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 4,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 4,
+                        column: 13,
+                    },
+                },
+                value: "password",
+            },
+            typ: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 4,
+                            column: 15,
+                        },
+                        end: Position {
+                            line: 4,
+                            column: 21,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 4,
+                                            column: 15,
+                                        },
+                                        end: Position {
+                                            line: 4,
+                                            column: 21,
+                                        },
+                                    },
+                                    value: "String",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 4,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 4,
+                                column: 26,
+                            },
+                        },
+                        value: "min",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 27,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 29,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 12.0,
+                                    text: "12",
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 5,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 5,
+                        column: 12,
+                    },
+                },
+                value: "confirm",
+            },
+            typ: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 14,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 20,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 5,
+                                            column: 14,
+                                        },
+                                        end: Position {
+                                            line: 5,
+                                            column: 20,
+                                        },
+                                    },
+                                    value: "String",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 22,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 28,
+                            },
+                        },
+                        value: "equals",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 29,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 37,
+                                },
+                            },
+                            value: Var(
+                                "password",
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

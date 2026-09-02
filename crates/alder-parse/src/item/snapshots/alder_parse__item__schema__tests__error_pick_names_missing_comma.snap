@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S from users { pick email name }"
+---
+End(
+    1,
+    34,
+)

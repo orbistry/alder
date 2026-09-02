@@ -1,0 +1,106 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S from users {\n    // columns\n    pick email // the login\n    name: min(3)\n}\n"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 9,
+            },
+        },
+        value: "S",
+    },
+    from: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 15,
+                },
+                end: Position {
+                    line: 1,
+                    column: 20,
+                },
+            },
+            value: "users",
+        },
+    ),
+    items: [
+        Pick(
+            [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 15,
+                        },
+                    },
+                    value: "email",
+                },
+            ],
+        ),
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 4,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 4,
+                        column: 9,
+                    },
+                },
+                value: "name",
+            },
+            typ: None,
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 4,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 4,
+                                column: 14,
+                            },
+                        },
+                        value: "min",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 15,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 16,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 3.0,
+                                    text: "3",
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

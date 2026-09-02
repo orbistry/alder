@@ -1,0 +1,143 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema SignUp {\n    password: String, min(12), max(64)\n}\n"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "SignUp",
+    },
+    from: None,
+    items: [
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 13,
+                    },
+                },
+                value: "password",
+            },
+            typ: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 15,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 21,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 15,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 21,
+                                        },
+                                    },
+                                    value: "String",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 26,
+                            },
+                        },
+                        value: "min",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 27,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 29,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 12.0,
+                                    text: "12",
+                                },
+                            ),
+                        },
+                    ],
+                },
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 32,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 35,
+                            },
+                        },
+                        value: "max",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 36,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 38,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 64.0,
+                                    text: "64",
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

@@ -1,0 +1,124 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema SignUp from users {\n    name: min(3), max(40)\n}\n"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "SignUp",
+    },
+    from: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 20,
+                },
+                end: Position {
+                    line: 1,
+                    column: 25,
+                },
+            },
+            value: "users",
+        },
+    ),
+    items: [
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 9,
+                    },
+                },
+                value: "name",
+            },
+            typ: None,
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 14,
+                            },
+                        },
+                        value: "min",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 15,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 16,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 3.0,
+                                    text: "3",
+                                },
+                            ),
+                        },
+                    ],
+                },
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 19,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 22,
+                            },
+                        },
+                        value: "max",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 23,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 25,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 40.0,
+                                    text: "40",
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}
