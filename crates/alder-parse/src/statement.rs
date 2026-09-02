@@ -26,6 +26,22 @@
 //! line break" hint (§10.38). `if` / `while` / `for … in` / `provide … =`
 //! heads run under `no_record_ctor` (§2.3).
 //!
+//! Error shape in `block()`:
+//!
+//! - A byte that cannot start a statement (`)`, `,`, `=`, EOF, …) is
+//!   `Block::End` ("expected a statement or `}`"): a `Stmt::Expr(Expr::Start)`
+//!   raised at the statement's own start position is folded into `End`, the
+//!   same rule §6.0 uses for `Expr::OperatorRight`. `Block::SameLine` is
+//!   therefore only reported for something that does start a statement.
+//! - A first statement shaped like a record start — `..`, or a lowercase name
+//!   followed on the same line by `:` (not `::`) or `,` — is
+//!   `Block::LooksLikeRecord` (§2.2, §11). The shape must not cross a line
+//!   break: `x` then `:timeout` on the next line is a legal block.
+//! - An assignment operator must sit on the target's line: `= += -= *= /=`
+//!   are chain terminators (§2), not line continuers (§2.1 rule 2), so `x`
+//!   then `= 1` on the next line is the statement `x` followed by `End` at
+//!   the `=`.
+//!
 //! Conventions: `block()` and `statement()` chomp trailing whitespace and
 //! compute their region before the chomp; the private `*_stmt` helpers and
 //! `use_stmt` leave the cursor wherever their last sub-parser left it (after
@@ -53,28 +69,33 @@ impl<'a> Parser<'a> {
         let mut last_end: Option<Position> = None;
         loop {
             let (row, col) = self.position();
+            // `;` is exempt from the same-line rule: `statement()` reports it
+            // as `Stmt::Semicolon` (the more specific hint).
+            let mut same_line = false;
             match self.peek() {
                 Some(b'}') => {
                     self.advance();
                     break;
                 }
                 None => return Err(error::Block::End(row, col)),
-                // `statement()` reports it as `Stmt::Semicolon` (the more
-                // specific hint), so it is exempt from the same-line rule.
                 Some(b';') => {}
                 Some(_) => {
-                    if last_end.is_some_and(|end| !self.newline_since(end)) {
-                        return Err(error::Block::SameLine(row, col));
-                    }
-                    if stmts.is_empty() && self.looks_like_record_field() {
+                    if stmts.is_empty() && self.looks_like_record_start() {
                         return Err(error::Block::LooksLikeRecord(row, col));
                     }
+                    same_line = last_end.is_some_and(|end| !self.newline_since(end));
                 }
             }
-            let stmt = self.specialize(
-                |bump, e, row, col| error::Block::Stmt(bump.alloc(e), row, col),
-                |p| p.statement(),
-            )?;
+            let stmt = match self.statement() {
+                Err(error::Stmt::Expr(error::Expr::Start(r, c), _, _))
+                    if (*r, *c) == (row, col) =>
+                {
+                    return Err(error::Block::End(row, col));
+                }
+                _ if same_line => return Err(error::Block::SameLine(row, col)),
+                Err(e) => return Err(error::Block::Stmt(self.alloc(e), row, col)),
+                Ok(stmt) => stmt,
+            };
             last_end = Some(stmt.region.end);
             stmts.push(stmt);
         }
@@ -97,10 +118,15 @@ impl<'a> Parser<'a> {
         Ok(block)
     }
 
-    /// Lookahead at a statement start: a non-reserved lowercase name followed
-    /// (after whitespace) by a single `:` — the record-field shape of §2.2, so
-    /// the block was probably meant to be a record.
-    fn looks_like_record_field(&mut self) -> bool {
+    /// Lookahead at the first statement of a block: the record-start shape of
+    /// §2.2 — `..`, or a non-reserved lowercase name followed on the same line
+    /// by a single `:` or by `,` — so the block was probably meant to be a
+    /// record. The shape never crosses a line break: `x` followed by
+    /// `:timeout` on the next line is a name statement and a tag tail.
+    fn looks_like_record_start(&mut self) -> bool {
+        if self.peek() == Some(b'.') && self.peek_at(1) == Some(b'.') {
+            return true;
+        }
         self.lookahead(|p| {
             if !p.peek_lower() {
                 return false;
@@ -110,8 +136,16 @@ impl<'a> Parser<'a> {
                 return false;
             }
             p.advance_by(word.len());
+            let name_end = p.get_position();
             p.chomp();
-            p.peek() == Some(b':') && p.peek_at(1) != Some(b':')
+            if p.newline_since(name_end) {
+                return false;
+            }
+            match (p.peek(), p.peek_at(1)) {
+                (Some(b':'), next) => next != Some(b':'),
+                (Some(b','), _) => true,
+                _ => false,
+            }
         })
     }
 
@@ -183,15 +217,19 @@ impl<'a> Parser<'a> {
 
     /// expression, then optional assign_op + value. Shared with lambda bodies.
     ///
-    /// The assignment operator may follow the target on a later line, like a
-    /// binary operator (§2.1 rule 2); the target's start is the position of
-    /// `Stmt::AssignTarget`.
+    /// The assignment operator must sit on the target's line: `=` and the
+    /// compound forms are chain terminators (§2), not line continuers, so an
+    /// operator on a later line ends this statement and is left for the
+    /// caller. The target's start is the position of `Stmt::AssignTarget`.
     pub(crate) fn expr_or_assign(&mut self) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>> {
         let start = self.get_position();
         let expr = self.specialize(
             |bump, e, row, col| error::Stmt::Expr(bump.alloc(e), row, col),
             |p| p.expression(),
         )?;
+        if self.newline_since(expr.region.end) {
+            return Ok(self.stmt_at(start, expr.region.end, Stmt::Expr(expr)));
+        }
         let Some(op) = self.assign_op() else {
             return Ok(self.stmt_at(start, expr.region.end, Stmt::Expr(expr)));
         };
@@ -314,13 +352,35 @@ impl<'a> Parser<'a> {
     /// After `use`. `pub(crate)` (not private as §5.12 shows) because
     /// `markup::directive` dispatches child-block `use` through it (§6.2).
     /// Does not chomp: the cursor stops right after the path.
+    ///
+    /// `path()` stops before `::lower` and never reads `.`, so `use Db::x` and
+    /// `use Db.insert(u)` would otherwise leave their tail to the block loop
+    /// (a misleading `Block::SameLine`); a `::` or `.` on the path's line is
+    /// reported here at its own position.
+    // TODO(wave0): a dedicated `Stmt::UseMember` variant would let the
+    // renderer say "a `use` names a provider (`Db`, `App::Db`), not a member";
+    // `Stmt::Use` ("expected a path after `use`") is the nearest one.
     pub(crate) fn use_stmt(
         &mut self,
         start: Position,
     ) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>> {
         self.chomp();
         let path = self.path(error::Stmt::Use, error::Stmt::Use)?;
-        Ok(self.stmt_at(start, path.region().end, Stmt::Use(path)))
+        let path_end = path.region().end;
+        let member = self.lookahead(|p| {
+            p.chomp();
+            if p.newline_since(path_end) {
+                return None;
+            }
+            match (p.peek(), p.peek_at(1)) {
+                (Some(b'.'), _) | (Some(b':'), Some(b':')) => Some(p.position()),
+                _ => None,
+            }
+        });
+        if let Some((row, col)) = member {
+            return Err(error::Stmt::Use(row, col));
+        }
+        Ok(self.stmt_at(start, path_end, Stmt::Use(path)))
     }
 
     /// After `return`: an optional value on the same line (§2.1 rule 4).
@@ -528,11 +588,14 @@ mod tests {
     #[test]
     #[ignore = "waits for expression/mod.rs"]
     fn block_nested() {
+        // The inner body must be unambiguously a block: `{ x }` alone sits in
+        // expression position, where §2.2 makes it a record.
         assert_block_snapshot!(
             r#"
             {
                 {
-                    x
+                    let y = x
+                    y
                 }
             }
             "#
@@ -542,6 +605,58 @@ mod tests {
     #[test]
     fn block_looks_like_record_hint() {
         assert_block_error_snapshot!("{ x: 1 }");
+    }
+
+    #[test]
+    fn block_shorthand_record_hint() {
+        assert_block_error_snapshot!("{ x, y }");
+    }
+
+    #[test]
+    fn block_spread_record_hint() {
+        assert_block_error_snapshot!("{ ..r }");
+    }
+
+    #[test]
+    #[ignore = "waits for expression/mod.rs"]
+    fn block_tag_stmt_after_name() {
+        // `x` then `:timeout` is a name statement and a tag tail, not the
+        // record-field shape: the hint must not cross the line break.
+        assert_block_snapshot!(
+            r#"
+            {
+                x
+                :timeout
+            }
+            "#
+        );
+    }
+
+    /// The record-start lookahead at the first statement position of `{ … }`.
+    fn record_start_hint(src: &str) -> bool {
+        let bump = bumpalo::Bump::new();
+        let src = bump.alloc_str(src);
+        let mut parser = crate::Parser::new(&bump, src.as_bytes());
+        parser.advance();
+        parser.chomp();
+        let saved = parser.position();
+        let hint = parser.looks_like_record_start();
+        assert_eq!(parser.position(), saved, "lookahead must not consume");
+        hint
+    }
+
+    #[test]
+    fn record_start_lookahead() {
+        assert!(record_start_hint("{ x: 1 }"));
+        assert!(record_start_hint("{ x : 1 }"));
+        assert!(record_start_hint("{ x, y }"));
+        assert!(record_start_hint("{ ..r }"));
+        assert!(!record_start_hint("{ x }"));
+        assert!(!record_start_hint("{ x::y }"));
+        assert!(!record_start_hint("{ type: 1 }"));
+        assert!(!record_start_hint("{ x\n: 1 }"));
+        assert!(!record_start_hint("{ x\n, y }"));
+        assert!(!record_start_hint("{ x\n:timeout }"));
     }
 
     // ---- let
@@ -752,6 +867,21 @@ mod tests {
     }
 
     #[test]
+    fn error_use_lower_member() {
+        assert_statement_error_snapshot!("use Db::x");
+    }
+
+    #[test]
+    fn error_use_access() {
+        assert_statement_error_snapshot!("use Db.insert(u)");
+    }
+
+    #[test]
+    fn error_use_access_in_block() {
+        assert_block_error_snapshot!("{ use Db.insert(u) }");
+    }
+
+    #[test]
     #[ignore = "waits for expression/mod.rs"]
     fn provide_simple() {
         assert_statement_snapshot!("provide Db = fakeDb() { run() }");
@@ -911,6 +1041,34 @@ mod tests {
     #[ignore = "waits for expression/mod.rs"]
     fn error_same_line() {
         assert_block_error_snapshot!("{ let x = 1 2 }");
+    }
+
+    #[test]
+    #[ignore = "waits for expression/mod.rs"]
+    fn error_close_paren_same_line() {
+        // `)` cannot start a statement: `End`, not `SameLine`.
+        assert_block_error_snapshot!("{ let x = 1 )");
+    }
+
+    #[test]
+    #[ignore = "waits for expression/mod.rs"]
+    fn error_close_paren_stmt_start() {
+        assert_block_error_snapshot!("{ )");
+    }
+
+    #[test]
+    #[ignore = "waits for expression/mod.rs"]
+    fn error_assign_op_on_next_line() {
+        // `=` is a chain terminator, not a line continuer: the statement is
+        // `x`, and the `=` on the next line cannot start a statement.
+        assert_block_error_snapshot!(
+            r#"
+            {
+                x
+                = 1
+            }
+            "#
+        );
     }
 
     #[test]

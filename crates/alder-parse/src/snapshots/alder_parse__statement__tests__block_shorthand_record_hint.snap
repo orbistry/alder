@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "{ x, y }"
+---
+LooksLikeRecord(
+    1,
+    3,
+)
