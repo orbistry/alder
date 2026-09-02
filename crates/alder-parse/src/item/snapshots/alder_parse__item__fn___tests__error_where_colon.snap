@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: " a Show"
+---
+Colon(
+    1,
+    4,
+)

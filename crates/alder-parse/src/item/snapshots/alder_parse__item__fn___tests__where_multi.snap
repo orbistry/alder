@@ -1,0 +1,74 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: " a: Show, k: Hash"
+---
+[
+    Bound {
+        var: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 3,
+                },
+            },
+            value: "a",
+        },
+        bounds: [
+            Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                        },
+                        value: "Show",
+                    },
+                ],
+            },
+        ],
+    },
+    Bound {
+        var: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 11,
+                },
+                end: Position {
+                    line: 1,
+                    column: 12,
+                },
+            },
+            value: "k",
+        },
+        bounds: [
+            Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 18,
+                            },
+                        },
+                        value: "Hash",
+                    },
+                ],
+            },
+        ],
+    },
+]

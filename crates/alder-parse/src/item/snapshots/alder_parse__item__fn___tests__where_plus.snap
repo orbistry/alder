@@ -1,0 +1,57 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: " k: Eq + Hash"
+---
+[
+    Bound {
+        var: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 3,
+                },
+            },
+            value: "k",
+        },
+        bounds: [
+            Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 7,
+                            },
+                        },
+                        value: "Eq",
+                    },
+                ],
+            },
+            Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                        },
+                        value: "Hash",
+                    },
+                ],
+            },
+        ],
+    },
+]
