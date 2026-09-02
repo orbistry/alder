@@ -10,8 +10,11 @@
 //! A macro body is raw balanced text (`raw_balanced`, §6.5, §10.29): the
 //! `Located<&str>` covers the interior between the braces, so `quote { }` /
 //! `unquote(x)` never reach the expression parser in M1. The parameter list
-//! is required; a missing `(` is `Macro::Param` at the position where it was
-//! expected. `Macro::Body` carries `raw_balanced`'s problems (`Open` when
+//! is required; a missing `(` is reported at the position where it was
+//! expected as `Macro::Param` — the nearest existing variant, whose
+//! rendering ("expected a parameter") is off for `macro now {}` where the
+//! user forgot the parentheses (see the `TODO(wave0)` at the call site).
+//! `Macro::Body` carries `raw_balanced`'s problems (`Open` when
 //! there is no `{`, `Endless`, `Unbalanced`, `String`) at the positions
 //! §5.9 gives them. A `comptime` body is an ordinary block.
 //!
@@ -30,6 +33,8 @@ impl<'a> Parser<'a> {
         self.chomp();
         let name = self.located_lower(error::Macro::Name)?;
         self.chomp();
+        // TODO(wave0): add `Macro::ParamsOpen(Row, Col)` ("expected `(` after the
+        // macro name") and report it here; `Param` is the nearest variant.
         self.word1(b'(', error::Macro::Param)?;
         self.chomp();
         let mut params = BumpVec::new_in(self.bump);

@@ -48,8 +48,11 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::super::{assert_item_error_snapshot, assert_item_snapshot};
 
+    // §7.2 names these `test_simple` / `test_provide`, but insta strips a
+    // leading `test_` from snapshot names, so the `decl_` prefix keeps the
+    // function and `.snap` names identical.
     #[test]
-    fn test_simple() {
+    fn decl_simple() {
         assert_item_snapshot!(
             r#"
             test "adds numbers" {
@@ -60,7 +63,7 @@ mod tests {
     }
 
     #[test]
-    fn test_provide() {
+    fn decl_provide() {
         assert_item_snapshot!(
             r#"
             test "finds a user" {
@@ -73,7 +76,7 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_body() {
+    fn decl_empty_body() {
         assert_item_snapshot!(r#"test "todo" {}"#);
     }
 
@@ -173,6 +176,14 @@ mod tests {
     #[test]
     fn error_tests_same_line() {
         assert_item_error_snapshot!(r#"tests { test "a" {} test "b" {} }"#);
+    }
+
+    // A non-item on the previous item's line is `Tests::End` ("expected an
+    // item or `}`"), not `Tests::SameLine`: the same precedence `module()`
+    // gives `Module::BadEnd` and `block()` gives `Block::End` (§5.10, §10.38).
+    #[test]
+    fn error_tests_non_item_same_line() {
+        assert_item_error_snapshot!("tests { let x = 1 42 }");
     }
 
     #[test]

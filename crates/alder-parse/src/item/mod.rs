@@ -219,6 +219,11 @@ impl<'a> Parser<'a> {
 
     /// Items until `}` (for `tests { }`); `}` is consumed. Same line-break rule as
     /// `module()` → Tests::SameLine. `item()` itself reports a `;` as Item::Semicolon.
+    ///
+    /// Precedence mirrors `module()` and `block()`: a byte that cannot start
+    /// an item is `Tests::End` even when it sits on the previous item's line
+    /// (`tests { let x = 1 42 }`), because `SameLine` describes a *second
+    /// item* on the line (§10.38) and `42` is not one.
     pub(crate) fn items_until_close(
         &mut self,
     ) -> Result<&'a [&'a Located<Item<'a>>], error::Tests<'a>> {
