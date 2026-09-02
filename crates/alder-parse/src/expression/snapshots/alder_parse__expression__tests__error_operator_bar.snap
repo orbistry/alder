@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: a | b
+---
+OperatorReserved(
+    Bar,
+    1,
+    3,
+)

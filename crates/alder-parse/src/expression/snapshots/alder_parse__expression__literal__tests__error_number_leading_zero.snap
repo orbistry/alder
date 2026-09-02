@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/literal.rs
+description: "007"
+---
+Number(
+    NoLeadingZero,
+    1,
+    2,
+)

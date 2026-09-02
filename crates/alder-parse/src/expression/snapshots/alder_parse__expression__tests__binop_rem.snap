@@ -1,0 +1,65 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: a % b
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 6,
+        },
+    },
+    value: BinOps {
+        operands: [
+            BinOpOperand {
+                expr: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+                op: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: Rem,
+                },
+            },
+        ],
+        last: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 5,
+                },
+                end: Position {
+                    line: 1,
+                    column: 6,
+                },
+            },
+            value: Var(
+                "b",
+            ),
+        },
+    },
+}

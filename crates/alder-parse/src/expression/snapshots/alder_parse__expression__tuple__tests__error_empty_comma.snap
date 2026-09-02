@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/expression/tuple.rs
+description: "(,)"
+---
+Tuple(
+    Expr(
+        Start(
+            1,
+            2,
+        ),
+        1,
+        2,
+    ),
+    1,
+    1,
+)

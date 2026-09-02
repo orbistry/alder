@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/literal.rs
+description: 123abc
+---
+Number(
+    End,
+    1,
+    4,
+)

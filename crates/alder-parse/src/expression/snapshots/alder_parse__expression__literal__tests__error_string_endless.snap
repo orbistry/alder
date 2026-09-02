@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/literal.rs
+description: "\"abc"
+---
+String(
+    Endless,
+    1,
+    5,
+)

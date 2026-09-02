@@ -1,0 +1,11 @@
+---
+source: crates/alder-parse/src/expression/literal.rs
+description: "\"\\q\""
+---
+String(
+    Escape(
+        Unknown,
+    ),
+    1,
+    2,
+)
