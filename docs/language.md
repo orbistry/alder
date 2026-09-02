@@ -96,11 +96,11 @@ Uncurried, JS-style call syntax. The pipe operator passes the value as the
 first argument.
 
 ```alder
-pub fn add(a: Number, b: Number) Number {
+pub fn add(a: Number, b: Number) -> Number {
     a + b
 }
 
-fn greet(name: String) String {
+fn greet(name: String) -> String {
     `Hello ${name}`
 }
 
@@ -115,13 +115,14 @@ let block = fn(x) {
     |> Array.filter(fn(x) x > 2)
 ```
 
-- Return type comes after the parameter list with no arrow.
+- Return type follows `->` after the parameter list and may be omitted
+  when it is inferred (including inferred `Result` errors and `Task`).
 - The last expression of a block is its value. `return` exits early.
 - Partial application uses `_` placeholders: `add(1, _)` and
   `Array.map(_, double)` each become a lambda with one parameter per `_`,
   in order. Lambdas remain for anything more involved.
 - Generics use angle brackets and lowercase type variables:
-  `fn first<a>(xs: Array<a>) Option<a>`.
+  `fn first<a>(xs: Array<a>) -> Option<a>`.
 
 ## Statements and control flow
 
@@ -129,7 +130,7 @@ Function bodies are statement blocks. `if`, `match`, and `loop` are
 expressions.
 
 ```alder
-fn classify(n: Number) String {
+fn classify(n: Number) -> String {
     if n < 0 {
         "negative"
     } else if n == 0 {
@@ -213,19 +214,19 @@ name or through the pipe.
 
 ```alder
 pub trait Show<a> {
-    fn show(value: a) String
+    fn show(value: a) -> String
 }
 
 impl Show<User> {
-    fn show(user: User) String { user.name }
+    fn show(user: User) -> String { user.name }
 }
 
 pub trait Functor<f> {
-    fn map<a, b>(fa: f<a>, g: fn(a) b) f<b>
+    fn map<a, b>(fa: f<a>, g: fn(a) -> b) f<b>
 }
 
 impl Functor<Option> {
-    fn map<a, b>(fa: Option<a>, g: fn(a) b) Option<b> {
+    fn map<a, b>(fa: Option<a>, g: fn(a) -> b) -> Option<b> {
         match fa {
             Some(x) => Some(g(x)),
             None => None,
@@ -233,13 +234,13 @@ impl Functor<Option> {
     }
 }
 
-fn describe<a: Show>(xs: Array<a>) String {
+fn describe<a: Show>(xs: Array<a>) -> String {
     xs |> Array.map(show) |> String.join(", ")
 }
 ```
 
 - Bounds: `<a: Show>`, multiple bounds `<a: Show + Eq>`.
-- Associated types: `trait Iterator<i> { type Item; fn next(it: i) Option<Item> }`.
+- Associated types: `trait Iterator<i> { type Item; fn next(it: i) -> Option<Item> }`.
 - Default method bodies are allowed in the trait.
 - Rust's orphan rule applies: an `impl` must live in the package that
   defines the trait or the type.
@@ -251,20 +252,27 @@ fn describe<a: Show>(xs: Array<a>) String {
 
 `Result<a, e>` is the only failure mechanism. The error position accepts
 open tagged constructors written `:tag(payload)`; their type is a row that
-grows as errors flow through `?`.
+grows as errors flow through `?`. The error is inferred: writing
+`Result<User>` in a signature leaves the row to the compiler, which
+collects every tag the body can produce. Spell the row out only to close
+it or to document it.
 
 ```alder
-fn find(id: Id) Result<User, [:not_found(Id) | r]> {
+fn find(id: Id) -> Result<User> {              // error inferred: [:not_found(Id) | r]
     match db.get(id) {
         Some(u) => Ok(u),
         None => Err(:not_found(id)),
     }
 }
 
-fn load(id: Id) Result<Profile, [:not_found(Id) | :timeout | r]> {
+fn load(id: Id) -> Result<Profile> {           // inferred: [:not_found(Id) | :timeout | r]
     let user = find(id)?          // rows merge through ?
     let prefs = fetchPrefs(user).await?
     Ok({ user, prefs })
+}
+
+fn loadStrict(id: Id) -> Result<Profile, [:not_found(Id) | :timeout]> {
+    load(id)                       // explicit, closed row
 }
 
 match load(id) {
@@ -283,9 +291,13 @@ pub error AuthError {
     :expired(Timestamp),
 }
 
-fn check(token: String) Result<Session, AuthError>
+fn check(token: String) -> Result<Session, AuthError>
 ```
 
+- `Result<a>` with one argument means an inferred error row. Hover, docs,
+  and the generated `.d.ts` show the inferred row, so `pub` functions still
+  have a readable error surface. **Open:** whether `pub` items should be
+  required to spell the row for API stability (semver diffing needs it).
 - `:tag` outside a `Result` error position is a type error. Tags are not a
   general polymorphic-variant feature.
 - A closed `error` group is matched exhaustively. An open row requires `_`.
@@ -305,7 +317,7 @@ structured concurrency, interruption, and scopes without an `Effect` type
 in user code.
 
 ```alder
-fn profile(id: Id) Result<Profile, [:not_found(Id) | r]> {
+fn profile(id: Id) -> Result<Profile> {
     let user = Http.get(`/users/${id}`).await?
     let posts = Http.get(`/users/${id}/posts`).await?
     Ok({ user, posts })
@@ -315,7 +327,7 @@ let (a, b) = Fiber.all(profile(1), profile(2)).await
 ```
 
 - `Task` is a visible type. Signatures may write it
-  (`fn load(id: Id) Task<Result<User, [:not_found(Id) | r]>>`), hover shows
+  (`fn load(id: Id) -> Task<Result<User>>`), hover shows
   it when inferred, and an un-awaited call is a `Task` value you can pass
   to `Fiber.fork`, `Fiber.all`, or `Fiber.race`.
 - **Open:** how a top-level entry point runs the scheduler; the exact fiber
@@ -327,7 +339,7 @@ Services are requested by type with `use` and supplied by `provide` in an
 enclosing scope. Missing providers are compile errors at entry points.
 
 ```alder
-fn saveUser(user: User) Result<(), [:db(DbError) | r]> {
+fn saveUser(user: User) -> Result<()> {
     use Db
     Db.insert(users, user).await
 }
@@ -412,7 +424,7 @@ build time in the compiler's embedded V8, with Elixir-style
 
 ```alder
 #[server]
-fn loadUser(id: Id) Result<User, [:not_found(Id) | r]> { ... }
+fn loadUser(id: Id) -> Result<User> { ... }
 
 #[derive(Show, Eq, Json)]
 type Point = { x: Number, y: Number }
@@ -467,13 +479,13 @@ TypeScript can consume Alder modules.
 
 ```alder
 #[extern("node:crypto", "randomUUID")]
-fn randomUUID() String
+fn randomUUID() -> String
 
 #[extern("node:fs/promises", "readFile")]
-fn readFile(path: String, encoding: String) Task<Result<String, [:io(String)]>>
+fn readFile(path: String, encoding: String) -> Task<Result<String, [:io(String)]>>
 
 #[extern("globalThis", "JSON.parse")]
-fn parseJson(s: String) Result<Json, [:syntax(String)]>
+fn parseJson(s: String) -> Result<Json, [:syntax(String)]>
 ```
 
 - If the declared return type is `Result`, the kernel wraps the call in

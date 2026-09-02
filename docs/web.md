@@ -55,7 +55,7 @@ One web package holds both. The split is per function.
 
 ```alder
 #[server]
-fn loadUser(id: Id) Result<User, [:not_found(Id) | r]> {
+fn loadUser(id: Id) -> Result<User> {
     use Db
     Db.get(users, id).await
 }
@@ -139,7 +139,7 @@ schema SignUp from users {
 }
 
 #[server]
-fn signUp(input: SignUp) Result<User, [:taken(Email) | r]> { ... }
+fn signUp(input: SignUp) -> Result<User> { ... }
 
 <Form action={signUp}>
     <Field name="email" />

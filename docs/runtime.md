@@ -71,7 +71,7 @@ interprets them and the compiler emits `wrangler.jsonc` and bindings.
 type Counter = { count: Number }
 
 impl DurableObject<Counter> {
-    fn fetch(self: Counter, req: Request) Response { ... }
+    fn fetch(self: Counter, req: Request) -> Response { ... }
 }
 
 #[binding("KV_CACHE")]

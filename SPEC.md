@@ -226,11 +226,11 @@ the solver. Snapshot tests per construct as today.
 
 - [ ] Lexer: `//` comments, template literals, `:tag` tokens, `#[`, `::`, `=>`, `|>`, `??`, `?`
 - [ ] Items: `pub`, path-first `import` with `.{ }`/`.*`/`as`, re-exports (`pub import`)
-- [ ] `fn` declarations and lambdas, return type after params
+- [ ] `fn` declarations and lambdas, optional `-> Type` after params
 - [ ] Statements: `let`/`let mut`, assignment and compound assignment, `for`, `while`, `loop`, `break`/`continue` with values, `return`
 - [ ] Expressions: blocks, `if`/`else if`, `match` with `=>` and guards, `|>`, `.await`, `?`, `??`, calls, `_` placeholders, field/tuple access, paths (`Option::Some`)
 - [ ] Literals: numbers (JS semantics), template literals, arrays, tuples, records with spread and optional fields
-- [ ] Types: `Name<a>`, `fn(A) B`, tuples, records with `?` fields and rows, error rows `[:tag(A) | r]`
+- [ ] Types: `Name<a>`, `fn(A) -> B`, tuples, records with `?` fields and rows, error rows `[:tag(A) | r]`, `Result<a>` shorthand
 - [ ] `type` aliases, `enum` with tuple and record variants
 - [ ] `trait` and `impl` (Haskell-style, HKT params, associated types, default bodies)
 - [ ] `error` groups
@@ -261,7 +261,7 @@ the solver. Snapshot tests per construct as today.
 
 ### M4: Errors and async
 
-- [ ] Row-typed `:tag` errors in `Result`'s error position, `?` row merging
+- [ ] Row-typed `:tag` errors in `Result`'s error position, `?` row merging, inferred rows for `Result<a>`
 - [ ] `error` groups and their unification with open rows
 - [ ] Exhaustiveness on closed groups, `_` requirement on open rows
 - [ ] Inferred `Task` from `.await`; generator codegen; fiber scheduler in the kernel
@@ -354,7 +354,7 @@ reexport      = 'import' module_path '.' import_names ;                         
 module_path   = '@' lower_ident '/' lower_ident { '/' lower_ident }             (* package *)
               | '~' { '/' lower_ident } ;                                       (* this package *)
 
-fn_decl       = 'fn' lower_ident [ generics ] '(' [ params ] ')' [ type ] block ;
+fn_decl       = 'fn' lower_ident [ generics ] '(' [ params ] ')' [ '->' type ] block ;
 generics      = '<' generic { ',' generic } '>' ;
 generic       = lower_ident [ ':' bound { '+' bound } ] | lower_ident '<' '_' { ',' '_' } '>' ;
 bound         = path ;
@@ -369,14 +369,14 @@ variant       = upper_ident [ '(' type { ',' type } ')' | record_type ] ;
 
 trait_decl    = 'trait' upper_ident generics '{' { trait_item } '}' ;
 trait_item    = 'type' upper_ident
-              | 'fn' lower_ident [ generics ] '(' [ params ] ')' [ type ] [ block ] ;
+              | 'fn' lower_ident [ generics ] '(' [ params ] ')' [ '->' type ] [ block ] ;
 impl_decl     = 'impl' [ generics ] path '<' type { ',' type } '>' '{' { impl_item } '}' ;
 impl_item     = 'type' upper_ident '=' type | fn_decl ;
 
 error_decl    = 'error' upper_ident '{' [ tag_variant { ',' tag_variant } [ ',' ] ] '}' ;
 tag_variant   = tag [ '(' type { ',' type } ')' ] ;
 
-extern_fn     = 'fn' lower_ident [ generics ] '(' [ params ] ')' [ type ] ;   (* requires #[extern("module", "name")] *)
+extern_fn     = 'fn' lower_ident [ generics ] '(' [ params ] ')' '->' type ;   (* requires #[extern("module", "name")] *)
 extern_type   = 'type' upper_ident ;                                           (* requires #[extern] *)
 
 component_decl = 'component' upper_ident '(' [ params ] ')' block ;
@@ -430,7 +430,7 @@ primary       = number | bigint | string | template | '_'            (* placehol
               | 'style' style_block
               | 'query' '{' query_expr '}' | markup
               | macro_call ;
-lambda        = 'fn' '(' [ params ] ')' ( block | expression ) ;
+lambda        = 'fn' '(' [ params ] ')' [ '->' type ] ( block | expression ) ;
 if_expr       = 'if' expression block { 'else' 'if' expression block } [ 'else' block ] ;
 match_expr    = 'match' expression '{' { match_arm } '}' ;
 match_arm     = pattern { '|' pattern } [ 'if' expression ] '=>' ( block | expression ) [ ',' ] ;
@@ -493,7 +493,7 @@ pattern_record = '{' [ lower_ident [ ':' pattern ] { ',' lower_ident [ ':' patte
 
 ```ebnf
 type          = fn_type | type_app ;
-fn_type       = 'fn' '(' [ type { ',' type } ] ')' type ;
+fn_type       = 'fn' '(' [ type { ',' type } ] ')' '->' type ;
 type_app      = path [ '<' type { ',' type } '>' ]
               | lower_ident                                            (* type variable *)
               | '(' ')' | '(' type ',' type { ',' type } ')'
