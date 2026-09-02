@@ -4,7 +4,7 @@
 
 Alder is a programming language compiler forked from the Elm compiler and ported from Haskell to Rust, adapting to Rust idioms where appropriate. It compiles to JavaScript with a focus on targeting Cloudflare. Unlike Elm it has no TEA (components use compile-time-tracked signals), supports SSR, ships a built-in Drizzle-like data layer, uses curly-brace Rust-flavored syntax, and is a general-purpose language via an embedded V8 runtime. Source files use the `.ald` extension.
 
-The pipeline (`alder-parse`, `alder-can`, `alder-constrain`, `alder-solve`, `alder-driver`) is a finished Elm port. The parser still accepts Elm syntax; milestone M1 in `SPEC.md` replaces it with the new grammar.
+The pipeline (`alder-parse`, `alder-can`, `alder-constrain`, `alder-solve`, `alder-driver`) started as a finished Elm port. `alder-parse` (over `alder-source`) now implements the new grammar in `SPEC.md` (milestone M1, done; design in `docs/parser-internals.md`); `alder-can` onward still consume the old AST until M2 adapts them, and the workspace `default-members` is narrowed to region/source/parse/config meanwhile.
 
 ## Design Documents
 
@@ -62,7 +62,7 @@ We use **insta** for snapshot testing with extremely granular tests:
 - `assert_X_snapshot!` - expects Ok, panics on Err, snapshots the parsed value
 - `assert_X_error_snapshot!` - expects Err, panics on Ok, snapshots the error
 
-Macros are defined in each module's test submodule for proper namespacing.
+Macros are defined at module level under `#[cfg(test)]` and re-exported with `pub(crate) use` where submodules import them (a `macro_rules!` inside `mod tests` would be invisible to child modules); modules with no child importers keep only the definitions.
 
 Example snapshot output:
 
@@ -86,20 +86,9 @@ cargo insta test --unreferenced delete  # delete stale snapshots
 
 The test macros use `indoc!` which strips leading indentation, so:
 
-- **Simple one-liners** stay simple: `assert_expression_snapshot!("if x then y else z");`
-- **Multiline tests** use the `assert_indented_*_snapshot!` macro variants,
-  which lay the fragment out as it would appear indented inside a
-  definition (in the current Elm-syntax parser a token at column 1 always
-  starts a new top-level declaration, so bare multiline fragments are not
-  valid input; this rule disappears with the brace-based grammar):
-  ```rust
-  assert_indented_expression_snapshot!(r#"
-      if condition then
-          trueBranch
-      else
-          falseBranch
-  "#);
-  ```
+- **Simple one-liners** stay simple: `assert_expression_snapshot!("if x { y } else { z }");`
+- **Multiline tests** are plain `indoc` strings (raw `r#"…"#` literals
+  indented to taste); there are no indented variants and no column rule.
 - No need to slam strings to the left - `indoc` handles it
 - Only use multiline raw strings when testing actual multiline syntax
 

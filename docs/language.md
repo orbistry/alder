@@ -1,9 +1,9 @@
 # Alder Language
 
 **Status: current direction, everything provisional.** This records the
-design decisions from the 2026-09-01 design session. Nothing here is
-implemented yet; the parser still accepts Elm-style syntax. Where a
-decision is open it is marked **Open**.
+design decisions from the 2026-09-01 design session. The parser
+implements this syntax (M1); nothing past parsing is implemented yet.
+Where a decision is open it is marked **Open**.
 
 Alder is a fork of the Elm compiler (ported to Rust) that compiles to
 JavaScript. The language is a deliberate mix of OCaml, JavaScript, and
