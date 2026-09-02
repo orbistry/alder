@@ -1,0 +1,221 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S { confirm: String, equals(password), check(fn(c) c != \"\") }"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 9,
+            },
+        },
+        value: "S",
+    },
+    from: None,
+    items: [
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                },
+                value: "confirm",
+            },
+            typ: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 27,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 21,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 27,
+                                        },
+                                    },
+                                    value: "String",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 29,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 35,
+                            },
+                        },
+                        value: "equals",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 36,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 44,
+                                },
+                            },
+                            value: Var(
+                                "password",
+                            ),
+                        },
+                    ],
+                },
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 47,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 52,
+                            },
+                        },
+                        value: "check",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 53,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 66,
+                                },
+                            },
+                            value: Lambda(
+                                Lambda {
+                                    params: [
+                                        Param {
+                                            mutable: None,
+                                            pattern: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 56,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 57,
+                                                    },
+                                                },
+                                                value: Var(
+                                                    "c",
+                                                ),
+                                            },
+                                            annotation: None,
+                                        },
+                                    ],
+                                    ret: None,
+                                    body: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 59,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 66,
+                                            },
+                                        },
+                                        value: BinOps {
+                                            operands: [
+                                                BinOpOperand {
+                                                    expr: Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 59,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 60,
+                                                            },
+                                                        },
+                                                        value: Var(
+                                                            "c",
+                                                        ),
+                                                    },
+                                                    op: Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 61,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 63,
+                                                            },
+                                                        },
+                                                        value: NotEq,
+                                                    },
+                                                },
+                                            ],
+                                            last: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 64,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 66,
+                                                    },
+                                                },
+                                                value: Str(
+                                                    "",
+                                                ),
+                                            },
+                                        },
+                                    },
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

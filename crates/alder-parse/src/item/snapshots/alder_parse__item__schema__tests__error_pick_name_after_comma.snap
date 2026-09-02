@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S from users { pick a, 5 }"
+---
+PickName(
+    1,
+    31,
+)

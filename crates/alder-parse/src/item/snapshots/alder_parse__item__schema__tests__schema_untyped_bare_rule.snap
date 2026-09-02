@@ -1,0 +1,70 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S from users { name: required }"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 9,
+            },
+        },
+        value: "S",
+    },
+    from: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 15,
+                },
+                end: Position {
+                    line: 1,
+                    column: 20,
+                },
+            },
+            value: "users",
+        },
+    ),
+    items: [
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 23,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 27,
+                    },
+                },
+                value: "name",
+            },
+            typ: None,
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 29,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 37,
+                            },
+                        },
+                        value: "required",
+                    },
+                    args: [],
+                },
+            ],
+        },
+    ],
+}

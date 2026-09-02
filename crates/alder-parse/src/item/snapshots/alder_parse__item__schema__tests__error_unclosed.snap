@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S { name: min(3)"
+---
+End(
+    1,
+    24,
+)

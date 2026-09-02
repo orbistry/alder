@@ -1,0 +1,125 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S {\n    name: min(3),\n    age: Number,\n}\n"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 9,
+            },
+        },
+        value: "S",
+    },
+    from: None,
+    items: [
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 9,
+                    },
+                },
+                value: "name",
+            },
+            typ: None,
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 14,
+                            },
+                        },
+                        value: "min",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 15,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 16,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 3.0,
+                                    text: "3",
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 8,
+                    },
+                },
+                value: "age",
+            },
+            typ: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 16,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 10,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 16,
+                                        },
+                                    },
+                                    value: "Number",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+            rules: [],
+        },
+    ],
+}

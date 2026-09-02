@@ -1,0 +1,141 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S { tags: Array[String], max(5) }"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 9,
+            },
+        },
+        value: "S",
+    },
+    from: None,
+    items: [
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                },
+                value: "tags",
+            },
+            typ: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 31,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 18,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 23,
+                                        },
+                                    },
+                                    value: "Array",
+                                },
+                            ],
+                        },
+                        args: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 24,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 30,
+                                    },
+                                },
+                                value: Named {
+                                    path: Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 24,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 30,
+                                                    },
+                                                },
+                                                value: "String",
+                                            },
+                                        ],
+                                    },
+                                    args: [],
+                                },
+                            },
+                        ],
+                    },
+                },
+            ),
+            rules: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 33,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 36,
+                            },
+                        },
+                        value: "max",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 37,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 38,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 5.0,
+                                    text: "5",
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

@@ -1,0 +1,72 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S { confirm: String }"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 9,
+            },
+        },
+        value: "S",
+    },
+    from: None,
+    items: [
+        Field {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                },
+                value: "confirm",
+            },
+            typ: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 27,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 21,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 27,
+                                        },
+                                    },
+                                    value: "String",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+            rules: [],
+        },
+    ],
+}
