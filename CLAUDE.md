@@ -2,11 +2,13 @@
 
 ## Project Overview
 
-Alder is a programming language compiler forked from the Elm compiler and ported from Haskell to Rust, adapting to Rust idioms where appropriate. It compiles to JavaScript with a focus on targeting Cloudflare. Unlike Elm it has no TEA (the runtime is React-like), supports SSR, ships a built-in Drizzle-like data layer, and uses curly-brace syntax. Source files use the `.ald` extension.
+Alder is a programming language compiler forked from the Elm compiler and ported from Haskell to Rust, adapting to Rust idioms where appropriate. It compiles to JavaScript with a focus on targeting Cloudflare. Unlike Elm it has no TEA (components use compile-time-tracked signals), supports SSR, ships a built-in Drizzle-like data layer, uses curly-brace Rust-flavored syntax, and is a general-purpose language via an embedded V8 runtime. Source files use the `.ald` extension.
+
+The pipeline (`alder-parse`, `alder-can`, `alder-constrain`, `alder-solve`, `alder-driver`) is a finished Elm port. The parser still accepts Elm syntax; milestone M1 in `SPEC.md` replaces it with the new grammar.
 
 ## Design Documents
 
-`docs/` holds the language, runtime, web, data, and tooling design (all provisional). `SPEC.md` holds the draft grammar and the milestone task list. Update them when a decision changes or a task lands.
+`docs/` holds the language, runtime, web, data, and tooling design (all provisional). `SPEC.md` holds the draft grammar and the milestone task list. Update them when a decision changes or a task lands. When the Elm reference and `docs/` disagree, `docs/` wins; Elm is a guide to compiler structure, not to language semantics.
 
 ## Reference Material
 
@@ -87,8 +89,9 @@ The test macros use `indoc!` which strips leading indentation, so:
 - **Simple one-liners** stay simple: `assert_expression_snapshot!("if x then y else z");`
 - **Multiline tests** use the `assert_indented_*_snapshot!` macro variants,
   which lay the fragment out as it would appear indented inside a
-  definition (a token at column 1 always starts a new top-level
-  declaration, so bare multiline fragments are not valid input):
+  definition (in the current Elm-syntax parser a token at column 1 always
+  starts a new top-level declaration, so bare multiline fragments are not
+  valid input; this rule disappears with the brace-based grammar):
   ```rust
   assert_indented_expression_snapshot!(r#"
       if condition then
