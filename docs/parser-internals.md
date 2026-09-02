@@ -1250,6 +1250,8 @@ pub enum Schema<'a> {
 #[derive(Debug)]
 pub enum Macro {
     Name(Row, Col),
+    /// Expected `(` after the macro name.
+    ParamsOpen(Row, Col),
     Param(Row, Col),
     ParamEnd(Row, Col),
     /// `{` expected, or raw body problem.

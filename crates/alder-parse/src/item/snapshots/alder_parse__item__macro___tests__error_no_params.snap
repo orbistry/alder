@@ -3,7 +3,7 @@ source: crates/alder-parse/src/item/macro_.rs
 description: "macro now {}"
 ---
 Macro(
-    Param(
+    ParamsOpen(
         1,
         11,
     ),
