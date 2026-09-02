@@ -13,6 +13,11 @@
 //! Every error leaves the cursor on the offending byte, and the returned
 //! position is that byte: `007` → col 2, `1.` → col 2 (the dot), `1e` → col 3,
 //! `0x` → col 3, `123abc` → col 4, `1.5n` → col 4 (the `n`).
+//!
+//! Only `chomp_number` accepts a leading `-` (§6.4: `margin: -8px` is
+//! `Dimension { -8 "-8", "px" }`); `number_literal` leaves `-` to the unary
+//! operator, and a float followed by `.digit` (`1.5.5`) ends before the second
+//! dot, which the postfix layer then reads as a tuple index (§10.10).
 // OWNER: number.rs (Wave 1)
 
 use alder_region::Located;
@@ -76,12 +81,19 @@ impl<'a> Parser<'a> {
 
     /// Committed numeric prefix without the dirty-end check (style dimensions read the unit after it).
     ///
-    /// The cursor must be on a digit. Stops before any byte that cannot
-    /// continue the literal (`16px` → `16`, cursor on `p`; `1em` → `1`,
-    /// cursor on `e`). Malformed shapes still fail: `007`, `0x`, `1.`, `1.5n`.
+    /// The cursor must be on a digit, or on a `-` immediately followed by a
+    /// digit: the `-` is consumed, negates `value` and stays in `text`
+    /// (`-8px` → `-8` / `"-8"`, cursor on `p`), which is the whole of the
+    /// §6.4 negative-dimension recipe — the style owner calls this at the
+    /// `-`. Stops before any byte that cannot continue the literal (`16px` →
+    /// `16`, cursor on `p`; `1em` → `1`, cursor on `e`). Malformed shapes
+    /// still fail: `007`, `0x`, `1.`, `1.5n`.
     pub(crate) fn chomp_number(&mut self) -> Result<NumberLiteral<'a>, error::Number> {
-        debug_assert!(self.peek_digit(), "chomp_number called off a digit");
         let start = self.pos;
+        if self.peek() == Some(b'-') && self.peek_at(1).is_some_and(|b| b.is_ascii_digit()) {
+            self.advance();
+        }
+        debug_assert!(self.peek_digit(), "chomp_number called off a digit");
 
         if self.peek() == Some(b'0') {
             self.advance();
@@ -152,7 +164,8 @@ impl<'a> Parser<'a> {
         Some(self.located(start, n))
     }
 
-    /// Hex digits after `0x`; `start` is the byte offset of the leading `0`.
+    /// Hex digits after `0x`; `start` is the byte offset of the literal's
+    /// first byte (the leading `0`, or the `-` before it).
     fn chomp_hex(&mut self, start: usize) -> Result<NumberLiteral<'a>, error::Number> {
         let digits_start = self.pos;
         // Exact while it fits; beyond 128 bits fall back to rounding per digit.
@@ -174,7 +187,13 @@ impl<'a> Parser<'a> {
             self.advance();
             return Ok(NumberLiteral::BigInt(text));
         }
-        let value = exact.map_or(value, |n| n as f64);
+        let magnitude = exact.map_or(value, |n| n as f64);
+        // `text` starts at the `-` when `chomp_number` consumed one.
+        let value = if text.starts_with('-') {
+            -magnitude
+        } else {
+            magnitude
+        };
         Ok(NumberLiteral::Number(NumberLit { value, text }))
     }
 
@@ -295,10 +314,26 @@ mod tests {
     }
 
     #[test]
+    fn int_hex_beyond_u128_rounds_per_digit() {
+        // 40 hex digits overflow the exact u128 path; 16^40 - 1 rounds to 2^160.
+        let src = "0x".to_owned() + &"F".repeat(40);
+        assert_eq!(literal(&src), (num(2f64.powi(160), &src), (1, 43)));
+    }
+
+    #[test]
     fn float_simple() {
         assert_eq!(literal("1.5"), (num(1.5, "1.5"), (1, 4)));
         assert_eq!(literal("0.25;"), (num(0.25, "0.25"), (1, 5)));
         assert_eq!(literal("10.00"), (num(10.0, "10.00"), (1, 6)));
+    }
+
+    #[test]
+    fn float_stops_before_second_dot() {
+        // `1.5.5` / `1e5.5` end at the second dot; the postfix layer decides
+        // what `.5` means (§10.10), the scanner does not.
+        assert_eq!(literal("1.5.5"), (num(1.5, "1.5"), (1, 4)));
+        assert_eq!(literal("1e5.5"), (num(100000.0, "1e5"), (1, 4)));
+        assert_eq!(literal("1..2"), (Err("Dot 1:2".into()), (1, 2)));
     }
 
     #[test]
@@ -431,6 +466,32 @@ mod tests {
         assert_eq!(chomp("1em"), (num(1.0, "1"), (1, 2)));
         assert_eq!(chomp("2e3em"), (num(2000.0, "2e3"), (1, 4)));
         assert_eq!(chomp("0xFFn;"), (big("0xFF"), (1, 6)));
+    }
+
+    #[test]
+    fn chomp_number_negative_dimension() {
+        // §6.4: `margin: -8px` — the `-` negates `value` and stays in `text`.
+        assert_eq!(chomp("-8px"), (num(-8.0, "-8"), (1, 3)));
+        assert_eq!(chomp("-1.5rem"), (num(-1.5, "-1.5"), (1, 5)));
+        assert_eq!(chomp("-0.5em"), (num(-0.5, "-0.5"), (1, 5)));
+        assert_eq!(chomp("-2e1%"), (num(-20.0, "-2e1"), (1, 5)));
+        assert_eq!(chomp("-0x10"), (num(-16.0, "-0x10"), (1, 6)));
+        // `-0.0 == 0.0`, so check the sign bit explicitly.
+        let (zero, pos) = with_parser("-0", |p| match p.chomp_number() {
+            Ok(NumberLiteral::Number(n)) => (n.value.is_sign_negative(), n.text.to_owned()),
+            other => panic!("expected a number, got {other:?}"),
+        });
+        assert_eq!(zero, (true, "-0".to_owned()));
+        assert_eq!(pos, (1, 3));
+        assert_eq!(chomp("-8n"), (big("-8"), (1, 4)));
+    }
+
+    #[test]
+    fn chomp_number_negative_errors_at_offending_byte() {
+        assert_eq!(chomp("-007"), (Err("NoLeadingZero".into()), (1, 3)));
+        assert_eq!(chomp("-0x"), (Err("HexDigit".into()), (1, 4)));
+        assert_eq!(chomp("-1."), (Err("Dot".into()), (1, 3)));
+        assert_eq!(chomp("-1.5n"), (Err("BigIntFraction".into()), (1, 5)));
     }
 
     #[test]
