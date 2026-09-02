@@ -423,7 +423,7 @@ let_decl      = 'let' [ 'mut' ] pattern [ ':' type ] '=' expression ;
 type_alias    = 'type' upper_ident [ type_params ] '=' type ;
 opaque_type   = 'type' upper_ident ;                                  (* requires #[extern] (§10.26) *)
 enum_decl     = 'enum' upper_ident [ type_params ] '{' [ variant { ',' variant } [ ',' ] ] '}' ;
-variant       = upper_ident [ '(' type { ',' type } [ ',' ] ')' | variant_record ] ;
+variant       = upper_ident [ '(' type { ',' type } [ ',' ] ')' | variant_record ] ;   (* '(' / '{' on the name's line *)
 variant_record = '{' field_type { ',' field_type } [ ',' ] '}' ;      (* no row extension (§10.39) *)
 
 trait_decl    = 'trait' upper_ident type_params [ where_clause ] '{' { trait_item } '}' ;
@@ -493,7 +493,7 @@ call          = '(' [ call_arg { ',' call_arg } [ ',' ] ] ')' ;
 call_arg      = '_' | expression ;                       (* '_' placeholder only as a whole argument (§10.18) *)
 primary       = number | bigint | string | template | 'true' | 'false'
               | lower_ident | path [ '::' lower_ident ] | tag [ call ]
-              | '(' ')' | '(' expression ')' | '(' expression ',' expression { ',' expression } [ ',' ] ')'
+              | '(' ')' | '(' expression [ ',' ] ')' | '(' expression ',' expression { ',' expression } [ ',' ] ')'   (* '(' e ',' ')' is e (§10.8) *)
               | '[' [ expression { ',' expression } [ ',' ] ] ']'
               | record | block | lambda | if_expr | match_expr | loop_expr
               | 'state' '(' expression ')'
@@ -589,12 +589,13 @@ most once (§10.21).
 pattern       = pattern_atom [ 'as' lower_ident ] ;
 pattern_atom  = '_' | lower_ident | '^' postfix
               | [ '-' ] number | [ '-' ] bigint | string | 'true' | 'false'   (* §10.7, §10.17 *)
-              | path [ '(' pattern { ',' pattern } [ ',' ] ')' | pattern_record ]
+              | path [ '(' pattern { ',' pattern } [ ',' ] ')' | pattern_record ]   (* '(' / '{' on the path's line *)
               | tag [ '(' pattern { ',' pattern } [ ',' ] ')' ]
-              | '(' ')' | '(' pattern { ',' pattern } [ ',' ] ')'   (* unit pattern for Ok(()) (§10.17) *)
-              | '[' [ pattern { ',' pattern } [ ',' ] ] [ '..' [ lower_ident ] ] ']'
+              | '(' ')' | '(' pattern [ ',' ] ')' | '(' pattern ',' pattern { ',' pattern } [ ',' ] ')'   (* unit pattern for Ok(()) (§10.17); '(' p ',' ')' is p *)
+              | '[' { pattern ',' } [ pattern | '..' [ lower_ident ] [ ',' ] ] ']'   (* a comma before '..' is required *)
               | pattern_record ;
-pattern_record = '{' [ lower_ident [ ':' pattern ] { ',' lower_ident [ ':' pattern ] } [ ',' ] ] [ '..' ] '}' ;
+pattern_record = '{' { field_pattern ',' } [ field_pattern | '..' [ ',' ] ] '}' ;   (* a comma before '..' is required *)
+field_pattern = lower_ident [ ':' pattern ] ;
 ```
 
 ### Types
@@ -604,13 +605,13 @@ type          = fn_type | type_app ;
 fn_type       = 'fn' '(' [ type { ',' type } [ ',' ] ] ')' '->' type ;
 type_app      = path [ type_args ]
               | lower_ident [ type_args ]                              (* type variable; applied for HKT (§10.14) *)
-              | '(' ')' | '(' type ')' | '(' type ',' type { ',' type } [ ',' ] ')'
+              | '(' ')' | '(' type [ ',' ] ')' | '(' type ',' type { ',' type } [ ',' ] ')'   (* '(' T ',' ')' is T *)
               | record_type
               | error_row ;
 type_args     = '[' type { ',' type } [ ',' ] ']' ;                    (* '[' on the name's line *)
 record_type   = '{' [ lower_ident '|' ] [ field_type { ',' field_type } [ ',' ] ] '}' ;
 field_type    = lower_ident [ '?' ] ':' type ;                         (* '?' adjacent to the name *)
-error_row     = '[' [ tag_variant { '|' tag_variant } ] [ '|' lower_ident ] ']' ;
+error_row     = '[' [ tag_variant { '|' tag_variant } [ '|' lower_ident ] | lower_ident ] ']' ;   (* '[r]' is open and empty; '[| r]' is an error *)
 ```
 
 ### Reserved words
