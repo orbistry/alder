@@ -1,0 +1,52 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Container[c] {\n    type Item\n}\n"
+---
+TraitDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 16,
+            },
+        },
+        value: "Container",
+    },
+    params: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 17,
+                },
+                end: Position {
+                    line: 1,
+                    column: 18,
+                },
+            },
+            value: "c",
+        },
+    ],
+    where_clause: [],
+    items: [
+        AssocType(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 10,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 14,
+                    },
+                },
+                value: "Item",
+            },
+        ),
+    ],
+}

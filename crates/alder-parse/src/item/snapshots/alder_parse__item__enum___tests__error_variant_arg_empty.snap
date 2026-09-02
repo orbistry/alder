@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Shape { Circle() }"
+---
+VariantArg(
+    Start(
+        1,
+        21,
+    ),
+    1,
+    21,
+)

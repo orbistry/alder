@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/module.rs
+description: let a = 1;
+---
+Item(
+    Semicolon(
+        1,
+        10,
+    ),
+    1,
+    10,
+)

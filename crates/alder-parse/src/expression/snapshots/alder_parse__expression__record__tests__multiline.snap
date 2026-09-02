@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/record.rs
-description: "Code:\n\n{\n    x = 1,\n    y = 2,\n    z = 3\n}"
+description: "{\n    id: 1,\n    name: \"Ada\",\n}\n"
 ---
 Located {
     region: Region {
@@ -9,14 +9,14 @@ Located {
             column: 1,
         },
         end: Position {
-            line: 5,
+            line: 4,
             column: 2,
         },
     },
     value: Record(
         [
-            FieldAssign {
-                field: Located {
+            Field {
+                name: Located {
                     region: Region {
                         start: Position {
                             line: 2,
@@ -24,29 +24,34 @@ Located {
                         },
                         end: Position {
                             line: 2,
-                            column: 6,
+                            column: 7,
                         },
                     },
-                    value: "x",
+                    value: "id",
                 },
-                value: Located {
-                    region: Region {
-                        start: Position {
-                            line: 2,
-                            column: 9,
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 10,
+                            },
                         },
-                        end: Position {
-                            line: 2,
-                            column: 10,
-                        },
+                        value: Number(
+                            NumberLit {
+                                value: 1.0,
+                                text: "1",
+                            },
+                        ),
                     },
-                    value: Int(
-                        1,
-                    ),
-                },
+                ),
             },
-            FieldAssign {
-                field: Located {
+            Field {
+                name: Located {
                     region: Region {
                         start: Position {
                             line: 3,
@@ -54,56 +59,28 @@ Located {
                         },
                         end: Position {
                             line: 3,
-                            column: 6,
-                        },
-                    },
-                    value: "y",
-                },
-                value: Located {
-                    region: Region {
-                        start: Position {
-                            line: 3,
                             column: 9,
                         },
-                        end: Position {
-                            line: 3,
-                            column: 10,
-                        },
                     },
-                    value: Int(
-                        2,
-                    ),
+                    value: "name",
                 },
-            },
-            FieldAssign {
-                field: Located {
-                    region: Region {
-                        start: Position {
-                            line: 4,
-                            column: 5,
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 16,
+                            },
                         },
-                        end: Position {
-                            line: 4,
-                            column: 6,
-                        },
+                        value: Str(
+                            "Ada",
+                        ),
                     },
-                    value: "z",
-                },
-                value: Located {
-                    region: Region {
-                        start: Position {
-                            line: 4,
-                            column: 9,
-                        },
-                        end: Position {
-                            line: 4,
-                            column: 10,
-                        },
-                    },
-                    value: Int(
-                        3,
-                    ),
-                },
+                ),
             },
         ],
     ),

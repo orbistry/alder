@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/pattern/record.rs
+description: "{ .., x }"
+---
+Record(
+    RestNotLast(
+        1,
+        7,
+    ),
+    1,
+    1,
+)

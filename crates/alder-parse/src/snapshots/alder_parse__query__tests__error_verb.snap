@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { fetch * from users }"
+---
+Query(
+    Verb(
+        1,
+        9,
+    ),
+    1,
+    1,
+)

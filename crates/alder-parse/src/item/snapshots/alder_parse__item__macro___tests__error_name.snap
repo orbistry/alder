@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro Now() {}"
+---
+Macro(
+    Name(
+        1,
+        7,
+    ),
+    1,
+    1,
+)

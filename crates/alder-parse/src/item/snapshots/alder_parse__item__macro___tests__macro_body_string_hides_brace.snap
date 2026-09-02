@@ -1,0 +1,51 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro close() { \"}\" }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 22,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Macro(
+            MacroDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                    },
+                    value: "close",
+                },
+                params: [],
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                    },
+                    value: " \"}\" ",
+                },
+            },
+        ),
+    },
+}

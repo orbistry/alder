@@ -1,0 +1,53 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "(Array[a],)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 12,
+        },
+    },
+    value: Named {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: "Array",
+                },
+            ],
+        },
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                },
+                value: Var {
+                    name: "a",
+                    args: [],
+                },
+            },
+        ],
+    },
+}

@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: match
+---
+Reserved(
+    Match,
+    1,
+    1,
+)

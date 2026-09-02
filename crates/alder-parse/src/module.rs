@@ -1,467 +1,811 @@
-//! Module parsing for Alder.
+//! Module parsing: a flat, line-break separated item list.
 //!
-//! Ported from Elm's `Parse/Module.hs`.
+//! Grammar (SPEC.md): `module = { item } ;` — no header, no `exposing`.
+//! `Module` is a flat ordered list (§10.30); `Module::imports()` serves the
+//! driver. Items follow the statement separation rule (§2.1 rule 3,
+//! §10.38): after an item the next one must be EOF or start on a later
+//! line, otherwise `Module::SameLine`; a `;` is never a separator
+//! (`item()` reports it as `Item::Semicolon`, wrapped in `Module::Item`).
+//! A byte that cannot start an item where one is expected (`}`, `42`, …)
+//! is `Module::BadEnd`.
 //!
-//! Parses full modules including:
-//! - Module header: `module Main exposing (main)`
-//! - Imports: `import List exposing (map)`
-//! - Declarations: values, types, aliases
+//! See docs/parser-internals.md §5.10.
+// OWNER: module.rs (Wave 4)
 
-use alder_region::{Located, Region};
-use alder_source::{Alias, Docs, Exposing, Import, Infix, Module, Union, Value};
+use alder_region::{Located, Position};
+use alder_source::{Item, Module};
+use bumpalo::collections::Vec as BumpVec;
 
-use crate::Parser;
-use crate::declaration::Decl;
-use crate::error;
+use crate::{Parser, error};
 
 impl<'a> Parser<'a> {
-    /// Parse a module header.
-    ///
-    /// Mirrors Elm's `chompHeader` (simplified - no port/effect modules):
-    /// ```text
-    /// module_header = 'module' module_name 'exposing' exposing_list
-    /// ```
-    ///
-    /// Returns the module name and exports as a tuple.
-    pub fn module_header(
-        &mut self,
-    ) -> Result<(&'a Located<&'a str>, &'a Located<Exposing<'a>>), error::Module<'a>> {
-        // Match 'module' keyword
-        self.keyword_module(error::Module::Problem)?;
-
-        self.chomp_and_check_indent(error::Module::Space, error::Module::Name)?;
-
-        // Parse module name (e.g., "Json.Decode")
-        let start = self.get_position();
-        let name = self.module_name(error::Module::Name)?;
-        let module_name = self.add_end(start, name);
-
-        // Consume whitespace
-        self.chomp(error::Module::Space)?;
-
-        // Must have 'exposing' keyword
-        self.keyword_exposing(|row, col| {
-            error::Module::Exposing(self.bump.alloc(error::Exposing::Start(row, col)), row, col)
-        })?;
-
-        self.chomp_and_check_indent(error::Module::Space, |row, col| {
-            error::Module::Exposing(
-                self.bump.alloc(error::Exposing::IndentValue(row, col)),
-                row,
-                col,
-            )
-        })?;
-
-        // Parse the exposing list, wrapping errors
-        let exposing_start = self.get_position();
-        let exposing = self.specialize(
-            |bump, err, row, col| error::Module::Exposing(bump.alloc(err), row, col),
-            |p| p.exposing(),
-        )?;
-        let exposing_located = self.add_end(exposing_start, exposing);
-
-        Ok((module_name, exposing_located))
-    }
-
-    /// Parse zero or more import statements.
-    ///
-    /// Mirrors Elm's `chompImports`:
-    /// ```haskell
-    /// chompImports :: [Src.Import] -> Parser E.Module [Src.Import]
-    /// chompImports imports =
-    ///   oneOfWithFallback
-    ///     [ do  i <- chompImport
-    ///           chompImports (i:imports)
-    ///     ]
-    ///     (reverse imports)
-    /// ```
-    fn imports(&mut self) -> Result<&'a [&'a Import<'a>], error::Module<'a>> {
-        let mut imports = Vec::new();
-
-        loop {
-            // Save state in case import keyword doesn't match
-            let state = self.save_state();
-
-            match self.import() {
-                Ok(import) => {
-                    imports.push(import);
-                    // import() already ensures fresh line at the end
-                }
-                Err(_) => {
-                    // If we didn't consume input, we're done with imports
-                    if self.pos == state.pos {
-                        self.restore_state(state);
-                        break;
-                    }
-                    // Otherwise propagate the error
-                    return Err(error::Module::ImportStart(self.row, self.col));
-                }
-            }
-        }
-
-        Ok(self.alloc_slice_copy(&imports))
-    }
-
-    /// Parse zero or more declarations.
-    ///
-    /// Mirrors Elm's `chompDecls`:
-    /// ```haskell
-    /// chompDecls :: [Decl.Decl] -> Parser E.Decl [Decl.Decl]
-    /// chompDecls decls =
-    ///   do  (decl, _) <- Decl.declaration
-    ///       oneOfWithFallback
-    ///         [ do  Space.checkFreshLine E.DeclStart
-    ///               chompDecls (decl:decls)
-    ///         ]
-    ///         (reverse (decl:decls))
-    /// ```
-    fn declarations(&mut self) -> Result<Vec<Decl<'a>>, error::Module<'a>> {
-        let mut decls = Vec::new();
-
-        loop {
-            // Save state in case no declaration starts
-            let state = self.save_state();
-
-            // Try to parse a declaration
-            match self.specialize(
-                |bump, err, row, col| error::Module::Declarations(bump.alloc(err), row, col),
-                |p| p.declaration(),
-            ) {
-                Ok((decl, _end)) => {
-                    decls.push(decl);
-
-                    // Chomp any trailing whitespace
-                    self.chomp(error::Module::Space)?;
-
-                    // Check for fresh line (another declaration might follow)
-                    if self.is_eof() {
-                        break;
-                    }
-
-                    // If not at fresh line, we're done
-                    if self.col != 1 {
-                        break;
-                    }
-                }
-                Err(_) => {
-                    // If we didn't consume input, we're done with declarations
-                    if self.pos == state.pos {
-                        self.restore_state(state);
-                        break;
-                    }
-                    // Otherwise propagate the error
-                    return Err(error::Module::Declarations(
-                        self.bump.alloc(error::Decl::Start(self.row, self.col)),
-                        self.row,
-                        self.col,
-                    ));
-                }
-            }
-        }
-
-        Ok(decls)
-    }
-
-    /// Parse zero or more infix declarations.
-    ///
-    /// Infixes are parsed at module level (before regular declarations).
-    fn infixes(&mut self) -> Result<Vec<&'a Located<Infix<'a>>>, error::Module<'a>> {
-        let mut infixes = Vec::new();
-
-        loop {
-            let state = self.save_state();
-
-            match self.infix_decl() {
-                Ok(infix) => {
-                    infixes.push(infix);
-                    // infix_decl already ensures fresh line
-                }
-                Err(_) => {
-                    // If we didn't consume input, we're done
-                    if self.pos == state.pos {
-                        self.restore_state(state);
-                        break;
-                    }
-                    return Err(error::Module::Infix(self.row, self.col));
-                }
-            }
-        }
-
-        Ok(infixes)
-    }
-
-    /// Parse a complete module.
-    ///
-    /// Mirrors Elm's `chompModule`:
-    /// ```text
-    /// module = [ module_header ] { import } { infix } { declaration }
-    /// ```
+    /// chomp; items until EOF; a non-item → Module::BadEnd. After each item the
+    /// next one must start on a later line (`newline_since(item.region.end)`),
+    /// otherwise Module::SameLine (§2.1 rule 3).
     pub fn module(&mut self) -> Result<Module<'a>, error::Module<'a>> {
-        // Consume initial whitespace
-        self.chomp(error::Module::Space)?;
-
-        let start_pos = self.get_position();
-
-        // Try to parse module header (optional)
-        let (name, exports) = {
-            let state = self.save_state();
-            match self.module_header() {
-                Ok((n, e)) => {
-                    // Consume whitespace after header and check fresh line
-                    self.chomp(error::Module::Space)?;
-                    self.check_fresh_line(error::Module::FreshLine)?;
-                    (Some(n), e)
+        self.chomp();
+        let mut items: BumpVec<'a, &'a Located<Item<'a>>> = BumpVec::new_in(self.bump);
+        let mut last_end: Option<Position> = None;
+        while !self.is_eof() {
+            let (row, col) = self.position();
+            // `;` is exempt from the same-line rule: `item()` reports it as
+            // `Item::Semicolon` (the more specific hint).
+            let same_line =
+                self.peek() != Some(b';') && last_end.is_some_and(|end| !self.newline_since(end));
+            let item = match self.item() {
+                // Not an item start at all: expected an item or the end of the file.
+                Err(error::Item::Start(r, c)) if (r, c) == (row, col) => {
+                    return Err(error::Module::BadEnd(row, col));
                 }
-                Err(_) => {
-                    // No header - restore and use defaults
-                    if self.pos == state.pos {
-                        self.restore_state(state);
-                    }
-                    // Default: name = None, exports = Open
-                    let default_exports = self.alloc(Located::at(Region::one(), Exposing::Open));
-                    (None, default_exports)
-                }
-            }
-        };
-
-        // Parse imports
-        let imports = self.imports()?;
-
-        // Parse infixes
-        let infix_vec = self.infixes()?;
-        let binops = self.alloc_slice_copy(&infix_vec);
-
-        // Parse declarations
-        let decls = self.declarations()?;
-
-        // Categorize declarations into values, unions, aliases
-        let (values, unions, aliases) = self.categorize_decls(decls);
-
-        // Build docs (simplified: no module-level docs for now)
-        let docs = self.alloc(Docs::NoDocs(Region::new(start_pos, self.get_position())));
-
+                _ if same_line => return Err(error::Module::SameLine(row, col)),
+                Err(e) => return Err(error::Module::Item(self.alloc(e), row, col)),
+                Ok(item) => item,
+            };
+            last_end = Some(item.region.end);
+            items.push(item);
+        }
         Ok(Module {
-            name,
-            exports,
-            docs,
-            imports,
-            values,
-            unions,
-            aliases,
-            binops,
+            items: items.into_bump_slice(),
         })
     }
+}
 
-    /// Categorize declarations into separate slices by type.
-    #[allow(clippy::type_complexity)]
-    fn categorize_decls(
-        &self,
-        decls: Vec<Decl<'a>>,
-    ) -> (
-        &'a [&'a Located<Value<'a>>],
-        &'a [&'a Located<Union<'a>>],
-        &'a [&'a Located<Alias<'a>>],
-    ) {
-        let mut values = Vec::new();
-        let mut unions = Vec::new();
-        let mut aliases = Vec::new();
+/// Snapshot test macro for successful module parsing.
+#[cfg(test)]
+macro_rules! assert_module_snapshot {
+    ($code:expr) => {{
+        let bump = bumpalo::Bump::new();
+        let code = indoc::indoc!($code);
+        let src = bump.alloc_str(code);
+        let mut parser = $crate::Parser::new(&bump, src.as_bytes());
+        let result = parser
+            .module()
+            .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
+        assert!(
+            parser.is_eof(),
+            "unconsumed input at {:?}\n\nSource:\n{code}",
+            parser.position()
+        );
+        insta::with_settings!({
+            description => code,
+            omit_expression => true,
+        }, {
+            insta::assert_debug_snapshot!(result);
+        });
+    }};
+}
 
-        for decl in decls {
-            match decl {
-                Decl::Value(_doc, value) => values.push(value),
-                Decl::Union(_doc, union) => unions.push(union),
-                Decl::Alias(_doc, alias) => aliases.push(alias),
-            }
-        }
-
-        (
-            self.alloc_slice_copy(&values),
-            self.alloc_slice_copy(&unions),
-            self.alloc_slice_copy(&aliases),
-        )
-    }
+/// Snapshot test macro for module parse errors.
+#[cfg(test)]
+macro_rules! assert_module_error_snapshot {
+    ($code:expr) => {{
+        let bump = bumpalo::Bump::new();
+        let code = indoc::indoc!($code);
+        let src = bump.alloc_str(code);
+        let mut parser = $crate::Parser::new(&bump, src.as_bytes());
+        let err = parser
+            .module()
+            .err()
+            .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
+        insta::with_settings!({
+            description => code,
+            omit_expression => true,
+        }, {
+            insta::assert_debug_snapshot!(err);
+        });
+    }};
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bumpalo::Bump;
-    use indoc::indoc;
+    #[test]
+    fn empty_module() {
+        assert_module_snapshot!("");
+    }
 
-    macro_rules! assert_module_header_snapshot {
-        ($input:expr) => {{
-            let input = indoc!($input);
-            let bump = Bump::new();
-            let src = bump.alloc_str(input);
-            let mut parser = Parser::new(&bump, src.as_bytes());
-            let result = parser.module_header();
-            match result {
-                Ok((name, exposing)) => {
-                    insta::with_settings!({
-                        description => format!("Code:\n\n{}", input),
-                        omit_expression => true,
-                    }, {
-                        insta::assert_debug_snapshot!((name, exposing));
-                    });
-                }
-                Err(e) => {
-                    panic!("Expected successful parse, got error: {:?}", e);
+    #[test]
+    fn whitespace_only_module() {
+        assert_module_snapshot!("\n\n   \n");
+    }
+
+    #[test]
+    fn single_fn() {
+        assert_module_snapshot!(
+            r#"
+            fn add(a, b) {
+                a + b
+            }
+            "#
+        );
+    }
+
+    #[test]
+    fn single_let() {
+        assert_module_snapshot!("let answer = 42");
+    }
+
+    #[test]
+    fn imports_then_items() {
+        assert_module_snapshot!(
+            r#"
+            import @alder/http.{ get, Request }
+            import ~/db/users
+
+            type Id = Number
+
+            let base = "https://example.com"
+            "#
+        );
+    }
+
+    #[test]
+    fn leading_comments() {
+        assert_module_snapshot!(
+            r#"
+            //! Module docs are skipped in M1.
+            // A plain comment.
+
+            /// Item docs too.
+            type Id = Number
+            "#
+        );
+    }
+
+    #[test]
+    fn trailing_comment() {
+        assert_module_snapshot!(
+            r#"
+            type Id = Number
+            // the end
+            "#
+        );
+    }
+
+    #[test]
+    fn imports_are_filtered() {
+        let bump = bumpalo::Bump::new();
+        let src = bump.alloc_str(indoc::indoc!(
+            r#"
+            import @alder/http
+            type Id = Number
+            pub import ~/leaf.*
+            "#
+        ));
+        let module = crate::parse_module(&bump, src).unwrap_or_else(|e| panic!("{e:#?}"));
+        let imports: Vec<_> = module.imports().collect();
+        assert_eq!(imports.len(), 2);
+        assert_eq!(imports[0].path.value.segments.len(), 0);
+        assert_eq!(imports[1].path.value.segments.len(), 1);
+        assert_eq!(imports[1].path.value.segments[0].value, "leaf");
+    }
+
+    // §7.2 docs-example tests: one per docs sample (language.md, web.md,
+    // data.md) that is a full module or a run of items, with the §10.35
+    // typo fixes applied (noted per test). Samples that are a statement,
+    // an expression or bare markup are covered by the statement /
+    // expression / markup tests instead. A `{ ... }` placeholder body in
+    // the docs is replaced by a one-line real body.
+
+    #[test]
+    fn docs_counter_component() {
+        assert_module_snapshot!(
+            r#"
+            pub component Counter(props: { start?: Number, label: String }) {
+                let mut count = state(props.start ?? 0)
+                let double = count * 2                     // memoized automatically
+
+                <button onClick={fn() count += 1}>
+                    {props.label}: {count} ({double})
+                </button>
+            }
+            "#
+        );
+    }
+
+    #[test]
+    fn docs_classify_fn() {
+        assert_module_snapshot!(
+            r#"
+            fn classify(n: Number) -> String {
+                if n < 0 {
+                    "negative"
+                } else if n == 0 {
+                    "zero"
+                } else {
+                    "positive"
                 }
             }
-        }};
+            "#
+        );
     }
 
     #[test]
-    fn module_header_simple_open() {
-        assert_module_header_snapshot!("module Foo exposing (..)");
-    }
-
-    #[test]
-    fn module_header_dotted() {
-        assert_module_header_snapshot!("module Foo.Bar exposing (baz)");
-    }
-
-    #[test]
-    fn module_header_mixed_exposing() {
-        assert_module_header_snapshot!("module Main exposing (main, Msg(..))");
-    }
-
-    #[test]
-    fn module_header_deeply_nested() {
-        assert_module_header_snapshot!("module Platform.Cmd.Extra exposing (batch, none)");
-    }
-
-    // =========================================================================
-    // Full module parsing tests
-    // =========================================================================
-
-    macro_rules! assert_module_snapshot {
-        ($input:expr) => {{
-            let input = indoc!($input);
-            let bump = Bump::new();
-            let src = bump.alloc_str(input);
-            let mut parser = Parser::new(&bump, src.as_bytes());
-            let result = parser.module();
-            match result {
-                Ok(module) => {
-                    insta::with_settings!({
-                        description => format!("Code:\n\n{}", input),
-                        omit_expression => true,
-                    }, {
-                        insta::assert_debug_snapshot!(module);
-                    });
-                }
-                Err(e) => {
-                    panic!("Expected successful parse, got error: {:?}", e);
+    fn docs_find_result() {
+        assert_module_snapshot!(
+            r#"
+            fn find(id: Id) -> Result[User] {              // error inferred: [:not_found(Id) | r]
+                match db.get(id) {
+                    Some(u) => Ok(u),
+                    None => Err(:not_found(id)),
                 }
             }
-        }};
-    }
-
-    #[test]
-    fn module_header_only() {
-        assert_module_snapshot!("module Main exposing (..)\n");
-    }
-
-    #[test]
-    fn module_with_imports() {
-        assert_module_snapshot!(
-            r#"
-            module Main exposing (..)
-
-            import List
-            import Maybe exposing (Maybe(..))
-        "#
+            "#
         );
     }
 
     #[test]
-    fn module_with_value() {
+    fn docs_load_await() {
         assert_module_snapshot!(
             r#"
-            module Main exposing (..)
+            fn load(id: Id) -> Result[Profile] {           // inferred: [:not_found(Id) | :timeout | r]
+                let user = find(id)?          // rows merge through ?
+                let prefs = fetchPrefs(user).await?
+                Ok({ user, prefs })
+            }
+            "#
+        );
+    }
 
-            main = 42
-        "#
+    // language.md "Traits" with the missing `->` in `map` added and the
+    // one-line `trait Iterator` written one item per line (§10.35, §10.38).
+    #[test]
+    fn docs_traits_functor() {
+        assert_module_snapshot!(
+            r#"
+            pub trait Show[a] {
+                fn show(value: a) -> String
+            }
+
+            impl Show[User] {
+                fn show(user: User) -> String { user.name }
+            }
+
+            pub trait Functor[f] {
+                fn map(fa: f[a], g: fn(a) -> b) -> f[b]
+            }
+
+            impl Functor[Option] {
+                fn map(fa: Option[a], g: fn(a) -> b) -> Option[b] {
+                    match fa {
+                        Some(x) => Some(g(x)),
+                        None => None,
+                    }
+                }
+            }
+
+            fn describe(xs: Array[a]) -> String where a: Show {
+                xs |> Array.map(show) |> String.join(", ")
+            }
+
+            trait Iterator[i] {
+                type Item
+                fn next(it: i) -> Option[Item]
+            }
+            "#
+        );
+    }
+
+    // language.md "Tests" with the path-first `import @alder/test.{ fakeDb }`
+    // (§10.34); `test` is reserved but a legal path segment (§2.4).
+    #[test]
+    fn docs_tests_block() {
+        assert_module_snapshot!(
+            r#"
+            tests {
+                import @alder/test.{ fakeDb }
+
+                test "adds numbers" {
+                    assert add(1, 2) == 3
+                }
+
+                test "finds a user" {
+                    provide Db = fakeDb() {
+                        assert find(1).await == Ok(ada)
+                    }
+                }
+            }
+            "#
+        );
+    }
+
+    // web.md "Loading data" with `event.params.id` pinned (§10.35).
+    #[test]
+    fn docs_web_load_page() {
+        assert_module_snapshot!(
+            r#"
+            // users/[id]/+page.server.ald
+            pub fn load(event: LoadEvent) -> Result[{ user: User, posts: Array[Post] }] {
+                use Db
+                let user = db.run(query { select * from users where users.id == ^event.params.id }).await?
+                let posts = loadPosts(user.id).await?
+                Ok({ user, posts })
+            }
+
+            // users/[id]/+page.ald
+            pub component page(props: { data: PageData }) {
+                <h1>{props.data.user.name}</h1>
+            }
+            "#
+        );
+    }
+
+    // web.md "Forms and validation": the `{ ... }` placeholder body is
+    // replaced by a real one and the top-level markup is wrapped in a
+    // component (markup is an expression, not an item).
+    #[test]
+    fn docs_web_login_form() {
+        assert_module_snapshot!(
+            r#"
+            schema SignUp from users {
+                pick email, name
+                name: min(3)
+                password: String, min(12)
+                confirm: String, equals(password)
+            }
+
+            // lib/auth.remote.ald
+            pub fn signUp(input: SignUp) -> Result[User] {
+                Ok(createUser(input))
+            }
+
+            component LoginForm() {
+                <Form action={signUp}>
+                    <Field name="email" />
+                    <Field name="password" type="password" />
+                </Form>
+            }
+            "#
         );
     }
 
     #[test]
-    fn module_with_type() {
+    fn docs_web_tui_app() {
         assert_module_snapshot!(
             r#"
-            module Main exposing (..)
+            component App() {
+                let mut selected = state(0)
+                <box direction="column" border="round">
+                    <text bold>Tasks</text>
+                    @for (task, i) in tasks; key task {
+                        <text inverse={i == selected}>{task}</text>
+                    }
+                </box>
+            }
+            "#
+        );
+    }
 
-            type Maybe a
-                = Just a
-                | Nothing
-        "#
+    // data.md "Tables" with the path-first import (§10.34).
+    #[test]
+    fn docs_data_tables() {
+        assert_module_snapshot!(
+            r#"
+            import @alder/sqlite.{ text, integer, timestamp, primaryKey }
+
+            pub table users {
+                id: integer() primaryKey autoIncrement
+                email: text() notNull unique
+                name: text() notNull
+                created: timestamp() notNull default(now)
+            }
+
+            pub table posts {
+                id: integer() primaryKey autoIncrement
+                author: integer() notNull references(users.id)
+                title: text() notNull
+                body: text()
+            }
+            "#
+        );
+    }
+
+    // data.md "Queries": the bare `db.run(...)` statements are wrapped in a
+    // function (statements are not items).
+    #[test]
+    fn docs_data_queries() {
+        assert_module_snapshot!(
+            r#"
+            let recent = query {
+                select { u.name, p.title, p.created }
+                from users as u
+                join posts as p on p.author == u.id
+                where u.active && p.created > ^since && u.id in ^ids
+                orderBy p.created desc
+                limit ^pageSize
+            }
+
+            fn run(db: Db) -> Result[()] {
+                let rows = db.run(recent).await?      // Array[{ name: String, title: String, created: Timestamp }]
+                db.run(query { insert into users values ^{ email, name } }).await?
+                db.run(query { update users set { name: ^newName } where users.id == ^user.id }).await?
+                db.run(query { delete from posts where posts.author == ^user.id }).await?
+                Ok(())
+            }
+            "#
+        );
+    }
+
+    // language.md "Modules": the import forms and the re-exports (the bare
+    // `http.get(url)` calls after them are statements, not items).
+    #[test]
+    fn docs_imports() {
+        assert_module_snapshot!(
+            r#"
+            import @alder/http                    // binds `http` (last segment, lowercase)
+            import @alder/http as h               // binds `h`
+            import @alder/http.{ get, Request }   // names into scope
+            import @alder/http.*                  // every pub name into scope
+            import ~/db/users                     // this package: binds `users`
+            import ~/db/users.{ find }
+
+            pub import ~/leaf.{ someFunc }
+            pub import ~/leaf.*                   // typical for mod.ald
+            "#
+        );
+    }
+
+    // language.md "Functions"; the trailing pipe chain is bound with `let`
+    // so it is an item.
+    #[test]
+    fn docs_functions() {
+        assert_module_snapshot!(
+            r#"
+            pub fn add(a: Number, b: Number) -> Number {
+                a + b
+            }
+
+            fn greet(name: String) -> String {
+                `Hello ${name}`
+            }
+
+            let inc = fn(x) x + 1
+            let block = fn(x) {
+                let y = x * 2
+                y + 1
+            }
+
+            let big = [1, 2, 3]
+                |> Array.map(fn(x) x * 2)
+                |> Array.filter(fn(x) x > 2)
+            "#
+        );
+    }
+
+    // language.md "Type application and variables": bodiless signatures
+    // with `where` clauses, including a trailing comma before EOF.
+    #[test]
+    fn docs_type_variables() {
+        assert_module_snapshot!(
+            r#"
+            fn zip(xs: Array[a], ys: Array[b]) -> Array[(a, b)]
+
+            fn lookup(cache: Cache[k, v], key: k) -> Option[v]
+                where k: Eq + Hash
+
+            fn traverse(xs: t[f[a]], g: fn(a) -> f[b]) -> f[t[b]]
+                where
+                    t: Traversable,
+                    f: Applicative,
+            "#
+        );
+    }
+
+    // language.md "Enums".
+    #[test]
+    fn docs_enums() {
+        assert_module_snapshot!(
+            r#"
+            pub enum Option[a] {
+                Some(a),
+                None,
+            }
+
+            pub enum Shape {
+                Circle(Number),
+                Rect { width: Number, height: Number },
+            }
+
+            let s = Shape::Rect { width: 1, height: 2 }
+            let o = Option::Some(3)
+            "#
+        );
+    }
+
+    // language.md "Records and rows"; the trailing `match u.nickname` is an
+    // expression, not an item.
+    #[test]
+    fn docs_records() {
+        assert_module_snapshot!(
+            r#"
+            type User = {
+                id: Id,
+                name: String,
+                nickname?: String,        // read as Option[String]
+            }
+
+            fn rename(user: { r | name: String }, name: String) -> { r | name: String } {
+                { ..user, name }
+            }
+
+            let u: User = { id, name: "Ada" }          // nickname omitted
+            "#
+        );
+    }
+
+    // language.md "Errors": the closed-row function, the `error` group and
+    // the bodiless signature using it.
+    #[test]
+    fn docs_error_group() {
+        assert_module_snapshot!(
+            r#"
+            fn loadStrict(id: Id) -> Result[Profile, [:not_found(Id) | :timeout]] {
+                load(id)                       // explicit, closed row
+            }
+
+            pub error AuthError {
+                :invalid_token,
+                :expired(Timestamp),
+            }
+
+            fn check(token: String) -> Result[Session, AuthError]
+            "#
+        );
+    }
+
+    // language.md "Async and fibers".
+    #[test]
+    fn docs_async_fibers() {
+        assert_module_snapshot!(
+            r#"
+            fn profile(id: Id) -> Result[Profile] {
+                let user = Http.get(`/users/${id}`).await?
+                let posts = Http.get(`/users/${id}/posts`).await?
+                Ok({ user, posts })
+            }
+
+            let (a, b) = Fiber.all(profile(1), profile(2)).await
+            "#
+        );
+    }
+
+    // language.md "Context (dependency injection)".
+    #[test]
+    fn docs_context() {
+        assert_module_snapshot!(
+            r#"
+            fn saveUser(user: User) -> Result[()] {
+                use Db
+                Db.insert(users, user).await
+            }
+
+            fn main() {
+                provide Db = Sqlite.open("app.db") {
+                    saveUser(u).await
+                }
+            }
+            "#
+        );
+    }
+
+    // language.md "Attributes and macros"; the `...` inside `comptime` is
+    // replaced by a real statement. Macro bodies are raw text in M1
+    // (§10.29), so `quote` / `unquote` / `stringify` never reach the parser.
+    #[test]
+    fn docs_macros() {
+        assert_module_snapshot!(
+            r#"
+            #[derive(Show, Eq, Json)]
+            type Point = { x: Number, y: Number }
+
+            macro assert_eq(left, right) {
+                quote {
+                    let l = unquote(left)
+                    let r = unquote(right)
+                    if l != r { Test.fail(unquote(stringify(left)), l, r) }
+                }
+            }
+
+            comptime {
+                let routes = Fs.readDir("routes")
+                Routes.generate(routes)
+            }
+            "#
+        );
+    }
+
+    // language.md "FFI", plus the `#[extern] type Response` opaque type the
+    // prose mentions.
+    #[test]
+    fn docs_ffi() {
+        assert_module_snapshot!(
+            r#"
+            #[extern("node:crypto", "randomUUID")]
+            fn randomUUID() -> String
+
+            #[extern("node:fs/promises", "readFile")]
+            fn readFile(path: String, encoding: String) -> Task[Result[String, [:io(String)]]]
+
+            #[extern("globalThis", "JSON.parse")]
+            fn parseJson(s: String) -> Result[Json, [:syntax(String)]]
+
+            #[extern] type Response
+            "#
+        );
+    }
+
+    // web.md "Server hooks" with `handleError`'s parameter renamed (`error`
+    // is reserved, §10.35). `handle` ends in `provide … { }`, which is a
+    // statement in M1, so its block has no tail (§10.40).
+    #[test]
+    fn docs_web_hooks() {
+        assert_module_snapshot!(
+            r#"
+            // src/hooks.server.ald
+            pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) -> Task[Response]) -> Task[Response] {
+                let session = Auth.fromCookie(event.cookies).await
+                provide Session = session {
+                    resolve(event).await
+                }
+            }
+
+            pub fn handleError(err: Error, event: RequestEvent) -> ErrorResponse { report(err) }
+            pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) -> Task[Response] { fetch(request) }
+            "#
+        );
+    }
+
+    // web.md "Page options".
+    #[test]
+    fn docs_web_page_options() {
+        assert_module_snapshot!(
+            r#"
+            pub let prerender = true      // build-time render (SSG); default false
+            pub let ssr = false           // skip server render for this subtree; default true
+            pub let csr = false           // ship no JS for this subtree; default true
+            pub let trailingSlash = Never // Never | Always | Ignore
+            "#
+        );
+    }
+
+    // web.md "Remote functions".
+    #[test]
+    fn docs_web_remote_functions() {
+        assert_module_snapshot!(
+            r#"
+            // lib/users.remote.ald
+            pub fn getUser(id: Id) -> Result[User] { db.get(id) }              // query
+            pub fn deleteUser(id: Id) -> Result[()] { db.delete(id) }           // command
+            pub fn signUp(input: SignUp) -> Result[User] { db.insert(input) }   // form action, typed by schema
+
+            // any component
+            component UserCard(props: { id: Id }) {
+                let user = resource(fn() getUser(props.id))
+                <button onClick={fn() deleteUser(props.id)}>Delete</button>
+            }
+            "#
+        );
+    }
+
+    // web.md "Stores".
+    #[test]
+    fn docs_web_stores() {
+        assert_module_snapshot!(
+            r#"
+            // src/stores/cart.ald
+            pub let mut items = state([])
+            pub fn add(item: Item) { items.push(item) }
+            "#
+        );
+    }
+
+    // web.md "Styles"; the `<div class={card}>` line is markup, not an item.
+    #[test]
+    fn docs_web_styles() {
+        assert_module_snapshot!(
+            r#"
+            let card = style {
+                padding: 16px,
+                color: theme.text,
+                ":hover": { color: theme.accent },
+                "@media (max-width: 600px)": { padding: 8px },
+            }
+            "#
+        );
+    }
+
+    /// docs/runtime.md "Cloudflare" with the `{ ... }` placeholder body
+    /// replaced by a real one.
+    #[test]
+    fn docs_runtime_cloudflare() {
+        assert_module_snapshot!(
+            r#"
+            #[durable_object]
+            type Counter = { count: Number }
+
+            impl DurableObject[Counter] {
+                fn fetch(obj: Counter, req: Request) -> Response { obj.count }
+            }
+
+            fn handler(req: Request) -> Response {
+                use Kv                      // bound to the worker's KV namespace via wrangler config
+                Kv.get(cache, "key").await
+            }
+            "#
         );
     }
 
     #[test]
-    fn module_with_union_then_value() {
-        // A definition at column 1 must end the union's variant list, not
-        // be swallowed as extra constructor arguments.
-        assert_module_snapshot!(
+    fn error_bad_end() {
+        assert_module_error_snapshot!(
             r#"
-            module Main exposing (..)
-
-            type Wrap a
-                = Wrap a
-
-            f w = w
-        "#
+            type Id = Number
+            }
+            "#
         );
     }
 
     #[test]
-    fn module_with_alias() {
-        assert_module_snapshot!(
-            r#"
-            module Main exposing (..)
-
-            type alias Point = { x : Int, y : Int }
-        "#
-        );
+    fn error_item() {
+        assert_module_error_snapshot!("import http");
     }
 
     #[test]
-    fn module_full() {
-        assert_module_snapshot!(
-            r#"
-            module Main exposing (main, Model, Msg(..))
-
-            import Html exposing (div)
-            import Platform.Cmd as Cmd
-
-            type alias Model = { count : Int }
-
-            type Msg
-                = Increment
-                | Decrement
-
-            main = 0
-        "#
-        );
+    fn error_same_line_items() {
+        assert_module_error_snapshot!("fn a() {} fn b() {}");
     }
 
     #[test]
-    fn module_no_header() {
-        // Without header, defaults to name=None, exports=Open
-        assert_module_snapshot!("x = 1\n");
+    fn error_same_line_let_items() {
+        assert_module_error_snapshot!("let a = 1 let b = 2");
     }
 
     #[test]
-    fn module_with_infix() {
-        assert_module_snapshot!(
+    fn error_same_line_import_then_type() {
+        assert_module_error_snapshot!("import ~/db type Id = Number");
+    }
+
+    #[test]
+    fn error_semicolon_after_item() {
+        assert_module_error_snapshot!("let a = 1;");
+    }
+
+    #[test]
+    fn error_pub_alone() {
+        assert_module_error_snapshot!(
             r#"
-            module Main exposing (..)
-
-            infix left 6 (|>) = apR
-
-            apR f x = f x
-        "#
+            type Id = Number
+            pub
+            "#
         );
+    }
+
+    /// Positions are `u32`: a line longer than `u16::MAX` bytes keeps exact
+    /// columns (the old `u16` counters overflowed in debug and wrapped in
+    /// release, misplacing every later region and error).
+    #[test]
+    fn long_line_keeps_exact_columns() {
+        let bump = bumpalo::Bump::new();
+        let text = "a".repeat(70_000);
+        let src = bump.alloc_str(&format!("let x = \"{text}\"\n"));
+        let module = crate::parse_module(&bump, src).unwrap_or_else(|e| panic!("{e:#?}"));
+        let [item] = module.items else {
+            panic!("expected one item")
+        };
+        assert_eq!(item.region.start, alder_region::Position::new(1, 1));
+        // `let x = "` is 9 bytes, the text 70_000, the closing quote 1.
+        assert_eq!(item.region.end, alder_region::Position::new(1, 70_011));
+    }
+
+    /// Positions are `u32`: a file with more than `u16::MAX` lines keeps
+    /// exact rows.
+    #[test]
+    fn many_lines_keep_exact_rows() {
+        let bump = bumpalo::Bump::new();
+        let src = bump.alloc_str(&"let x = 1\n".repeat(70_000));
+        let module = crate::parse_module(&bump, src).unwrap_or_else(|e| panic!("{e:#?}"));
+        assert_eq!(module.items.len(), 70_000);
+        let last = module.items.last().unwrap();
+        assert_eq!(last.region.start, alder_region::Position::new(70_000, 1));
+        assert_eq!(last.region.end, alder_region::Position::new(70_000, 10));
     }
 }

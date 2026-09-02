@@ -1,0 +1,48 @@
+---
+source: crates/alder-parse/src/expression/path.rs
+description: "Show::show"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 11,
+        },
+    },
+    value: PathVar {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: "Show",
+                },
+            ],
+        },
+        name: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 11,
+                },
+            },
+            value: "show",
+        },
+    },
+}

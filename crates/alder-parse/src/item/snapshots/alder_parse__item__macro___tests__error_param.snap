@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro f(A) {}"
+---
+Macro(
+    Param(
+        1,
+        9,
+    ),
+    1,
+    1,
+)

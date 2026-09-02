@@ -1,0 +1,34 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { delete from posts }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 28,
+        },
+    },
+    value: Query(
+        Delete {
+            table: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 21,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 26,
+                    },
+                },
+                value: "posts",
+            },
+            where_: None,
+        },
+    ),
+}

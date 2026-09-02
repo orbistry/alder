@@ -1,0 +1,108 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "((a, b), { x, y })"
+---
+[
+    Param {
+        mutable: None,
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Tuple {
+                first: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+                second: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: Var(
+                        "b",
+                    ),
+                },
+                rest: [],
+            },
+        },
+        annotation: None,
+    },
+    Param {
+        mutable: None,
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 10,
+                },
+                end: Position {
+                    line: 1,
+                    column: 18,
+                },
+            },
+            value: Record {
+                fields: [
+                    FieldPattern {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 13,
+                                },
+                            },
+                            value: "x",
+                        },
+                        pattern: None,
+                    },
+                    FieldPattern {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 15,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                            },
+                            value: "y",
+                        },
+                        pattern: None,
+                    },
+                ],
+                rest: None,
+            },
+        },
+        annotation: None,
+    },
+]

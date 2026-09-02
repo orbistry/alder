@@ -1,0 +1,70 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select * from users as u }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 35,
+        },
+    },
+    value: Query(
+        Select(
+            Select {
+                projection: Star(
+                    Region {
+                        start: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                    },
+                ),
+                from: TableRef {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 28,
+                            },
+                        },
+                        value: "users",
+                    },
+                    alias: Some(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 32,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 33,
+                                },
+                            },
+                            value: "u",
+                        },
+                    ),
+                },
+                joins: [],
+                where_: None,
+                group_by: [],
+                order_by: [],
+                limit: None,
+                offset: None,
+            },
+        ),
+    ),
+}

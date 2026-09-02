@@ -1,0 +1,81 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "Db.sql`select 1`"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 17,
+        },
+    },
+    value: TaggedTemplate {
+        tag: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 7,
+                },
+            },
+            value: Access {
+                record: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                    },
+                    value: Path(
+                        Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 1,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 3,
+                                        },
+                                    },
+                                    value: "Db",
+                                },
+                            ],
+                        },
+                    ),
+                },
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: "sql",
+                },
+            },
+        },
+        parts: [
+            Text(
+                "select 1",
+            ),
+        ],
+    },
+}

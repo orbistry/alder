@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Shape {\n    Circle\n    (Number),\n}\n"
+---
+End(
+    3,
+    5,
+)

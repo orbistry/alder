@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/type_.rs
-description: "Code:\n\n{ a | name : String }"
+description: "{ r | name: String }"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 22,
+            column: 21,
         },
     },
     value: Record {
@@ -29,29 +29,36 @@ Located {
                     },
                     value: "name",
                 },
+                optional: None,
                 typ: Located {
                     region: Region {
                         start: Position {
                             line: 1,
-                            column: 14,
+                            column: 13,
                         },
                         end: Position {
                             line: 1,
-                            column: 20,
+                            column: 19,
                         },
                     },
-                    value: Type {
-                        region: Region {
-                            start: Position {
-                                line: 1,
-                                column: 14,
-                            },
-                            end: Position {
-                                line: 1,
-                                column: 20,
-                            },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 13,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 19,
+                                        },
+                                    },
+                                    value: "String",
+                                },
+                            ],
                         },
-                        name: "String",
                         args: [],
                     },
                 },
@@ -69,7 +76,7 @@ Located {
                         column: 4,
                     },
                 },
-                value: "a",
+                value: "r",
             },
         ),
     },

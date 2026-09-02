@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/pattern/record.rs
-description: "Code:\n\n{ x, y"
+description: "{ x, y"
 ---
 Record(
     End(

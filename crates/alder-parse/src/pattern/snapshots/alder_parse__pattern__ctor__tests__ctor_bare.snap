@@ -1,0 +1,36 @@
+---
+source: crates/alder-parse/src/pattern/ctor.rs
+description: None
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 5,
+        },
+    },
+    value: Ctor {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: "None",
+                },
+            ],
+        },
+        args: [],
+    },
+}

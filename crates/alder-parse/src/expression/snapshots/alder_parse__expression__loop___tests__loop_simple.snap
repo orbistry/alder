@@ -1,0 +1,65 @@
+---
+source: crates/alder-parse/src/expression/loop_.rs
+description: "loop {\n    step()\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 3,
+            column: 2,
+        },
+    },
+    value: Loop(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 6,
+                },
+                end: Position {
+                    line: 3,
+                    column: 2,
+                },
+            },
+            value: Block {
+                stmts: [],
+                tail: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 11,
+                            },
+                        },
+                        value: Call {
+                            function: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 5,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 9,
+                                    },
+                                },
+                                value: Var(
+                                    "step",
+                                ),
+                            },
+                            arguments: [],
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

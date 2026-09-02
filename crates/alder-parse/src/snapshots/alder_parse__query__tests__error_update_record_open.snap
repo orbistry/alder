@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { update users set name: ^n }"
+---
+Query(
+    Update(
+        RecordOpen(
+            1,
+            26,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

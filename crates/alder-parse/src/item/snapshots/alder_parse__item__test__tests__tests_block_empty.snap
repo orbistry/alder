@@ -1,0 +1,23 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "tests {}"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 9,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Tests(
+            [],
+        ),
+    },
+}

@@ -1,0 +1,21 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table users { id: text(\"x }"
+---
+Builder(
+    Call(
+        Arg(
+            String(
+                Endless,
+                1,
+                28,
+            ),
+            1,
+            24,
+        ),
+        1,
+        23,
+    ),
+    1,
+    19,
+)

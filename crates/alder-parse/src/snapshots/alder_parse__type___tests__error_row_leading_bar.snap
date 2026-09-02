@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "[|]"
+---
+ErrorRow(
+    Start(
+        1,
+        2,
+    ),
+    1,
+    1,
+)

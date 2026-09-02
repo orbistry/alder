@@ -1,0 +1,21 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<div><p>x"
+---
+Markup(
+    Child(
+        Element(
+            Unclosed {
+                name: "p",
+                row: 1,
+                col: 6,
+            },
+            1,
+            6,
+        ),
+        1,
+        6,
+    ),
+    1,
+    1,
+)

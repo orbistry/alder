@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro now {}"
+---
+Macro(
+    ParamsOpen(
+        1,
+        11,
+    ),
+    1,
+    1,
+)

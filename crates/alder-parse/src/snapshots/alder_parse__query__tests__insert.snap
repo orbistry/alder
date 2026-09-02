@@ -1,0 +1,95 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { insert into users values ^{ email, name } }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 52,
+        },
+    },
+    value: Query(
+        Insert {
+            table: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 21,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 26,
+                    },
+                },
+                value: "users",
+            },
+            values: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 34,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 50,
+                    },
+                },
+                value: Pin(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 35,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 50,
+                            },
+                        },
+                        value: Record(
+                            [
+                                Field {
+                                    name: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 37,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 42,
+                                            },
+                                        },
+                                        value: "email",
+                                    },
+                                    value: None,
+                                },
+                                Field {
+                                    name: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 44,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 48,
+                                            },
+                                        },
+                                        value: "name",
+                                    },
+                                    value: None,
+                                },
+                            ],
+                        ),
+                    },
+                ),
+            },
+        },
+    ),
+}

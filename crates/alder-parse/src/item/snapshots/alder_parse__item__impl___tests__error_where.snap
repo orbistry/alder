@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Show[User] where a: 1 {}"
+---
+Where(
+    Bound(
+        1,
+        26,
+    ),
+    1,
+    22,
+)

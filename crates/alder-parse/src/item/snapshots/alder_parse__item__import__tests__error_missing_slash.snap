@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: import @alder
+---
+Import(
+    Path(
+        Slash(
+            1,
+            14,
+        ),
+        1,
+        8,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,44 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: f!((a)(b))
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 11,
+        },
+    },
+    value: MacroCall {
+        name: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 2,
+                },
+            },
+            value: "f",
+        },
+        tokens: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 4,
+                },
+                end: Position {
+                    line: 1,
+                    column: 10,
+                },
+            },
+            value: "(a)(b)",
+        },
+    },
+}

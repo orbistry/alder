@@ -1,0 +1,80 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style {\n    padding: 16px\n    color: red\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 12,
+                            },
+                        },
+                        value: Ident(
+                            "padding",
+                        ),
+                    },
+                    value: Dimension {
+                        number: NumberLit {
+                            value: 16.0,
+                            text: "16",
+                        },
+                        unit: "px",
+                    },
+                },
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 10,
+                            },
+                        },
+                        value: Ident(
+                            "color",
+                        ),
+                    },
+                    value: Expr(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 15,
+                                },
+                            },
+                            value: Var(
+                                "red",
+                            ),
+                        },
+                    ),
+                },
+            ],
+        },
+    ),
+}

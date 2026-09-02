@@ -1,372 +1,329 @@
-//! Expression parsing for Alder.
+//! Expressions: the flat binop chain, unary prefixes, the postfix loop and
+//! the `primary` dispatch table (docs/parser-internals.md §6.0).
 //!
-//! Ported from Elm's `Parse/Expression.hs`.
+//! Conventions: `expression()`, `unary()` and `postfix()` chomp trailing
+//! whitespace and compute their region before the chomp; `primary()` and the
+//! individual postfix-op parsers do not chomp. Every node's `region.end` is
+//! the last byte it consumed — a parenthesized expression is its inner
+//! expression re-spanned over the parentheses (§tuple.rs, §10.43) — so the
+//! newline rules of §2.1 and every wrapper (`Negate`, `BinOps`, statements)
+//! can use a child's `region.end` as the true end.
+//!
+//! Two points where this file goes beyond the §6.0 pseudo-code, both for
+//! the design owner to ratify: an Elm-habit token (`^`, `|`, `..`, `->`,
+//! `::`, …) on a later line ends the chain instead of raising
+//! `OperatorReserved`, so `other => 1\n^x => 2` reaches the match parser
+//! (7.2 `match_newline_separated_arms` + `match_pin`); and whitespace is
+//! allowed between a unary prefix and its operand (`- x`, `! x`).
+//!
+//! See docs/parser-internals.md §5.13.
+// OWNER: expression/mod.rs (Wave 2)
 
-use alder_region::{Located, Position, Region};
-use alder_source::{BinOpOperand, Expr};
-use bumpalo::collections::Vec as BumpVec;
-
-use crate::Parser;
-use crate::error;
-
-mod accessor;
-mod case;
+mod array;
 mod if_;
 mod lambda;
-mod let_;
-mod list;
-mod number;
+mod literal;
+mod loop_;
+mod match_;
+mod path;
+mod postfix;
 mod record;
-mod string;
+mod tag;
 mod tuple;
-mod variable;
+
+use alder_region::{Located, Position, Region};
+use alder_source::{BinOp, BinOpOperand, Expr};
+use bumpalo::collections::Vec as BumpVec;
+
+use crate::keyword::is_ident_byte;
+use crate::{Keyword, Parser, SqlWord, error};
 
 impl<'a> Parser<'a> {
-    /// Parse a full expression, returning the expression and end position.
-    ///
-    /// Mirrors Elm's `expression`:
-    /// ```haskell
-    /// expression =
-    ///   do  start <- getPosition
-    ///       oneOf E.Start
-    ///         [ let_ start
-    ///         , if_ start
-    ///         , case_ start
-    ///         , function start
-    ///         , do  expr <- possiblyNegativeTerm start
-    ///               ...
-    ///         ]
-    /// ```
-    ///
-    /// Currently implements: lambda, possiblyNegativeTerm + function application.
-    /// TODO: let, if, case, operators
-    pub fn expression(&mut self) -> Result<(&'a Located<Expr<'a>>, Position), error::Expr<'a>> {
-        let start = self.get_position();
-
-        self.one_of(
-            error::Expr::Start,
-            vec![
-                // Let: let defs in expr
-                Box::new(|p: &mut Parser<'a>| p.let_(start)),
-                // Case: case expr of pattern -> branch ...
-                Box::new(|p: &mut Parser<'a>| p.case_(start)),
-                // If: if cond then expr else expr
-                Box::new(|p: &mut Parser<'a>| p.if_(start)),
-                // Lambda: \args -> body
-                Box::new(|p: &mut Parser<'a>| p.lambda(start)),
-                // Term (possibly negated) with function application
-                Box::new(|p| {
-                    let expr = p.possibly_negative_term(start)?;
-                    let end = p.get_position();
-                    p.chomp(error::Expr::Space)?;
-                    p.chomp_expr_end(start, expr, vec![], end)
-                }),
-            ],
-        )
+    /// Flat binop chain over `unary`. Chomps trailing whitespace. Counts one
+    /// nesting level (§10.44).
+    pub fn expression(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        self.nest(error::Expr::TooDeep, Self::expression_chain)
     }
 
-    /// Handle function application and binary operators.
-    ///
-    /// Mirrors Elm's `chompExprEnd`:
-    /// ```haskell
-    /// chompExprEnd start (State ops expr args end) =
-    ///   oneOfWithFallback
-    ///     [ -- argument
-    ///       do  Space.checkIndent end E.Start
-    ///           arg <- term
-    ///           ...
-    ///     , -- operator
-    ///       do  Space.checkIndent end E.Start
-    ///           op <- addLocation (Symbol.operator ...)
-    ///           ...
-    ///     ]
-    ///     -- done: finalize with toCall and possibly wrap in Binops
-    /// ```
-    pub(crate) fn chomp_expr_end(
-        &mut self,
-        start: Position,
-        expr: &'a Located<Expr<'a>>,
-        args: Vec<&'a Located<Expr<'a>>>,
-        end: Position,
-    ) -> Result<(&'a Located<Expr<'a>>, Position), error::Expr<'a>> {
-        // Track ops for binary operator chains
-        let mut ops: BumpVec<'a, &'a BinOpOperand<'a>> = BumpVec::new_in(self.bump);
-        let mut current_expr = expr;
-        let mut current_args = args;
-        let mut current_end = end;
-
+    fn expression_chain(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        let mut last = self.unary()?;
+        let mut operands = BumpVec::new_in(self.bump);
         loop {
-            let state_for_fallback = (ops.clone(), current_expr, current_args.clone(), current_end);
-
-            let result = self.one_of_with_fallback(
-                vec![
-                    // argument - function application
-                    Box::new(|p: &mut Parser<'a>| {
-                        let (row, col) = p.position();
-                        p.check_indent(row, col, error::Expr::Start)?;
-                        let arg = p.term()?;
-                        let new_end = p.get_position();
-                        p.chomp(error::Expr::Space)?;
-
-                        let mut new_args = current_args.clone();
-                        new_args.push(arg);
-
-                        Ok(ExprEndState::MoreArgs(new_args, new_end))
-                    }),
-                    // operator
-                    Box::new(|p: &mut Parser<'a>| {
-                        let (row, col) = p.position();
-                        p.check_indent(row, col, error::Expr::Start)?;
-
-                        // Save positions for negative-term detection
-                        let op_start = p.get_position();
-
-                        let op = p.add_location_operator(
-                            error::Expr::Start,
-                            error::Expr::OperatorReserved,
-                        )?;
-                        let op_name = op.value;
-                        let op_end = p.get_position();
-
-                        p.chomp_and_check_indent(error::Expr::Space, |row, col| {
-                            error::Expr::IndentOperatorRight(op_name, row, col)
-                        })?;
-
-                        let new_start = p.get_position();
-
-                        // Check for negative term: `-` operator where there's no space before
-                        // but space after (e.g., `a -b` means apply `a` to `-b`)
-                        if op_name == "-"
-                            && current_end != op_start // space before operator
-                            && op_end == new_start
-                        // no space after operator
-                        {
-                            // This is a negative term being passed as an argument
-                            let negated_expr = p.term()?;
-                            let neg_end = p.get_position();
-                            let neg_region = Region::new(op_start, neg_end);
-                            let neg = p.alloc(Located::at(neg_region, Expr::Negate(negated_expr)));
-                            p.chomp(error::Expr::Space)?;
-
-                            let mut new_args = current_args.clone();
-                            new_args.push(neg);
-
-                            Ok(ExprEndState::MoreArgs(new_args, neg_end))
-                        } else {
-                            // Regular binary operator
-                            p.one_of(
-                                |row, col| error::Expr::OperatorRight(op_name, row, col),
-                                vec![
-                                    // Parse a term (possibly negative)
-                                    Box::new(|p: &mut Parser<'a>| {
-                                        let new_expr = p.possibly_negative_term(new_start)?;
-                                        let new_end = p.get_position();
-                                        p.chomp(error::Expr::Space)?;
-
-                                        Ok(ExprEndState::MoreOps(op, new_expr, new_end))
-                                    }),
-                                    // Parse a "final" expression (let, case, if, lambda)
-                                    Box::new(|p: &mut Parser<'a>| {
-                                        let (final_expr, final_end) = p.one_of(
-                                            |row, col| {
-                                                error::Expr::OperatorRight(op_name, row, col)
-                                            },
-                                            vec![
-                                                Box::new(|p: &mut Parser<'a>| p.let_(new_start)),
-                                                Box::new(|p| p.case_(new_start)),
-                                                Box::new(|p| p.if_(new_start)),
-                                                Box::new(|p| p.lambda(new_start)),
-                                            ],
-                                        )?;
-
-                                        Ok(ExprEndState::Final(op, final_expr, final_end))
-                                    }),
-                                ],
-                            )
-                        }
-                    }),
-                ],
-                ExprEndState::Done,
-            )?;
-
-            match result {
-                ExprEndState::MoreArgs(new_args, new_end) => {
-                    current_args = new_args;
-                    current_end = new_end;
+            let saved = self.save_state();
+            let newline = self.newline_since(last.region.end);
+            let op = match self.binop(error::Expr::OperatorReserved) {
+                Ok(Some(op)) => op,
+                Ok(None) => break,
+                // An Elm-habit token at the start of a later line (`^x`,
+                // `| p`, `..rest`, `-> t`) begins the next statement or
+                // match arm rather than continuing this chain; nothing was
+                // consumed, and whoever parses that line reports it.
+                Err(_) if newline => break,
+                Err(e) => return Err(e),
+            };
+            if newline && !continues_line(op.value, self.peek()) {
+                self.restore_state(saved);
+                break;
+            }
+            self.chomp();
+            let operand = match self.unary() {
+                Err(error::Expr::Start(row, col)) => {
+                    return Err(error::Expr::OperatorRight(op.value, row, col));
                 }
-                ExprEndState::MoreOps(op, new_expr, new_end) => {
-                    // Push (toCall current_expr current_args, op) onto ops
-                    let call_expr = to_call(self, start, current_expr, current_args.clone());
-                    let operand = self.alloc(BinOpOperand {
-                        expr: call_expr,
-                        op,
-                    });
-                    ops.push(operand);
-                    current_expr = new_expr;
-                    current_args = Vec::new();
-                    current_end = new_end;
-                }
-                ExprEndState::Final(op, final_expr, final_end) => {
-                    // Push current and build final Binops
-                    let call_expr = to_call(self, start, current_expr, current_args);
-                    let operand = self.alloc(BinOpOperand {
-                        expr: call_expr,
-                        op,
-                    });
-                    ops.push(operand);
+                other => other?,
+            };
+            operands.push(BinOpOperand { expr: last, op });
+            last = operand;
+        }
+        if operands.is_empty() {
+            return Ok(last);
+        }
+        let start = operands[0].expr.region.start;
+        Ok(self.expr_at(
+            start,
+            last.region.end,
+            Expr::BinOps {
+                operands: operands.into_bump_slice(),
+                last,
+            },
+        ))
+    }
 
-                    let ops_slice = ops.into_bump_slice();
-                    let binops = Expr::BinOps {
-                        operands: ops_slice,
-                        last: final_expr,
+    /// `-` / `!` / (query mode) `^` prefix, then `postfix`. A `Start` failure of the
+    /// operand becomes `Expr::Unary`; every other operand error propagates (§6.0).
+    ///
+    /// Whitespace may separate the prefix from its operand (`- x`, `! ready`,
+    /// `- -x`), as in JS and Rust. This does not disturb §2.1 rule 2: at the
+    /// start of a continuation line `- b` is still the subtraction and `-b`
+    /// the new statement, because the chain decides before `unary` runs.
+    pub(crate) fn unary(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        let start = self.get_position();
+        match self.peek() {
+            Some(b'-') => {
+                self.advance();
+                self.chomp();
+                let operand = self.unary_operand()?;
+                Ok(self.expr_at(start, operand.region.end, Expr::Negate(operand)))
+            }
+            Some(b'!') => {
+                self.advance();
+                self.chomp();
+                let operand = self.unary_operand()?;
+                Ok(self.expr_at(start, operand.region.end, Expr::Not(operand)))
+            }
+            Some(b'^') if self.in_query() => self.pinned_value(),
+            _ => self.postfix(),
+        }
+    }
+
+    /// The operand of `-` / `!`: another unary. Nothing operand-like at all
+    /// (`Start`) becomes `Unary` at that position.
+    fn unary_operand(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        match self.unary() {
+            Err(error::Expr::Start(row, col)) => Err(error::Expr::Unary(row, col)),
+            other => other,
+        }
+    }
+
+    /// `primary` then the postfix loop (§6.0). Chomps trailing whitespace.
+    pub(crate) fn postfix(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        let mut node = self.primary()?;
+        // The true end of the node being extended: `primary` does not chomp,
+        // but a block-ending primary (and the postfix ops below) may have.
+        let mut end = node.region.end;
+        loop {
+            // 1. Tagged template: the backtick must be adjacent (nothing
+            //    chomped yet, but a block-ending primary has already chomped
+            //    its own trailing whitespace, hence the explicit check).
+            if self.peek() == Some(b'`') && self.adjacent_to(end) {
+                node = self.tagged_template(node)?;
+                end = self.get_position();
+                continue;
+            }
+            // 2. Everything else may follow whitespace; only `.` may follow a
+            //    line break (§2.1 rule 1).
+            self.chomp();
+            let same_line = !self.newline_since(end);
+            match self.peek() {
+                Some(b'.') if self.peek_at(1) != Some(b'.') => {
+                    node = self.dot_suffix(node)?;
+                }
+                Some(b'(') if same_line => {
+                    let arguments = self.specialize(
+                        |bump, e, row, col| error::Expr::Call(bump.alloc(e), row, col),
+                        |p| p.call_args(),
+                    )?;
+                    node = self.expr_at(
+                        node.region.start,
+                        self.get_position(),
+                        Expr::Call {
+                            function: node,
+                            arguments,
+                        },
+                    );
+                }
+                Some(b'[') if same_line => {
+                    node = self.specialize(
+                        |bump, e, row, col| error::Expr::Index(bump.alloc(e), row, col),
+                        |p| p.index(node),
+                    )?;
+                }
+                Some(b'?') if same_line && self.peek_at(1) != Some(b'?') => {
+                    self.advance();
+                    node = self.expr_at(node.region.start, self.get_position(), Expr::Try(node));
+                }
+                Some(b'{') if same_line && self.record_ctor_allowed() => {
+                    let Expr::Path(path) = node.value else {
+                        return Ok(node);
                     };
-                    let result = self.alloc(Located::at(Region::new(start, final_end), binops));
-                    return Ok((result, final_end));
+                    node = self.record_ctor(node.region.start, path)?;
                 }
-                ExprEndState::Done => {
-                    // Finalize - use saved state
-                    let (saved_ops, saved_expr, saved_args, saved_end) = state_for_fallback;
-                    let final_call = to_call(self, start, saved_expr, saved_args);
+                _ => return Ok(node),
+            }
+            end = self.get_position();
+        }
+    }
 
-                    if saved_ops.is_empty() {
-                        return Ok((final_call, saved_end));
-                    } else {
-                        let ops_slice = saved_ops.into_bump_slice();
-                        let binops = Expr::BinOps {
-                            operands: ops_slice,
-                            last: final_call,
-                        };
-                        let result = self.alloc(Located::at(Region::new(start, saved_end), binops));
-                        return Ok((result, saved_end));
-                    }
+    /// Dispatch table on the first byte/word. Does NOT chomp.
+    pub(crate) fn primary(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        let start = self.get_position();
+        let (row, col) = self.position();
+        match self.peek() {
+            Some(b'0'..=b'9') => self.number(start),
+            Some(b'"') => self.string(start),
+            Some(b'`') => self.template(start),
+            Some(b'(') => self.tuple(start),
+            Some(b'[') => self.array(start),
+            Some(b'{') => {
+                if self.looks_like_record() {
+                    self.record(start)
+                } else {
+                    let block = self.specialize(
+                        |bump, e, row, col| error::Expr::Block(bump.alloc(e), row, col),
+                        |p| p.block(),
+                    )?;
+                    Ok(self.expr_at(start, block.region.end, Expr::Block(block)))
                 }
+            }
+            Some(b'<') => match self.peek_at(1) {
+                Some(b'/') => Err(error::Expr::UnexpectedClose(row, col)),
+                Some(b) if b.is_ascii_alphabetic() || b == b'>' => self.markup(start),
+                _ => Err(error::Expr::Start(row, col)),
+            },
+            Some(b':') => {
+                if self.peek_at(1).is_some_and(|b| b.is_ascii_lowercase()) {
+                    self.tag(start)
+                } else {
+                    Err(error::Expr::Tag(
+                        self.alloc(error::Tag::Name(row, col)),
+                        row,
+                        col,
+                    ))
+                }
+            }
+            Some(b'^') => Err(error::Expr::PinOutsideQuery(row, col)),
+            Some(b'_') if !self.peek_at(1).is_some_and(is_ident_byte) => {
+                Err(error::Expr::Placeholder(row, col))
+            }
+            Some(b) if b.is_ascii_lowercase() => self.lower_primary(start),
+            Some(b) if b.is_ascii_uppercase() => self.name_or_path(start),
+            _ => Err(error::Expr::Start(row, col)),
+        }
+    }
+
+    /// At a lowercase letter: literal `true` / `false`, a keyword-led
+    /// construct, a misplaced reserved or SQL word, or a name.
+    fn lower_primary(&mut self, start: Position) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        let (row, col) = self.position();
+        let word = self.peek_word();
+        match word {
+            "true" | "false" => {
+                self.advance_by(word.len());
+                Ok(self.add_end(start, Expr::Bool(word == "true")))
+            }
+            "fn" => {
+                self.advance_by(word.len());
+                self.lambda(start)
+            }
+            "if" => {
+                self.advance_by(word.len());
+                self.if_(start)
+            }
+            "match" => {
+                self.advance_by(word.len());
+                self.match_(start)
+            }
+            "loop" => {
+                self.advance_by(word.len());
+                self.loop_(start)
+            }
+            "state" => {
+                self.advance_by(word.len());
+                self.state(start)
+            }
+            "style" => {
+                self.advance_by(word.len());
+                self.style(start)
+            }
+            "query" => {
+                self.advance_by(word.len());
+                self.query(start)
+            }
+            _ => {
+                if let Some(kw) = Keyword::from_word(word) {
+                    return Err(error::Expr::Reserved(kw, row, col));
+                }
+                if self.in_query()
+                    && let Some(sql) = SqlWord::from_word(word)
+                {
+                    return Err(error::Expr::SqlKeyword(sql, row, col));
+                }
+                self.name_or_path(start)
             }
         }
     }
 
-    /// Parse possibly negated term: `-term` or `term`.
-    ///
-    /// Mirrors Elm's `possiblyNegativeTerm`:
-    /// ```haskell
-    /// possiblyNegativeTerm start =
-    ///   oneOf E.Start
-    ///     [ do  word1 0x2D {---} E.Start
-    ///           expr <- term
-    ///           addEnd start (Src.Negate expr)
-    ///     , term
-    ///     ]
-    /// ```
-    fn possibly_negative_term(
-        &mut self,
+    /// An expression node whose region ends at `end` rather than at the
+    /// cursor (for nodes built after a sub-parser chomped, or whose end is a
+    /// child's end).
+    pub(super) fn expr_at(
+        &self,
         start: Position,
-    ) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
-        self.one_of(
-            error::Expr::Start,
-            vec![
-                Box::new(|p: &mut Parser<'a>| {
-                    p.word1(b'-', error::Expr::Start)?;
-                    let expr = p.term()?;
-                    Ok(p.add_end(start, Expr::Negate(expr)))
-                }),
-                Box::new(|p| p.term()),
-            ],
-        )
-    }
-
-    /// Parse a term (atomic expression).
-    ///
-    /// Mirrors Elm's `term`:
-    /// ```haskell
-    /// term =
-    ///   do  start <- getPosition
-    ///       oneOf E.Start
-    ///         [ variable start >>= accessible start
-    ///         , string start
-    ///         , number start
-    ///         , ...
-    ///         ]
-    /// ```
-    pub fn term(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
-        let start = self.get_position();
-
-        self.one_of(
-            error::Expr::Start,
-            vec![
-                Box::new(|p: &mut Parser<'a>| {
-                    let expr = p.variable(start)?;
-                    p.accessible(start, expr)
-                }),
-                Box::new(|p| p.string(start)),
-                Box::new(|p| p.number(start)),
-                Box::new(|p| p.list(start)),
-                Box::new(|p| {
-                    let expr = p.record(start)?;
-                    p.accessible(start, expr)
-                }),
-                Box::new(|p| {
-                    let expr = p.tuple(start)?;
-                    p.accessible(start, expr)
-                }),
-                Box::new(|p| p.accessor(start)),
-            ],
-        )
+        end: Position,
+        value: Expr<'a>,
+    ) -> &'a Located<Expr<'a>> {
+        self.alloc(Located::at(Region::new(start, end), value))
     }
 }
 
-/// Convert function + args into a Call expression.
-///
-/// Mirrors Elm's `toCall`:
-/// ```haskell
-/// toCall func revArgs =
-///   case revArgs of
-///     [] -> func
-///     lastArg : _ -> A.merge func lastArg (Src.Call func (reverse revArgs))
-/// ```
-fn to_call<'a>(
-    parser: &Parser<'a>,
-    _start: Position,
-    func: &'a Located<Expr<'a>>,
-    args: Vec<&'a Located<Expr<'a>>>,
-) -> &'a Located<Expr<'a>> {
-    if args.is_empty() {
-        func
-    } else {
-        let last_arg = args.last().unwrap();
-        let region = Region::span_across(&func.region, &last_arg.region);
-        let args_slice = parser.alloc_slice_copy(&args);
-        parser.alloc(Located::at(
-            region,
-            Expr::Call {
-                function: func,
-                arguments: args_slice,
-            },
-        ))
+/// May `op` sit at the start of a continuation line? (`-` only if followed by
+/// whitespace; `<` only if not followed by a letter or `>`; everything else yes.)
+fn continues_line(op: BinOp, next: Option<u8>) -> bool {
+    match op {
+        BinOp::Sub => next.is_some_and(|b| matches!(b, b' ' | b'\t' | b'\r' | b'\n')),
+        BinOp::Lt => !next.is_some_and(|b| b.is_ascii_alphabetic() || b == b'>'),
+        _ => true,
     }
-}
-
-/// State for expression end parsing (function application and binary operators).
-enum ExprEndState<'a> {
-    /// More function arguments accumulated
-    MoreArgs(Vec<&'a Located<Expr<'a>>>, Position),
-    /// Binary operator found, continue parsing chain
-    MoreOps(&'a Located<&'a str>, &'a Located<Expr<'a>>, Position),
-    /// Final expression found (let, case, if, lambda) after operator
-    Final(&'a Located<&'a str>, &'a Located<Expr<'a>>, Position),
-    /// Done parsing, finalize expression
-    Done,
 }
 
 /// Snapshot test macro for successful expression parsing.
 #[cfg(test)]
-macro_rules! assert_expr_snapshot {
+macro_rules! assert_expression_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
-        let src = bump.alloc_str(indoc::indoc!($code));
+        let code = indoc::indoc!($code);
+        let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        let result = parser.term().expect("expected successful parse");
-
+        let result = parser
+            .expression()
+            .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
+        assert!(
+            parser.is_eof(),
+            "unconsumed input at {:?}\n\nSource:\n{code}",
+            parser.position()
+        );
         insta::with_settings!({
-            description => format!("Code:\n\n{}", indoc::indoc!($code)),
+            description => code,
             omit_expression => true,
         }, {
             insta::assert_debug_snapshot!(result);
@@ -376,165 +333,106 @@ macro_rules! assert_expr_snapshot {
 
 /// Snapshot test macro for expression parse errors.
 #[cfg(test)]
-macro_rules! assert_expr_error_snapshot {
+macro_rules! assert_expression_error_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
-        let src = bump.alloc_str(indoc::indoc!($code));
+        let code = indoc::indoc!($code);
+        let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        let result = parser.term().expect_err("expected parse error");
-
+        let err = parser
+            .expression()
+            .err()
+            .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
         insta::with_settings!({
-            description => format!("Code:\n\n{}", indoc::indoc!($code)),
+            description => code,
             omit_expression => true,
         }, {
-            insta::assert_debug_snapshot!(result);
-        });
-    }};
-}
-
-/// Snapshot test macro for full expression parsing.
-#[cfg(test)]
-macro_rules! assert_expression_snapshot {
-    ($code:expr) => {{
-        let bump = bumpalo::Bump::new();
-        let src = bump.alloc_str(indoc::indoc!($code));
-        let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        let (result, _end) = parser.expression().expect("expected successful parse");
-
-        insta::with_settings!({
-            description => format!("Code:\n\n{}", indoc::indoc!($code)),
-            omit_expression => true,
-        }, {
-            insta::assert_debug_snapshot!(result);
-        });
-    }};
-}
-
-/// Snapshot test macro for multiline terms, laid out as they would appear
-/// indented inside a definition. Bare fragments cannot use multiline
-/// layout: a token at column 1 always starts a new top-level declaration.
-#[cfg(test)]
-macro_rules! assert_indented_expr_snapshot {
-    ($code:expr) => {{
-        let bump = bumpalo::Bump::new();
-        let fragment = indoc::indoc!($code);
-        let indented = $crate::test_support::indent_fragment(fragment);
-        let src = bump.alloc_str(&indented);
-        let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        parser
-            .chomp(|_, _, _| "space error")
-            .expect("expected leading indent");
-        let result = parser.term().expect("expected successful parse");
-
-        insta::with_settings!({
-            description => format!("Code (indented inside a def):\n\n{}", indented),
-            omit_expression => true,
-        }, {
-            insta::assert_debug_snapshot!(result);
-        });
-    }};
-}
-
-/// Like `assert_indented_expr_snapshot` but for full expressions.
-#[cfg(test)]
-macro_rules! assert_indented_expression_snapshot {
-    ($code:expr) => {{
-        let bump = bumpalo::Bump::new();
-        let fragment = indoc::indoc!($code);
-        let indented = $crate::test_support::indent_fragment(fragment);
-        let src = bump.alloc_str(&indented);
-        let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        parser
-            .chomp(|_, _, _| "space error")
-            .expect("expected leading indent");
-        let (result, _end) = parser.expression().expect("expected successful parse");
-
-        insta::with_settings!({
-            description => format!("Code (indented inside a def):\n\n{}", indented),
-            omit_expression => true,
-        }, {
-            insta::assert_debug_snapshot!(result);
+            insta::assert_debug_snapshot!(err);
         });
     }};
 }
 
 #[cfg(test)]
-pub(crate) use assert_expr_error_snapshot;
-#[cfg(test)]
-pub(crate) use assert_expr_snapshot;
+pub(crate) use assert_expression_error_snapshot;
 #[cfg(test)]
 pub(crate) use assert_expression_snapshot;
-#[cfg(test)]
-pub(crate) use assert_indented_expr_snapshot;
-#[cfg(test)]
-pub(crate) use assert_indented_expression_snapshot;
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn negate_var() {
-        assert_expression_snapshot!("-x");
-    }
 
     #[test]
-    fn negate_number() {
-        assert_expression_snapshot!("-42");
-    }
-
-    #[test]
-    fn negate_parens() {
-        assert_expression_snapshot!("-(a)");
-    }
-
-    #[test]
-    fn expr_simple_var() {
-        assert_expression_snapshot!("foo");
-    }
-
-    #[test]
-    fn expr_simple_number() {
-        assert_expression_snapshot!("123");
-    }
-
-    #[test]
-    fn application_single() {
-        assert_expression_snapshot!("f x");
-    }
-
-    #[test]
-    fn application_multiple() {
-        assert_expression_snapshot!("f x y z");
-    }
-
-    #[test]
-    fn application_nested() {
-        assert_expression_snapshot!("f (g x)");
-    }
-
-    #[test]
-    fn application_with_record() {
-        assert_expression_snapshot!("f { x = 1 }");
-    }
-
-    // Binary operators
-    #[test]
-    fn binop_simple_add() {
+    fn binop_add() {
         assert_expression_snapshot!("a + b");
     }
 
     #[test]
-    fn binop_simple_subtract() {
+    fn binop_sub() {
         assert_expression_snapshot!("a - b");
     }
 
     #[test]
-    fn binop_simple_multiply() {
+    fn binop_mul() {
         assert_expression_snapshot!("a * b");
     }
 
     #[test]
-    fn binop_simple_divide() {
+    fn binop_div() {
         assert_expression_snapshot!("a / b");
+    }
+
+    #[test]
+    fn binop_rem() {
+        assert_expression_snapshot!("a % b");
+    }
+
+    #[test]
+    fn binop_eq() {
+        assert_expression_snapshot!("a == b");
+    }
+
+    #[test]
+    fn binop_neq() {
+        assert_expression_snapshot!("a != b");
+    }
+
+    #[test]
+    fn binop_lt() {
+        assert_expression_snapshot!("a < b");
+    }
+
+    #[test]
+    fn binop_lte() {
+        assert_expression_snapshot!("a <= b");
+    }
+
+    #[test]
+    fn binop_gt() {
+        assert_expression_snapshot!("a > b");
+    }
+
+    #[test]
+    fn binop_gte() {
+        assert_expression_snapshot!("a >= b");
+    }
+
+    #[test]
+    fn binop_and() {
+        assert_expression_snapshot!("a && b");
+    }
+
+    #[test]
+    fn binop_or() {
+        assert_expression_snapshot!("a || b");
+    }
+
+    #[test]
+    fn binop_coalesce() {
+        assert_expression_snapshot!("a ?? b");
+    }
+
+    #[test]
+    fn binop_pipe() {
+        assert_expression_snapshot!("a |> f");
     }
 
     #[test]
@@ -543,8 +441,8 @@ mod tests {
     }
 
     #[test]
-    fn binop_mixed() {
-        assert_expression_snapshot!("a + b * c");
+    fn binop_mixed_flat() {
+        assert_expression_snapshot!("a + b * c == d");
     }
 
     #[test]
@@ -553,166 +451,196 @@ mod tests {
     }
 
     #[test]
-    fn binop_pipe_right() {
-        assert_expression_snapshot!("a |> b |> c");
+    fn binop_eq_negative_no_space() {
+        assert_expression_snapshot!("a==-1");
     }
 
     #[test]
-    fn binop_pipe_left() {
-        assert_expression_snapshot!("c <| b <| a");
+    fn binop_lt_negative_no_space() {
+        assert_expression_snapshot!("x<-1");
     }
 
     #[test]
-    fn binop_comparison() {
-        assert_expression_snapshot!("a == b");
-    }
-
-    #[test]
-    fn binop_less_than() {
-        assert_expression_snapshot!("a < b");
-    }
-
-    #[test]
-    fn binop_greater_than() {
-        assert_expression_snapshot!("a > b");
-    }
-
-    #[test]
-    fn binop_append() {
-        assert_expression_snapshot!("a ++ b");
-    }
-
-    #[test]
-    fn binop_cons() {
-        assert_expression_snapshot!("a :: b");
-    }
-
-    #[test]
-    fn binop_logical_and() {
-        assert_expression_snapshot!("a && b");
-    }
-
-    #[test]
-    fn binop_logical_or() {
-        assert_expression_snapshot!("a || b");
-    }
-
-    #[test]
-    fn binop_less_than_or_equal() {
-        assert_expression_snapshot!("a <= b");
-    }
-
-    #[test]
-    fn binop_greater_than_or_equal() {
-        assert_expression_snapshot!("a >= b");
-    }
-
-    #[test]
-    fn binop_not_equal() {
-        assert_expression_snapshot!("a /= b");
-    }
-
-    #[test]
-    fn binop_compose_right() {
-        assert_expression_snapshot!("f >> g");
-    }
-
-    #[test]
-    fn binop_compose_left() {
-        assert_expression_snapshot!("f << g");
-    }
-
-    #[test]
-    fn binop_power() {
-        assert_expression_snapshot!("a ^ b");
-    }
-
-    #[test]
-    fn binop_with_function_application() {
-        assert_expression_snapshot!("f x + g y");
-    }
-
-    #[test]
-    fn binop_with_negation() {
-        assert_expression_snapshot!("a + -b");
-    }
-
-    #[test]
-    fn binop_negative_first() {
-        assert_expression_snapshot!("-a + b");
-    }
-
-    #[test]
-    fn binop_with_let() {
-        assert_expression_snapshot!("a + let x = 1 in x");
-    }
-
-    #[test]
-    fn binop_with_if() {
-        assert_expression_snapshot!("a + if b then c else d");
-    }
-
-    #[test]
-    fn binop_with_case() {
+    fn binop_leading_pipe_newline() {
         assert_expression_snapshot!(
             r#"
-            a + case x of
-                1 -> y
-                _ -> z
+            xs
+                |> f
+                |> g
             "#
         );
     }
 
     #[test]
-    fn binop_with_lambda() {
-        assert_expression_snapshot!("a + \\x -> x");
+    fn binop_leading_plus_newline() {
+        assert_expression_snapshot!(
+            r#"
+            a
+                + b
+            "#
+        );
     }
 
-    // Operator sections
-    #[test]
-    fn op_section_plus() {
-        assert_expression_snapshot!("(+)");
-    }
-
-    #[test]
-    fn op_section_minus() {
-        assert_expression_snapshot!("(-)");
-    }
-
-    #[test]
-    fn op_section_multiply() {
-        assert_expression_snapshot!("(*)");
-    }
-
-    #[test]
-    fn op_section_append() {
-        assert_expression_snapshot!("(++)");
-    }
-
-    #[test]
-    fn op_section_pipe_right() {
-        assert_expression_snapshot!("(|>)");
-    }
-
-    #[test]
-    fn op_section_cons() {
-        assert_expression_snapshot!("(::)");
-    }
-
-    // Negation vs subtraction
-    #[test]
-    fn application_with_negative_arg() {
-        // `f -x` means f applied to -x (negative x), not f minus x
-        assert_expression_snapshot!("f -x");
+    /// An Elm-habit token on a later line ends the chain (the next line is
+    /// a new statement or match arm); the token is left unconsumed at `$at`.
+    macro_rules! assert_expression_ends_at {
+        ($code:expr, $at:expr) => {{
+            let bump = bumpalo::Bump::new();
+            let code = $code;
+            let src = bump.alloc_str(code);
+            let mut parser = crate::Parser::new(&bump, src.as_bytes());
+            let result = parser
+                .expression()
+                .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
+            assert_eq!(parser.position(), $at, "unexpected end\n\nSource:\n{code}");
+            insta::with_settings!({
+                description => code,
+                omit_expression => true,
+            }, {
+                insta::assert_debug_snapshot!(result);
+            });
+        }};
     }
 
     #[test]
-    fn negation_in_parens() {
-        assert_expression_snapshot!("(-42)");
+    fn binop_newline_caret_ends_expression() {
+        assert_expression_ends_at!("a\n^b", (2, 1));
     }
 
     #[test]
-    fn negation_in_tuple() {
-        assert_expression_snapshot!("(-a, b)");
+    fn binop_newline_bar_ends_expression() {
+        assert_expression_ends_at!("a\n| b", (2, 1));
+    }
+
+    #[test]
+    fn binop_newline_arrow_ends_expression() {
+        assert_expression_ends_at!("a\n-> b", (2, 1));
+    }
+
+    #[test]
+    fn binop_sub_negate() {
+        assert_expression_snapshot!("a - -b");
+    }
+
+    #[test]
+    fn negate_var() {
+        assert_expression_snapshot!("-x");
+    }
+
+    #[test]
+    fn negate_with_space() {
+        assert_expression_snapshot!("- x");
+    }
+
+    #[test]
+    fn negate_negate_with_space() {
+        assert_expression_snapshot!("- -x");
+    }
+
+    #[test]
+    fn negate_number() {
+        assert_expression_snapshot!("-1");
+    }
+
+    #[test]
+    fn negate_call() {
+        assert_expression_snapshot!("-f(x)");
+    }
+
+    /// The operand's region includes its parentheses, so the wrapper's end
+    /// is the `)` (§10.43).
+    #[test]
+    fn negate_parens() {
+        assert_expression_snapshot!("-(a)");
+    }
+
+    #[test]
+    fn not_var() {
+        assert_expression_snapshot!("!ready");
+    }
+
+    #[test]
+    fn not_parens() {
+        assert_expression_snapshot!("!(a && b)");
+    }
+
+    #[test]
+    fn not_with_space() {
+        assert_expression_snapshot!("! ready");
+    }
+
+    #[test]
+    fn double_negate() {
+        assert_expression_snapshot!("--x");
+    }
+
+    #[test]
+    fn error_operator_arrow() {
+        assert_expression_error_snapshot!("a -> b");
+    }
+
+    #[test]
+    fn error_operator_bar() {
+        assert_expression_error_snapshot!("a | b");
+    }
+
+    #[test]
+    fn error_operator_plus_plus() {
+        assert_expression_error_snapshot!("a ++ b");
+    }
+
+    #[test]
+    fn error_operator_double_colon() {
+        assert_expression_error_snapshot!("a :: b");
+    }
+
+    #[test]
+    fn error_operator_caret() {
+        assert_expression_error_snapshot!("a ^ b");
+    }
+
+    #[test]
+    fn error_operator_right_missing() {
+        assert_expression_error_snapshot!("a +");
+    }
+
+    #[test]
+    fn error_operator_right_bad_operand_propagates() {
+        assert_expression_error_snapshot!(r#"a + "x"#);
+    }
+
+    #[test]
+    fn error_unary_missing_operand() {
+        assert_expression_error_snapshot!("-");
+    }
+
+    #[test]
+    fn error_not_missing_operand() {
+        assert_expression_error_snapshot!("!)");
+    }
+
+    #[test]
+    fn error_unary_bad_operand_propagates() {
+        assert_expression_error_snapshot!(r#"-"x"#);
+    }
+
+    #[test]
+    fn error_pin_outside_query() {
+        assert_expression_error_snapshot!("^x");
+    }
+
+    #[test]
+    fn error_start_reserved() {
+        assert_expression_error_snapshot!("else");
+    }
+
+    #[test]
+    fn error_unexpected_close_tag() {
+        assert_expression_error_snapshot!("</div>");
+    }
+
+    #[test]
+    fn error_placeholder_alone() {
+        assert_expression_error_snapshot!("_");
     }
 }

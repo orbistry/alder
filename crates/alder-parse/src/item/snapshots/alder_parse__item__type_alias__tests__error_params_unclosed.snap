@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/item/type_alias.rs
+description: "type Pair[a, b = (a, b)"
+---
+TypeAlias(
+    Params(
+        End(
+            1,
+            16,
+        ),
+        1,
+        10,
+    ),
+    1,
+    1,
+)

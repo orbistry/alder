@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<p>@empty { <b>x</b> }</p>"
+---
+Markup(
+    Child(
+        StrayEmpty(
+            1,
+            4,
+        ),
+        1,
+        4,
+    ),
+    1,
+    1,
+)

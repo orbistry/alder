@@ -1,0 +1,92 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style {\n    \"@media (max-width: 600px)\": {\n        \":hover\": { padding: 4px },\n    },\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 5,
+            column: 2,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 32,
+                            },
+                        },
+                        value: Str(
+                            "@media (max-width: 600px)",
+                        ),
+                    },
+                    value: Nested(
+                        Style {
+                            entries: [
+                                StyleEntry {
+                                    key: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 9,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 17,
+                                            },
+                                        },
+                                        value: Str(
+                                            ":hover",
+                                        ),
+                                    },
+                                    value: Nested(
+                                        Style {
+                                            entries: [
+                                                StyleEntry {
+                                                    key: Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 3,
+                                                                column: 21,
+                                                            },
+                                                            end: Position {
+                                                                line: 3,
+                                                                column: 28,
+                                                            },
+                                                        },
+                                                        value: Ident(
+                                                            "padding",
+                                                        ),
+                                                    },
+                                                    value: Dimension {
+                                                        number: NumberLit {
+                                                            value: 4.0,
+                                                            text: "4",
+                                                        },
+                                                        unit: "px",
+                                                    },
+                                                },
+                                            ],
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+        },
+    ),
+}

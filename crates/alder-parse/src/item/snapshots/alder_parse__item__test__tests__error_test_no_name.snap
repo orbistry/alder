@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "test { assert true }"
+---
+Test(
+    Name(
+        1,
+        6,
+    ),
+    1,
+    1,
+)

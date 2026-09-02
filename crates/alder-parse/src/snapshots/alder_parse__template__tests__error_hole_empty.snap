@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`a ${ } b`"
+---
+Template(
+    HoleEmpty(
+        1,
+        7,
+    ),
+    1,
+    1,
+)

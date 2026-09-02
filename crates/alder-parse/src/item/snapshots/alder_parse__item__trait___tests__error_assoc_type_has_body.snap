@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Iterator[i] { type Item = Number }"
+---
+AssocTypeHasBody(
+    1,
+    31,
+)

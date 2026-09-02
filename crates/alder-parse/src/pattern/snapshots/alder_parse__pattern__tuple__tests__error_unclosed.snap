@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/pattern/tuple.rs
-description: "Code:\n\n(a, b"
+description: "(a, b"
 ---
 Tuple(
     End(

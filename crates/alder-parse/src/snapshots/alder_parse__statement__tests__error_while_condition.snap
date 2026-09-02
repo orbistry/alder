@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "while ) { }"
+---
+While(
+    Condition(
+        Start(
+            1,
+            7,
+        ),
+        1,
+        7,
+    ),
+    1,
+    1,
+)

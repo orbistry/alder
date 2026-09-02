@@ -1,0 +1,601 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "pub enum Option[a] {\n    Some(a),\n    None,\n}\n\npub enum Shape {\n    Circle(Number),\n    Rect { width: Number, height: Number },\n}\n\nlet s = Shape::Rect { width: 1, height: 2 }\nlet o = Option::Some(3)\n"
+---
+Module {
+    items: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 4,
+                    column: 2,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Pub(
+                    Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                ),
+                kind: Enum(
+                    EnumDecl {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                            },
+                            value: "Option",
+                        },
+                        params: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 17,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 18,
+                                    },
+                                },
+                                value: "a",
+                            },
+                        ],
+                        variants: [
+                            Variant {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 9,
+                                        },
+                                    },
+                                    value: "Some",
+                                },
+                                payload: Tuple(
+                                    [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 2,
+                                                    column: 10,
+                                                },
+                                                end: Position {
+                                                    line: 2,
+                                                    column: 11,
+                                                },
+                                            },
+                                            value: Var {
+                                                name: "a",
+                                                args: [],
+                                            },
+                                        },
+                                    ],
+                                ),
+                            },
+                            Variant {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 9,
+                                        },
+                                    },
+                                    value: "None",
+                                },
+                                payload: Unit,
+                            },
+                        ],
+                    },
+                ),
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 6,
+                    column: 1,
+                },
+                end: Position {
+                    line: 9,
+                    column: 2,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Pub(
+                    Region {
+                        start: Position {
+                            line: 6,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 6,
+                            column: 4,
+                        },
+                    },
+                ),
+                kind: Enum(
+                    EnumDecl {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 6,
+                                    column: 10,
+                                },
+                                end: Position {
+                                    line: 6,
+                                    column: 15,
+                                },
+                            },
+                            value: "Shape",
+                        },
+                        params: [],
+                        variants: [
+                            Variant {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 7,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 7,
+                                            column: 11,
+                                        },
+                                    },
+                                    value: "Circle",
+                                },
+                                payload: Tuple(
+                                    [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 7,
+                                                    column: 12,
+                                                },
+                                                end: Position {
+                                                    line: 7,
+                                                    column: 18,
+                                                },
+                                            },
+                                            value: Named {
+                                                path: Path {
+                                                    segments: [
+                                                        Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 7,
+                                                                    column: 12,
+                                                                },
+                                                                end: Position {
+                                                                    line: 7,
+                                                                    column: 18,
+                                                                },
+                                                            },
+                                                            value: "Number",
+                                                        },
+                                                    ],
+                                                },
+                                                args: [],
+                                            },
+                                        },
+                                    ],
+                                ),
+                            },
+                            Variant {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 8,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 8,
+                                            column: 9,
+                                        },
+                                    },
+                                    value: "Rect",
+                                },
+                                payload: Record(
+                                    [
+                                        FieldType {
+                                            field: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 8,
+                                                        column: 12,
+                                                    },
+                                                    end: Position {
+                                                        line: 8,
+                                                        column: 17,
+                                                    },
+                                                },
+                                                value: "width",
+                                            },
+                                            optional: None,
+                                            typ: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 8,
+                                                        column: 19,
+                                                    },
+                                                    end: Position {
+                                                        line: 8,
+                                                        column: 25,
+                                                    },
+                                                },
+                                                value: Named {
+                                                    path: Path {
+                                                        segments: [
+                                                            Located {
+                                                                region: Region {
+                                                                    start: Position {
+                                                                        line: 8,
+                                                                        column: 19,
+                                                                    },
+                                                                    end: Position {
+                                                                        line: 8,
+                                                                        column: 25,
+                                                                    },
+                                                                },
+                                                                value: "Number",
+                                                            },
+                                                        ],
+                                                    },
+                                                    args: [],
+                                                },
+                                            },
+                                        },
+                                        FieldType {
+                                            field: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 8,
+                                                        column: 27,
+                                                    },
+                                                    end: Position {
+                                                        line: 8,
+                                                        column: 33,
+                                                    },
+                                                },
+                                                value: "height",
+                                            },
+                                            optional: None,
+                                            typ: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 8,
+                                                        column: 35,
+                                                    },
+                                                    end: Position {
+                                                        line: 8,
+                                                        column: 41,
+                                                    },
+                                                },
+                                                value: Named {
+                                                    path: Path {
+                                                        segments: [
+                                                            Located {
+                                                                region: Region {
+                                                                    start: Position {
+                                                                        line: 8,
+                                                                        column: 35,
+                                                                    },
+                                                                    end: Position {
+                                                                        line: 8,
+                                                                        column: 41,
+                                                                    },
+                                                                },
+                                                                value: "Number",
+                                                            },
+                                                        ],
+                                                    },
+                                                    args: [],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                ),
+                            },
+                        ],
+                    },
+                ),
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 11,
+                    column: 1,
+                },
+                end: Position {
+                    line: 11,
+                    column: 44,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: Let(
+                    LetDecl {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 11,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 11,
+                                    column: 6,
+                                },
+                            },
+                            value: Var(
+                                "s",
+                            ),
+                        },
+                        annotation: None,
+                        value: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 11,
+                                    column: 9,
+                                },
+                                end: Position {
+                                    line: 11,
+                                    column: 44,
+                                },
+                            },
+                            value: RecordCtor {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 11,
+                                                    column: 9,
+                                                },
+                                                end: Position {
+                                                    line: 11,
+                                                    column: 14,
+                                                },
+                                            },
+                                            value: "Shape",
+                                        },
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 11,
+                                                    column: 16,
+                                                },
+                                                end: Position {
+                                                    line: 11,
+                                                    column: 20,
+                                                },
+                                            },
+                                            value: "Rect",
+                                        },
+                                    ],
+                                },
+                                fields: [
+                                    Field {
+                                        name: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 11,
+                                                    column: 23,
+                                                },
+                                                end: Position {
+                                                    line: 11,
+                                                    column: 28,
+                                                },
+                                            },
+                                            value: "width",
+                                        },
+                                        value: Some(
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 11,
+                                                        column: 30,
+                                                    },
+                                                    end: Position {
+                                                        line: 11,
+                                                        column: 31,
+                                                    },
+                                                },
+                                                value: Number(
+                                                    NumberLit {
+                                                        value: 1.0,
+                                                        text: "1",
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                    Field {
+                                        name: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 11,
+                                                    column: 33,
+                                                },
+                                                end: Position {
+                                                    line: 11,
+                                                    column: 39,
+                                                },
+                                            },
+                                            value: "height",
+                                        },
+                                        value: Some(
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 11,
+                                                        column: 41,
+                                                    },
+                                                    end: Position {
+                                                        line: 11,
+                                                        column: 42,
+                                                    },
+                                                },
+                                                value: Number(
+                                                    NumberLit {
+                                                        value: 2.0,
+                                                        text: "2",
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                ),
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 12,
+                    column: 1,
+                },
+                end: Position {
+                    line: 12,
+                    column: 24,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: Let(
+                    LetDecl {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 12,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 12,
+                                    column: 6,
+                                },
+                            },
+                            value: Var(
+                                "o",
+                            ),
+                        },
+                        annotation: None,
+                        value: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 12,
+                                    column: 9,
+                                },
+                                end: Position {
+                                    line: 12,
+                                    column: 24,
+                                },
+                            },
+                            value: Call {
+                                function: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 12,
+                                            column: 9,
+                                        },
+                                        end: Position {
+                                            line: 12,
+                                            column: 21,
+                                        },
+                                    },
+                                    value: Path(
+                                        Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 12,
+                                                            column: 9,
+                                                        },
+                                                        end: Position {
+                                                            line: 12,
+                                                            column: 15,
+                                                        },
+                                                    },
+                                                    value: "Option",
+                                                },
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 12,
+                                                            column: 17,
+                                                        },
+                                                        end: Position {
+                                                            line: 12,
+                                                            column: 21,
+                                                        },
+                                                    },
+                                                    value: "Some",
+                                                },
+                                            ],
+                                        },
+                                    ),
+                                },
+                                arguments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 12,
+                                                column: 22,
+                                            },
+                                            end: Position {
+                                                line: 12,
+                                                column: 23,
+                                            },
+                                        },
+                                        value: Number(
+                                            NumberLit {
+                                                value: 3.0,
+                                                text: "3",
+                                            },
+                                        ),
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                ),
+            },
+        },
+    ],
+}

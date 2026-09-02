@@ -1,0 +1,263 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Convert[Number, String] {\n    fn convert(n: Number) -> String { show(n) }\n}\n"
+---
+ImplDecl {
+    trait_: Path {
+        segments: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                },
+                value: "Convert",
+            },
+        ],
+    },
+    args: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 14,
+                },
+                end: Position {
+                    line: 1,
+                    column: 20,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 14,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 20,
+                                },
+                            },
+                            value: "Number",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 22,
+                },
+                end: Position {
+                    line: 1,
+                    column: 28,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 22,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 28,
+                                },
+                            },
+                            value: "String",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    ],
+    where_clause: [],
+    items: [
+        Fn(
+            FnDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 15,
+                        },
+                    },
+                    value: "convert",
+                },
+                params: [
+                    Param {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 16,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 17,
+                                },
+                            },
+                            value: Var(
+                                "n",
+                            ),
+                        },
+                        annotation: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 19,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 25,
+                                    },
+                                },
+                                value: Named {
+                                    path: Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 2,
+                                                        column: 19,
+                                                    },
+                                                    end: Position {
+                                                        line: 2,
+                                                        column: 25,
+                                                    },
+                                                },
+                                                value: "Number",
+                                            },
+                                        ],
+                                    },
+                                    args: [],
+                                },
+                            },
+                        ),
+                    },
+                ],
+                ret: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 30,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 36,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 30,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 36,
+                                            },
+                                        },
+                                        value: "String",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ),
+                where_clause: [],
+                body: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 37,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 48,
+                            },
+                        },
+                        value: Block {
+                            stmts: [],
+                            tail: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 39,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 46,
+                                        },
+                                    },
+                                    value: Call {
+                                        function: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 2,
+                                                    column: 39,
+                                                },
+                                                end: Position {
+                                                    line: 2,
+                                                    column: 43,
+                                                },
+                                            },
+                                            value: Var(
+                                                "show",
+                                            ),
+                                        },
+                                        arguments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 2,
+                                                        column: 44,
+                                                    },
+                                                    end: Position {
+                                                        line: 2,
+                                                        column: 45,
+                                                    },
+                                                },
+                                                value: Var(
+                                                    "n",
+                                                ),
+                                            },
+                                        ],
+                                    },
+                                },
+                            ),
+                        },
+                    },
+                ),
+            },
+        ),
+    ],
+}

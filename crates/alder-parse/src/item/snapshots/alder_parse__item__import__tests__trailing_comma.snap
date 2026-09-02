@@ -1,0 +1,103 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: "import @alder/http.{\n    get,\n    Request,\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Import(
+            Import {
+                path: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                    },
+                    value: ModulePath {
+                        root: Package {
+                            author: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 9,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                },
+                                value: "alder",
+                            },
+                            package: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 15,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 19,
+                                    },
+                                },
+                                value: "http",
+                            },
+                        },
+                        segments: [],
+                    },
+                },
+                tail: Names(
+                    [
+                        ImportName {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 5,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 8,
+                                    },
+                                },
+                                value: "get",
+                            },
+                            alias: None,
+                        },
+                        ImportName {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 5,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 12,
+                                    },
+                                },
+                                value: "Request",
+                            },
+                            alias: None,
+                        },
+                    ],
+                ),
+            },
+        ),
+    },
+}

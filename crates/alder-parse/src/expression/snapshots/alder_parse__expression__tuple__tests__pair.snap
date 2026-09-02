@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/tuple.rs
-description: "Code:\n\n(1, 2)"
+description: "(1, 2)"
 ---
 Located {
     region: Region {
@@ -25,8 +25,11 @@ Located {
                     column: 3,
                 },
             },
-            value: Int(
-                1,
+            value: Number(
+                NumberLit {
+                    value: 1.0,
+                    text: "1",
+                },
             ),
         },
         second: Located {
@@ -40,8 +43,11 @@ Located {
                     column: 6,
                 },
             },
-            value: Int(
-                2,
+            value: Number(
+                NumberLit {
+                    value: 2.0,
+                    text: "2",
+                },
             ),
         },
         rest: [],

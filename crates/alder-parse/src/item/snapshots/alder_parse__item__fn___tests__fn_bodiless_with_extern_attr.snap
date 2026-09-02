@@ -1,0 +1,134 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "#[extern(\"node:crypto\", \"randomUUID\")]\nfn randomUUID() -> String\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 2,
+            column: 26,
+        },
+    },
+    value: Item {
+        attributes: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 39,
+                    },
+                },
+                value: Attribute {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 3,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                        },
+                        value: "extern",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 23,
+                                },
+                            },
+                            value: Str(
+                                "node:crypto",
+                            ),
+                        },
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 25,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 37,
+                                },
+                            },
+                            value: Str(
+                                "randomUUID",
+                            ),
+                        },
+                    ],
+                },
+            },
+        ],
+        visibility: Private,
+        kind: Fn(
+            FnDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 14,
+                        },
+                    },
+                    value: "randomUUID",
+                },
+                params: [],
+                ret: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 20,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 26,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 20,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 26,
+                                            },
+                                        },
+                                        value: "String",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ),
+                where_clause: [],
+                body: None,
+            },
+        ),
+    },
+}

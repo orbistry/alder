@@ -1,11 +1,11 @@
 ---
 source: crates/alder-parse/src/expression/record.rs
-description: "Code:\n\n{ X = 1 }"
+description: "{ x: 1, Foo: 2 }"
 ---
 Record(
-    Open(
+    Field(
         1,
-        3,
+        9,
     ),
     1,
     1,

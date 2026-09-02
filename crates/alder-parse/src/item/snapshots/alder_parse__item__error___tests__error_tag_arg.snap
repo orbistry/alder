@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/item/error_.rs
+description: "error E { :a(1) }"
+---
+Tag(
+    Arg(
+        Start(
+            1,
+            14,
+        ),
+        1,
+        14,
+    ),
+    1,
+    11,
+)

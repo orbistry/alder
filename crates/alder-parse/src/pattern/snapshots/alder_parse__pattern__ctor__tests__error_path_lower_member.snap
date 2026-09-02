@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/pattern/ctor.rs
+description: "Foo::bar"
+---
+PathVar(
+    1,
+    1,
+)

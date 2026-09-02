@@ -1,0 +1,125 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: a + b * c == d
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 15,
+        },
+    },
+    value: BinOps {
+        operands: [
+            BinOpOperand {
+                expr: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+                op: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: Add,
+                },
+            },
+            BinOpOperand {
+                expr: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                    },
+                    value: Var(
+                        "b",
+                    ),
+                },
+                op: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Mul,
+                },
+            },
+            BinOpOperand {
+                expr: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: Var(
+                        "c",
+                    ),
+                },
+                op: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                    },
+                    value: Eq,
+                },
+            },
+        ],
+        last: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 14,
+                },
+                end: Position {
+                    line: 1,
+                    column: 15,
+                },
+            },
+            value: Var(
+                "d",
+            ),
+        },
+    },
+}

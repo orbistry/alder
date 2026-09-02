@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/attribute.rs
+description: "#[derive(Show) type X"
+---
+Attribute(
+    End(
+        1,
+        16,
+    ),
+    1,
+    1,
+)

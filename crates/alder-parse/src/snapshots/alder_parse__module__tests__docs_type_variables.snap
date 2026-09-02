@@ -1,0 +1,839 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "fn zip(xs: Array[a], ys: Array[b]) -> Array[(a, b)]\n\nfn lookup(cache: Cache[k, v], key: k) -> Option[v]\n    where k: Eq + Hash\n\nfn traverse(xs: t[f[a]], g: fn(a) -> f[b]) -> f[t[b]]\n    where\n        t: Traversable,\n        f: Applicative,\n"
+---
+Module {
+    items: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 52,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: Fn(
+                    FnDecl {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 4,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 7,
+                                },
+                            },
+                            value: "zip",
+                        },
+                        params: [
+                            Param {
+                                mutable: None,
+                                pattern: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 8,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 10,
+                                        },
+                                    },
+                                    value: Var(
+                                        "xs",
+                                    ),
+                                },
+                                annotation: Some(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 12,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 20,
+                                            },
+                                        },
+                                        value: Named {
+                                            path: Path {
+                                                segments: [
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 12,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 17,
+                                                            },
+                                                        },
+                                                        value: "Array",
+                                                    },
+                                                ],
+                                            },
+                                            args: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 18,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 19,
+                                                        },
+                                                    },
+                                                    value: Var {
+                                                        name: "a",
+                                                        args: [],
+                                                    },
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ),
+                            },
+                            Param {
+                                mutable: None,
+                                pattern: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 22,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 24,
+                                        },
+                                    },
+                                    value: Var(
+                                        "ys",
+                                    ),
+                                },
+                                annotation: Some(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 26,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 34,
+                                            },
+                                        },
+                                        value: Named {
+                                            path: Path {
+                                                segments: [
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 26,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 31,
+                                                            },
+                                                        },
+                                                        value: "Array",
+                                                    },
+                                                ],
+                                            },
+                                            args: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 32,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 33,
+                                                        },
+                                                    },
+                                                    value: Var {
+                                                        name: "b",
+                                                        args: [],
+                                                    },
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ),
+                            },
+                        ],
+                        ret: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 39,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 52,
+                                    },
+                                },
+                                value: Named {
+                                    path: Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 39,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 44,
+                                                    },
+                                                },
+                                                value: "Array",
+                                            },
+                                        ],
+                                    },
+                                    args: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 45,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 51,
+                                                },
+                                            },
+                                            value: Tuple {
+                                                first: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 46,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 47,
+                                                        },
+                                                    },
+                                                    value: Var {
+                                                        name: "a",
+                                                        args: [],
+                                                    },
+                                                },
+                                                second: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 49,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 50,
+                                                        },
+                                                    },
+                                                    value: Var {
+                                                        name: "b",
+                                                        args: [],
+                                                    },
+                                                },
+                                                rest: [],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ),
+                        where_clause: [],
+                        body: None,
+                    },
+                ),
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 4,
+                    column: 23,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: Fn(
+                    FnDecl {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 4,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 10,
+                                },
+                            },
+                            value: "lookup",
+                        },
+                        params: [
+                            Param {
+                                mutable: None,
+                                pattern: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 11,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 16,
+                                        },
+                                    },
+                                    value: Var(
+                                        "cache",
+                                    ),
+                                },
+                                annotation: Some(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 18,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 29,
+                                            },
+                                        },
+                                        value: Named {
+                                            path: Path {
+                                                segments: [
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 3,
+                                                                column: 18,
+                                                            },
+                                                            end: Position {
+                                                                line: 3,
+                                                                column: 23,
+                                                            },
+                                                        },
+                                                        value: "Cache",
+                                                    },
+                                                ],
+                                            },
+                                            args: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 24,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 25,
+                                                        },
+                                                    },
+                                                    value: Var {
+                                                        name: "k",
+                                                        args: [],
+                                                    },
+                                                },
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 27,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 28,
+                                                        },
+                                                    },
+                                                    value: Var {
+                                                        name: "v",
+                                                        args: [],
+                                                    },
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ),
+                            },
+                            Param {
+                                mutable: None,
+                                pattern: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 31,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 34,
+                                        },
+                                    },
+                                    value: Var(
+                                        "key",
+                                    ),
+                                },
+                                annotation: Some(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 36,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 37,
+                                            },
+                                        },
+                                        value: Var {
+                                            name: "k",
+                                            args: [],
+                                        },
+                                    },
+                                ),
+                            },
+                        ],
+                        ret: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 42,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 51,
+                                    },
+                                },
+                                value: Named {
+                                    path: Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 3,
+                                                        column: 42,
+                                                    },
+                                                    end: Position {
+                                                        line: 3,
+                                                        column: 48,
+                                                    },
+                                                },
+                                                value: "Option",
+                                            },
+                                        ],
+                                    },
+                                    args: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 3,
+                                                    column: 49,
+                                                },
+                                                end: Position {
+                                                    line: 3,
+                                                    column: 50,
+                                                },
+                                            },
+                                            value: Var {
+                                                name: "v",
+                                                args: [],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ),
+                        where_clause: [
+                            Bound {
+                                var: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 4,
+                                            column: 11,
+                                        },
+                                        end: Position {
+                                            line: 4,
+                                            column: 12,
+                                        },
+                                    },
+                                    value: "k",
+                                },
+                                bounds: [
+                                    Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 4,
+                                                        column: 14,
+                                                    },
+                                                    end: Position {
+                                                        line: 4,
+                                                        column: 16,
+                                                    },
+                                                },
+                                                value: "Eq",
+                                            },
+                                        ],
+                                    },
+                                    Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 4,
+                                                        column: 19,
+                                                    },
+                                                    end: Position {
+                                                        line: 4,
+                                                        column: 23,
+                                                    },
+                                                },
+                                                value: "Hash",
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                        body: None,
+                    },
+                ),
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 6,
+                    column: 1,
+                },
+                end: Position {
+                    line: 9,
+                    column: 24,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: Fn(
+                    FnDecl {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 6,
+                                    column: 4,
+                                },
+                                end: Position {
+                                    line: 6,
+                                    column: 12,
+                                },
+                            },
+                            value: "traverse",
+                        },
+                        params: [
+                            Param {
+                                mutable: None,
+                                pattern: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 6,
+                                            column: 13,
+                                        },
+                                        end: Position {
+                                            line: 6,
+                                            column: 15,
+                                        },
+                                    },
+                                    value: Var(
+                                        "xs",
+                                    ),
+                                },
+                                annotation: Some(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 6,
+                                                column: 17,
+                                            },
+                                            end: Position {
+                                                line: 6,
+                                                column: 24,
+                                            },
+                                        },
+                                        value: Var {
+                                            name: "t",
+                                            args: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 6,
+                                                            column: 19,
+                                                        },
+                                                        end: Position {
+                                                            line: 6,
+                                                            column: 23,
+                                                        },
+                                                    },
+                                                    value: Var {
+                                                        name: "f",
+                                                        args: [
+                                                            Located {
+                                                                region: Region {
+                                                                    start: Position {
+                                                                        line: 6,
+                                                                        column: 21,
+                                                                    },
+                                                                    end: Position {
+                                                                        line: 6,
+                                                                        column: 22,
+                                                                    },
+                                                                },
+                                                                value: Var {
+                                                                    name: "a",
+                                                                    args: [],
+                                                                },
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ),
+                            },
+                            Param {
+                                mutable: None,
+                                pattern: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 6,
+                                            column: 26,
+                                        },
+                                        end: Position {
+                                            line: 6,
+                                            column: 27,
+                                        },
+                                    },
+                                    value: Var(
+                                        "g",
+                                    ),
+                                },
+                                annotation: Some(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 6,
+                                                column: 29,
+                                            },
+                                            end: Position {
+                                                line: 6,
+                                                column: 42,
+                                            },
+                                        },
+                                        value: Fn {
+                                            params: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 6,
+                                                            column: 32,
+                                                        },
+                                                        end: Position {
+                                                            line: 6,
+                                                            column: 33,
+                                                        },
+                                                    },
+                                                    value: Var {
+                                                        name: "a",
+                                                        args: [],
+                                                    },
+                                                },
+                                            ],
+                                            ret: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 6,
+                                                        column: 38,
+                                                    },
+                                                    end: Position {
+                                                        line: 6,
+                                                        column: 42,
+                                                    },
+                                                },
+                                                value: Var {
+                                                    name: "f",
+                                                    args: [
+                                                        Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 6,
+                                                                    column: 40,
+                                                                },
+                                                                end: Position {
+                                                                    line: 6,
+                                                                    column: 41,
+                                                                },
+                                                            },
+                                                            value: Var {
+                                                                name: "b",
+                                                                args: [],
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    },
+                                ),
+                            },
+                        ],
+                        ret: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 6,
+                                        column: 47,
+                                    },
+                                    end: Position {
+                                        line: 6,
+                                        column: 54,
+                                    },
+                                },
+                                value: Var {
+                                    name: "f",
+                                    args: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 6,
+                                                    column: 49,
+                                                },
+                                                end: Position {
+                                                    line: 6,
+                                                    column: 53,
+                                                },
+                                            },
+                                            value: Var {
+                                                name: "t",
+                                                args: [
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 6,
+                                                                column: 51,
+                                                            },
+                                                            end: Position {
+                                                                line: 6,
+                                                                column: 52,
+                                                            },
+                                                        },
+                                                        value: Var {
+                                                            name: "b",
+                                                            args: [],
+                                                        },
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ),
+                        where_clause: [
+                            Bound {
+                                var: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 8,
+                                            column: 9,
+                                        },
+                                        end: Position {
+                                            line: 8,
+                                            column: 10,
+                                        },
+                                    },
+                                    value: "t",
+                                },
+                                bounds: [
+                                    Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 8,
+                                                        column: 12,
+                                                    },
+                                                    end: Position {
+                                                        line: 8,
+                                                        column: 23,
+                                                    },
+                                                },
+                                                value: "Traversable",
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                            Bound {
+                                var: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 9,
+                                            column: 9,
+                                        },
+                                        end: Position {
+                                            line: 9,
+                                            column: 10,
+                                        },
+                                    },
+                                    value: "f",
+                                },
+                                bounds: [
+                                    Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 9,
+                                                        column: 12,
+                                                    },
+                                                    end: Position {
+                                                        line: 9,
+                                                        column: 23,
+                                                    },
+                                                },
+                                                value: "Applicative",
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                        body: None,
+                    },
+                ),
+            },
+        },
+    ],
+}

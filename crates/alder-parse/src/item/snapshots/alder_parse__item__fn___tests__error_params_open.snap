@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: x)
+---
+Open(
+    1,
+    1,
+)

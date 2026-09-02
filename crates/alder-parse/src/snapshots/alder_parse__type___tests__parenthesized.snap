@@ -1,30 +1,53 @@
 ---
 source: crates/alder-parse/src/type_.rs
-description: "Code:\n\n(Int)"
+description: "(Array[a])"
 ---
 Located {
     region: Region {
         start: Position {
             line: 1,
-            column: 2,
+            column: 1,
         },
         end: Position {
             line: 1,
-            column: 5,
+            column: 11,
         },
     },
-    value: Type {
-        region: Region {
-            start: Position {
-                line: 1,
-                column: 2,
-            },
-            end: Position {
-                line: 1,
-                column: 5,
-            },
+    value: Named {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: "Array",
+                },
+            ],
         },
-        name: "Int",
-        args: [],
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                },
+                value: Var {
+                    name: "a",
+                    args: [],
+                },
+            },
+        ],
     },
 }

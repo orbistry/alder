@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { type: 1 }"
+---
+Style(
+    Key(
+        1,
+        9,
+    ),
+    1,
+    1,
+)

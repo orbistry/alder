@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Option::"
+---
+PathMember(
+    1,
+    9,
+)

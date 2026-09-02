@@ -1,0 +1,95 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "pub schema SignUp from users {\n    pick email, name\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 3,
+            column: 2,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Pub(
+            Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+        ),
+        kind: Schema(
+            SchemaDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                    },
+                    value: "SignUp",
+                },
+                from: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 24,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 29,
+                            },
+                        },
+                        value: "users",
+                    },
+                ),
+                items: [
+                    Pick(
+                        [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 10,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 15,
+                                    },
+                                },
+                                value: "email",
+                            },
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 17,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 21,
+                                    },
+                                },
+                                value: "name",
+                            },
+                        ],
+                    ),
+                ],
+            },
+        ),
+    },
+}

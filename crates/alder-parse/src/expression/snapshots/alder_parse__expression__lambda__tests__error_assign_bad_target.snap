@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: fn() 1 += 2
+---
+Lambda(
+    AssignTarget(
+        Add,
+        1,
+        6,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,14 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<div></span>"
+---
+Markup(
+    CloseMismatch {
+        expected: "div",
+        found: "span",
+        row: 1,
+        col: 8,
+    },
+    1,
+    1,
+)

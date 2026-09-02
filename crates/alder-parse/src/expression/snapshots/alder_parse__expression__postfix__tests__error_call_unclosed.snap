@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "f(a, b"
+---
+Call(
+    End(
+        1,
+        7,
+    ),
+    1,
+    2,
+)

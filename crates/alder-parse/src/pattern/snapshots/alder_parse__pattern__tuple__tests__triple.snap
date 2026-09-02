@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/pattern/tuple.rs
-description: "Code:\n\n(a, b, c)"
+description: "(a, b, c)"
 ---
 Located {
     region: Region {

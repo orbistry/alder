@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro f(a) { quote { a }"
+---
+Macro(
+    Body(
+        Endless,
+        1,
+        12,
+    ),
+    1,
+    1,
+)

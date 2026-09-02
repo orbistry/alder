@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: import ~/db/Users
+---
+Import(
+    Path(
+        Segment(
+            1,
+            13,
+        ),
+        1,
+        8,
+    ),
+    1,
+    1,
+)

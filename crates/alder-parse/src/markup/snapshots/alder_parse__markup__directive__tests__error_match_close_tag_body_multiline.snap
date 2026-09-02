@@ -1,0 +1,28 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<div>\n    @match status {\n        Loading => </pinner />,\n        Ready(n) => <span>{n}</span>,\n    }\n</div>\n"
+---
+Markup(
+    Child(
+        Match(
+            Body(
+                Element(
+                    CloseName(
+                        3,
+                        22,
+                    ),
+                    3,
+                    20,
+                ),
+                3,
+                20,
+            ),
+            2,
+            5,
+        ),
+        1,
+        6,
+    ),
+    1,
+    1,
+)

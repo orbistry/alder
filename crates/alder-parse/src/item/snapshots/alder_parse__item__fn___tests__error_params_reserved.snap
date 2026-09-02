@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: (type)
+---
+Pattern(
+    Reserved(
+        Type,
+        1,
+        2,
+    ),
+    1,
+    2,
+)

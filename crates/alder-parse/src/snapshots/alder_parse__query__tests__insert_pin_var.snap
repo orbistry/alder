@@ -1,0 +1,62 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { insert into users values ^rows }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 41,
+        },
+    },
+    value: Query(
+        Insert {
+            table: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 21,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 26,
+                    },
+                },
+                value: "users",
+            },
+            values: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 34,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 39,
+                    },
+                },
+                value: Pin(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 35,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 39,
+                            },
+                        },
+                        value: Var(
+                            "rows",
+                        ),
+                    },
+                ),
+            },
+        },
+    ),
+}

@@ -1,0 +1,81 @@
+---
+source: crates/alder-parse/src/expression/record.rs
+description: "{ f(x) }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 9,
+        },
+    },
+    value: Block(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 9,
+                },
+            },
+            value: Block {
+                stmts: [],
+                tail: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 3,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 7,
+                            },
+                        },
+                        value: Call {
+                            function: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 3,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 4,
+                                    },
+                                },
+                                value: Var(
+                                    "f",
+                                ),
+                            },
+                            arguments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 6,
+                                        },
+                                    },
+                                    value: Var(
+                                        "x",
+                                    ),
+                                },
+                            ],
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

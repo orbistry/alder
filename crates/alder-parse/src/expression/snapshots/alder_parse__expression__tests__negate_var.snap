@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/mod.rs
-description: "Code:\n\n-x"
+description: "-x"
 ---
 Located {
     region: Region {
@@ -25,10 +25,9 @@ Located {
                     column: 3,
                 },
             },
-            value: Var {
-                kind: LowVar,
-                name: "x",
-            },
+            value: Var(
+                "x",
+            ),
         },
     ),
 }

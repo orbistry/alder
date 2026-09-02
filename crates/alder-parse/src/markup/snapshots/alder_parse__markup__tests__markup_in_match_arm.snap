@@ -1,0 +1,213 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "match s { A => <p>a</p>, B => <p>b</p> }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 41,
+        },
+    },
+    value: Match {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Var(
+                "s",
+            ),
+        },
+        arms: [
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: Ctor {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 11,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 12,
+                                            },
+                                        },
+                                        value: "A",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 24,
+                        },
+                    },
+                    value: Markup(
+                        Element(
+                            Element {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 17,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 18,
+                                        },
+                                    },
+                                    value: Tag(
+                                        "p",
+                                    ),
+                                },
+                                attrs: [],
+                                children: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 19,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 20,
+                                            },
+                                        },
+                                        value: Text(
+                                            "a",
+                                        ),
+                                    },
+                                ],
+                                self_closing: false,
+                            },
+                        ),
+                    ),
+                },
+            },
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 26,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 27,
+                            },
+                        },
+                        value: Ctor {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 26,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 27,
+                                            },
+                                        },
+                                        value: "B",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 31,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 39,
+                        },
+                    },
+                    value: Markup(
+                        Element(
+                            Element {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 32,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 33,
+                                        },
+                                    },
+                                    value: Tag(
+                                        "p",
+                                    ),
+                                },
+                                attrs: [],
+                                children: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 34,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 35,
+                                            },
+                                        },
+                                        value: Text(
+                                            "b",
+                                        ),
+                                    },
+                                ],
+                                self_closing: false,
+                            },
+                        ),
+                    ),
+                },
+            },
+        ],
+    },
+}

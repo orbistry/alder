@@ -1,0 +1,21 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema Empty {}"
+---
+SchemaDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 13,
+            },
+        },
+        value: "Empty",
+    },
+    from: None,
+    items: [],
+}

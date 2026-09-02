@@ -1,0 +1,156 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<p><b>a</b> <i>b</i></p>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 25,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                    },
+                    value: Tag(
+                        "p",
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: Element(
+                            Element {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 6,
+                                        },
+                                    },
+                                    value: Tag(
+                                        "b",
+                                    ),
+                                },
+                                attrs: [],
+                                children: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 7,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 8,
+                                            },
+                                        },
+                                        value: Text(
+                                            "a",
+                                        ),
+                                    },
+                                ],
+                                self_closing: false,
+                            },
+                        ),
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                        },
+                        value: Text(
+                            " ",
+                        ),
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 21,
+                            },
+                        },
+                        value: Element(
+                            Element {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 14,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 15,
+                                        },
+                                    },
+                                    value: Tag(
+                                        "i",
+                                    ),
+                                },
+                                attrs: [],
+                                children: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 16,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 17,
+                                            },
+                                        },
+                                        value: Text(
+                                            "b",
+                                        ),
+                                    },
+                                ],
+                                self_closing: false,
+                            },
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

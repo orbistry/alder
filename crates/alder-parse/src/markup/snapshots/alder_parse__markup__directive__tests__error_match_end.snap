@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<p>@match x { A => <b>a</b> ) }</p>"
+---
+Markup(
+    Child(
+        Match(
+            End(
+                1,
+                29,
+            ),
+            1,
+            4,
+        ),
+        1,
+        4,
+    ),
+    1,
+    1,
+)

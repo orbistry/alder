@@ -1,0 +1,95 @@
+---
+source: crates/alder-parse/src/expression/tag.rs
+description: "Err(:not_found(id))"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 20,
+        },
+    },
+    value: Call {
+        function: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+            value: Path(
+                Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 1,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 4,
+                                },
+                            },
+                            value: "Err",
+                        },
+                    ],
+                },
+            ),
+        },
+        arguments: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                },
+                value: Tag {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                        },
+                        value: "not_found",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 18,
+                                },
+                            },
+                            value: Var(
+                                "id",
+                            ),
+                        },
+                    ],
+                },
+            },
+        ],
+    },
+}

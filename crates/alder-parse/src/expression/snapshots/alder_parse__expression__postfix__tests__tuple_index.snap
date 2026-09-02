@@ -1,0 +1,46 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: t.0
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 4,
+        },
+    },
+    value: TupleAccess {
+        tuple: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 2,
+                },
+            },
+            value: Var(
+                "t",
+            ),
+        },
+        index: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 3,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+            value: 0,
+        },
+    },
+}

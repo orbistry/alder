@@ -1,0 +1,596 @@
+//! Raw balanced token text for macro bodies and `name!( … )` calls
+//! (docs/parser-internals.md §6.5).
+//!
+//! The scanner never builds an AST: it walks bytes from an opener to its
+//! matching closer, keeping `()[]{}` balanced and stepping over the three
+//! places where a bracket byte is not a bracket — `"…"` strings, `` `…` ``
+//! templates (whose `${ … }` holes are code again) and `//` comments — and
+//! hands back the interior as a zero-copy slice. `quote` / `unquote` /
+//! `stringify` are M5's problem; in M1 the text is opaque.
+//!
+//! Nesting is tracked on an explicit arena stack of expected closers, not
+//! by recursion, so the depth of a body is bounded by memory rather than by
+//! the thread's stack (`((((…))))` and `` `${ `${ … }` }` `` chains never
+//! overflow).
+//!
+//! See docs/parser-internals.md §5.9.
+// OWNER: raw.rs (Wave 1)
+
+use alder_region::Located;
+use bumpalo::collections::Vec;
+
+use crate::error::{RawTokens, StringError};
+use crate::string::EscapeResult;
+use crate::{Col, Parser, Row};
+
+/// A raw-scan failure with the position it should be reported at.
+type RawError = (RawTokens, Row, Col);
+
+/// One open construct waiting for its closer: a bracket (`close` is `)`,
+/// `]` or `}`) or a template (`close` is `` ` ``). `row` / `col` locate the
+/// opener; only templates report there (`String(Endless)`), brackets report
+/// `Endless` at the outermost opener.
+#[derive(Clone, Copy)]
+struct Frame {
+    close: u8,
+    row: Row,
+    col: Col,
+}
+
+const BACKTICK: u8 = b'`';
+
+impl<'a> Parser<'a> {
+    /// At `open`. Consumes through the matching `close`, honoring nested
+    /// `()[]{}`, strings, templates and `//` comments. Returns the interior text.
+    ///
+    /// The region covers the interior only (the byte after `open` through the
+    /// byte before `close`); the delimiters are consumed but not part of the
+    /// value. Nothing is chomped afterwards. Error positions:
+    ///
+    /// - not at `open` → `Open` at the cursor, nothing consumed;
+    /// - EOF anywhere inside (including inside a `${ … }` hole) → `Endless`
+    ///   at `open`;
+    /// - a closer that is not the one expected for the innermost open bracket
+    ///   (`( ]`, or `( a }` at depth zero) → `Unbalanced(byte)` at that byte;
+    /// - a string problem → `String(_)` positioned as `string_literal`
+    ///   does (§5.6): `Endless` at the cursor where the scan stopped,
+    ///   `Newline` at the newline, `Escape` at the backslash;
+    /// - a template problem → `String(_)` positioned as template mode does
+    ///   (§6.1): `Endless` at the opening backtick, `Escape` at the backslash.
+    pub(crate) fn raw_balanced<E>(
+        &mut self,
+        open: u8,
+        close: u8,
+        to_error: impl FnOnce(RawTokens, Row, Col) -> E,
+    ) -> Result<Located<&'a str>, E> {
+        let (open_row, open_col) = self.position();
+        if self.peek() != Some(open) {
+            return Err(to_error(RawTokens::Open, open_row, open_col));
+        }
+        self.advance();
+
+        let start = self.get_position();
+        let start_pos = self.pos;
+        match self.raw_scan(close, open_row, open_col) {
+            Ok(()) => {
+                // The cursor sits on `close`; slice before consuming it so the
+                // region ends where the text does.
+                let text = self.slice_from(start_pos);
+                let located = self.located(start, text);
+                self.advance();
+                Ok(located)
+            }
+            Err((err, row, col)) => Err(to_error(err, row, col)),
+        }
+    }
+
+    /// After the opener: scan until the `close` that matches it, leaving the
+    /// cursor on it. `open_row` / `open_col` locate the construct being
+    /// balanced for `Endless`.
+    ///
+    /// The stack holds one frame per open bracket or template; the top frame
+    /// decides the mode. In code mode (top is a bracket) brackets push and
+    /// pop, strings and comments are stepped over, and a backtick pushes a
+    /// template frame. In template mode (top is a backtick) only `` ` ``,
+    /// `\` and `${` mean anything; `${` pushes a `}` frame, so the hole is
+    /// code again until its `}` pops back to the template.
+    fn raw_scan(&mut self, close: u8, open_row: Row, open_col: Col) -> Result<(), RawError> {
+        let mut stack: Vec<Frame> = Vec::new_in(self.bump);
+        stack.push(Frame {
+            close,
+            row: open_row,
+            col: open_col,
+        });
+
+        loop {
+            let top = *stack
+                .last()
+                .expect("the outer frame stays until its closer returns");
+            if top.close == BACKTICK {
+                match self.peek() {
+                    None => return Err((string_err(StringError::Endless), top.row, top.col)),
+                    Some(BACKTICK) => {
+                        self.advance();
+                        stack.pop();
+                    }
+                    Some(b'\\') => self.raw_escape(Some((top.row, top.col)))?,
+                    Some(b'$') if self.peek_at(1) == Some(b'{') => {
+                        let (row, col) = self.position();
+                        self.advance_by(2);
+                        stack.push(Frame {
+                            close: b'}',
+                            row,
+                            col,
+                        });
+                    }
+                    Some(_) => self.advance(),
+                }
+            } else {
+                match self.peek() {
+                    None => return Err((RawTokens::Endless, open_row, open_col)),
+                    Some(b @ (b')' | b']' | b'}')) => {
+                        if b != top.close {
+                            let (row, col) = self.position();
+                            return Err((RawTokens::Unbalanced(b), row, col));
+                        }
+                        stack.pop();
+                        if stack.is_empty() {
+                            return Ok(());
+                        }
+                        self.advance();
+                    }
+                    Some(b @ (b'(' | b'[' | b'{')) => {
+                        let (row, col) = self.position();
+                        self.advance();
+                        stack.push(Frame {
+                            close: closer_of(b),
+                            row,
+                            col,
+                        });
+                    }
+                    Some(BACKTICK) => {
+                        let (row, col) = self.position();
+                        self.advance();
+                        stack.push(Frame {
+                            close: BACKTICK,
+                            row,
+                            col,
+                        });
+                    }
+                    Some(b'"') => self.raw_string()?,
+                    Some(b'/') if self.peek_at(1) == Some(b'/') => self.raw_comment(),
+                    Some(_) => self.advance(),
+                }
+            }
+        }
+    }
+
+    /// At `//`: skip to the end of the line (the newline itself is left for
+    /// the code loop, which treats it like any other byte).
+    fn raw_comment(&mut self) {
+        while let Some(b) = self.peek() {
+            if b == b'\n' {
+                return;
+            }
+            self.advance();
+        }
+    }
+
+    /// At `"`: step over a single-line string, consuming the closing quote.
+    /// Positions follow `string_literal` (§5.6).
+    fn raw_string(&mut self) -> Result<(), RawError> {
+        self.advance();
+        loop {
+            match self.peek() {
+                None => {
+                    let (row, col) = self.position();
+                    return Err((string_err(StringError::Endless), row, col));
+                }
+                Some(b'\n') => {
+                    let (row, col) = self.position();
+                    return Err((string_err(StringError::Newline), row, col));
+                }
+                Some(b'"') => {
+                    self.advance();
+                    return Ok(());
+                }
+                Some(b'\\') => self.raw_escape(None)?,
+                Some(_) => self.advance(),
+            }
+        }
+    }
+
+    /// At `\` inside a string (`template == None`) or a template
+    /// (`template == Some(backtick position)`): consume the backslash and the
+    /// escape it introduces, using the string scanner's escape rules. A bad
+    /// escape is reported at the backslash in both modes; EOF right after
+    /// the backslash is `Endless` at the cursor for a string and at the
+    /// opening backtick for a template.
+    fn raw_escape(&mut self, template: Option<(Row, Col)>) -> Result<(), RawError> {
+        let (slash_row, slash_col) = self.position();
+        self.advance();
+        match self.eat_escape(template.is_some()) {
+            EscapeResult::Normal(width) | EscapeResult::Unicode(width) => {
+                self.advance_by(width);
+                Ok(())
+            }
+            EscapeResult::EndOfFile => {
+                let (row, col) = template.unwrap_or_else(|| self.position());
+                Err((string_err(StringError::Endless), row, col))
+            }
+            EscapeResult::Problem(escape) => Err((
+                string_err(StringError::Escape(escape)),
+                slash_row,
+                slash_col,
+            )),
+        }
+    }
+}
+
+fn closer_of(open: u8) -> u8 {
+    match open {
+        b'(' => b')',
+        b'[' => b']',
+        _ => b'}',
+    }
+}
+
+fn string_err(err: StringError) -> RawTokens {
+    RawTokens::String(err)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alder_region::Position;
+    use bumpalo::Bump;
+
+    /// Interior text with its region, or the error rendered as text with its
+    /// position; plus where the cursor stopped.
+    type Outcome = (Result<(String, Region), (String, u32, u32)>, Position);
+
+    type Region = ((u32, u32), (u32, u32));
+
+    fn raw(src: &str, open: u8, close: u8) -> Outcome {
+        let bump = Bump::new();
+        let text = bump.alloc_str(src);
+        let mut parser = Parser::new(&bump, text.as_bytes());
+        let result = parser
+            .raw_balanced(open, close, |err, row, col| (describe(&err), row, col))
+            .map(|located| {
+                let start = located.region.start;
+                let end = located.region.end;
+                (
+                    located.value.to_owned(),
+                    ((start.line, start.column), (end.line, end.column)),
+                )
+            });
+        (result, parser.get_position())
+    }
+
+    fn parens(src: &str) -> Outcome {
+        raw(src, b'(', b')')
+    }
+
+    fn braces(src: &str) -> Outcome {
+        raw(src, b'{', b'}')
+    }
+
+    fn describe(err: &RawTokens) -> String {
+        match err {
+            RawTokens::Unbalanced(b) => format!("unbalanced {:?}", *b as char),
+            RawTokens::Endless => "endless".to_owned(),
+            RawTokens::Open => "open".to_owned(),
+            RawTokens::String(StringError::Endless) => "string endless".to_owned(),
+            RawTokens::String(StringError::Newline) => "string newline".to_owned(),
+            RawTokens::String(StringError::Escape(escape)) => format!("string escape {escape:?}"),
+        }
+    }
+
+    fn ok(text: &str, region: Region) -> Result<(String, Region), (String, u32, u32)> {
+        Ok((text.to_owned(), region))
+    }
+
+    fn err(what: &str, row: u32, col: u32) -> Result<(String, Region), (String, u32, u32)> {
+        Err((what.to_owned(), row, col))
+    }
+
+    fn at(line: u32, column: u32) -> Position {
+        Position::new(line, column)
+    }
+
+    // ---- success -----------------------------------------------------------
+
+    #[test]
+    fn empty() {
+        assert_eq!(parens("()"), (ok("", ((1, 2), (1, 2))), at(1, 3)));
+    }
+
+    #[test]
+    fn simple() {
+        assert_eq!(parens("(a, b)"), (ok("a, b", ((1, 2), (1, 6))), at(1, 7)));
+    }
+
+    #[test]
+    fn stops_at_close() {
+        // Only the balanced span is consumed; whatever follows is left alone.
+        assert_eq!(parens("(x) + 1"), (ok("x", ((1, 2), (1, 3))), at(1, 4)));
+    }
+
+    #[test]
+    fn braces_body() {
+        assert_eq!(
+            braces("{ x + 1 }"),
+            (ok(" x + 1 ", ((1, 2), (1, 9))), at(1, 10))
+        );
+    }
+
+    #[test]
+    fn nested_same_kind() {
+        assert_eq!(
+            parens("(f(g(x)))"),
+            (ok("f(g(x))", ((1, 2), (1, 9))), at(1, 10))
+        );
+    }
+
+    #[test]
+    fn nested_mixed_kinds() {
+        assert_eq!(
+            braces("{ [a, (b, c)], { d: e } }"),
+            (ok(" [a, (b, c)], { d: e } ", ((1, 2), (1, 25))), at(1, 26))
+        );
+    }
+
+    #[test]
+    fn deep_nesting() {
+        // 20_000 levels overflowed the recursive scanner's stack; the
+        // explicit frame stack is depth-independent. Kept on one line.
+        let depth = 20_000;
+        let src = format!("{}{}", "(".repeat(depth), ")".repeat(depth));
+        let interior = &src[1..src.len() - 1];
+        let end = u32::try_from(src.len()).unwrap();
+        assert_eq!(
+            parens(&src),
+            (ok(interior, ((1, 2), (1, end))), at(1, end + 1))
+        );
+    }
+
+    #[test]
+    fn deep_template_holes() {
+        // Every `${` re-enters code mode; 5_000 nested holes.
+        let depth = 5_000;
+        let src = format!("({}x{})", "`${ ".repeat(depth), " }`".repeat(depth));
+        let interior = &src[1..src.len() - 1];
+        let end = u32::try_from(src.len()).unwrap();
+        assert_eq!(
+            parens(&src),
+            (ok(interior, ((1, 2), (1, end))), at(1, end + 1))
+        );
+    }
+
+    #[test]
+    fn multiline() {
+        assert_eq!(
+            braces("{\n    let l = left\n    l\n}"),
+            (
+                ok("\n    let l = left\n    l\n", ((1, 2), (4, 1))),
+                at(4, 2)
+            )
+        );
+    }
+
+    #[test]
+    fn multibyte_text() {
+        // Columns count bytes, like every other scanner.
+        assert_eq!(parens("(héllo)"), (ok("héllo", ((1, 2), (1, 8))), at(1, 9)));
+    }
+
+    #[test]
+    fn string_hides_closer() {
+        assert_eq!(
+            parens(r#"(")")"#),
+            (ok(r#"")""#, ((1, 2), (1, 5))), at(1, 6))
+        );
+    }
+
+    #[test]
+    fn string_hides_opener() {
+        assert_eq!(
+            parens(r#"("(")"#),
+            (ok(r#""(""#, ((1, 2), (1, 5))), at(1, 6))
+        );
+    }
+
+    #[test]
+    fn string_escaped_quote() {
+        assert_eq!(
+            parens(r#"("a\")b")"#),
+            (ok(r#""a\")b""#, ((1, 2), (1, 9))), at(1, 10))
+        );
+    }
+
+    #[test]
+    fn string_unicode_escape() {
+        assert_eq!(
+            parens(r#"("\u{1F600}")"#),
+            (ok(r#""\u{1F600}""#, ((1, 2), (1, 13))), at(1, 14))
+        );
+    }
+
+    #[test]
+    fn template_hides_closer() {
+        assert_eq!(parens("(`)`)"), (ok("`)`", ((1, 2), (1, 5))), at(1, 6)));
+    }
+
+    #[test]
+    fn template_multiline() {
+        assert_eq!(
+            parens("(`a\nb`)"),
+            (ok("`a\nb`", ((1, 2), (2, 3))), at(2, 4))
+        );
+    }
+
+    #[test]
+    fn template_hole_is_code() {
+        // The hole's `}` closes the hole, not the outer body; brackets and
+        // strings inside it are balanced like code.
+        assert_eq!(
+            braces(r#"{ `x ${ f({ a: ")" }) } y` }"#),
+            (
+                ok(r#" `x ${ f({ a: ")" }) } y` "#, ((1, 2), (1, 28))),
+                at(1, 29)
+            )
+        );
+    }
+
+    #[test]
+    fn template_hole_nested_template() {
+        assert_eq!(
+            parens("(`a ${ `b ${ c }` } d`)"),
+            (ok("`a ${ `b ${ c }` } d`", ((1, 2), (1, 23))), at(1, 24))
+        );
+    }
+
+    #[test]
+    fn template_dollar_without_brace() {
+        assert_eq!(
+            parens("(`$5 }`)"),
+            (ok("`$5 }`", ((1, 2), (1, 8))), at(1, 9))
+        );
+    }
+
+    #[test]
+    fn template_escaped_backtick() {
+        assert_eq!(
+            parens(r"(`a\`b`)"),
+            (ok(r"`a\`b`", ((1, 2), (1, 8))), at(1, 9))
+        );
+    }
+
+    #[test]
+    fn comment_hides_closer() {
+        assert_eq!(
+            braces("{ // ) }\n}"),
+            (ok(" // ) }\n", ((1, 2), (2, 1))), at(2, 2))
+        );
+    }
+
+    #[test]
+    fn comment_hides_quote() {
+        assert_eq!(
+            braces("{ // \"\n}"),
+            (ok(" // \"\n", ((1, 2), (2, 1))), at(2, 2))
+        );
+    }
+
+    #[test]
+    fn single_slash_is_text() {
+        assert_eq!(parens("(a / b)"), (ok("a / b", ((1, 2), (1, 7))), at(1, 8)));
+    }
+
+    // ---- errors ------------------------------------------------------------
+
+    #[test]
+    fn error_not_at_open() {
+        assert_eq!(parens("x"), (err("open", 1, 1), at(1, 1)));
+        assert_eq!(parens(""), (err("open", 1, 1), at(1, 1)));
+        // The opener kind matters: `{` is not `(`.
+        assert_eq!(parens("{}"), (err("open", 1, 1), at(1, 1)));
+    }
+
+    #[test]
+    fn error_endless() {
+        assert_eq!(parens("(a, b"), (err("endless", 1, 1), at(1, 6)));
+    }
+
+    #[test]
+    fn error_endless_nested() {
+        // Reported at the opener `raw_balanced` was asked to balance.
+        assert_eq!(braces("{\n  [a"), (err("endless", 1, 1), at(2, 5)));
+    }
+
+    #[test]
+    fn error_endless_deep() {
+        let src = "(".repeat(20_000);
+        assert_eq!(parens(&src), (err("endless", 1, 1), at(1, 20_001)));
+    }
+
+    #[test]
+    fn error_endless_in_hole() {
+        assert_eq!(parens("(`${ a"), (err("endless", 1, 1), at(1, 7)));
+    }
+
+    #[test]
+    fn error_unbalanced() {
+        assert_eq!(parens("(a]"), (err("unbalanced ']'", 1, 3), at(1, 3)));
+    }
+
+    #[test]
+    fn error_unbalanced_other_closer_at_depth_zero() {
+        // A foreign closer is unbalanced even when nothing nested is open:
+        // the only closer wanted at depth zero is `close` itself.
+        assert_eq!(parens("(a}"), (err("unbalanced '}'", 1, 3), at(1, 3)));
+    }
+
+    #[test]
+    fn error_unbalanced_nested() {
+        assert_eq!(parens("([a)]"), (err("unbalanced ')'", 1, 4), at(1, 4)));
+    }
+
+    #[test]
+    fn error_unbalanced_in_hole() {
+        assert_eq!(
+            parens("(`${ ) }`)"),
+            (err("unbalanced ')'", 1, 6), at(1, 6))
+        );
+    }
+
+    #[test]
+    fn error_string_endless() {
+        // Where the scan stopped, as `string_literal` reports it.
+        assert_eq!(
+            parens(r#"(a, "b)"#),
+            (err("string endless", 1, 8), at(1, 8))
+        );
+    }
+
+    #[test]
+    fn error_string_newline() {
+        assert_eq!(
+            parens("(\"a\nb\")"),
+            (err("string newline", 1, 4), at(1, 4))
+        );
+    }
+
+    #[test]
+    fn error_string_bad_escape() {
+        assert_eq!(
+            parens(r#"("\q")"#),
+            (err("string escape Unknown", 1, 3), at(1, 4))
+        );
+    }
+
+    #[test]
+    fn error_string_escape_at_eof() {
+        assert_eq!(parens(r#"("\"#), (err("string endless", 1, 4), at(1, 4)));
+    }
+
+    #[test]
+    fn error_template_endless() {
+        // At the opening backtick, as template mode reports it (§6.1).
+        assert_eq!(parens("(a, `b)"), (err("string endless", 1, 5), at(1, 8)));
+    }
+
+    #[test]
+    fn error_template_bad_escape() {
+        assert_eq!(
+            parens(r"(`\q`)"),
+            (err("string escape Unknown", 1, 3), at(1, 4))
+        );
+    }
+
+    #[test]
+    fn error_template_escape_at_eof() {
+        assert_eq!(parens(r"(`a\"), (err("string endless", 1, 2), at(1, 5)));
+    }
+}

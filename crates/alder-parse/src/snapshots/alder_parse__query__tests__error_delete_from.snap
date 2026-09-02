@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { delete posts }"
+---
+Query(
+    Delete(
+        From(
+            1,
+            16,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

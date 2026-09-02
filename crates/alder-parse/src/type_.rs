@@ -1,523 +1,488 @@
-//! Type parsing for Alder.
+//! Type expressions.
 //!
-//! Ported from Elm's `Parse/Type.hs`.
+//! See docs/parser-internals.md §5.15.
 //!
-//! Provides:
-//! - `type_term` - atomic types (variables, named types, tuples, records)
-//! - `type_expr` - full types including function arrows and type application
+//! Grammar (SPEC.md "Types", with §10.14's HKT application):
+//!
+//! ```ebnf
+//! type        = fn_type | type_term ;
+//! fn_type     = 'fn' '(' [ type { ',' type } [ ',' ] ] ')' '->' type ;
+//! type_term   = path [ type_args ]
+//!             | lower_ident [ type_args ]
+//!             | '(' ')' | '(' type ')' | '(' type ',' type { ',' type } [ ',' ] ')'
+//!             | '{' [ lower_ident '|' ] [ field_type { ',' field_type } [ ',' ] ] '}'
+//!             | '[' [ tag_variant { '|' tag_variant } ] [ '|' lower_ident ] ']' ;
+//! type_args   = '[' type { ',' type } [ ',' ] ']' ;        (* '[' on the name's line *)
+//! field_type  = lower_ident [ '?' ] ':' type ;              (* '?' adjacent to the name *)
+//! tag_variant = tag [ '(' type { ',' type } [ ',' ] ')' ] ; (* '(' on the tag's line *)
+//! ```
+//!
+//! Type arguments and tag arguments follow the postfix rule of §2.1 (1): a
+//! `[` after a type name, or a `(` after a tag, attaches when it starts on
+//! the same line (`Array [a]` is `Array[a]`), and starts something new on a
+//! later line. A `?` marking an optional field must be adjacent to the
+//! field name (`nickname?: String`). `(T,)` is `(T)` (§10.8: trailing
+//! commas are accepted in every comma-separated list); `[r]` is an error
+//! row with no tags (§7.2 `error_row_var_only`).
+//!
+//! Conventions: `type_expr` chomps trailing whitespace; `type_term`,
+//! `type_args`, `tag_variant` and `field_types` stop right after their last
+//! byte (the closing bracket, or the name when there is none). A
+//! parenthesized type `(T)` is returned as `T` itself, so its region
+//! excludes the parentheses (as in Elm).
+// OWNER: type_.rs (Wave 1)
 
 use alder_region::{Located, Position, Region};
-use alder_source::{FieldType, Type};
+use alder_source::{FieldType, Name, TagVariant, Type};
 use bumpalo::collections::Vec as BumpVec;
 
 use crate::Parser;
-use crate::error::{self, TRecord, TTuple};
-
-/// Qualified or unqualified uppercase name (for types).
-enum ForeignUpper<'a> {
-    Unqualified(&'a str),
-    Qualified(&'a str, &'a str), // (module, name)
-}
+use crate::error::{self, TArgs, TErrorRow, TFn, TRecord, TTuple};
+use crate::keyword::Keyword;
 
 impl<'a> Parser<'a> {
-    // -------------------------------------------------------------------------
-    // Type expressions (with arrows)
-    // -------------------------------------------------------------------------
-
-    /// Parse a type expression including function arrows.
-    ///
-    /// Returns `(type, end)` where `end` is the position at end of type (before any chomp).
-    ///
-    /// Mirrors Elm's `Type.expression`:
-    /// ```haskell
-    /// expression :: Space.Parser E.Type Src.Type
-    /// expression =
-    ///   do  start <- getPosition
-    ///       term1@(tipe1, end1) <- oneOf E.TStart [ app start, term... ]
-    ///       oneOfWithFallback [ arrow... ] term1
-    /// ```
-    pub fn type_expr(&mut self) -> Result<(&'a Located<Type<'a>>, Position), error::Type<'a>> {
-        let start = self.get_position();
-
-        // Parse first term - either type application or simple term
-        let (tipe1, end1) = self.one_of(
-            error::Type::Start,
-            vec![
-                // Type application: Maybe Int, Result String Int, etc.
-                Box::new(|p: &mut Parser<'a>| p.type_app(start)),
-                // Simple term
-                Box::new(|p: &mut Parser<'a>| {
-                    let term = p.type_term()?;
-                    let end = p.get_position();
-                    p.chomp(error::Type::Space)?;
-                    Ok((term, end))
-                }),
-            ],
-        )?;
-
-        // Try to parse function arrow
-        self.one_of_with_fallback(
-            vec![Box::new(|p: &mut Parser<'a>| {
-                p.check_indent(end1.line, end1.column, error::Type::IndentStart)?;
-                p.word2(0x2D, 0x3E, error::Type::Start)?; // ->
-                p.chomp_and_check_indent(error::Type::Space, error::Type::IndentStart)?;
-
-                let (tipe2, end2) = p.type_expr()?;
-                let tipe = p.alloc(Located::at(
-                    Region::new(start, end2),
-                    Type::Lambda {
-                        from: tipe1,
-                        to: tipe2,
-                    },
-                ));
-                Ok((tipe, end2))
-            })],
-            (tipe1, end1),
-        )
+    /// `fn` type or term. Chomps trailing whitespace. Counts one nesting
+    /// level (§10.44).
+    pub fn type_expr(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
+        self.nest(error::Type::TooDeep, Self::type_fn_or_term)
     }
 
-    // -------------------------------------------------------------------------
-    // Type application
-    // -------------------------------------------------------------------------
+    fn type_fn_or_term(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
+        let start = self.get_position();
+        let typ = if self.peek_keyword(b"fn") {
+            self.specialize(
+                |bump, e, row, col| error::Type::Fn(bump.alloc(e), row, col),
+                |p| p.type_fn(start),
+            )?
+        } else {
+            self.type_term()?
+        };
+        self.chomp();
+        Ok(typ)
+    }
 
-    /// Parse type application: `Maybe Int`, `Result String Int`, etc.
+    /// path[args] | var[args] | ( ) | tuple | record | error row.
     ///
-    /// Mirrors Elm's `Type.app`.
-    fn type_app(
+    /// Dispatches on the first byte and reports `Start` itself. Does not chomp.
+    pub(crate) fn type_term(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
+        let start = self.get_position();
+        match self.peek() {
+            Some(b) if b.is_ascii_uppercase() => {
+                let path = self.path(error::Type::Start, error::Type::PathMember)?;
+                // `path` stops before `::lower` (a value member); a type
+                // cannot be one, so report it like a dangling `::` (§10.42).
+                if self.peek() == Some(b':') && self.peek_at(1) == Some(b':') {
+                    self.advance_by(2);
+                    let (row, col) = self.position();
+                    return Err(error::Type::PathMember(row, col));
+                }
+                let args = self.type_args_opt()?;
+                Ok(self.add_end(start, Type::Named { path, args }))
+            }
+            Some(b) if b.is_ascii_lowercase() => {
+                if let Some(kw) = Keyword::from_word(self.peek_word()) {
+                    let (row, col) = self.position();
+                    return Err(error::Type::Reserved(kw, row, col));
+                }
+                let name = self.lower_name(error::Type::Start)?;
+                let args = self.type_args_opt()?;
+                Ok(self.add_end(start, Type::Var { name, args }))
+            }
+            Some(b'(') => self.specialize(
+                |bump, e, row, col| error::Type::Tuple(bump.alloc(e), row, col),
+                |p| p.type_tuple(start),
+            ),
+            Some(b'{') => self.specialize(
+                |bump, e, row, col| error::Type::Record(bump.alloc(e), row, col),
+                |p| {
+                    p.advance(); // `{`
+                    let (fields, ext) = p.field_types()?;
+                    Ok(p.add_end(start, Type::Record { fields, ext }))
+                },
+            ),
+            Some(b'[') => self.specialize(
+                |bump, e, row, col| error::Type::ErrorRow(bump.alloc(e), row, col),
+                |p| p.type_error_row(start),
+            ),
+            _ => {
+                let (row, col) = self.position();
+                Err(error::Type::Start(row, col))
+            }
+        }
+    }
+
+    /// Type arguments when a `[` follows the name on the same line; empty
+    /// otherwise. Called right after the name, so the cursor is its end.
+    /// Consumes nothing when there are no arguments.
+    fn type_args_opt(&mut self) -> Result<&'a [&'a Located<Type<'a>>], error::Type<'a>> {
+        let name_end = self.get_position();
+        let saved = self.save_state();
+        self.chomp();
+        if self.peek() == Some(b'[') && !self.newline_since(name_end) {
+            self.specialize(
+                |bump, e, row, col| error::Type::Args(bump.alloc(e), row, col),
+                |p| p.type_args(),
+            )
+        } else {
+            self.restore_state(saved);
+            Ok(&[])
+        }
+    }
+
+    /// At `[`: `[T, U]`. Consumes through the `]`; does not chomp.
+    pub(crate) fn type_args(&mut self) -> Result<&'a [&'a Located<Type<'a>>], TArgs<'a>> {
+        self.advance(); // `[`
+        self.chomp();
+        if self.peek() == Some(b']') {
+            let (row, col) = self.position();
+            return Err(TArgs::Empty(row, col));
+        }
+        let mut args = BumpVec::new_in(self.bump);
+        loop {
+            let arg = self.specialize(
+                |bump, e, row, col| TArgs::Type(bump.alloc(e), row, col),
+                |p| p.type_expr(),
+            )?;
+            args.push(arg);
+            match self.peek() {
+                Some(b',') => {
+                    self.advance();
+                    self.chomp();
+                    if self.peek() == Some(b']') {
+                        self.advance();
+                        break;
+                    }
+                }
+                Some(b']') => {
+                    self.advance();
+                    break;
+                }
+                _ => {
+                    let (row, col) = self.position();
+                    return Err(TArgs::End(row, col));
+                }
+            }
+        }
+        Ok(args.into_bump_slice())
+    }
+
+    /// `:tag[(T, …)]` — shared by error rows and `error` groups.
+    ///
+    /// The `(` must start on the tag's line. Stops after the tag or its
+    /// `)`; does not chomp.
+    pub(crate) fn tag_variant(&mut self) -> Result<TagVariant<'a>, error::TagVariant<'a>> {
+        let name = self.tag_name(error::TagVariant::Name, error::TagVariant::Name)?;
+        let mut args = BumpVec::new_in(self.bump);
+        let saved = self.save_state();
+        self.chomp();
+        if self.peek() == Some(b'(') && !self.newline_since(name.region.end) {
+            self.advance();
+            self.chomp();
+            loop {
+                let arg = self.specialize(
+                    |bump, e, row, col| error::TagVariant::Arg(bump.alloc(e), row, col),
+                    |p| p.type_expr(),
+                )?;
+                args.push(arg);
+                match self.peek() {
+                    Some(b',') => {
+                        self.advance();
+                        self.chomp();
+                        if self.peek() == Some(b')') {
+                            self.advance();
+                            break;
+                        }
+                    }
+                    Some(b')') => {
+                        self.advance();
+                        break;
+                    }
+                    _ => {
+                        let (row, col) = self.position();
+                        return Err(error::TagVariant::ArgEnd(row, col));
+                    }
+                }
+            }
+        } else {
+            self.restore_state(saved);
+        }
+        Ok(TagVariant {
+            name,
+            args: args.into_bump_slice(),
+        })
+    }
+
+    /// After `{`: fields with `?` and `r |` extension. Shared with enum record variants.
+    ///
+    /// Consumes through the `}`; does not chomp afterwards.
+    pub(crate) fn field_types(
         &mut self,
-        start: Position,
-    ) -> Result<(&'a Located<Type<'a>>, Position), error::Type<'a>> {
-        let upper = self.foreign_upper(error::Type::Start)?;
-        let upper_end = self.get_position();
-        self.chomp(error::Type::Space)?;
+    ) -> Result<(&'a [FieldType<'a>], Option<Name<'a>>), TRecord<'a>> {
+        self.chomp();
+        let mut fields = BumpVec::new_in(self.bump);
+        if self.peek() == Some(b'}') {
+            self.advance();
+            return Ok((fields.into_bump_slice(), None));
+        }
 
-        let (args, end) = self.type_chomp_args(upper_end)?;
-
-        let region = Region::new(start, upper_end);
-        let tipe = match upper {
-            ForeignUpper::Unqualified(name) => Type::Type { region, name, args },
-            ForeignUpper::Qualified(module, name) => Type::TypeQual {
-                region,
-                module,
-                name,
-                args,
-            },
+        // The first name is either the extension variable (`r |`) or a field.
+        let name = self.located_lower(TRecord::Field)?;
+        let saved = self.save_state();
+        self.chomp();
+        let ext = if self.peek() == Some(b'|') {
+            self.advance();
+            self.chomp();
+            if self.peek() == Some(b'}') {
+                let (row, col) = self.position();
+                return Err(TRecord::ExtField(row, col));
+            }
+            let first = self.located_lower(TRecord::Field)?;
+            fields.push(self.field_type_after_name(first)?);
+            Some(name)
+        } else {
+            // Back to the name's end: a `?` must be adjacent to it.
+            self.restore_state(saved);
+            fields.push(self.field_type_after_name(name)?);
+            None
         };
 
-        Ok((self.alloc(Located::at(Region::new(start, end), tipe)), end))
-    }
-
-    /// Chomp type arguments for application.
-    ///
-    /// Mirrors Elm's `Type.chompArgs`.
-    fn type_chomp_args(
-        &mut self,
-        mut end: Position,
-    ) -> Result<(&'a [&'a Located<Type<'a>>], Position), error::Type<'a>> {
-        let mut args: BumpVec<'a, &'a Located<Type<'a>>> = BumpVec::new_in(self.bump);
-
         loop {
-            let result = self.one_of_with_fallback(
-                vec![Box::new(|p: &mut Parser<'a>| {
-                    // Check CURRENT position (after chomp), not the end of previous token
-                    let (row, col) = p.position();
-                    p.check_indent(row, col, error::Type::IndentStart)?;
-                    let arg = p.type_term()?;
-                    let new_end = p.get_position();
-                    p.chomp(error::Type::Space)?;
-                    Ok(Some((arg, new_end)))
-                })],
-                None,
-            )?;
-
-            match result {
-                Some((arg, new_end)) => {
-                    args.push(arg);
-                    end = new_end;
+            match self.peek() {
+                Some(b',') => {
+                    self.advance();
+                    self.chomp();
+                    if self.peek() == Some(b'}') {
+                        self.advance();
+                        break;
+                    }
+                    let name = self.located_lower(TRecord::Field)?;
+                    fields.push(self.field_type_after_name(name)?);
                 }
-                None => break,
+                Some(b'}') => {
+                    self.advance();
+                    break;
+                }
+                _ => {
+                    let (row, col) = self.position();
+                    return Err(TRecord::End(row, col));
+                }
             }
         }
-
-        Ok((args.into_bump_slice(), end))
+        Ok((fields.into_bump_slice(), ext))
     }
 
-    // -------------------------------------------------------------------------
-    // Type terms (atomic)
-    // -------------------------------------------------------------------------
-
-    /// Parse an atomic type (no arrows, no application).
-    ///
-    /// Mirrors Elm's `Type.term`:
-    /// - Named types: `Int`, `Maybe`, `Module.Type`
-    /// - Type variables: `a`, `msg`
-    /// - Tuples: `()`, `(Int, String)`
-    /// - Records: `{}`, `{ name : String }`, `{ a | name : String }`
-    pub fn type_term(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
-        let start = self.get_position();
-
-        self.one_of(
-            error::Type::Start,
-            vec![
-                // Named type (no args in term - args handled by app)
-                Box::new(|p: &mut Parser<'a>| {
-                    let upper = p.foreign_upper(error::Type::Start)?;
-                    let end = p.get_position();
-                    let region = Region::new(start, end);
-
-                    let tipe = match upper {
-                        ForeignUpper::Unqualified(name) => {
-                            let empty: &'a [&'a Located<Type<'a>>] = &[];
-                            Type::Type {
-                                region,
-                                name,
-                                args: empty,
-                            }
-                        }
-                        ForeignUpper::Qualified(module, name) => {
-                            let empty: &'a [&'a Located<Type<'a>>] = &[];
-                            Type::TypeQual {
-                                region,
-                                module,
-                                name,
-                                args: empty,
-                            }
-                        }
-                    };
-
-                    Ok(p.add_end(start, tipe))
-                }),
-                // Type variable
-                Box::new(|p: &mut Parser<'a>| {
-                    let var = p.lower_name(error::Type::Start)?;
-                    Ok(p.add_end(start, Type::Var(var)))
-                }),
-                // Tuple (or unit, or parenthesized)
-                Box::new(|p: &mut Parser<'a>| p.type_tuple(start)),
-                // Record
-                Box::new(|p: &mut Parser<'a>| p.type_record(start)),
-            ],
-        )
-    }
-
-    // -------------------------------------------------------------------------
-    // Tuples
-    // -------------------------------------------------------------------------
-
-    /// Parse a tuple type: `()`, `(a)`, `(a, b)`, `(a, b, c)`
-    fn type_tuple(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
-        self.in_context(
-            |bump, tuple_err, row, col| error::Type::Tuple(bump.alloc(tuple_err), row, col),
-            |p| p.word1(0x28, error::Type::Start), // (
-            |p| p.type_tuple_body(start),
-        )
-    }
-
-    /// Parse tuple type body after `(`.
-    fn type_tuple_body(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TTuple<'a>> {
-        self.chomp_and_check_indent(TTuple::Space, TTuple::IndentType1)?;
-
-        self.one_of(
-            TTuple::Open,
-            vec![
-                // Unit: `()`
-                Box::new(|p: &mut Parser<'a>| {
-                    p.word1(0x29, TTuple::Open)?; // )
-                    Ok(p.add_end(start, Type::Unit))
-                }),
-                // Type (might be parenthesized or tuple)
-                Box::new(|p: &mut Parser<'a>| {
-                    let (first, end) = p.type_tuple_entry()?;
-                    p.check_indent(end.line, end.column, TTuple::IndentEnd)?;
-                    p.type_tuple_help(start, first)
-                }),
-            ],
-        )
-    }
-
-    /// Parse a type inside a tuple.
-    fn type_tuple_entry(&mut self) -> Result<(&'a Located<Type<'a>>, Position), TTuple<'a>> {
-        self.specialize(
-            |bump, type_err, row, col| TTuple::Type(bump.alloc(type_err), row, col),
-            |p| p.type_expr(),
-        )
-    }
-
-    /// Parse remaining tuple elements.
-    fn type_tuple_help(
-        &mut self,
-        start: Position,
-        first: &'a Located<Type<'a>>,
-    ) -> Result<&'a Located<Type<'a>>, TTuple<'a>> {
-        let mut rest: BumpVec<'a, &'a Located<Type<'a>>> = BumpVec::new_in(self.bump);
-
-        loop {
-            self.chomp(TTuple::Space)?;
-
-            let done = self.one_of(
-                TTuple::End,
-                vec![
-                    // Comma - another type
-                    Box::new(|p: &mut Parser<'a>| {
-                        p.word1(0x2C, TTuple::End)?; // ,
-                        p.chomp_and_check_indent(TTuple::Space, TTuple::IndentTypeN)?;
-
-                        let (tipe, end) = p.type_tuple_entry()?;
-                        rest.push(tipe);
-
-                        p.check_indent(end.line, end.column, TTuple::IndentEnd)?;
-                        Ok(false)
-                    }),
-                    // Close paren
-                    Box::new(|p: &mut Parser<'a>| {
-                        p.word1(0x29, TTuple::End)?; // )
-                        Ok(true)
-                    }),
-                ],
-            )?;
-
-            if done {
-                break;
-            }
-        }
-
-        if rest.is_empty() {
-            // Just parenthesized type
-            Ok(first)
+    /// The rest of a field after its name: `[?] ':' type`. The `?` must be
+    /// adjacent to the name (`nickname?: String`); the cursor is at the
+    /// name's end.
+    fn field_type_after_name(&mut self, field: Name<'a>) -> Result<FieldType<'a>, TRecord<'a>> {
+        let optional = if self.peek() == Some(b'?') {
+            let start = self.get_position();
+            self.advance();
+            Some(Region::new(start, self.get_position()))
         } else {
-            // Tuple
-            let second = rest.remove(0);
-            let others = rest.into_bump_slice();
-            Ok(self.add_end(
+            None
+        };
+        self.chomp();
+        self.word1(b':', TRecord::Colon)?;
+        self.chomp();
+        let typ = self.specialize(
+            |bump, e, row, col| TRecord::Type(bump.alloc(e), row, col),
+            |p| p.type_expr(),
+        )?;
+        Ok(FieldType {
+            field,
+            optional,
+            typ,
+        })
+    }
+
+    /// At `fn`: `fn(A, B) -> C`. The return type is a full `type_expr`, so
+    /// `fn(a) -> fn(b) -> c` nests to the right.
+    fn type_fn(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TFn<'a>> {
+        self.advance_by(2); // `fn` (peeked by the caller)
+        self.chomp();
+        self.word1(b'(', TFn::Open)?;
+        self.chomp();
+        let mut params = BumpVec::new_in(self.bump);
+        if self.peek() == Some(b')') {
+            self.advance();
+        } else {
+            loop {
+                let param = self.specialize(
+                    |bump, e, row, col| TFn::Param(bump.alloc(e), row, col),
+                    |p| p.type_expr(),
+                )?;
+                params.push(param);
+                match self.peek() {
+                    Some(b',') => {
+                        self.advance();
+                        self.chomp();
+                        if self.peek() == Some(b')') {
+                            self.advance();
+                            break;
+                        }
+                    }
+                    Some(b')') => {
+                        self.advance();
+                        break;
+                    }
+                    _ => {
+                        let (row, col) = self.position();
+                        return Err(TFn::ParamEnd(row, col));
+                    }
+                }
+            }
+        }
+        self.chomp();
+        self.word2(b'-', b'>', TFn::Arrow)?;
+        self.chomp();
+        let ret = self.specialize(
+            |bump, e, row, col| TFn::Ret(bump.alloc(e), row, col),
+            |p| p.type_expr(),
+        )?;
+        // `type_expr` chomped after the return type; its region end is ours.
+        let region = Region::new(start, ret.region.end);
+        Ok(self.alloc(Located::at(
+            region,
+            Type::Fn {
+                params: params.into_bump_slice(),
+                ret,
+            },
+        )))
+    }
+
+    /// At `(`: `()`, `(T)` (returned as `T` re-spanned over the parentheses,
+    /// §10.43), or `(T, U, …)`.
+    fn type_tuple(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TTuple<'a>> {
+        self.advance(); // `(`
+        self.chomp();
+        if self.peek() == Some(b')') {
+            self.advance();
+            return Ok(self.add_end(start, Type::Unit));
+        }
+        let first = self.tuple_entry()?;
+        let mut rest = BumpVec::new_in(self.bump);
+        loop {
+            match self.peek() {
+                Some(b',') => {
+                    self.advance();
+                    self.chomp();
+                    if self.peek() == Some(b')') {
+                        self.advance();
+                        break;
+                    }
+                    rest.push(self.tuple_entry()?);
+                }
+                Some(b')') => {
+                    self.advance();
+                    break;
+                }
+                _ => {
+                    let (row, col) = self.position();
+                    return Err(TTuple::End(row, col));
+                }
+            }
+        }
+        match rest.into_bump_slice().split_first() {
+            // `(T)`: the inner node, re-spanned to include the parentheses.
+            None => Ok(self.add_end(start, first.value)),
+            Some((second, rest)) => Ok(self.add_end(
                 start,
                 Type::Tuple {
                     first,
                     second,
-                    rest: others,
+                    rest,
                 },
-            ))
+            )),
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Records
-    // -------------------------------------------------------------------------
-
-    /// Parse a record type: `{}`, `{ name : String }`, `{ a | name : String }`
-    fn type_record(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
-        self.in_context(
-            |bump, record_err, row, col| error::Type::Record(bump.alloc(record_err), row, col),
-            |p| p.word1(0x7B, error::Type::Start), // {
-            |p| p.type_record_body(start),
-        )
-    }
-
-    /// Parse record type body after `{`.
-    fn type_record_body(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TRecord<'a>> {
-        self.chomp_and_check_indent(TRecord::Space, TRecord::IndentOpen)?;
-
-        self.one_of(
-            TRecord::Open,
-            vec![
-                // Empty record: `{}`
-                Box::new(|p: &mut Parser<'a>| {
-                    p.word1(0x7D, TRecord::Open)?; // }
-                    let empty: &'a [&'a FieldType<'a>] = &[];
-                    Ok(p.add_end(
-                        start,
-                        Type::Record {
-                            fields: empty,
-                            ext: None,
-                        },
-                    ))
-                }),
-                // Non-empty record
-                Box::new(|p: &mut Parser<'a>| {
-                    let name_start = p.get_position();
-                    let name = p.lower_name(TRecord::Field)?;
-                    let name_loc = p.add_end(name_start, name);
-
-                    p.chomp_and_check_indent(TRecord::Space, TRecord::IndentColon)?;
-
-                    p.one_of(
-                        TRecord::Colon,
-                        vec![
-                            // Extension: `{ a | field : Type }`
-                            Box::new(|p: &mut Parser<'a>| {
-                                p.word1(0x7C, TRecord::Colon)?; // |
-                                p.chomp_and_check_indent(TRecord::Space, TRecord::IndentField)?;
-
-                                let field = p.type_record_field()?;
-                                let fields = p.type_record_end(field)?;
-                                Ok(p.add_end(
-                                    start,
-                                    Type::Record {
-                                        fields,
-                                        ext: Some(name_loc),
-                                    },
-                                ))
-                            }),
-                            // Regular field: `{ name : Type }`
-                            Box::new(|p: &mut Parser<'a>| {
-                                p.word1(0x3A, TRecord::Colon)?; // :
-                                p.chomp_and_check_indent(TRecord::Space, TRecord::IndentType)?;
-
-                                let (tipe, end) = p.type_record_type_entry()?;
-                                p.check_indent(end.line, end.column, TRecord::IndentEnd)?;
-
-                                let field = p.alloc(FieldType {
-                                    field: name_loc,
-                                    typ: tipe,
-                                });
-                                let fields = p.type_record_end(field)?;
-                                Ok(p.add_end(start, Type::Record { fields, ext: None }))
-                            }),
-                        ],
-                    )
-                }),
-            ],
-        )
-    }
-
-    /// Parse a type inside a record field.
-    fn type_record_type_entry(&mut self) -> Result<(&'a Located<Type<'a>>, Position), TRecord<'a>> {
+    fn tuple_entry(&mut self) -> Result<&'a Located<Type<'a>>, TTuple<'a>> {
         self.specialize(
-            |bump, type_err, row, col| TRecord::Type(bump.alloc(type_err), row, col),
+            |bump, e, row, col| TTuple::Type(bump.alloc(e), row, col),
             |p| p.type_expr(),
         )
     }
 
-    /// Parse a record field: `name : Type`
-    fn type_record_field(&mut self) -> Result<&'a FieldType<'a>, TRecord<'a>> {
-        let name_start = self.get_position();
-        let name = self.lower_name(TRecord::Field)?;
-        let name_loc = self.add_end(name_start, name);
-
-        self.chomp_and_check_indent(TRecord::Space, TRecord::IndentColon)?;
-        self.word1(0x3A, TRecord::Colon)?; // :
-        self.chomp_and_check_indent(TRecord::Space, TRecord::IndentType)?;
-
-        let (tipe, end) = self.type_record_type_entry()?;
-        self.check_indent(end.line, end.column, TRecord::IndentEnd)?;
-
-        Ok(self.alloc(FieldType {
-            field: name_loc,
-            typ: tipe,
-        }))
-    }
-
-    /// Parse remaining record fields.
-    fn type_record_end(
-        &mut self,
-        first: &'a FieldType<'a>,
-    ) -> Result<&'a [&'a FieldType<'a>], TRecord<'a>> {
-        let mut fields: BumpVec<'a, &'a FieldType<'a>> = BumpVec::new_in(self.bump);
-        fields.push(first);
-
-        loop {
-            self.chomp(TRecord::Space)?;
-
-            let done = self.one_of(
-                TRecord::End,
-                vec![
-                    // Comma - another field
-                    Box::new(|p: &mut Parser<'a>| {
-                        p.word1(0x2C, TRecord::End)?; // ,
-                        p.chomp_and_check_indent(TRecord::Space, TRecord::IndentField)?;
-
-                        let field = p.type_record_field()?;
-                        fields.push(field);
-                        Ok(false)
-                    }),
-                    // Close brace
-                    Box::new(|p: &mut Parser<'a>| {
-                        p.word1(0x7D, TRecord::End)?; // }
-                        Ok(true)
-                    }),
-                ],
-            )?;
-
-            if done {
-                break;
-            }
-        }
-
-        Ok(fields.into_bump_slice())
-    }
-
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
-    /// Parse a possibly-qualified uppercase name (for types).
-    ///
-    /// Mirrors Elm's `Var.foreignUpper`.
-    fn foreign_upper<E>(
-        &mut self,
-        to_error: impl FnOnce(u16, u16) -> E,
-    ) -> Result<ForeignUpper<'a>, E> {
-        let (row, col) = self.position();
-        let start_pos = self.pos;
-
-        match self.peek() {
-            Some(b) if b.is_ascii_uppercase() => {
-                self.advance();
-                self.chomp_inner_chars();
-
-                // Check for qualification
-                if self.is_dot_upper() {
-                    self.chomp_qualified_upper_for_type(start_pos)
-                } else if self.is_dot_lower() {
-                    // Can't have lowercase after dot for types
-                    Err(to_error(row, col))
-                } else {
-                    let name = self.slice_from(start_pos);
-                    Ok(ForeignUpper::Unqualified(name))
+    /// At `[`: `[:tag(T) | :tag | r]`. Also `[]` (closed, empty) and `[r]`
+    /// (a bare row variable).
+    fn type_error_row(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TErrorRow<'a>> {
+        self.advance(); // `[`
+        self.chomp();
+        let mut tags = BumpVec::new_in(self.bump);
+        let mut ext = None;
+        if self.peek() == Some(b']') {
+            self.advance();
+        } else {
+            let mut after_bar = false;
+            loop {
+                if self.peek_lower() {
+                    ext = Some(self.located_lower(TErrorRow::Ext)?);
+                    self.chomp();
+                    self.word1(b']', TErrorRow::End)?;
+                    break;
                 }
-            }
-            _ => Err(to_error(row, col)),
-        }
-    }
-
-    /// Chomp through Module.Module... chain for type names.
-    fn chomp_qualified_upper_for_type<E>(
-        &mut self,
-        start_pos: usize,
-    ) -> Result<ForeignUpper<'a>, E> {
-        loop {
-            if self.is_dot_upper() {
-                self.advance(); // consume dot
-                self.advance(); // consume first uppercase char
-                self.chomp_inner_chars();
-            } else {
-                // No more dots - split into module and name
-                let full = self.slice_from(start_pos);
-                if let Some(last_dot) = full.rfind('.') {
-                    let module = &full[..last_dot];
-                    let name = &full[last_dot + 1..];
-                    return Ok(ForeignUpper::Qualified(module, name));
-                } else {
-                    return Ok(ForeignUpper::Unqualified(full));
+                if self.peek() != Some(b':') {
+                    // After `|` the choices are a tag or a variable (`Ext`);
+                    // right after `[` they also include `]` (`Start`).
+                    let (row, col) = self.position();
+                    return Err(if after_bar {
+                        TErrorRow::Ext(row, col)
+                    } else {
+                        TErrorRow::Start(row, col)
+                    });
+                }
+                let tag = self.specialize(
+                    |bump, e, row, col| TErrorRow::Tag(bump.alloc(e), row, col),
+                    |p| p.tag_variant(),
+                )?;
+                tags.push(tag);
+                self.chomp();
+                match self.peek() {
+                    Some(b'|') => {
+                        self.advance();
+                        self.chomp();
+                        after_bar = true;
+                    }
+                    Some(b']') => {
+                        self.advance();
+                        break;
+                    }
+                    _ => {
+                        let (row, col) = self.position();
+                        return Err(TErrorRow::End(row, col));
+                    }
                 }
             }
         }
+        Ok(self.add_end(
+            start,
+            Type::ErrorRow {
+                tags: tags.into_bump_slice(),
+                ext,
+            },
+        ))
     }
 }
 
-// =============================================================================
-// Tests
-// =============================================================================
-
+/// Snapshot test macro for successful type parsing.
 #[cfg(test)]
 macro_rules! assert_type_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
-        let src = bump.alloc_str(indoc::indoc!($code));
+        let code = indoc::indoc!($code);
+        let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        let (result, _end) = parser.type_expr().expect("expected successful parse");
-
+        let result = parser
+            .type_expr()
+            .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
+        assert!(
+            parser.is_eof(),
+            "unconsumed input at {:?}\n\nSource:\n{code}",
+            parser.position()
+        );
         insta::with_settings!({
-            description => format!("Code:\n\n{}", indoc::indoc!($code)),
+            description => code,
             omit_expression => true,
         }, {
             insta::assert_debug_snapshot!(result);
@@ -525,200 +490,392 @@ macro_rules! assert_type_snapshot {
     }};
 }
 
-/// Snapshot test macro for multiline types, laid out as they would appear
-/// indented inside a declaration (see `test_support::indent_fragment`).
+/// Snapshot test macro for type parse errors.
 #[cfg(test)]
-macro_rules! assert_indented_type_snapshot {
+macro_rules! assert_type_error_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
-        let fragment = indoc::indoc!($code);
-        let indented = $crate::test_support::indent_fragment(fragment);
-        let src = bump.alloc_str(&indented);
+        let code = indoc::indoc!($code);
+        let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        parser
-            .chomp(|_, _, _| "space error")
-            .expect("expected leading indent");
-        let (result, _end) = parser.type_expr().expect("expected successful parse");
-
+        let err = parser
+            .type_expr()
+            .err()
+            .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
         insta::with_settings!({
-            description => format!("Code (indented inside a declaration):\n\n{}", indented),
+            description => code,
             omit_expression => true,
         }, {
-            insta::assert_debug_snapshot!(result);
+            insta::assert_debug_snapshot!(err);
         });
     }};
 }
 
 #[cfg(test)]
 mod tests {
-    // Type variables
+    // ---- variables and names
+
     #[test]
-    fn type_var_simple() {
+    fn var() {
         assert_type_snapshot!("a");
     }
 
     #[test]
-    fn type_var_msg() {
-        assert_type_snapshot!("msg");
-    }
-
-    // Named types (no args)
-    #[test]
-    fn named_type_int() {
-        assert_type_snapshot!("Int");
+    fn var_applied() {
+        assert_type_snapshot!("f[a]");
     }
 
     #[test]
-    fn named_type_string() {
-        assert_type_snapshot!("String");
+    fn var_applied_nested() {
+        assert_type_snapshot!("t[f[a]]");
     }
 
     #[test]
-    fn named_type_qualified() {
-        assert_type_snapshot!("Dict.Dict");
+    fn named_simple() {
+        assert_type_snapshot!("User");
     }
 
     #[test]
-    fn named_type_multi_qualified() {
-        assert_type_snapshot!("Data.Map.Map");
+    fn named_qualified() {
+        assert_type_snapshot!("Option::Foo");
     }
 
-    // Type application
-    #[test]
-    fn type_app_maybe() {
-        assert_type_snapshot!("Maybe Int");
-    }
+    // ---- application
 
     #[test]
-    fn type_app_result() {
-        assert_type_snapshot!("Result String Int");
+    fn app_one_arg() {
+        assert_type_snapshot!("Array[User]");
     }
 
     #[test]
-    fn type_app_nested() {
-        assert_type_snapshot!("Maybe (List Int)");
+    fn app_many_args() {
+        assert_type_snapshot!("Result[User, AuthError]");
     }
 
     #[test]
-    fn type_app_qualified() {
-        assert_type_snapshot!("Dict.Dict String Int");
-    }
-
-    // Function types
-    #[test]
-    fn function_simple() {
-        assert_type_snapshot!("a -> b");
+    fn app_nested() {
+        assert_type_snapshot!("Map[String, Array[User]]");
     }
 
     #[test]
-    fn function_multi() {
-        assert_type_snapshot!("a -> b -> c");
+    fn app_result_shorthand() {
+        assert_type_snapshot!("Result[User]");
     }
 
     #[test]
-    fn function_with_types() {
-        assert_type_snapshot!("Int -> String -> Bool");
+    fn app_trailing_comma() {
+        assert_type_snapshot!("Map[String, Number,]");
     }
 
     #[test]
-    fn function_with_app() {
-        assert_type_snapshot!("Maybe a -> Result e a");
+    fn app_args_after_space() {
+        assert_type_snapshot!("Array [User]");
     }
 
-    // Unit
+    #[test]
+    fn var_applied_after_space() {
+        assert_type_snapshot!("f [a]");
+    }
+
+    /// A `[` on a later line is not an argument list (§2.1 rule 1): the
+    /// type ends at the name and the `[` is left for the caller.
+    #[test]
+    fn app_args_newline_not_applied() {
+        let bump = bumpalo::Bump::new();
+        let code = "Array\n[a]";
+        let src = bump.alloc_str(code);
+        let mut parser = crate::Parser::new(&bump, src.as_bytes());
+        let result = parser.type_expr().expect("a bare name parses");
+        assert!(
+            matches!(result.value, alder_source::Type::Named { args: &[], .. }),
+            "expected `Array` without arguments, got {result:#?}"
+        );
+        assert_eq!(parser.position(), (2, 1), "the `[` is left unconsumed");
+    }
+
+    // ---- functions
+
+    #[test]
+    fn fn_no_params() {
+        assert_type_snapshot!("fn() -> Number");
+    }
+
+    #[test]
+    fn fn_one_param() {
+        assert_type_snapshot!("fn(a) -> b");
+    }
+
+    #[test]
+    fn fn_many_params() {
+        assert_type_snapshot!("fn(String, Number) -> Bool");
+    }
+
+    #[test]
+    fn fn_returning_fn() {
+        assert_type_snapshot!("fn(a) -> fn(b) -> c");
+    }
+
+    #[test]
+    fn fn_hkt() {
+        assert_type_snapshot!("fn(a) -> f[b]");
+    }
+
+    #[test]
+    fn fn_param_is_fn() {
+        assert_type_snapshot!("fn(fn(a) -> b, Array[a]) -> Array[b]");
+    }
+
+    // ---- unit and tuples
+
     #[test]
     fn unit() {
         assert_type_snapshot!("()");
     }
 
-    // Tuple types
     #[test]
     fn tuple_pair() {
-        assert_type_snapshot!("(Int, String)");
+        assert_type_snapshot!("(a, b)");
     }
 
     #[test]
     fn tuple_triple() {
-        assert_type_snapshot!("(Int, String, Bool)");
+        assert_type_snapshot!("(String, Number, Bool)");
     }
 
     #[test]
-    fn tuple_nested() {
-        assert_type_snapshot!("((Int, String), Bool)");
+    fn parenthesized() {
+        assert_type_snapshot!("(Array[a])");
     }
 
     #[test]
-    fn tuple_with_function() {
-        assert_type_snapshot!("(a -> b, c)");
+    fn parenthesized_trailing_comma() {
+        assert_type_snapshot!("(Array[a],)");
     }
 
-    #[test]
-    fn tuple_multiline() {
-        assert_indented_type_snapshot!(
-            "(
-                Int,
-                String,
-                Bool
-            )"
-        );
-    }
+    // ---- records
 
-    // Record types
     #[test]
     fn record_empty() {
         assert_type_snapshot!("{}");
     }
 
     #[test]
-    fn record_single() {
-        assert_type_snapshot!("{ name : String }");
+    fn record_fields() {
+        assert_type_snapshot!("{ id: Id, name: String }");
     }
 
     #[test]
-    fn record_multiple() {
-        assert_type_snapshot!("{ name : String, age : Int }");
-    }
-
-    #[test]
-    fn record_with_function() {
-        assert_type_snapshot!("{ onClick : msg -> Cmd msg }");
+    fn record_optional_field() {
+        assert_type_snapshot!("{ nickname?: String }");
     }
 
     #[test]
     fn record_extension() {
-        assert_type_snapshot!("{ a | name : String }");
+        assert_type_snapshot!("{ r | name: String }");
     }
 
     #[test]
-    fn record_extension_multiple() {
-        assert_type_snapshot!("{ a | name : String, age : Int }");
+    fn record_trailing_comma() {
+        assert_type_snapshot!("{ id: Id, }");
     }
 
     #[test]
     fn record_multiline() {
-        assert_indented_type_snapshot!(
-            "{
-                name : String,
-                age : Int,
-                active : Bool
-            }"
+        assert_type_snapshot!(
+            r#"
+            {
+                id: Id,
+                name: String,
+                nickname?: String,
+            }
+            "#
         );
     }
 
-    // Parenthesized
+    // ---- error rows
+
     #[test]
-    fn parenthesized() {
-        assert_type_snapshot!("(Int)");
+    fn error_row_empty() {
+        assert_type_snapshot!("[]");
     }
 
     #[test]
-    fn parenthesized_function() {
-        assert_type_snapshot!("(a -> b) -> List a -> List b");
+    fn error_row_single() {
+        assert_type_snapshot!("[:timeout]");
     }
 
-    // Complex combinations
     #[test]
-    fn complex_model_msg() {
-        assert_type_snapshot!("{ model : Model, update : Msg -> Model -> Model }");
+    fn error_row_args() {
+        assert_type_snapshot!("[:invalid(String, Number)]");
+    }
+
+    #[test]
+    fn error_row_args_after_space() {
+        assert_type_snapshot!("[:invalid (String)]");
+    }
+
+    #[test]
+    fn error_row_multiline() {
+        assert_type_snapshot!(
+            r#"
+            [
+                :not_found(Id)
+                | :timeout
+                | r
+            ]
+            "#
+        );
+    }
+
+    #[test]
+    fn error_row_open() {
+        assert_type_snapshot!("[:not_found(Id) | :timeout | r]");
+    }
+
+    #[test]
+    fn error_row_var_only() {
+        assert_type_snapshot!("[r]");
+    }
+
+    #[test]
+    fn error_row_in_result() {
+        assert_type_snapshot!("Result[User, [:timeout | r]]");
+    }
+
+    // ---- errors
+
+    #[test]
+    fn error_app_unclosed() {
+        assert_type_error_snapshot!("Array[User");
+    }
+
+    #[test]
+    fn error_app_empty() {
+        assert_type_error_snapshot!("Array[]");
+    }
+
+    #[test]
+    fn error_app_bad_arg() {
+        assert_type_error_snapshot!("Array[1]");
+    }
+
+    #[test]
+    fn error_path_dangling() {
+        assert_type_error_snapshot!("Option::");
+    }
+
+    #[test]
+    fn error_path_lower_member() {
+        assert_type_error_snapshot!("Option::foo");
+    }
+
+    #[test]
+    fn error_fn_missing_arrow() {
+        assert_type_error_snapshot!("fn(a) b");
+    }
+
+    #[test]
+    fn error_fn_missing_parens() {
+        assert_type_error_snapshot!("fn -> a");
+    }
+
+    #[test]
+    fn error_fn_param_end() {
+        assert_type_error_snapshot!("fn(a b) -> c");
+    }
+
+    #[test]
+    fn error_fn_missing_ret() {
+        assert_type_error_snapshot!("fn(a) ->");
+    }
+
+    #[test]
+    fn error_tuple_unclosed() {
+        assert_type_error_snapshot!("(a, b");
+    }
+
+    #[test]
+    fn error_record_missing_colon() {
+        assert_type_error_snapshot!("{ name String }");
+    }
+
+    #[test]
+    fn error_record_ext_no_fields() {
+        assert_type_error_snapshot!("{ r | }");
+    }
+
+    #[test]
+    fn error_record_field() {
+        assert_type_error_snapshot!("{ Name: String }");
+    }
+
+    #[test]
+    fn error_record_optional_after_space() {
+        assert_type_error_snapshot!("{ nickname ?: String }");
+    }
+
+    #[test]
+    fn error_record_optional_after_space_second_field() {
+        assert_type_error_snapshot!("{ id: Id, nickname ?: String }");
+    }
+
+    #[test]
+    fn error_record_unclosed() {
+        assert_type_error_snapshot!("{ name: String");
+    }
+
+    #[test]
+    fn error_row_bad_tag() {
+        assert_type_error_snapshot!("[:1]");
+    }
+
+    #[test]
+    fn error_row_bad_start() {
+        assert_type_error_snapshot!("[1]");
+    }
+
+    #[test]
+    fn error_row_leading_bar() {
+        assert_type_error_snapshot!("[|]");
+    }
+
+    #[test]
+    fn error_row_eof() {
+        assert_type_error_snapshot!("[");
+    }
+
+    #[test]
+    fn error_row_tag_args_newline() {
+        assert_type_error_snapshot!(
+            r#"
+            [:not_found
+            (Id)]
+            "#
+        );
+    }
+
+    #[test]
+    fn error_row_bad_ext() {
+        assert_type_error_snapshot!("[:timeout | 1]");
+    }
+
+    #[test]
+    fn error_row_unclosed() {
+        assert_type_error_snapshot!("[:timeout");
+    }
+
+    #[test]
+    fn error_row_tag_args_unclosed() {
+        assert_type_error_snapshot!("[:not_found(Id]");
+    }
+
+    #[test]
+    fn error_start() {
+        assert_type_error_snapshot!("42");
+    }
+
+    #[test]
+    fn error_reserved() {
+        assert_type_error_snapshot!("match");
     }
 }

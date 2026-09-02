@@ -1,0 +1,131 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: "import @alder/http.{ get as fetch, Request as Req }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 52,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Import(
+            Import {
+                path: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                    },
+                    value: ModulePath {
+                        root: Package {
+                            author: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 9,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                },
+                                value: "alder",
+                            },
+                            package: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 15,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 19,
+                                    },
+                                },
+                                value: "http",
+                            },
+                        },
+                        segments: [],
+                    },
+                },
+                tail: Names(
+                    [
+                        ImportName {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 22,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 25,
+                                    },
+                                },
+                                value: "get",
+                            },
+                            alias: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 29,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 34,
+                                        },
+                                    },
+                                    value: "fetch",
+                                },
+                            ),
+                        },
+                        ImportName {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 36,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 43,
+                                    },
+                                },
+                                value: "Request",
+                            },
+                            alias: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 47,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 50,
+                                        },
+                                    },
+                                    value: "Req",
+                                },
+                            ),
+                        },
+                    ],
+                ),
+            },
+        ),
+    },
+}

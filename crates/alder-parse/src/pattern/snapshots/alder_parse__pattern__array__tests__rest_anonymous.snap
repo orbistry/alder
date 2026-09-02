@@ -1,0 +1,50 @@
+---
+source: crates/alder-parse/src/pattern/array.rs
+description: "[a, ..]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 8,
+        },
+    },
+    value: Array {
+        elements: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 2,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 3,
+                    },
+                },
+                value: Var(
+                    "a",
+                ),
+            },
+        ],
+        rest: Some(
+            ArrayRest {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 7,
+                    },
+                },
+                name: None,
+            },
+        ),
+    },
+}

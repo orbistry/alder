@@ -1,0 +1,69 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "(mut count: Number)"
+---
+[
+    Param {
+        mutable: Some(
+            Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 5,
+                },
+            },
+        ),
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 6,
+                },
+                end: Position {
+                    line: 1,
+                    column: 11,
+                },
+            },
+            value: Var(
+                "count",
+            ),
+        },
+        annotation: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 19,
+                                    },
+                                },
+                                value: "Number",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+        ),
+    },
+]

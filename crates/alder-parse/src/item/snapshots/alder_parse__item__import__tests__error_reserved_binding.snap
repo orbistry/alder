@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: import @alder/test
+---
+Import(
+    ReservedBinding(
+        Test,
+        1,
+        15,
+    ),
+    1,
+    1,
+)

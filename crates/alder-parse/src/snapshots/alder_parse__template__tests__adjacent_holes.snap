@@ -1,0 +1,54 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`${a}${b}`"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 11,
+        },
+    },
+    value: Template(
+        [
+            Expr(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+            ),
+            Expr(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                    },
+                    value: Var(
+                        "b",
+                    ),
+                },
+            ),
+        ],
+    ),
+}

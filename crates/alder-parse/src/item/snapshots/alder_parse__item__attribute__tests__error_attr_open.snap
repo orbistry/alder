@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/attribute.rs
+description: "# derive"
+---
+Attribute(
+    Open(
+        1,
+        1,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`a \\q b`"
+---
+Template(
+    Escape(
+        Unknown,
+        1,
+        4,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,204 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Container[c] {\n    type Item\n    fn sum(xs: c) -> Number where c.Item == Number\n}\n"
+---
+TraitDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 16,
+            },
+        },
+        value: "Container",
+    },
+    params: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 17,
+                },
+                end: Position {
+                    line: 1,
+                    column: 18,
+                },
+            },
+            value: "c",
+        },
+    ],
+    where_clause: [],
+    items: [
+        AssocType(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 10,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 14,
+                    },
+                },
+                value: "Item",
+            },
+        ),
+        Fn(
+            FnDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 11,
+                        },
+                    },
+                    value: "sum",
+                },
+                params: [
+                    Param {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 14,
+                                },
+                            },
+                            value: Var(
+                                "xs",
+                            ),
+                        },
+                        annotation: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 16,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 17,
+                                    },
+                                },
+                                value: Var {
+                                    name: "c",
+                                    args: [],
+                                },
+                            },
+                        ),
+                    },
+                ],
+                ret: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 22,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 28,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 22,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 28,
+                                            },
+                                        },
+                                        value: "Number",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ),
+                where_clause: [
+                    AssocEq {
+                        var: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 35,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 36,
+                                },
+                            },
+                            value: "c",
+                        },
+                        assoc: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 37,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 41,
+                                },
+                            },
+                            value: "Item",
+                        },
+                        typ: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 45,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 51,
+                                },
+                            },
+                            value: Named {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 3,
+                                                    column: 45,
+                                                },
+                                                end: Position {
+                                                    line: 3,
+                                                    column: 51,
+                                                },
+                                            },
+                                            value: "Number",
+                                        },
+                                    ],
+                                },
+                                args: [],
+                            },
+                        },
+                    },
+                ],
+                body: None,
+            },
+        ),
+    ],
+}

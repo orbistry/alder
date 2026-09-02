@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: foo() /= 1
+---
+AssignTarget(
+    Div,
+    1,
+    1,
+)

@@ -1,0 +1,102 @@
+---
+source: crates/alder-parse/src/pattern/ctor.rs
+description: "Rect { width: w, height: h }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 29,
+        },
+    },
+    value: CtorRecord {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: "Rect",
+                },
+            ],
+        },
+        fields: [
+            FieldPattern {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                    },
+                    value: "width",
+                },
+                pattern: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                        },
+                        value: Var(
+                            "w",
+                        ),
+                    },
+                ),
+            },
+            FieldPattern {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 24,
+                        },
+                    },
+                    value: "height",
+                },
+                pattern: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 26,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 27,
+                            },
+                        },
+                        value: Var(
+                            "h",
+                        ),
+                    },
+                ),
+            },
+        ],
+        rest: None,
+    },
+}

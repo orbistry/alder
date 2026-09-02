@@ -1,0 +1,46 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { width: 1e3px }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                        },
+                        value: Ident(
+                            "width",
+                        ),
+                    },
+                    value: Dimension {
+                        number: NumberLit {
+                            value: 1000.0,
+                            text: "1e3",
+                        },
+                        unit: "px",
+                    },
+                },
+            ],
+        },
+    ),
+}

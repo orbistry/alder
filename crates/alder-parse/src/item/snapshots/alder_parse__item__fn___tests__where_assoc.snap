@@ -1,0 +1,66 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: " i.Item == Number"
+---
+[
+    AssocEq {
+        var: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 3,
+                },
+            },
+            value: "i",
+        },
+        assoc: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 4,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: "Item",
+        },
+        typ: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 12,
+                },
+                end: Position {
+                    line: 1,
+                    column: 18,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 18,
+                                },
+                            },
+                            value: "Number",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    },
+]

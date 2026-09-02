@@ -1,0 +1,86 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select * from users limit ^pageSize }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 46,
+        },
+    },
+    value: Query(
+        Select(
+            Select {
+                projection: Star(
+                    Region {
+                        start: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                    },
+                ),
+                from: TableRef {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 28,
+                            },
+                        },
+                        value: "users",
+                    },
+                    alias: None,
+                },
+                joins: [],
+                where_: None,
+                group_by: [],
+                order_by: [],
+                limit: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 35,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 44,
+                            },
+                        },
+                        value: Pin(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 36,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 44,
+                                    },
+                                },
+                                value: Var(
+                                    "pageSize",
+                                ),
+                            },
+                        ),
+                    },
+                ),
+                offset: None,
+            },
+        ),
+    ),
+}

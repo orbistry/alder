@@ -1,0 +1,349 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<div>@match s { Some(x) => @if x { <b>x</b> }, None => <></> }</div>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 69,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Tag(
+                        "div",
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 63,
+                            },
+                        },
+                        value: Match {
+                            scrutinee: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                },
+                                value: Var(
+                                    "s",
+                                ),
+                            },
+                            arms: [
+                                ChildMatchArm {
+                                    patterns: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 17,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 24,
+                                                },
+                                            },
+                                            value: Ctor {
+                                                path: Path {
+                                                    segments: [
+                                                        Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 1,
+                                                                    column: 17,
+                                                                },
+                                                                end: Position {
+                                                                    line: 1,
+                                                                    column: 21,
+                                                                },
+                                                            },
+                                                            value: "Some",
+                                                        },
+                                                    ],
+                                                },
+                                                args: [
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 22,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 23,
+                                                            },
+                                                        },
+                                                        value: Var(
+                                                            "x",
+                                                        ),
+                                                    },
+                                                ],
+                                            },
+                                        },
+                                    ],
+                                    guard: None,
+                                    body: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 28,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 46,
+                                            },
+                                        },
+                                        value: ChildBlock {
+                                            items: [
+                                                Child(
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 28,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 46,
+                                                            },
+                                                        },
+                                                        value: If {
+                                                            branches: [
+                                                                ChildIfBranch {
+                                                                    condition: Located {
+                                                                        region: Region {
+                                                                            start: Position {
+                                                                                line: 1,
+                                                                                column: 32,
+                                                                            },
+                                                                            end: Position {
+                                                                                line: 1,
+                                                                                column: 33,
+                                                                            },
+                                                                        },
+                                                                        value: Var(
+                                                                            "x",
+                                                                        ),
+                                                                    },
+                                                                    body: Located {
+                                                                        region: Region {
+                                                                            start: Position {
+                                                                                line: 1,
+                                                                                column: 34,
+                                                                            },
+                                                                            end: Position {
+                                                                                line: 1,
+                                                                                column: 46,
+                                                                            },
+                                                                        },
+                                                                        value: ChildBlock {
+                                                                            items: [
+                                                                                Child(
+                                                                                    Located {
+                                                                                        region: Region {
+                                                                                            start: Position {
+                                                                                                line: 1,
+                                                                                                column: 35,
+                                                                                            },
+                                                                                            end: Position {
+                                                                                                line: 1,
+                                                                                                column: 36,
+                                                                                            },
+                                                                                        },
+                                                                                        value: Text(
+                                                                                            " ",
+                                                                                        ),
+                                                                                    },
+                                                                                ),
+                                                                                Child(
+                                                                                    Located {
+                                                                                        region: Region {
+                                                                                            start: Position {
+                                                                                                line: 1,
+                                                                                                column: 36,
+                                                                                            },
+                                                                                            end: Position {
+                                                                                                line: 1,
+                                                                                                column: 44,
+                                                                                            },
+                                                                                        },
+                                                                                        value: Element(
+                                                                                            Element {
+                                                                                                name: Located {
+                                                                                                    region: Region {
+                                                                                                        start: Position {
+                                                                                                            line: 1,
+                                                                                                            column: 37,
+                                                                                                        },
+                                                                                                        end: Position {
+                                                                                                            line: 1,
+                                                                                                            column: 38,
+                                                                                                        },
+                                                                                                    },
+                                                                                                    value: Tag(
+                                                                                                        "b",
+                                                                                                    ),
+                                                                                                },
+                                                                                                attrs: [],
+                                                                                                children: [
+                                                                                                    Located {
+                                                                                                        region: Region {
+                                                                                                            start: Position {
+                                                                                                                line: 1,
+                                                                                                                column: 39,
+                                                                                                            },
+                                                                                                            end: Position {
+                                                                                                                line: 1,
+                                                                                                                column: 40,
+                                                                                                            },
+                                                                                                        },
+                                                                                                        value: Text(
+                                                                                                            "x",
+                                                                                                        ),
+                                                                                                    },
+                                                                                                ],
+                                                                                                self_closing: false,
+                                                                                            },
+                                                                                        ),
+                                                                                    },
+                                                                                ),
+                                                                                Child(
+                                                                                    Located {
+                                                                                        region: Region {
+                                                                                            start: Position {
+                                                                                                line: 1,
+                                                                                                column: 44,
+                                                                                            },
+                                                                                            end: Position {
+                                                                                                line: 1,
+                                                                                                column: 45,
+                                                                                            },
+                                                                                        },
+                                                                                        value: Text(
+                                                                                            " ",
+                                                                                        ),
+                                                                                    },
+                                                                                ),
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                },
+                                                            ],
+                                                            final_else: None,
+                                                        },
+                                                    },
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                },
+                                ChildMatchArm {
+                                    patterns: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 48,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 52,
+                                                },
+                                            },
+                                            value: Ctor {
+                                                path: Path {
+                                                    segments: [
+                                                        Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 1,
+                                                                    column: 48,
+                                                                },
+                                                                end: Position {
+                                                                    line: 1,
+                                                                    column: 52,
+                                                                },
+                                                            },
+                                                            value: "None",
+                                                        },
+                                                    ],
+                                                },
+                                                args: [],
+                                            },
+                                        },
+                                    ],
+                                    guard: None,
+                                    body: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 56,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 61,
+                                            },
+                                        },
+                                        value: ChildBlock {
+                                            items: [
+                                                Child(
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 56,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 61,
+                                                            },
+                                                        },
+                                                        value: Fragment(
+                                                            [],
+                                                        ),
+                                                    },
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

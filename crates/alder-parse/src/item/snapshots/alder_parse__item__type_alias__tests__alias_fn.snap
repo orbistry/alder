@@ -1,0 +1,151 @@
+---
+source: crates/alder-parse/src/item/type_alias.rs
+description: "type Handler = fn(Request) -> Task[Response]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 45,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: TypeAlias(
+            TypeAlias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                    },
+                    value: "Handler",
+                },
+                params: [],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 45,
+                        },
+                    },
+                    value: Fn {
+                        params: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 19,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 26,
+                                    },
+                                },
+                                value: Named {
+                                    path: Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 19,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 26,
+                                                    },
+                                                },
+                                                value: "Request",
+                                            },
+                                        ],
+                                    },
+                                    args: [],
+                                },
+                            },
+                        ],
+                        ret: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 31,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 45,
+                                },
+                            },
+                            value: Named {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 31,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 35,
+                                                },
+                                            },
+                                            value: "Task",
+                                        },
+                                    ],
+                                },
+                                args: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 36,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 44,
+                                            },
+                                        },
+                                        value: Named {
+                                            path: Path {
+                                                segments: [
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 36,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 44,
+                                                            },
+                                                        },
+                                                        value: "Response",
+                                                    },
+                                                ],
+                                            },
+                                            args: [],
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        ),
+    },
+}

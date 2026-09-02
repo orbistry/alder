@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/pattern/array.rs
+description: "[..rest, x]"
+---
+Array(
+    RestNotLast(
+        1,
+        10,
+    ),
+    1,
+    1,
+)

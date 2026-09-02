@@ -1,0 +1,100 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table users {\n    id: integer() primaryKey autoIncrement\n}\n"
+---
+TableDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: "users",
+    },
+    columns: [
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 7,
+                    },
+                },
+                value: "id",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 18,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 16,
+                            },
+                        },
+                        value: Var(
+                            "integer",
+                        ),
+                    },
+                    arguments: [],
+                },
+            },
+            modifiers: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 19,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 29,
+                            },
+                        },
+                        value: "primaryKey",
+                    },
+                    args: [],
+                },
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 30,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 43,
+                            },
+                        },
+                        value: "autoIncrement",
+                    },
+                    args: [],
+                },
+            ],
+        },
+    ],
+}

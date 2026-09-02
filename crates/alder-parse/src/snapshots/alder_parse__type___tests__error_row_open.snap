@@ -1,0 +1,100 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "[:not_found(Id) | :timeout | r]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 32,
+        },
+    },
+    value: ErrorRow {
+        tags: [
+            TagVariant {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                    },
+                    value: "not_found",
+                },
+                args: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 13,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 15,
+                                            },
+                                        },
+                                        value: "Id",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ],
+            },
+            TagVariant {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 27,
+                        },
+                    },
+                    value: "timeout",
+                },
+                args: [],
+            },
+        ],
+        ext: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 30,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 31,
+                    },
+                },
+                value: "r",
+            },
+        ),
+    },
+}

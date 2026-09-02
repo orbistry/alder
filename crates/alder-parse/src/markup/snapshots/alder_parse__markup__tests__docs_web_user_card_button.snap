@@ -1,0 +1,167 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<button onClick={fn() deleteUser(props.id)}>Delete</button>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 60,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Tag(
+                        "button",
+                    ),
+                },
+                attrs: [
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 9,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                            },
+                            value: "onClick",
+                        },
+                        value: Some(
+                            Expr(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 18,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 43,
+                                        },
+                                    },
+                                    value: Lambda(
+                                        Lambda {
+                                            params: [],
+                                            ret: None,
+                                            body: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 23,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 43,
+                                                    },
+                                                },
+                                                value: Call {
+                                                    function: Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 23,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 33,
+                                                            },
+                                                        },
+                                                        value: Var(
+                                                            "deleteUser",
+                                                        ),
+                                                    },
+                                                    arguments: [
+                                                        Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 1,
+                                                                    column: 34,
+                                                                },
+                                                                end: Position {
+                                                                    line: 1,
+                                                                    column: 42,
+                                                                },
+                                                            },
+                                                            value: Access {
+                                                                record: Located {
+                                                                    region: Region {
+                                                                        start: Position {
+                                                                            line: 1,
+                                                                            column: 34,
+                                                                        },
+                                                                        end: Position {
+                                                                            line: 1,
+                                                                            column: 39,
+                                                                        },
+                                                                    },
+                                                                    value: Var(
+                                                                        "props",
+                                                                    ),
+                                                                },
+                                                                field: Located {
+                                                                    region: Region {
+                                                                        start: Position {
+                                                                            line: 1,
+                                                                            column: 40,
+                                                                        },
+                                                                        end: Position {
+                                                                            line: 1,
+                                                                            column: 42,
+                                                                        },
+                                                                    },
+                                                                    value: "id",
+                                                                },
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        },
+                                    ),
+                                },
+                            ),
+                        ),
+                    },
+                ],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 45,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 51,
+                            },
+                        },
+                        value: Text(
+                            "Delete",
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

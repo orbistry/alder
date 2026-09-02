@@ -1,0 +1,78 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro when(cond, body) {\n    quote {\n        if unquote(cond) { unquote(body) } else { () }\n    }\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 5,
+            column: 2,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Macro(
+            MacroDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                    },
+                    value: "when",
+                },
+                params: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                        },
+                        value: "cond",
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 18,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 22,
+                            },
+                        },
+                        value: "body",
+                    },
+                ],
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 25,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 1,
+                        },
+                    },
+                    value: "\n    quote {\n        if unquote(cond) { unquote(body) } else { () }\n    }\n",
+                },
+            },
+        ),
+    },
+}

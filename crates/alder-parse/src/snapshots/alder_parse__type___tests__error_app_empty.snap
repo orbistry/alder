@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Array[]"
+---
+Args(
+    Empty(
+        1,
+        7,
+    ),
+    1,
+    6,
+)

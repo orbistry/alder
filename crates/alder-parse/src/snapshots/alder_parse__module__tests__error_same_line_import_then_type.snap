@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/module.rs
+description: import ~/db type Id = Number
+---
+SameLine(
+    1,
+    13,
+)

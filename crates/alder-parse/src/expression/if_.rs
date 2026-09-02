@@ -1,206 +1,202 @@
-//! If expression parsing for Alder.
+//! `if` / `else if` / `else` expressions.
 //!
-//! Ported from Elm's `Parse/Expression.hs` (if_, chompIfEnd).
+//! See docs/parser-internals.md §5.13:
 //!
-//! Parses: `if cond then branch else branch`
-//! Also handles: `if c1 then b1 else if c2 then b2 else b3`
+//! ```ebnf
+//! if_expr = 'if' expression block { 'else' 'if' expression block } [ 'else' block ] ;
+//! ```
+//!
+//! Every condition is parsed under `no_record_ctor` (§2.3) so
+//! `if s == Shape::Empty { … }` opens the branch rather than a record
+//! constructor. The branch blocks run under `with_record_ctor(true, …)`:
+//! a `{` that grammatically demands a block (§2.2) is a brace context like
+//! the brackets of §2.3, so it resets the flag (Rust clears its
+//! struct-literal restriction inside blocks the same way). This is
+//! observable only when the whole `if` sits unbracketed inside another
+//! head; the plain `block()` of statement.rs does not reset by itself, so
+//! the reset is applied here, in lambda `{` bodies and around match arms
+//! (recorded for §10 so `@if` / `@match` bodies and item bodies agree).
+//! `else` may start on the line after the closing `}`. The expression's region ends at the last branch's `}`;
+//! `block()` has already chomped past it.
+// OWNER: expression/if_.rs (Wave 2)
 
 use alder_region::{Located, Position, Region};
 use alder_source::{Expr, IfBranch};
 use bumpalo::collections::Vec as BumpVec;
 
-use crate::Parser;
-use crate::error::{self, If};
+use crate::{Parser, error};
 
 impl<'a> Parser<'a> {
-    /// Parse an if expression: `if cond then branch else branch`.
-    ///
-    /// Mirrors Elm's `if_`:
-    /// ```haskell
-    /// if_ start =
-    ///   inContext E.If (Keyword.if_ E.Start) $
-    ///     chompIfEnd start []
-    /// ```
+    /// After `if`.
     pub(crate) fn if_(
         &mut self,
         start: Position,
-    ) -> Result<(&'a Located<Expr<'a>>, Position), error::Expr<'a>> {
-        self.in_context(
-            |bump, e, row, col| error::Expr::If(bump.alloc(e), row, col),
-            |p| p.keyword_if(error::Expr::Start),
-            |p| p.chomp_if_end(start, vec![]),
-        )
+    ) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        let (row, col) = (start.line, start.column);
+        self.if_body(start)
+            .map_err(|e| error::Expr::If(self.alloc(e), row, col))
     }
 
-    /// Parse the body of an if expression after the initial `if` keyword.
-    ///
-    /// Mirrors Elm's `chompIfEnd`:
-    /// ```haskell
-    /// chompIfEnd start branches =
-    ///   do  Space.chompAndCheckIndent E.IfSpace E.IfIndentCondition
-    ///       (condition, condEnd) <- specialize E.IfCondition expression
-    ///       Space.checkIndent condEnd E.IfIndentThen
-    ///       Keyword.then_ E.IfThen
-    ///       Space.chompAndCheckIndent E.IfSpace E.IfIndentThenBranch
-    ///       (thenBranch, thenEnd) <- specialize E.IfThenBranch expression
-    ///       Space.checkIndent thenEnd E.IfIndentElse
-    ///       Keyword.else_ E.IfElse
-    ///       Space.chompAndCheckIndent E.IfSpace E.IfIndentElseBranch
-    ///       let newBranches = (condition, thenBranch) : branches
-    ///       oneOf E.IfElseBranchStart
-    ///         [ do  Keyword.if_ E.IfElseBranchStart
-    ///               chompIfEnd start newBranches
-    ///         , do  (elseBranch, elseEnd) <- specialize E.IfElseBranch expression
-    ///               let ifExpr = Src.If (reverse newBranches) elseBranch
-    ///               return (A.at start elseEnd ifExpr, elseEnd)
-    ///         ]
-    /// ```
-    fn chomp_if_end(
-        &mut self,
-        start: Position,
-        mut branches: Vec<&'a IfBranch<'a>>,
-    ) -> Result<(&'a Located<Expr<'a>>, Position), If<'a>> {
-        // Parse condition
-        self.chomp_and_check_indent(If::Space, If::IndentCondition)?;
-        let (condition, cond_end) = self.if_condition()?;
-
-        // Parse `then`
-        self.check_indent(cond_end.line, cond_end.column, If::IndentThen)?;
-        self.keyword_then(If::Then)?;
-
-        // Parse then branch
-        self.chomp_and_check_indent(If::Space, If::IndentThenBranch)?;
-        let (then_branch, then_end) = self.if_then_branch()?;
-
-        // Parse `else`
-        self.check_indent(then_end.line, then_end.column, If::IndentElse)?;
-        self.keyword_else(If::Else)?;
-
-        // Create the new branch
-        let branch = self.bump.alloc(IfBranch {
-            condition,
-            then_branch,
-        });
-        branches.push(branch);
-
-        // Parse else branch: either `else if ...` or final else expression
-        self.chomp_and_check_indent(If::Space, If::IndentElseBranch)?;
-
-        // Clone for second closure
-        let branches_for_else = branches.clone();
-
-        self.one_of(
-            If::ElseBranchStart,
-            vec![
-                // `else if ...` - continue the chain
-                Box::new(|p: &mut Parser<'a>| {
-                    p.keyword_if(If::ElseBranchStart)?;
-                    p.chomp_if_end(start, branches)
-                }),
-                // Final else expression
-                Box::new(|p: &mut Parser<'a>| {
-                    let (else_branch, else_end) = p.if_else_branch()?;
-
-                    // Convert branches to bump slice
-                    // Note: Elm reverses because it uses `:` (prepend), we use push (append)
-                    // so our branches are already in correct order
-                    let mut branch_vec: BumpVec<'a, &'a IfBranch<'a>> = BumpVec::new_in(p.bump);
-                    for b in branches_for_else {
-                        branch_vec.push(b);
-                    }
-                    let branches_slice = branch_vec.into_bump_slice();
-
-                    let if_expr = Expr::If {
-                        branches: branches_slice,
-                        final_else: else_branch,
-                    };
-
-                    Ok((
-                        p.alloc(Located::at(Region::new(start, else_end), if_expr)),
-                        else_end,
-                    ))
-                }),
-            ],
-        )
-    }
-
-    /// Parse condition expression in an if.
-    fn if_condition(&mut self) -> Result<(&'a Located<Expr<'a>>, Position), If<'a>> {
-        self.specialize(
-            |bump, e, r, c| If::Condition(bump.alloc(e), r, c),
-            |p| p.expression(),
-        )
-    }
-
-    /// Parse then branch expression in an if.
-    fn if_then_branch(&mut self) -> Result<(&'a Located<Expr<'a>>, Position), If<'a>> {
-        self.specialize(
-            |bump, e, r, c| If::ThenBranch(bump.alloc(e), r, c),
-            |p| p.expression(),
-        )
-    }
-
-    /// Parse else branch expression in an if.
-    fn if_else_branch(&mut self) -> Result<(&'a Located<Expr<'a>>, Position), If<'a>> {
-        self.specialize(
-            |bump, e, r, c| If::ElseBranch(bump.alloc(e), r, c),
-            |p| p.expression(),
-        )
+    /// The branch list, at the first condition. Builds the node here so the
+    /// region can end at the last branch's `}`.
+    fn if_body(&mut self, start: Position) -> Result<&'a Located<Expr<'a>>, error::If<'a>> {
+        let mut branches = BumpVec::new_in(self.bump);
+        let mut final_else = None;
+        let mut end;
+        loop {
+            self.chomp();
+            let condition = self.specialize(
+                |bump, e, row, col| error::If::Condition(bump.alloc(e), row, col),
+                |p| p.with_record_ctor(false, |p| p.expression()),
+            )?;
+            // `expression()` chomped; an Elm-style `then` sits right here.
+            if self.peek_keyword(b"then") {
+                let (row, col) = self.position();
+                return Err(error::If::ThenKeyword(row, col));
+            }
+            let body = self.specialize(
+                |bump, e, row, col| error::If::Then(bump.alloc(e), row, col),
+                |p| p.with_record_ctor(true, |p| p.block()),
+            )?;
+            end = body.region.end;
+            branches.push(IfBranch { condition, body });
+            // `block()` chomped, so `else` on the next line is visible too.
+            if !self.peek_keyword(b"else") {
+                break;
+            }
+            self.advance_by(4);
+            self.chomp();
+            if self.peek_keyword(b"if") {
+                self.advance_by(2);
+                continue;
+            }
+            if self.peek() != Some(b'{') {
+                let (row, col) = self.position();
+                return Err(error::If::ElseBranchStart(row, col));
+            }
+            let block = self.specialize(
+                |bump, e, row, col| error::If::Else(bump.alloc(e), row, col),
+                |p| p.with_record_ctor(true, |p| p.block()),
+            )?;
+            end = block.region.end;
+            final_else = Some(block);
+            break;
+        }
+        Ok(self.alloc(Located::at(
+            Region::new(start, end),
+            Expr::If {
+                branches: branches.into_bump_slice(),
+                final_else,
+            },
+        )))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::expression::{assert_expression_snapshot, assert_indented_expression_snapshot};
+    use super::super::{assert_expression_error_snapshot, assert_expression_snapshot};
 
     #[test]
-    fn if_simple() {
-        assert_expression_snapshot!("if True then 1 else 2");
+    fn if_no_else() {
+        assert_expression_snapshot!("if ready { go() }");
     }
 
     #[test]
-    fn if_with_vars() {
-        assert_expression_snapshot!("if x then y else z");
+    fn if_else() {
+        assert_expression_snapshot!("if a { 1 } else { 2 }");
     }
 
     #[test]
     fn if_else_if() {
-        assert_expression_snapshot!("if a then 1 else if b then 2 else 3");
+        assert_expression_snapshot!("if a { 1 } else if b { 2 }");
+    }
+
+    #[test]
+    fn if_else_if_else() {
+        assert_expression_snapshot!("if a { 1 } else if b { 2 } else { 3 }");
     }
 
     #[test]
     fn if_multiline() {
-        assert_indented_expression_snapshot!(
+        assert_expression_snapshot!(
             r#"
-            if condition then
-                trueBranch
-            else
-                falseBranch
+            if n < 0 {
+                "negative"
+            } else if n == 0 {
+                "zero"
+            } else {
+                "positive"
+            }
         "#
         );
     }
 
     #[test]
-    fn if_nested_condition() {
-        assert_expression_snapshot!("if f x then 1 else 2");
-    }
-
-    #[test]
-    fn if_nested_branches() {
-        assert_expression_snapshot!("if a then f x else g y");
-    }
-
-    #[test]
-    fn if_else_if_multiline() {
-        assert_indented_expression_snapshot!(
+    fn if_else_next_line() {
+        assert_expression_snapshot!(
             r#"
-            if a then
+            if a {
                 1
-            else if b then
+            }
+            else {
                 2
-            else
-                3
+            }
         "#
         );
+    }
+
+    #[test]
+    fn if_condition_call() {
+        assert_expression_snapshot!("if isReady(x) { go() }");
+    }
+
+    #[test]
+    fn if_condition_path_no_record_ctor() {
+        assert_expression_snapshot!("if s == Shape::Empty { 1 }");
+    }
+
+    #[test]
+    fn if_condition_parenthesized_record_ctor() {
+        assert_expression_snapshot!("if (s == Shape::Rect { width: 1 }) { 2 }");
+    }
+
+    #[test]
+    fn if_nested() {
+        assert_expression_snapshot!("if a { if b { 1 } else { 2 } } else { 3 }");
+    }
+
+    #[test]
+    fn if_block_tail_values() {
+        assert_expression_snapshot!(
+            r#"
+            if a {
+                let x = 1
+                x
+            } else {
+                let y = 2
+                y
+            }
+        "#
+        );
+    }
+
+    #[test]
+    fn error_missing_block() {
+        assert_expression_error_snapshot!("if x");
+    }
+
+    #[test]
+    fn error_then_keyword() {
+        assert_expression_error_snapshot!("if x then y else z");
+    }
+
+    #[test]
+    fn error_else_dangling() {
+        assert_expression_error_snapshot!("if x { 1 } else");
+    }
+
+    #[test]
+    fn error_condition() {
+        assert_expression_error_snapshot!("if else { 1 }");
     }
 }

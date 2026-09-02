@@ -1,0 +1,120 @@
+---
+source: crates/alder-parse/src/expression/path.rs
+description: "Shape::Rect { width: 1, height: 2 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 36,
+        },
+    },
+    value: RecordCtor {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                    },
+                    value: "Shape",
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                    },
+                    value: "Rect",
+                },
+            ],
+        },
+        fields: [
+            Field {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 20,
+                        },
+                    },
+                    value: "width",
+                },
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 22,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 1.0,
+                                text: "1",
+                            },
+                        ),
+                    },
+                ),
+            },
+            Field {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 25,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 31,
+                        },
+                    },
+                    value: "height",
+                },
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 33,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 34,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 2.0,
+                                text: "2",
+                            },
+                        ),
+                    },
+                ),
+            },
+        ],
+    },
+}

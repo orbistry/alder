@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/mod.rs
-description: "Code:\n\n-42"
+description: "-1"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 4,
+            column: 3,
         },
     },
     value: Negate(
@@ -22,11 +22,14 @@ Located {
                 },
                 end: Position {
                     line: 1,
-                    column: 4,
+                    column: 3,
                 },
             },
-            value: Int(
-                42,
+            value: Number(
+                NumberLit {
+                    value: 1.0,
+                    text: "1",
+                },
             ),
         },
     ),

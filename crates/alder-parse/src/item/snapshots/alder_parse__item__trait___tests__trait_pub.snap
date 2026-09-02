@@ -1,0 +1,157 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "pub trait Show[a] {\n    fn show(value: a) -> String\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 3,
+            column: 2,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Pub(
+            Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+        ),
+        kind: Trait(
+            TraitDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                    },
+                    value: "Show",
+                },
+                params: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                        },
+                        value: "a",
+                    },
+                ],
+                where_clause: [],
+                items: [
+                    Fn(
+                        FnDecl {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 8,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 12,
+                                    },
+                                },
+                                value: "show",
+                            },
+                            params: [
+                                Param {
+                                    mutable: None,
+                                    pattern: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 13,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 18,
+                                            },
+                                        },
+                                        value: Var(
+                                            "value",
+                                        ),
+                                    },
+                                    annotation: Some(
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 2,
+                                                    column: 20,
+                                                },
+                                                end: Position {
+                                                    line: 2,
+                                                    column: 21,
+                                                },
+                                            },
+                                            value: Var {
+                                                name: "a",
+                                                args: [],
+                                            },
+                                        },
+                                    ),
+                                },
+                            ],
+                            ret: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 26,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 32,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 2,
+                                                            column: 26,
+                                                        },
+                                                        end: Position {
+                                                            line: 2,
+                                                            column: 32,
+                                                        },
+                                                    },
+                                                    value: "String",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            ),
+                            where_clause: [],
+                            body: None,
+                        },
+                    ),
+                ],
+            },
+        ),
+    },
+}

@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: import ~
+---
+Import(
+    RootOnly(
+        1,
+        8,
+    ),
+    1,
+    1,
+)

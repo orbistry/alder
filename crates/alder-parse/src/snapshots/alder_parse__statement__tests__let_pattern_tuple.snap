@@ -1,0 +1,82 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "let (a, b) = pair"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 18,
+        },
+    },
+    value: Let(
+        LetDecl {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                },
+                value: Tuple {
+                    first: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 7,
+                            },
+                        },
+                        value: Var(
+                            "a",
+                        ),
+                    },
+                    second: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                        },
+                        value: Var(
+                            "b",
+                        ),
+                    },
+                    rest: [],
+                },
+            },
+            annotation: None,
+            value: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 18,
+                    },
+                },
+                value: Var(
+                    "pair",
+                ),
+            },
+        },
+    ),
+}

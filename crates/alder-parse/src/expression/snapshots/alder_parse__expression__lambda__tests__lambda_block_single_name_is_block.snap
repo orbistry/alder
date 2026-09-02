@@ -1,0 +1,68 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: "fn() { x }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 11,
+        },
+    },
+    value: Lambda(
+        Lambda {
+            params: [],
+            ret: None,
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                },
+                value: Block(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                        },
+                        value: Block {
+                            stmts: [],
+                            tail: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 8,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 9,
+                                        },
+                                    },
+                                    value: Var(
+                                        "x",
+                                    ),
+                                },
+                            ),
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

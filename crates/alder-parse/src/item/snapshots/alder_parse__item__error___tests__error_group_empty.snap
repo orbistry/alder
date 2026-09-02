@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/item/error_.rs
+description: "error Never {}"
+---
+ErrorDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: "Never",
+    },
+    tags: [],
+}

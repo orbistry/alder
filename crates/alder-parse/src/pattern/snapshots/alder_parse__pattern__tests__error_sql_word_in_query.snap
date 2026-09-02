@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: select
+---
+SqlKeyword(
+    Select,
+    1,
+    1,
+)

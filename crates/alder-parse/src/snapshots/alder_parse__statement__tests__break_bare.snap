@@ -1,0 +1,19 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: break
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 6,
+        },
+    },
+    value: Break(
+        None,
+    ),
+}

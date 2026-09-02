@@ -1,0 +1,60 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn next(it: i)"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: "next",
+    },
+    params: [
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                },
+                value: Var(
+                    "it",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                    },
+                    value: Var {
+                        name: "i",
+                        args: [],
+                    },
+                },
+            ),
+        },
+    ],
+    ret: None,
+    where_clause: [],
+    body: None,
+}

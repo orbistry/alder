@@ -1,0 +1,84 @@
+---
+source: crates/alder-parse/src/item/let_.rs
+description: let mut count = state(0)
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 25,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Let(
+            LetDecl {
+                mutable: Some(
+                    Region {
+                        start: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                ),
+                pattern: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                    },
+                    value: Var(
+                        "count",
+                    ),
+                },
+                annotation: None,
+                value: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 25,
+                        },
+                    },
+                    value: State(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 23,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 24,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 0.0,
+                                    text: "0",
+                                },
+                            ),
+                        },
+                    ),
+                },
+            },
+        ),
+    },
+}

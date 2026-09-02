@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "{ let x = 1"
+---
+End(
+    1,
+    12,
+)

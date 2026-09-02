@@ -1,0 +1,96 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: "pub import ~/leaf.{ someFunc }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 31,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Pub(
+            Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+        ),
+        kind: Import(
+            Import {
+                path: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                    },
+                    value: ModulePath {
+                        root: Local(
+                            Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 13,
+                                },
+                            },
+                        ),
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 18,
+                                    },
+                                },
+                                value: "leaf",
+                            },
+                        ],
+                    },
+                },
+                tail: Names(
+                    [
+                        ImportName {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 21,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 29,
+                                    },
+                                },
+                                value: "someFunc",
+                            },
+                            alias: None,
+                        },
+                    ],
+                ),
+            },
+        ),
+    },
+}

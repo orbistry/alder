@@ -1,0 +1,66 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "{\n    x\n    (y)\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Block {
+        stmts: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 6,
+                    },
+                },
+                value: Expr(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 6,
+                            },
+                        },
+                        value: Var(
+                            "x",
+                        ),
+                    },
+                ),
+            },
+        ],
+        tail: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 8,
+                    },
+                },
+                value: Var(
+                    "y",
+                ),
+            },
+        ),
+    },
+}

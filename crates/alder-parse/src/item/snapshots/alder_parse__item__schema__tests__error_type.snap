@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S { name: 5 }"
+---
+Type(
+    Start(
+        1,
+        18,
+    ),
+    1,
+    18,
+)

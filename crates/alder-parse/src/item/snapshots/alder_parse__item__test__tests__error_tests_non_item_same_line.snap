@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "tests { let x = 1 42 }"
+---
+Tests(
+    End(
+        1,
+        19,
+    ),
+    1,
+    1,
+)

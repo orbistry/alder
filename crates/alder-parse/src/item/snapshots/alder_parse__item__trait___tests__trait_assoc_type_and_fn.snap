@@ -1,0 +1,176 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Iterator[i] {\n    type Item\n    fn next(it: i) -> Option[Item]\n}\n"
+---
+TraitDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 15,
+            },
+        },
+        value: "Iterator",
+    },
+    params: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 16,
+                },
+                end: Position {
+                    line: 1,
+                    column: 17,
+                },
+            },
+            value: "i",
+        },
+    ],
+    where_clause: [],
+    items: [
+        AssocType(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 10,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 14,
+                    },
+                },
+                value: "Item",
+            },
+        ),
+        Fn(
+            FnDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 12,
+                        },
+                    },
+                    value: "next",
+                },
+                params: [
+                    Param {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 13,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 15,
+                                },
+                            },
+                            value: Var(
+                                "it",
+                            ),
+                        },
+                        annotation: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 17,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 18,
+                                    },
+                                },
+                                value: Var {
+                                    name: "i",
+                                    args: [],
+                                },
+                            },
+                        ),
+                    },
+                ],
+                ret: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 35,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 23,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 29,
+                                            },
+                                        },
+                                        value: "Option",
+                                    },
+                                ],
+                            },
+                            args: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 30,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 34,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 30,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 34,
+                                                        },
+                                                    },
+                                                    value: "Item",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ),
+                where_clause: [],
+                body: None,
+            },
+        ),
+    ],
+}

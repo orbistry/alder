@@ -1,0 +1,70 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<style>{css}</style>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 21,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: Tag(
+                        "style",
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 8,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                        },
+                        value: Hole(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 9,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 12,
+                                    },
+                                },
+                                value: Var(
+                                    "css",
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

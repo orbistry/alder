@@ -1,103 +1,89 @@
-//! Record pattern parsing for Alder.
+//! Record patterns `{ a, b: p, .. }` — shared with `CtorRecord`.
 //!
-//! Ported from Elm's `Pattern.record`.
+//! `{}`, `{ x }`, `{ x, y: p }`, `{ x, .. }`. Each field is a shorthand
+//! binding or `name: pattern`; `..` takes no name and must be last (a
+//! trailing comma after it is fine): `,` followed by anything but `}` is
+//! `RestNotLast`, anything else after `..` (`{ ..r }`) is `End`. Trailing
+//! commas are accepted (§10.8).
 //!
-//! Handles: `{}`, `{ x }`, `{ x, y, z }`
+//! See docs/parser-internals.md §5.14.
+// OWNER: pattern/record.rs (Wave 1)
 
-use alder_region::{Located, Position};
-use alder_source::Pattern;
+use alder_region::Region;
+use alder_source::FieldPattern;
 use bumpalo::collections::Vec as BumpVec;
 
-use crate::Parser;
-use crate::error::{self, PRecord};
+use crate::error::PRecord;
+use crate::{Parser, error};
 
 impl<'a> Parser<'a> {
-    /// Parse a record pattern: `{ x, y, z }`
-    pub(super) fn pattern_record(
+    /// After `{`. Consumes the closing `}` and nothing after it.
+    pub(super) fn pattern_record_fields(
         &mut self,
-        start: Position,
-    ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
-        self.in_context(
-            |bump, record_err, row, col| error::Pattern::Record(bump.alloc(record_err), row, col),
-            |p| p.word1(0x7B, error::Pattern::Start),
-            |p| p.pattern_record_body(start),
-        )
-    }
-
-    /// Parse record pattern body after `{`.
-    fn pattern_record_body(
-        &mut self,
-        start: Position,
-    ) -> Result<&'a Located<Pattern<'a>>, PRecord> {
-        self.chomp_and_check_indent(PRecord::Space, PRecord::IndentOpen)?;
-
-        self.one_of(
-            PRecord::Open,
-            vec![
-                // Non-empty: first field
-                Box::new(|p: &mut Parser<'a>| {
-                    let field_start = p.get_position();
-                    let name = p.lower_name(PRecord::Field)?;
-                    let field = p.add_end(field_start, name);
-
-                    // Check indent after field name (don't chomp - that happens in the helper)
-                    let (end_row, end_col) = p.position();
-                    p.check_indent(end_row, end_col, PRecord::IndentEnd)?;
-
-                    let mut fields: BumpVec<'a, &'a Located<&'a str>> = BumpVec::new_in(p.bump);
-                    fields.push(field);
-                    p.pattern_record_help(&mut fields)?;
-
-                    let slice = fields.into_bump_slice();
-                    Ok(p.add_end(start, Pattern::Record(slice)))
-                }),
-                // Empty record: `{}`
-                Box::new(|p: &mut Parser<'a>| {
-                    p.word1(0x7D, PRecord::Open)?;
-                    let empty: &'a [&'a Located<&'a str>] = &[];
-                    Ok(p.add_end(start, Pattern::Record(empty)))
-                }),
-            ],
-        )
-    }
-
-    /// Parse remaining record pattern fields.
-    fn pattern_record_help(
-        &mut self,
-        fields: &mut BumpVec<'a, &'a Located<&'a str>>,
-    ) -> Result<(), PRecord> {
+    ) -> Result<(&'a [FieldPattern<'a>], Option<Region>), error::PRecord<'a>> {
+        self.chomp();
+        let mut fields = BumpVec::new_in(self.bump);
         loop {
-            // Chomp whitespace before checking for comma or brace
-            self.chomp(PRecord::Space)?;
-
-            let done = self.one_of(
-                PRecord::End,
-                vec![
-                    // Comma - another field
-                    Box::new(|p: &mut Parser<'a>| {
-                        p.word1(0x2C, PRecord::End)?;
-                        p.chomp_and_check_indent(PRecord::Space, PRecord::IndentField)?;
-
-                        let field_start = p.get_position();
-                        let name = p.lower_name(PRecord::Field)?;
-                        let field = p.add_end(field_start, name);
-                        fields.push(field);
-
-                        // Check indent after field (don't chomp - that happens next iteration)
-                        let (end_row, end_col) = p.position();
-                        p.check_indent(end_row, end_col, PRecord::IndentEnd)?;
-                        Ok(false)
-                    }),
-                    // Close brace
-                    Box::new(|p: &mut Parser<'a>| {
-                        p.word1(0x7D, PRecord::End)?;
-                        Ok(true)
-                    }),
-                ],
-            )?;
-
-            if done {
-                return Ok(());
+            match self.peek() {
+                Some(b'}') => {
+                    self.advance();
+                    return Ok((fields.into_bump_slice(), None));
+                }
+                Some(b'.') if self.peek_at(1) == Some(b'.') => {
+                    let rest_start = self.get_position();
+                    self.advance_by(2);
+                    let rest = Region::new(rest_start, self.get_position());
+                    self.chomp();
+                    match self.peek() {
+                        Some(b'}') => {
+                            self.advance();
+                            return Ok((fields.into_bump_slice(), Some(rest)));
+                        }
+                        Some(b',') => {
+                            self.advance();
+                            self.chomp();
+                            if self.peek() == Some(b'}') {
+                                self.advance();
+                                return Ok((fields.into_bump_slice(), Some(rest)));
+                            }
+                            let (row, col) = self.position();
+                            return Err(PRecord::RestNotLast(row, col));
+                        }
+                        _ => {
+                            let (row, col) = self.position();
+                            return Err(PRecord::End(row, col));
+                        }
+                    }
+                }
+                _ => {
+                    let name = self.located_lower(PRecord::Field)?;
+                    self.chomp();
+                    let pattern = if self.peek() == Some(b':') {
+                        self.advance();
+                        self.chomp();
+                        Some(self.specialize(
+                            |bump, e, row, col| PRecord::Pattern(bump.alloc(e), row, col),
+                            |p| p.pattern(),
+                        )?)
+                    } else {
+                        None
+                    };
+                    fields.push(FieldPattern { name, pattern });
+                    match self.peek() {
+                        Some(b',') => {
+                            self.advance();
+                            self.chomp();
+                        }
+                        Some(b'}') => {
+                            self.advance();
+                            return Ok((fields.into_bump_slice(), None));
+                        }
+                        _ => {
+                            let (row, col) = self.position();
+                            return Err(PRecord::End(row, col));
+                        }
+                    }
+                }
             }
         }
     }
@@ -113,33 +99,47 @@ mod tests {
     }
 
     #[test]
-    fn single() {
+    fn single_shorthand() {
         assert_pattern_snapshot!("{ x }");
     }
 
     #[test]
-    fn multiple() {
-        assert_pattern_snapshot!("{ x, y, z }");
+    fn multiple_shorthand() {
+        assert_pattern_snapshot!("{ x, y }");
     }
 
     #[test]
-    fn multiline() {
-        assert_pattern_snapshot!(
-            "{
-                x,
-                y,
-                z
-            }"
-        );
+    fn renamed_field() {
+        assert_pattern_snapshot!("{ x: a }");
+    }
+
+    #[test]
+    fn nested_pattern() {
+        assert_pattern_snapshot!("{ point: (x, y) }");
+    }
+
+    #[test]
+    fn rest() {
+        assert_pattern_snapshot!("{ x, .. }");
+    }
+
+    #[test]
+    fn rest_trailing_comma() {
+        assert_pattern_snapshot!("{ x, .., }");
+    }
+
+    #[test]
+    fn error_rest_not_last() {
+        assert_pattern_error_snapshot!("{ .., x }");
+    }
+
+    #[test]
+    fn error_rest_named() {
+        assert_pattern_error_snapshot!("{ ..r }");
     }
 
     #[test]
     fn error_unclosed() {
         assert_pattern_error_snapshot!("{ x, y");
-    }
-
-    #[test]
-    fn error_trailing_comma() {
-        assert_pattern_error_snapshot!("{ x, y, }");
     }
 }

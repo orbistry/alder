@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/pattern/record.rs
-description: "Code:\n\n{}"
+description: "{}"
 ---
 Located {
     region: Region {
@@ -13,7 +13,8 @@ Located {
             column: 3,
         },
     },
-    value: Record(
-        [],
-    ),
+    value: Record {
+        fields: [],
+        rest: None,
+    },
 }

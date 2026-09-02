@@ -1,0 +1,70 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Color { Red, Green, Blue }"
+---
+EnumDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 11,
+            },
+        },
+        value: "Color",
+    },
+    params: [],
+    variants: [
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                },
+                value: "Red",
+            },
+            payload: Unit,
+        },
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 24,
+                    },
+                },
+                value: "Green",
+            },
+            payload: Unit,
+        },
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 26,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 30,
+                    },
+                },
+                value: "Blue",
+            },
+            payload: Unit,
+        },
+    ],
+}

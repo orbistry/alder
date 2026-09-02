@@ -1,0 +1,56 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<a>mail a@b.com or @iffy</a>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 29,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                    },
+                    value: Tag(
+                        "a",
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 25,
+                            },
+                        },
+                        value: Text(
+                            "mail a@b.com or @iffy",
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

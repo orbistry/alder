@@ -1,0 +1,101 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Map[String, Number,]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 21,
+        },
+    },
+    value: Named {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: "Map",
+                },
+            ],
+        },
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 5,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 11,
+                                    },
+                                },
+                                value: "String",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 19,
+                                    },
+                                },
+                                value: "Number",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+        ],
+    },
+}

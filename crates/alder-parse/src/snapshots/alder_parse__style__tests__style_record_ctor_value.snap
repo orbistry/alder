@@ -1,0 +1,122 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { border: Border::Solid { width: 1 } }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 45,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                        },
+                        value: Ident(
+                            "border",
+                        ),
+                    },
+                    value: Expr(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 17,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 43,
+                                },
+                            },
+                            value: RecordCtor {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 17,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 23,
+                                                },
+                                            },
+                                            value: "Border",
+                                        },
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 25,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 30,
+                                                },
+                                            },
+                                            value: "Solid",
+                                        },
+                                    ],
+                                },
+                                fields: [
+                                    Field {
+                                        name: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 33,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 38,
+                                                },
+                                            },
+                                            value: "width",
+                                        },
+                                        value: Some(
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 40,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 41,
+                                                    },
+                                                },
+                                                value: Number(
+                                                    NumberLit {
+                                                        value: 1.0,
+                                                        text: "1",
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ],
+                            },
+                        },
+                    ),
+                },
+            ],
+        },
+    ),
+}

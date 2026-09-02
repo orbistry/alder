@@ -1,0 +1,95 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: "xs\n    |> f\n    |> g\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 3,
+            column: 9,
+        },
+    },
+    value: BinOps {
+        operands: [
+            BinOpOperand {
+                expr: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                    },
+                    value: Var(
+                        "xs",
+                    ),
+                },
+                op: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 7,
+                        },
+                    },
+                    value: Pipe,
+                },
+            },
+            BinOpOperand {
+                expr: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 9,
+                        },
+                    },
+                    value: Var(
+                        "f",
+                    ),
+                },
+                op: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 7,
+                        },
+                    },
+                    value: Pipe,
+                },
+            },
+        ],
+        last: Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 8,
+                },
+                end: Position {
+                    line: 3,
+                    column: 9,
+                },
+            },
+            value: Var(
+                "g",
+            ),
+        },
+    },
+}

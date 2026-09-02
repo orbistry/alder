@@ -1,9 +1,9 @@
 # Alder Language
 
 **Status: current direction, everything provisional.** This records the
-design decisions from the 2026-09-01 design session. Nothing here is
-implemented yet; the parser still accepts Elm-style syntax. Where a
-decision is open it is marked **Open**.
+design decisions from the 2026-09-01 design session. The parser
+implements this syntax (M1); nothing past parsing is implemented yet.
+Where a decision is open it is marked **Open**.
 
 Alder is a fork of the Elm compiler (ported to Rust) that compiles to
 JavaScript. The language is a deliberate mix of OCaml, JavaScript, and
@@ -156,6 +156,15 @@ let found = loop {
 }
 ```
 
+### Layout rules
+
+Items and statements are separated by line breaks. `;` is never a
+separator, and two items or two statements on one line is an error.
+Comma-separated members (enum variants, match arms, record fields,
+parameters) are separated by their commas and may share a line. A record
+constructor needs its `{` on the same line as the path
+(`Shape::Rect { width: 1 }`); a `{` on the next line starts a block.
+
 ### Pinning
 
 `^` means "use the existing value here" wherever a position would
@@ -268,7 +277,7 @@ impl Show[User] {
 }
 
 pub trait Functor[f] {
-    fn map(fa: f[a], g: fn(a) -> b) f[b]
+    fn map(fa: f[a], g: fn(a) -> b) -> f[b]
 }
 
 impl Functor[Option] {
@@ -289,7 +298,16 @@ fn describe(xs: Array[a]) -> String where a: Show {
   may constrain their own parameters the same way
   (`trait Ord[a] where a: Eq`), and impls too
   (`impl Show[Cache[k, v]] where k: Show, v: Show`).
-- Associated types: `trait Iterator[i] { type Item; fn next(it: i) -> Option[Item] }`.
+- Associated types are declared one item per line, like every other
+  trait item:
+
+  ```alder
+  trait Iterator[i] {
+      type Item
+      fn next(it: i) -> Option[Item]
+  }
+  ```
+
 - Default method bodies are allowed in the trait.
 - Rust's orphan rule applies: an `impl` must live in the package that
   defines the trait or the type.
@@ -403,6 +421,12 @@ fn main() {
 - Providers are resolved lexically through the call graph and, in the web
   runtime, through the render tree, so SSR gets per-request isolation.
 - Tests swap providers with `provide Db = FakeDb.new() { ... }`.
+- **Open (M2):** `provide … { }` is a statement in the M1 parser, so a
+  block ending in it has no value. `web.md`'s `handle` hook ends its body
+  with `provide Session = session { resolve(event).await }` and expects
+  that to be the function's `Task[Response]`. M2 either promotes
+  `provide` to an expression whose value is its body's value, or `handle`
+  writes an explicit `return` / tail.
 
 ## Numbers, strings, collections
 
@@ -519,7 +543,7 @@ every other build.
 
 ```alder
 tests {
-    import { fakeDb } from @alder/test
+    import @alder/test.{ fakeDb }
 
     test "adds numbers" {
         assert add(1, 2) == 3
@@ -565,3 +589,4 @@ fn parseJson(s: String) -> Result[Json, [:syntax(String)]]
 - Entry-point scheduler and the fiber API surface.
 - Macro hygiene and the compile-time API surface.
 - Enum and record runtime representation (see `runtime.md`).
+- Whether `provide … { }` is a statement or an expression (M2).

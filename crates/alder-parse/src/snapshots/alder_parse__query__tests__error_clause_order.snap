@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select * from users orderBy users.name where users.active }"
+---
+Query(
+    ClauseOrder(
+        Where,
+        1,
+        48,
+    ),
+    1,
+    1,
+)

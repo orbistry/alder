@@ -1,0 +1,17 @@
+---
+source: crates/alder-parse/src/item/let_.rs
+description: "let x = \"oops"
+---
+Let(
+    Body(
+        String(
+            Endless,
+            1,
+            14,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

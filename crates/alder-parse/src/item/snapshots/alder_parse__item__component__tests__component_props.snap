@@ -1,0 +1,165 @@
+---
+source: crates/alder-parse/src/item/component.rs
+description: "component UserCard(props: { id: Id }) { props.id }"
+---
+ComponentDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 11,
+            },
+            end: Position {
+                line: 1,
+                column: 19,
+            },
+        },
+        value: "UserCard",
+    },
+    params: [
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 20,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 25,
+                    },
+                },
+                value: Var(
+                    "props",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 27,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 37,
+                        },
+                    },
+                    value: Record {
+                        fields: [
+                            FieldType {
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 29,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 31,
+                                        },
+                                    },
+                                    value: "id",
+                                },
+                                optional: None,
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 33,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 35,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 33,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 35,
+                                                        },
+                                                    },
+                                                    value: "Id",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            },
+                        ],
+                        ext: None,
+                    },
+                },
+            ),
+        },
+    ],
+    body: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 39,
+            },
+            end: Position {
+                line: 1,
+                column: 51,
+            },
+        },
+        value: Block {
+            stmts: [],
+            tail: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 41,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 49,
+                        },
+                    },
+                    value: Access {
+                        record: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 41,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 46,
+                                },
+                            },
+                            value: Var(
+                                "props",
+                            ),
+                        },
+                        field: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 47,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 49,
+                                },
+                            },
+                            value: "id",
+                        },
+                    },
+                },
+            ),
+        },
+    },
+}

@@ -1,0 +1,36 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Marker[a] {}"
+---
+TraitDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 13,
+            },
+        },
+        value: "Marker",
+    },
+    params: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 14,
+                },
+                end: Position {
+                    line: 1,
+                    column: 15,
+                },
+            },
+            value: "a",
+        },
+    ],
+    where_clause: [],
+    items: [],
+}

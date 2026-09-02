@@ -1,0 +1,77 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: count += 1
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 11,
+        },
+    },
+    value: Assign {
+        place: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 6,
+                },
+            },
+            value: Place {
+                root: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                    },
+                    value: "count",
+                },
+                steps: [],
+            },
+        },
+        op: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 9,
+                },
+            },
+            value: Add,
+        },
+        value: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 10,
+                },
+                end: Position {
+                    line: 1,
+                    column: 11,
+                },
+            },
+            value: Number(
+                NumberLit {
+                    value: 1.0,
+                    text: "1",
+                },
+            ),
+        },
+    },
+}

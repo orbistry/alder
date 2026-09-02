@@ -1,0 +1,77 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "grid[i][j]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 11,
+        },
+    },
+    value: Index {
+        target: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Index {
+                target: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Var(
+                        "grid",
+                    ),
+                },
+                index: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: Var(
+                        "i",
+                    ),
+                },
+            },
+        },
+        index: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 9,
+                },
+                end: Position {
+                    line: 1,
+                    column: 10,
+                },
+            },
+            value: Var(
+                "j",
+            ),
+        },
+    },
+}

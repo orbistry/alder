@@ -1,0 +1,64 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`outer ${`inner ${x}`} done`"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 29,
+        },
+    },
+    value: Template(
+        [
+            Text(
+                "outer ",
+            ),
+            Expr(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 22,
+                        },
+                    },
+                    value: Template(
+                        [
+                            Text(
+                                "inner ",
+                            ),
+                            Expr(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 19,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 20,
+                                        },
+                                    },
+                                    value: Var(
+                                        "x",
+                                    ),
+                                },
+                            ),
+                        ],
+                    ),
+                },
+            ),
+            Text(
+                " done",
+            ),
+        ],
+    ),
+}

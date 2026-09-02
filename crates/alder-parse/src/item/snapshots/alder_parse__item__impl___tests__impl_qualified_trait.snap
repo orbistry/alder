@@ -1,0 +1,72 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Std::Show[User] {}"
+---
+ImplDecl {
+    trait_: Path {
+        segments: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                },
+                value: "Std",
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 15,
+                    },
+                },
+                value: "Show",
+            },
+        ],
+    },
+    args: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 16,
+                },
+                end: Position {
+                    line: 1,
+                    column: 20,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 20,
+                                },
+                            },
+                            value: "User",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    ],
+    where_clause: [],
+    items: [],
+}

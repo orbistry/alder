@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/pattern/ctor.rs
+description: Foo()
+---
+Ctor(
+    Arg(
+        Start(
+            1,
+            5,
+        ),
+        1,
+        5,
+    ),
+    1,
+    1,
+)

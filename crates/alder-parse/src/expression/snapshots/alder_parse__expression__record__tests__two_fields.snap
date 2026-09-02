@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/record.rs
-description: "Code:\n\n{ x = 1, y = 2 }"
+description: "{ x: 1, y: 2 }"
 ---
 Located {
     region: Region {
@@ -10,13 +10,13 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 17,
+            column: 15,
         },
     },
     value: Record(
         [
-            FieldAssign {
-                field: Located {
+            Field {
+                name: Located {
                     region: Region {
                         start: Position {
                             line: 1,
@@ -29,51 +29,61 @@ Located {
                     },
                     value: "x",
                 },
-                value: Located {
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 7,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 1.0,
+                                text: "1",
+                            },
+                        ),
+                    },
+                ),
+            },
+            Field {
+                name: Located {
                     region: Region {
                         start: Position {
                             line: 1,
-                            column: 7,
+                            column: 9,
                         },
                         end: Position {
-                            line: 1,
-                            column: 8,
-                        },
-                    },
-                    value: Int(
-                        1,
-                    ),
-                },
-            },
-            FieldAssign {
-                field: Located {
-                    region: Region {
-                        start: Position {
                             line: 1,
                             column: 10,
-                        },
-                        end: Position {
-                            line: 1,
-                            column: 11,
                         },
                     },
                     value: "y",
                 },
-                value: Located {
-                    region: Region {
-                        start: Position {
-                            line: 1,
-                            column: 14,
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 13,
+                            },
                         },
-                        end: Position {
-                            line: 1,
-                            column: 15,
-                        },
+                        value: Number(
+                            NumberLit {
+                                value: 2.0,
+                                text: "2",
+                            },
+                        ),
                     },
-                    value: Int(
-                        2,
-                    ),
-                },
+                ),
             },
         ],
     ),

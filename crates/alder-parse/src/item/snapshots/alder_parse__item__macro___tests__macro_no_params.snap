@@ -1,0 +1,51 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro now() { quote { Date.now() } }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 37,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Macro(
+            MacroDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: "now",
+                },
+                params: [],
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 36,
+                        },
+                    },
+                    value: " quote { Date.now() } ",
+                },
+            },
+        ),
+    },
+}

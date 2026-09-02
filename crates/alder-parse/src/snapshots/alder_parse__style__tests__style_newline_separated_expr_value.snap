@@ -1,0 +1,107 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style {\n    color: theme.text\n    padding: 8px\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 10,
+                            },
+                        },
+                        value: Ident(
+                            "color",
+                        ),
+                    },
+                    value: Expr(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 22,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 12,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 17,
+                                        },
+                                    },
+                                    value: Var(
+                                        "theme",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 18,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 22,
+                                        },
+                                    },
+                                    value: "text",
+                                },
+                            },
+                        },
+                    ),
+                },
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 12,
+                            },
+                        },
+                        value: Ident(
+                            "padding",
+                        ),
+                    },
+                    value: Dimension {
+                        number: NumberLit {
+                            value: 8.0,
+                            text: "8",
+                        },
+                        unit: "px",
+                    },
+                },
+            ],
+        },
+    ),
+}

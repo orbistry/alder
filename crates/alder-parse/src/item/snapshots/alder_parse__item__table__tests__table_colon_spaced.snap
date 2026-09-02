@@ -1,0 +1,67 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table t { id : integer() }"
+---
+TableDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: "t",
+    },
+    columns: [
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                },
+                value: "id",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 25,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                        },
+                        value: Var(
+                            "integer",
+                        ),
+                    },
+                    arguments: [],
+                },
+            },
+            modifiers: [],
+        },
+    ],
+}

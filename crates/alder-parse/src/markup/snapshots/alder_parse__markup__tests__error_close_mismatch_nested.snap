@@ -1,0 +1,22 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<div><p>x</div>"
+---
+Markup(
+    Child(
+        Element(
+            CloseMismatch {
+                expected: "p",
+                found: "div",
+                row: 1,
+                col: 12,
+            },
+            1,
+            6,
+        ),
+        1,
+        6,
+    ),
+    1,
+    1,
+)

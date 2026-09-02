@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/loop_.rs
+description: "state\n(0)\n"
+---
+State(
+    Open(
+        1,
+        6,
+    ),
+    1,
+    1,
+)

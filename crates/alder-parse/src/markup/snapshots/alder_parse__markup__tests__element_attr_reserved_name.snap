@@ -1,0 +1,121 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<Field name=\"password\" type=\"password\" />"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 42,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: Component(
+                        Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 2,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 7,
+                                        },
+                                    },
+                                    value: "Field",
+                                },
+                            ],
+                        },
+                    ),
+                },
+                attrs: [
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 12,
+                                },
+                            },
+                            value: "name",
+                        },
+                        value: Some(
+                            Str(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 13,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 23,
+                                        },
+                                    },
+                                    value: "password",
+                                },
+                            ),
+                        ),
+                    },
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 24,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 28,
+                                },
+                            },
+                            value: "type",
+                        },
+                        value: Some(
+                            Str(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 29,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 39,
+                                        },
+                                    },
+                                    value: "password",
+                                },
+                            ),
+                        ),
+                    },
+                ],
+                children: [],
+                self_closing: true,
+            },
+        ),
+    ),
+}

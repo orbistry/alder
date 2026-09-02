@@ -1,0 +1,79 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { hover: { color: red } }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 32,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                        },
+                        value: Ident(
+                            "hover",
+                        ),
+                    },
+                    value: Nested(
+                        Style {
+                            entries: [
+                                StyleEntry {
+                                    key: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 18,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 23,
+                                            },
+                                        },
+                                        value: Ident(
+                                            "color",
+                                        ),
+                                    },
+                                    value: Expr(
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 25,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 28,
+                                                },
+                                            },
+                                            value: Var(
+                                                "red",
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+        },
+    ),
+}

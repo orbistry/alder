@@ -1,0 +1,174 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<Chart data={{ x: 1 }}>{{ y }}</Chart>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 39,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: Component(
+                        Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 2,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 7,
+                                        },
+                                    },
+                                    value: "Chart",
+                                },
+                            ],
+                        },
+                    ),
+                },
+                attrs: [
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 12,
+                                },
+                            },
+                            value: "data",
+                        },
+                        value: Some(
+                            Expr(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 14,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 22,
+                                        },
+                                    },
+                                    value: Record(
+                                        [
+                                            Field {
+                                                name: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 16,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 17,
+                                                        },
+                                                    },
+                                                    value: "x",
+                                                },
+                                                value: Some(
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 19,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 20,
+                                                            },
+                                                        },
+                                                        value: Number(
+                                                            NumberLit {
+                                                                value: 1.0,
+                                                                text: "1",
+                                                            },
+                                                        ),
+                                                    },
+                                                ),
+                                            },
+                                        ],
+                                    ),
+                                },
+                            ),
+                        ),
+                    },
+                ],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 24,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 31,
+                            },
+                        },
+                        value: Hole(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 25,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 30,
+                                    },
+                                },
+                                value: Record(
+                                    [
+                                        Field {
+                                            name: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 27,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 28,
+                                                    },
+                                                },
+                                                value: "y",
+                                            },
+                                            value: None,
+                                        },
+                                    ],
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

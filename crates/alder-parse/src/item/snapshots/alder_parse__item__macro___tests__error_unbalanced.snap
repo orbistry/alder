@@ -1,0 +1,15 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro f(a) { (a] }"
+---
+Macro(
+    Body(
+        Unbalanced(
+            93,
+        ),
+        1,
+        16,
+    ),
+    1,
+    1,
+)

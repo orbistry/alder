@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/type_.rs
-description: "Code:\n\n(Int, String)"
+description: "(a, b)"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 14,
+            column: 7,
         },
     },
     value: Tuple {
@@ -22,21 +22,11 @@ Located {
                 },
                 end: Position {
                     line: 1,
-                    column: 5,
+                    column: 3,
                 },
             },
-            value: Type {
-                region: Region {
-                    start: Position {
-                        line: 1,
-                        column: 2,
-                    },
-                    end: Position {
-                        line: 1,
-                        column: 5,
-                    },
-                },
-                name: "Int",
+            value: Var {
+                name: "a",
                 args: [],
             },
         },
@@ -44,25 +34,15 @@ Located {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 7,
+                    column: 5,
                 },
                 end: Position {
                     line: 1,
-                    column: 13,
+                    column: 6,
                 },
             },
-            value: Type {
-                region: Region {
-                    start: Position {
-                        line: 1,
-                        column: 7,
-                    },
-                    end: Position {
-                        line: 1,
-                        column: 13,
-                    },
-                },
-                name: "String",
+            value: Var {
+                name: "b",
                 args: [],
             },
         },

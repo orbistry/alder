@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/type_.rs
-description: "Code:\n\n(Int, String, Bool)"
+description: "(String, Number, Bool)"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 20,
+            column: 23,
         },
     },
     value: Tuple {
@@ -22,21 +22,27 @@ Located {
                 },
                 end: Position {
                     line: 1,
-                    column: 5,
+                    column: 8,
                 },
             },
-            value: Type {
-                region: Region {
-                    start: Position {
-                        line: 1,
-                        column: 2,
-                    },
-                    end: Position {
-                        line: 1,
-                        column: 5,
-                    },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 2,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                            },
+                            value: "String",
+                        },
+                    ],
                 },
-                name: "Int",
                 args: [],
             },
         },
@@ -44,25 +50,31 @@ Located {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 7,
+                    column: 10,
                 },
                 end: Position {
                     line: 1,
-                    column: 13,
+                    column: 16,
                 },
             },
-            value: Type {
-                region: Region {
-                    start: Position {
-                        line: 1,
-                        column: 7,
-                    },
-                    end: Position {
-                        line: 1,
-                        column: 13,
-                    },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                            },
+                            value: "Number",
+                        },
+                    ],
                 },
-                name: "String",
                 args: [],
             },
         },
@@ -71,25 +83,31 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 15,
+                        column: 18,
                     },
                     end: Position {
                         line: 1,
-                        column: 19,
+                        column: 22,
                     },
                 },
-                value: Type {
-                    region: Region {
-                        start: Position {
-                            line: 1,
-                            column: 15,
-                        },
-                        end: Position {
-                            line: 1,
-                            column: 19,
-                        },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 18,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 22,
+                                    },
+                                },
+                                value: "Bool",
+                            },
+                        ],
                     },
-                    name: "Bool",
                     args: [],
                 },
             },

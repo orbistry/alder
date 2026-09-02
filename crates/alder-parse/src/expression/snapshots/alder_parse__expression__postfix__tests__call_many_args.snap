@@ -1,0 +1,89 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "add(1, 2, 3)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 13,
+        },
+    },
+    value: Call {
+        function: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+            value: Var(
+                "add",
+            ),
+        },
+        arguments: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                },
+                value: Number(
+                    NumberLit {
+                        value: 1.0,
+                        text: "1",
+                    },
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                },
+                value: Number(
+                    NumberLit {
+                        value: 2.0,
+                        text: "2",
+                    },
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: Number(
+                    NumberLit {
+                        value: 3.0,
+                        text: "3",
+                    },
+                ),
+            },
+        ],
+    },
+}

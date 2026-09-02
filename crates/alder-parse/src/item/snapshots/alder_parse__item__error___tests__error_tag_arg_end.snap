@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/error_.rs
+description: "error E { :a(Number Number) }"
+---
+Tag(
+    ArgEnd(
+        1,
+        21,
+    ),
+    1,
+    11,
+)

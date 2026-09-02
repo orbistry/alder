@@ -1,0 +1,22 @@
+---
+source: crates/alder-parse/src/expression/literal.rs
+description: "3.25"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 5,
+        },
+    },
+    value: Number(
+        NumberLit {
+            value: 3.25,
+            text: "3.25",
+        },
+    ),
+}

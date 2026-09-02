@@ -1,0 +1,87 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: render(<p>x</p>)
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 17,
+        },
+    },
+    value: Call {
+        function: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 7,
+                },
+            },
+            value: Var(
+                "render",
+            ),
+        },
+        arguments: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                },
+                value: Markup(
+                    Element(
+                        Element {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 9,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 10,
+                                    },
+                                },
+                                value: Tag(
+                                    "p",
+                                ),
+                            },
+                            attrs: [],
+                            children: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 11,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 12,
+                                        },
+                                    },
+                                    value: Text(
+                                        "x",
+                                    ),
+                                },
+                            ],
+                            self_closing: false,
+                        },
+                    ),
+                ),
+            },
+        ],
+    },
+}

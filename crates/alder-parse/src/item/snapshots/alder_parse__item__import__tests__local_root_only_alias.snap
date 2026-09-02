@@ -1,0 +1,66 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: import ~ as root
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 17,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Import(
+            Import {
+                path: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                    },
+                    value: ModulePath {
+                        root: Local(
+                            Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 9,
+                                },
+                            },
+                        ),
+                        segments: [],
+                    },
+                },
+                tail: Alias(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                        },
+                        value: "root",
+                    },
+                ),
+            },
+        ),
+    },
+}

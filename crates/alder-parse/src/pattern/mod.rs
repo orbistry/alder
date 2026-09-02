@@ -1,321 +1,215 @@
-//! Pattern parsing for Alder.
+//! Patterns.
 //!
-//! Ported from Elm's `Parse/Pattern.hs`.
+//! `pattern()` is `pattern_atom [as name]`; `pattern_atom` dispatches on the
+//! first byte (docs/parser-internals.md §5.14). Constructor, tag, tuple,
+//! array and record bodies live in the sibling modules.
 //!
-//! Provides:
-//! - `pattern_term` - atomic patterns (wildcard, var, ctor, literal, record, tuple, list)
-//! - `pattern_expr` - full patterns including cons (::), as-patterns, and ctor with args
+//! Conventions: `pattern()` chomps trailing whitespace and computes its
+//! region before the chomp; `pattern_atom()` leaves the cursor right after
+//! the atom except where a helper had to look past whitespace (`Some (x)`,
+//! `Rect { .. }`, `^expr`), in which case the node's region still ends at
+//! the atom's last byte.
+//!
+//! See docs/parser-internals.md §5.14 and §10.17 / §10.20.
+// OWNER: pattern/mod.rs (Wave 1)
 
-mod list;
+mod array;
+mod ctor;
 mod record;
-mod term;
 mod tuple;
 
 use alder_region::{Located, Position, Region};
-use alder_source::Pattern;
+use alder_source::{NumberLit, Pattern};
 use bumpalo::collections::Vec as BumpVec;
 
-use crate::Parser;
-use crate::error;
+use crate::number::NumberLiteral;
+use crate::{Keyword, Parser, SqlWord, error};
 
 impl<'a> Parser<'a> {
-    /// Parse an atomic pattern (no cons, as, or ctor args).
-    ///
-    /// Mirrors Elm's `Pattern.term`:
-    /// ```haskell
-    /// term =
-    ///   do  start <- getPosition
-    ///       oneOf E.PStart
-    ///         [ record start
-    ///         , tuple start
-    ///         , list start
-    ///         , termHelp start
-    ///         ]
-    /// ```
-    pub fn pattern_term(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
-        let start = self.get_position();
-
-        self.one_of(
-            error::Pattern::Start,
-            vec![
-                Box::new(|p: &mut Parser<'a>| p.pattern_record(start)),
-                Box::new(|p| p.pattern_tuple(start)),
-                Box::new(|p| p.pattern_list(start)),
-                Box::new(|p| p.pattern_term_help(start)),
-            ],
-        )
+    /// `pattern_atom [as name]`. Chomps trailing whitespace. Counts one
+    /// nesting level (§10.44).
+    pub fn pattern(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+        self.nest(error::Pattern::TooDeep, Self::pattern_aliased)
     }
 
-    /// Parse a full pattern expression including cons (::), as-patterns, and ctor with args.
-    ///
-    /// Returns `(pattern, end)` where `end` is the position at the end of the pattern
-    /// (before any trailing whitespace was chomped). This is important for indent checking.
-    ///
-    /// Mirrors Elm's `Pattern.expression`:
-    /// ```haskell
-    /// expression :: Space.Parser E.Pattern Src.Pattern
-    /// expression =
-    ///   do  start <- getPosition
-    ///       ePart <- exprPart
-    ///       exprHelp start [] ePart
-    /// ```
-    pub fn pattern_expr(
-        &mut self,
-    ) -> Result<(&'a Located<Pattern<'a>>, Position), error::Pattern<'a>> {
+    fn pattern_aliased(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
         let start = self.get_position();
-        let (first_pattern, first_end) = self.pattern_expr_part()?;
-        self.pattern_expr_help(start, first_pattern, first_end)
+        let atom = self.pattern_atom()?;
+        self.chomp();
+        if !self.peek_keyword(b"as") {
+            return Ok(atom);
+        }
+        self.advance_by(2);
+        self.chomp();
+        let name = self.located_lower(error::Pattern::Alias)?;
+        let alias = self.pattern_at(
+            start,
+            name.region.end,
+            Pattern::Alias {
+                pattern: atom,
+                name,
+            },
+        );
+        self.chomp();
+        Ok(alias)
     }
 
-    /// Parse a pattern expression part (term or ctor with args).
-    ///
-    /// Mirrors Elm's `exprPart`.
-    fn pattern_expr_part(
+    /// `p | q | r` (match arms). Each alternative is a full `pattern()`, so
+    /// the cursor ends after trailing whitespace. A `|` that begins `||` or
+    /// `|>` is not an alternative separator.
+    pub(crate) fn pattern_alternatives(
         &mut self,
-    ) -> Result<(&'a Located<Pattern<'a>>, Position), error::Pattern<'a>> {
-        let start = self.get_position();
-
-        // Check if it starts with uppercase (constructor that might have args)
-        if matches!(self.peek(), Some(b) if b.is_ascii_uppercase()) {
-            let ctor_start = self.pos;
+    ) -> Result<&'a [&'a Located<Pattern<'a>>], error::Pattern<'a>> {
+        let mut patterns = BumpVec::new_in(self.bump);
+        patterns.push(self.pattern()?);
+        while self.peek() == Some(b'|') && !matches!(self.peek_at(1), Some(b'|' | b'>')) {
             self.advance();
-            self.chomp_inner_chars();
-
-            // Check for qualification
-            let (region, module, name) = if self.is_dot_upper() || self.is_dot_lower() {
-                self.pattern_ctor_qualified_parts(start, ctor_start)?
-            } else {
-                let name = self.slice_from(ctor_start);
-                let end = self.get_position();
-                (Region::new(start, end), None, name)
-            };
-
-            // Now try to parse arguments
-            self.pattern_ctor_with_args(start, region, module, name)
-        } else {
-            // Regular term - chomp whitespace but return the end position
-            // from BEFORE chomping (extracted from pattern's region)
-            let pattern = self.pattern_term()?;
-            let end = pattern.region.end;
-            self.chomp(error::Pattern::Space)?;
-            Ok((pattern, end))
+            self.chomp();
+            patterns.push(self.pattern()?);
         }
+        Ok(patterns.into_bump_slice())
     }
 
-    /// Parse qualified constructor parts, returning (region, module, name).
-    fn pattern_ctor_qualified_parts(
-        &mut self,
-        start: Position,
-        ctor_start: usize,
-    ) -> Result<(Region, Option<&'a str>, &'a str), error::Pattern<'a>> {
+    /// Dispatch on first byte: `_`, lower, upper (ctor), `:`, `^`, `-`/digit, `"`, `(`, `[`, `{`, true/false.
+    pub(crate) fn pattern_atom(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+        let start = self.get_position();
         let (row, col) = self.position();
-
-        // Keep chomping Module.Module... until we hit the final name
-        loop {
-            if self.is_dot_upper() {
-                self.advance(); // consume dot
-                self.advance(); // consume first uppercase char
-                self.chomp_inner_chars();
-            } else if self.is_dot_lower() {
-                // Qualified lowercase - error for patterns
-                return Err(error::Pattern::Start(row, col));
-            } else {
-                break;
+        match self.peek() {
+            Some(b'_') => self.pattern_wildcard(start),
+            Some(b) if b.is_ascii_lowercase() => self.pattern_var(start),
+            Some(b) if b.is_ascii_uppercase() => self.pattern_ctor(start),
+            Some(b':') => self.pattern_tag(start),
+            Some(b'^') => self.pattern_pin(start),
+            Some(b'0'..=b'9') => self.pattern_number(start, false),
+            Some(b'-') if self.peek_at(1).is_some_and(|b| b.is_ascii_digit()) => {
+                self.pattern_number(start, true)
             }
-        }
-
-        let full = self.slice_from(ctor_start);
-        let end = self.get_position();
-        let region = Region::new(start, end);
-
-        if let Some(last_dot) = full.rfind('.') {
-            let module = &full[..last_dot];
-            let name = &full[last_dot + 1..];
-            Ok((region, Some(module), name))
-        } else {
-            Ok((region, None, full))
-        }
-    }
-
-    /// Parse constructor with potential arguments.
-    fn pattern_ctor_with_args(
-        &mut self,
-        start: Position,
-        region: Region,
-        module: Option<&'a str>,
-        name: &'a str,
-    ) -> Result<(&'a Located<Pattern<'a>>, Position), error::Pattern<'a>> {
-        let mut end = self.get_position();
-        self.chomp(error::Pattern::Space)?;
-
-        let mut args: BumpVec<'a, &'a Located<Pattern<'a>>> = BumpVec::new_in(self.bump);
-
-        // Try to parse arguments (terms only, not full expressions)
-        loop {
-            let arg_result = self.one_of_with_fallback(
-                vec![Box::new(|p: &mut Parser<'a>| {
-                    // Check indent before trying to parse arg
-                    let (check_row, check_col) = p.position();
-                    p.check_indent(check_row, check_col, error::Pattern::IndentStart)?;
-
-                    let arg = p.pattern_term()?;
-                    Ok(Some(arg))
-                })],
-                None,
-            )?;
-
-            match arg_result {
-                Some(arg) => {
-                    args.push(arg);
-                    end = self.get_position();
-                    self.chomp(error::Pattern::Space)?;
-                }
-                None => break,
+            Some(b'"') => self.pattern_string(start),
+            Some(b'(') => self.specialize(
+                |bump, e, row, col| error::Pattern::Tuple(bump.alloc(e), row, col),
+                |p| p.pattern_tuple(start),
+            ),
+            Some(b'[') => self.specialize(
+                |bump, e, row, col| error::Pattern::Array(bump.alloc(e), row, col),
+                |p| p.pattern_array(start),
+            ),
+            Some(b'{') => {
+                let (fields, rest) = self.specialize(
+                    |bump, e, row, col| error::Pattern::Record(bump.alloc(e), row, col),
+                    |p| {
+                        p.advance();
+                        p.pattern_record_fields()
+                    },
+                )?;
+                Ok(self.add_end(start, Pattern::Record { fields, rest }))
             }
-        }
-
-        let args_slice = args.into_bump_slice();
-        let pattern = match module {
-            Some(module) => Pattern::CtorQual {
-                region,
-                module,
-                name,
-                args: args_slice,
-            },
-            None => Pattern::Ctor {
-                region,
-                name,
-                args: args_slice,
-            },
-        };
-
-        Ok((self.add_end(start, pattern), end))
-    }
-
-    /// Parse the rest of a pattern expression (cons and as).
-    ///
-    /// Returns `(pattern, end)` where `end` is the position at the end of the pattern.
-    ///
-    /// Mirrors Elm's `exprHelp`.
-    fn pattern_expr_help(
-        &mut self,
-        start: Position,
-        pattern: &'a Located<Pattern<'a>>,
-        end: Position,
-    ) -> Result<(&'a Located<Pattern<'a>>, Position), error::Pattern<'a>> {
-        let mut patterns: BumpVec<'a, &'a Located<Pattern<'a>>> = BumpVec::new_in(self.bump);
-        let mut current = pattern;
-        let mut current_end = end;
-
-        loop {
-            // Check indent at the end position (before chomp), not current parser position.
-            // If indent check fails, we're done - return what we have.
-            if self
-                .check_indent(
-                    current_end.line,
-                    current_end.column,
-                    error::Pattern::IndentStart,
-                )
-                .is_err()
-            {
-                let result = self.build_cons_chain(&mut patterns, current);
-                return Ok((result, current_end));
-            }
-
-            // Try to parse :: or as
-            let result = self.one_of_with_fallback(
-                vec![
-                    // Cons: `::`
-                    Box::new(|p: &mut Parser<'a>| {
-                        p.word2(0x3A, 0x3A, error::Pattern::Start)?; // ::
-                        p.chomp_and_check_indent(error::Pattern::Space, error::Pattern::IndentStart)?;
-
-                        let (next_pattern, next_end) = p.pattern_expr_part()?;
-                        Ok(ConsOrAs::Cons(next_pattern, next_end))
-                    }),
-                    // As: `as name`
-                    Box::new(|p: &mut Parser<'a>| {
-                        // Check for "as" keyword
-                        let (row, col) = p.position();
-                        if !p.remaining().starts_with(b"as")
-                            || matches!(p.peek_at(2), Some(b) if b.is_ascii_alphanumeric() || b == b'_')
-                        {
-                            return Err(error::Pattern::Start(row, col));
-                        }
-                        p.advance_by(2);
-
-                        p.chomp_and_check_indent(error::Pattern::Space, error::Pattern::IndentAlias)?;
-
-                        let name_start = p.get_position();
-                        let name = p.lower_name(error::Pattern::Alias)?;
-                        let name_end = p.get_position();
-                        p.chomp(error::Pattern::Space)?;
-
-                        let alias = p.add_end(name_start, name);
-                        Ok(ConsOrAs::As(alias, name_end))
-                    }),
-                ],
-                ConsOrAs::Done,
-            )?;
-
-            match result {
-                ConsOrAs::Cons(next_pattern, next_end) => {
-                    patterns.push(current);
-                    current = next_pattern;
-                    current_end = next_end;
-                }
-                ConsOrAs::As(alias, alias_end) => {
-                    // Build up cons chain first
-                    let base = self.build_cons_chain(&mut patterns, current);
-                    // Then wrap in alias
-                    return Ok((
-                        self.add_end(
-                            start,
-                            Pattern::Alias {
-                                pattern: base,
-                                name: alias,
-                            },
-                        ),
-                        alias_end,
-                    ));
-                }
-                ConsOrAs::Done => {
-                    // Build up cons chain
-                    let result = self.build_cons_chain(&mut patterns, current);
-                    return Ok((result, current_end));
-                }
-            }
+            _ => Err(error::Pattern::Start(row, col)),
         }
     }
 
-    /// Build a cons chain from accumulated patterns.
-    fn build_cons_chain(
+    /// A pattern node whose region ends at `end` rather than at the cursor
+    /// (for atoms that had to look past trailing whitespace).
+    pub(super) fn pattern_at(
         &self,
-        patterns: &mut BumpVec<'a, &'a Located<Pattern<'a>>>,
-        tail: &'a Located<Pattern<'a>>,
+        start: Position,
+        end: Position,
+        value: Pattern<'a>,
     ) -> &'a Located<Pattern<'a>> {
-        if patterns.is_empty() {
-            tail
-        } else {
-            // Build right-to-left: a :: b :: c => Cons(a, Cons(b, c))
-            let mut result = tail;
-            while let Some(head) = patterns.pop() {
-                let region = Region::new(
-                    Position::new(head.region.start.line, head.region.start.column),
-                    Position::new(result.region.end.line, result.region.end.column),
-                );
-                result = self.alloc(Located::at(region, Pattern::Cons { head, tail: result }));
+        self.alloc(Located::at(Region::new(start, end), value))
+    }
+
+    /// At `_`: wildcard, or `WildcardNotVar` for `_foo` (identifiers start
+    /// with a letter; §10.17).
+    fn pattern_wildcard(
+        &mut self,
+        start: Position,
+    ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+        let (row, col) = self.position();
+        let word = self.peek_word();
+        if word.len() > 1 {
+            self.advance_by(word.len());
+            return Err(error::Pattern::WildcardNotVar(word, word.len(), row, col));
+        }
+        self.advance();
+        Ok(self.add_end(start, Pattern::Anything))
+    }
+
+    /// At a lowercase letter: `true` / `false`, a reserved word (error), or a variable.
+    fn pattern_var(
+        &mut self,
+        start: Position,
+    ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+        let (row, col) = self.position();
+        let word = self.peek_word();
+        match word {
+            "true" | "false" => {
+                self.advance_by(word.len());
+                Ok(self.add_end(start, Pattern::Bool(word == "true")))
             }
-            result
+            _ => {
+                if let Some(kw) = Keyword::from_word(word) {
+                    return Err(error::Pattern::Reserved(kw, row, col));
+                }
+                if self.in_query()
+                    && let Some(sql) = SqlWord::from_word(word)
+                {
+                    return Err(error::Pattern::SqlKeyword(sql, row, col));
+                }
+                // Nothing is left for `lower_name` to refuse; `Start` is only
+                // the required expectation argument.
+                let name = self.lower_name(error::Pattern::Start)?;
+                Ok(self.add_end(start, Pattern::Var(name)))
+            }
         }
     }
-}
 
-/// Helper enum for pattern expression parsing.
-enum ConsOrAs<'a> {
-    Cons(&'a Located<Pattern<'a>>, Position),
-    As(&'a Located<&'a str>, Position),
-    Done,
+    /// At `^`: pin a whole postfix chain, parsed with query mode off (§10.20).
+    fn pattern_pin(
+        &mut self,
+        start: Position,
+    ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+        self.advance();
+        let expr = self.specialize(
+            |bump, e, row, col| error::Pattern::Pin(bump.alloc(e), row, col),
+            |p| p.with_query(false, |p| p.postfix()),
+        )?;
+        // `postfix()` chomps trailing whitespace; the pin ends where its operand does.
+        Ok(self.pattern_at(start, expr.region.end, Pattern::Pin(expr)))
+    }
+
+    /// At a digit, or at `-` immediately followed by a digit. A negative
+    /// literal negates the value and keeps the sign in the text (§10.17).
+    fn pattern_number(
+        &mut self,
+        start: Position,
+        negative: bool,
+    ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+        if negative {
+            self.advance();
+        }
+        let literal = self.number_literal(error::Pattern::Start, error::Pattern::Number)?;
+        let pattern = match literal {
+            NumberLiteral::Number(lit) if negative => Pattern::Number(NumberLit {
+                value: -lit.value,
+                text: self.alloc_str(&format!("-{}", lit.text)),
+            }),
+            NumberLiteral::Number(lit) => Pattern::Number(lit),
+            NumberLiteral::BigInt(digits) if negative => {
+                Pattern::BigInt(self.alloc_str(&format!("-{digits}")))
+            }
+            NumberLiteral::BigInt(digits) => Pattern::BigInt(digits),
+        };
+        Ok(self.add_end(start, pattern))
+    }
+
+    /// At `"`.
+    fn pattern_string(
+        &mut self,
+        start: Position,
+    ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+        let s = self.string_literal(error::Pattern::Start, error::Pattern::String)?;
+        Ok(self.add_end(start, Pattern::Str(s)))
+    }
 }
 
 /// Snapshot test macro for successful pattern parsing.
@@ -323,12 +217,19 @@ enum ConsOrAs<'a> {
 macro_rules! assert_pattern_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
-        let src = bump.alloc_str(indoc::indoc!($code));
+        let code = indoc::indoc!($code);
+        let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        let (result, _end) = parser.pattern_expr().expect("expected successful parse");
-
+        let result = parser
+            .pattern()
+            .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
+        assert!(
+            parser.is_eof(),
+            "unconsumed input at {:?}\n\nSource:\n{code}",
+            parser.position()
+        );
         insta::with_settings!({
-            description => format!("Code:\n\n{}", indoc::indoc!($code)),
+            description => code,
             omit_expression => true,
         }, {
             insta::assert_debug_snapshot!(result);
@@ -341,45 +242,22 @@ macro_rules! assert_pattern_snapshot {
 macro_rules! assert_pattern_error_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
-        let src = bump.alloc_str(indoc::indoc!($code));
+        let code = indoc::indoc!($code);
+        let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        let result = parser.pattern_expr().expect_err("expected parse error");
-
+        let err = parser
+            .pattern()
+            .err()
+            .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
         insta::with_settings!({
-            description => format!("Code:\n\n{}", indoc::indoc!($code)),
+            description => code,
             omit_expression => true,
         }, {
-            insta::assert_debug_snapshot!(result);
+            insta::assert_debug_snapshot!(err);
         });
     }};
 }
 
-/// Snapshot test macro for multiline patterns, laid out as they would
-/// appear indented inside a definition (see `test_support::indent_fragment`).
-#[cfg(test)]
-macro_rules! assert_indented_pattern_snapshot {
-    ($code:expr) => {{
-        let bump = bumpalo::Bump::new();
-        let fragment = indoc::indoc!($code);
-        let indented = $crate::test_support::indent_fragment(fragment);
-        let src = bump.alloc_str(&indented);
-        let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        parser
-            .chomp(|_, _, _| "space error")
-            .expect("expected leading indent");
-        let (result, _end) = parser.pattern_expr().expect("expected successful parse");
-
-        insta::with_settings!({
-            description => format!("Code (indented inside a def):\n\n{}", indented),
-            omit_expression => true,
-        }, {
-            insta::assert_debug_snapshot!(result);
-        });
-    }};
-}
-
-#[cfg(test)]
-pub(crate) use assert_indented_pattern_snapshot;
 #[cfg(test)]
 pub(crate) use assert_pattern_error_snapshot;
 #[cfg(test)]
@@ -387,62 +265,169 @@ pub(crate) use assert_pattern_snapshot;
 
 #[cfg(test)]
 mod tests {
-    // Cons patterns
-    #[test]
-    fn cons_simple() {
-        assert_pattern_snapshot!("head :: tail");
+    /// Like `assert_pattern_snapshot!` but for `pattern_alternatives()`,
+    /// which has no other entry point until `arm_head` lands.
+    macro_rules! assert_alternatives_snapshot {
+        ($code:expr) => {{
+            let bump = bumpalo::Bump::new();
+            let code = indoc::indoc!($code);
+            let src = bump.alloc_str(code);
+            let mut parser = $crate::Parser::new(&bump, src.as_bytes());
+            let result = parser
+                .pattern_alternatives()
+                .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
+            assert!(
+                parser.is_eof(),
+                "unconsumed input at {:?}\n\nSource:\n{code}",
+                parser.position()
+            );
+            insta::with_settings!({
+                description => code,
+                omit_expression => true,
+            }, {
+                insta::assert_debug_snapshot!(result);
+            });
+        }};
+    }
+
+    /// Like `assert_pattern_error_snapshot!` but with query mode on, so a
+    /// SQL word is refused (`lower_name`, §5.8).
+    macro_rules! assert_query_pattern_error_snapshot {
+        ($code:expr) => {{
+            let bump = bumpalo::Bump::new();
+            let code = indoc::indoc!($code);
+            let src = bump.alloc_str(code);
+            let mut parser = $crate::Parser::new(&bump, src.as_bytes());
+            let err = parser
+                .with_query(true, |p| p.pattern())
+                .err()
+                .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
+            insta::with_settings!({
+                description => code,
+                omit_expression => true,
+            }, {
+                insta::assert_debug_snapshot!(err);
+            });
+        }};
     }
 
     #[test]
-    fn cons_multiple() {
-        assert_pattern_snapshot!("a :: b :: c");
+    fn wildcard() {
+        assert_pattern_snapshot!("_");
     }
 
     #[test]
-    fn cons_with_empty_list() {
-        assert_pattern_snapshot!("head :: []");
-    }
-
-    // As patterns
-    #[test]
-    fn as_simple() {
-        assert_pattern_snapshot!("x as foo");
+    fn variable() {
+        assert_pattern_snapshot!("foo");
     }
 
     #[test]
-    fn as_with_tuple() {
+    fn number() {
+        assert_pattern_snapshot!("42");
+    }
+
+    #[test]
+    fn negative_number() {
+        assert_pattern_snapshot!("-1");
+    }
+
+    #[test]
+    fn bigint() {
+        assert_pattern_snapshot!("123n");
+    }
+
+    #[test]
+    fn negative_bigint() {
+        assert_pattern_snapshot!("-123n");
+    }
+
+    #[test]
+    fn string() {
+        assert_pattern_snapshot!(r#""hello""#);
+    }
+
+    #[test]
+    fn bool_true() {
+        assert_pattern_snapshot!("true");
+    }
+
+    #[test]
+    fn bool_false() {
+        assert_pattern_snapshot!("false");
+    }
+
+    #[test]
+    fn unit() {
+        assert_pattern_snapshot!("()");
+    }
+
+    #[test]
+    fn pin_var() {
+        assert_pattern_snapshot!("^expected");
+    }
+
+    #[test]
+    fn pin_access() {
+        assert_pattern_snapshot!("^user.id");
+    }
+
+    #[test]
+    fn pin_call() {
+        assert_pattern_snapshot!("^f(x)");
+    }
+
+    #[test]
+    fn pin_parens() {
+        assert_pattern_snapshot!("^(a + b)");
+    }
+
+    #[test]
+    fn alias_simple() {
+        assert_pattern_snapshot!("x as y");
+    }
+
+    #[test]
+    fn alias_ctor() {
+        assert_pattern_snapshot!("Some(x) as opt");
+    }
+
+    #[test]
+    fn alias_tuple() {
         assert_pattern_snapshot!("(a, b) as pair");
     }
 
     #[test]
-    fn as_with_cons() {
-        assert_pattern_snapshot!("head :: tail as list");
-    }
-
-    // Constructor with args
-    #[test]
-    fn ctor_with_one_arg() {
-        assert_pattern_snapshot!("Just x");
+    fn alternatives_two() {
+        assert_alternatives_snapshot!("None | Some(x)");
     }
 
     #[test]
-    fn ctor_with_multiple_args() {
-        assert_pattern_snapshot!("Node left value right");
+    fn alternatives_three() {
+        assert_alternatives_snapshot!("Red | Green | Blue");
     }
 
     #[test]
-    fn ctor_qualified_with_args() {
-        assert_pattern_snapshot!("Maybe.Just x");
+    fn error_wildcard_not_var() {
+        assert_pattern_error_snapshot!("_foo");
     }
 
     #[test]
-    fn ctor_nested() {
-        assert_pattern_snapshot!("Just (Just x)");
+    fn error_reserved() {
+        assert_pattern_error_snapshot!("match");
     }
 
-    // Complex combinations
     #[test]
-    fn complex_pattern() {
-        assert_pattern_snapshot!("Just x :: rest as list");
+    fn error_alias_no_name() {
+        assert_pattern_error_snapshot!("x as");
+    }
+
+    #[test]
+    fn error_start() {
+        assert_pattern_error_snapshot!("=>");
+    }
+
+    #[test]
+    fn error_sql_word_in_query() {
+        assert_query_pattern_error_snapshot!("select");
     }
 }

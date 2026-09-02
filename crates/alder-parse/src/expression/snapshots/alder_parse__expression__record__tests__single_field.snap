@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/record.rs
-description: "Code:\n\n{ x = 1 }"
+description: "{ x: 1 }"
 ---
 Located {
     region: Region {
@@ -10,13 +10,13 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 10,
+            column: 9,
         },
     },
     value: Record(
         [
-            FieldAssign {
-                field: Located {
+            Field {
+                name: Located {
                     region: Region {
                         start: Position {
                             line: 1,
@@ -29,21 +29,26 @@ Located {
                     },
                     value: "x",
                 },
-                value: Located {
-                    region: Region {
-                        start: Position {
-                            line: 1,
-                            column: 7,
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 7,
+                            },
                         },
-                        end: Position {
-                            line: 1,
-                            column: 8,
-                        },
+                        value: Number(
+                            NumberLit {
+                                value: 1.0,
+                                text: "1",
+                            },
+                        ),
                     },
-                    value: Int(
-                        1,
-                    ),
-                },
+                ),
             },
         ],
     ),

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/record.rs
-description: "Code:\n\n{ inner = { x = 1 } }"
+description: "{ pos: { x: 1, y: 2 } }"
 ---
 Located {
     region: Region {
@@ -10,13 +10,13 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 22,
+            column: 24,
         },
     },
     value: Record(
         [
-            FieldAssign {
-                field: Located {
+            Field {
+                name: Located {
                     region: Region {
                         start: Position {
                             line: 1,
@@ -24,57 +24,99 @@ Located {
                         },
                         end: Position {
                             line: 1,
-                            column: 8,
+                            column: 6,
                         },
                     },
-                    value: "inner",
+                    value: "pos",
                 },
-                value: Located {
-                    region: Region {
-                        start: Position {
-                            line: 1,
-                            column: 11,
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 8,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 22,
+                            },
                         },
-                        end: Position {
-                            line: 1,
-                            column: 20,
-                        },
-                    },
-                    value: Record(
-                        [
-                            FieldAssign {
-                                field: Located {
-                                    region: Region {
-                                        start: Position {
-                                            line: 1,
-                                            column: 13,
+                        value: Record(
+                            [
+                                Field {
+                                    name: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 10,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 11,
+                                            },
                                         },
-                                        end: Position {
-                                            line: 1,
-                                            column: 14,
-                                        },
+                                        value: "x",
                                     },
-                                    value: "x",
-                                },
-                                value: Located {
-                                    region: Region {
-                                        start: Position {
-                                            line: 1,
-                                            column: 17,
+                                    value: Some(
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 13,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 14,
+                                                },
+                                            },
+                                            value: Number(
+                                                NumberLit {
+                                                    value: 1.0,
+                                                    text: "1",
+                                                },
+                                            ),
                                         },
-                                        end: Position {
-                                            line: 1,
-                                            column: 18,
-                                        },
-                                    },
-                                    value: Int(
-                                        1,
                                     ),
                                 },
-                            },
-                        ],
-                    ),
-                },
+                                Field {
+                                    name: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 16,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 17,
+                                            },
+                                        },
+                                        value: "y",
+                                    },
+                                    value: Some(
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 19,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 20,
+                                                },
+                                            },
+                                            value: Number(
+                                                NumberLit {
+                                                    value: 2.0,
+                                                    text: "2",
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ],
+                        ),
+                    },
+                ),
             },
         ],
     ),

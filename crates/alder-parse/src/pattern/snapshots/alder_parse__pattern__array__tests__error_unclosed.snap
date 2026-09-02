@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/pattern/array.rs
+description: "[a, b"
+---
+Array(
+    End(
+        1,
+        6,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Show::show[User] {}"
+---
+Open(
+    1,
+    10,
+)

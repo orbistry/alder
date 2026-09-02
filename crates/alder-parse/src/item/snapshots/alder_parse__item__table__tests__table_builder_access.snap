@@ -1,0 +1,111 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table t { id: sqlite.integer() primaryKey }"
+---
+TableDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: "t",
+    },
+    columns: [
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                },
+                value: "id",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 15,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 31,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 29,
+                            },
+                        },
+                        value: Access {
+                            record: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 15,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 21,
+                                    },
+                                },
+                                value: Var(
+                                    "sqlite",
+                                ),
+                            },
+                            field: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 22,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 29,
+                                    },
+                                },
+                                value: "integer",
+                            },
+                        },
+                    },
+                    arguments: [],
+                },
+            },
+            modifiers: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 32,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 42,
+                            },
+                        },
+                        value: "primaryKey",
+                    },
+                    args: [],
+                },
+            ],
+        },
+    ],
+}

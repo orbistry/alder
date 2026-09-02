@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<p>@match x { A => hi }</p>"
+---
+Markup(
+    Child(
+        Match(
+            BareText(
+                1,
+                20,
+            ),
+            1,
+            4,
+        ),
+        1,
+        4,
+    ),
+    1,
+    1,
+)

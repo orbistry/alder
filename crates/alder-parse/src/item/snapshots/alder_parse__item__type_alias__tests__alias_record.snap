@@ -1,0 +1,151 @@
+---
+source: crates/alder-parse/src/item/type_alias.rs
+description: "type User = {\n    name: String,\n    email: String,\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: TypeAlias(
+            TypeAlias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: "User",
+                },
+                params: [],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                        end: Position {
+                            line: 4,
+                            column: 2,
+                        },
+                    },
+                    value: Record {
+                        fields: [
+                            FieldType {
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 9,
+                                        },
+                                    },
+                                    value: "name",
+                                },
+                                optional: None,
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 11,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 17,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 2,
+                                                            column: 11,
+                                                        },
+                                                        end: Position {
+                                                            line: 2,
+                                                            column: 17,
+                                                        },
+                                                    },
+                                                    value: "String",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            },
+                            FieldType {
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 10,
+                                        },
+                                    },
+                                    value: "email",
+                                },
+                                optional: None,
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 12,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 18,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 12,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 18,
+                                                        },
+                                                    },
+                                                    value: "String",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            },
+                        ],
+                        ext: None,
+                    },
+                },
+            },
+        ),
+    },
+}

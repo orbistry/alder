@@ -1,0 +1,54 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "t[f[a]]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 8,
+        },
+    },
+    value: Var {
+        name: "t",
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 3,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 7,
+                    },
+                },
+                value: Var {
+                    name: "f",
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 6,
+                                },
+                            },
+                            value: Var {
+                                name: "a",
+                                args: [],
+                            },
+                        },
+                    ],
+                },
+            },
+        ],
+    },
+}

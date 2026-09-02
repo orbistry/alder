@@ -1,0 +1,108 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { width: 10 %3 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                        },
+                        value: Ident(
+                            "width",
+                        ),
+                    },
+                    value: Expr(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 21,
+                                },
+                            },
+                            value: BinOps {
+                                operands: [
+                                    BinOpOperand {
+                                        expr: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 16,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 18,
+                                                },
+                                            },
+                                            value: Number(
+                                                NumberLit {
+                                                    value: 10.0,
+                                                    text: "10",
+                                                },
+                                            ),
+                                        },
+                                        op: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 19,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 20,
+                                                },
+                                            },
+                                            value: Rem,
+                                        },
+                                    },
+                                ],
+                                last: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 20,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 21,
+                                        },
+                                    },
+                                    value: Number(
+                                        NumberLit {
+                                            value: 3.0,
+                                            text: "3",
+                                        },
+                                    ),
+                                },
+                            },
+                        },
+                    ),
+                },
+            ],
+        },
+    ),
+}

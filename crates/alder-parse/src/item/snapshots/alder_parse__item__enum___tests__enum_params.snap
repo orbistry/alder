@@ -1,0 +1,87 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Option[a] {\n    Some(a),\n    None,\n}\n"
+---
+EnumDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: "Option",
+    },
+    params: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 13,
+                },
+                end: Position {
+                    line: 1,
+                    column: 14,
+                },
+            },
+            value: "a",
+        },
+    ],
+    variants: [
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 9,
+                    },
+                },
+                value: "Some",
+            },
+            payload: Tuple(
+                [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 10,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 11,
+                            },
+                        },
+                        value: Var {
+                            name: "a",
+                            args: [],
+                        },
+                    },
+                ],
+            ),
+        },
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 9,
+                    },
+                },
+                value: "None",
+            },
+            payload: Unit,
+        },
+    ],
+}

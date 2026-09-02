@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: "a + \"x"
+---
+String(
+    Endless,
+    1,
+    7,
+)

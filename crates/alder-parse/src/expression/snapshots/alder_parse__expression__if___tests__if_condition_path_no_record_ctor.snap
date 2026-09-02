@@ -1,0 +1,148 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "if s == Shape::Empty { 1 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 27,
+        },
+    },
+    value: If {
+        branches: [
+            IfBranch {
+                condition: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                    },
+                    value: BinOps {
+                        operands: [
+                            BinOpOperand {
+                                expr: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 4,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 5,
+                                        },
+                                    },
+                                    value: Var(
+                                        "s",
+                                    ),
+                                },
+                                op: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 6,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 8,
+                                        },
+                                    },
+                                    value: Eq,
+                                },
+                            },
+                        ],
+                        last: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 9,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 21,
+                                },
+                            },
+                            value: Path(
+                                Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 9,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 14,
+                                                },
+                                            },
+                                            value: "Shape",
+                                        },
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 16,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 21,
+                                                },
+                                            },
+                                            value: "Empty",
+                                        },
+                                    ],
+                                },
+                            ),
+                        },
+                    },
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 22,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 27,
+                        },
+                    },
+                    value: Block {
+                        stmts: [],
+                        tail: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 24,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 25,
+                                    },
+                                },
+                                value: Number(
+                                    NumberLit {
+                                        value: 1.0,
+                                        text: "1",
+                                    },
+                                ),
+                            },
+                        ),
+                    },
+                },
+            },
+        ],
+        final_else: None,
+    },
+}

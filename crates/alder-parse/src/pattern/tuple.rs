@@ -1,135 +1,82 @@
-//! Tuple pattern parsing for Alder.
+//! Unit, parenthesized and tuple patterns.
 //!
-//! Ported from Elm's `Pattern.tuple`.
+//! `()` is `Pattern::Unit` (§10.17), `(p)` is `p` itself (the parentheses
+//! leave no node of their own, exactly as Elm's `tupleHelp` returns
+//! `firstPattern`) re-spanned over the parentheses: `(x)` is `Var("x")` at
+//! 1:1-1:4, so `region.end` is the last consumed byte (§10.43). `(p, q, …)`
+//! is `Pattern::Tuple`. A trailing comma is accepted (§10.8), so `(p,)` is
+//! also just `p`.
 //!
-//! Handles: `()`, `(p)`, `(p1, p2)`, `(p1, p2, p3, ...)`
+//! See docs/parser-internals.md §5.14.
+// OWNER: pattern/tuple.rs (Wave 1)
 
 use alder_region::{Located, Position};
 use alder_source::Pattern;
 use bumpalo::collections::Vec as BumpVec;
 
-use crate::Parser;
-use crate::error::{self, PTuple};
+use crate::error::PTuple;
+use crate::{Parser, error};
 
 impl<'a> Parser<'a> {
-    /// Parse a tuple pattern: `()`, `(p)`, `(p1, p2, ...)`
+    /// At `(`.
     pub(super) fn pattern_tuple(
         &mut self,
         start: Position,
-    ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
-        self.in_context(
-            |bump, tuple_err, row, col| error::Pattern::Tuple(bump.alloc(tuple_err), row, col),
-            |p| p.word1(0x28, error::Pattern::Start),
-            |p| p.pattern_tuple_body(start),
-        )
-    }
-
-    /// Parse tuple pattern body after `(`.
-    fn pattern_tuple_body(
-        &mut self,
-        start: Position,
-    ) -> Result<&'a Located<Pattern<'a>>, PTuple<'a>> {
-        self.chomp_and_check_indent(PTuple::Space, PTuple::IndentExpr1)?;
-
-        self.one_of(
-            PTuple::Open,
-            vec![
-                // Unit: `()`
-                Box::new(|p: &mut Parser<'a>| {
-                    p.word1(0x29, PTuple::Open)?;
-                    Ok(p.add_end(start, Pattern::Unit))
-                }),
-                // Pattern (might be parenthesized or tuple)
-                Box::new(|p: &mut Parser<'a>| {
-                    let (first, end) = p.pattern_tuple_entry()?;
-                    p.check_indent(end.line, end.column, PTuple::IndentEnd)?;
-                    p.pattern_tuple_help(start, first)
-                }),
-            ],
-        )
-    }
-
-    /// Parse a pattern inside a tuple.
-    /// Returns `(pattern, end)` where end is the position at end of pattern (before any chomp).
-    fn pattern_tuple_entry(&mut self) -> Result<(&'a Located<Pattern<'a>>, Position), PTuple<'a>> {
-        self.specialize(
-            |bump, pat_err, row, col| PTuple::Expr(bump.alloc(pat_err), row, col),
-            |p| p.pattern_expr(),
-        )
-    }
-
-    /// Parse remaining tuple elements.
-    fn pattern_tuple_help(
-        &mut self,
-        start: Position,
-        first: &'a Located<Pattern<'a>>,
-    ) -> Result<&'a Located<Pattern<'a>>, PTuple<'a>> {
-        let mut rest: BumpVec<'a, &'a Located<Pattern<'a>>> = BumpVec::new_in(self.bump);
-
+    ) -> Result<&'a Located<Pattern<'a>>, error::PTuple<'a>> {
+        self.advance();
+        self.chomp();
+        if self.peek() == Some(b')') {
+            self.advance();
+            return Ok(self.add_end(start, Pattern::Unit));
+        }
+        let first = self.pattern_tuple_entry()?;
+        let mut rest = BumpVec::new_in(self.bump);
         loop {
-            self.chomp(PTuple::Space)?;
-
-            let done = self.one_of(
-                PTuple::End,
-                vec![
-                    // Comma - another pattern
-                    Box::new(|p: &mut Parser<'a>| {
-                        p.word1(0x2C, PTuple::End)?;
-                        p.chomp_and_check_indent(PTuple::Space, PTuple::IndentExprN)?;
-
-                        let (pat, end) = p.pattern_tuple_entry()?;
-                        rest.push(pat);
-
-                        p.check_indent(end.line, end.column, PTuple::IndentEnd)?;
-                        Ok(false)
-                    }),
-                    // Close paren
-                    Box::new(|p: &mut Parser<'a>| {
-                        p.word1(0x29, PTuple::End)?;
-                        Ok(true)
-                    }),
-                ],
-            )?;
-
-            if done {
-                break;
+            match self.peek() {
+                Some(b',') => {
+                    self.advance();
+                    self.chomp();
+                    if self.peek() == Some(b')') {
+                        self.advance();
+                        break;
+                    }
+                    rest.push(self.pattern_tuple_entry()?);
+                }
+                Some(b')') => {
+                    self.advance();
+                    break;
+                }
+                _ => {
+                    let (row, col) = self.position();
+                    return Err(PTuple::End(row, col));
+                }
             }
         }
-
-        if rest.is_empty() {
-            // Just parenthesized pattern
-            Ok(first)
-        } else {
-            // Tuple
-            let second = rest.remove(0);
-            let others = rest.into_bump_slice();
-            Ok(self.add_end(
+        match rest.into_bump_slice().split_first() {
+            // `(p)`: the inner node, re-spanned to include the parentheses.
+            None => Ok(self.add_end(start, first.value)),
+            Some((second, rest)) => Ok(self.add_end(
                 start,
                 Pattern::Tuple {
                     first,
                     second,
-                    rest: others,
+                    rest,
                 },
-            ))
+            )),
         }
+    }
+
+    fn pattern_tuple_entry(&mut self) -> Result<&'a Located<Pattern<'a>>, PTuple<'a>> {
+        self.specialize(
+            |bump, e, row, col| PTuple::Pattern(bump.alloc(e), row, col),
+            |p| p.pattern(),
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{
-        assert_indented_pattern_snapshot, assert_pattern_error_snapshot, assert_pattern_snapshot,
-    };
-
-    #[test]
-    fn unit() {
-        assert_pattern_snapshot!("()");
-    }
-
-    #[test]
-    fn parenthesized() {
-        assert_pattern_snapshot!("(foo)");
-    }
+    use super::super::{assert_pattern_error_snapshot, assert_pattern_snapshot};
 
     #[test]
     fn pair() {
@@ -147,28 +94,17 @@ mod tests {
     }
 
     #[test]
-    fn with_constructors() {
-        assert_pattern_snapshot!("(Just x, Nothing)");
+    fn parenthesized_single() {
+        assert_pattern_snapshot!("(x)");
     }
 
     #[test]
-    fn multiline() {
-        assert_indented_pattern_snapshot!(
-            "(
-                a,
-                b,
-                c
-            )"
-        );
+    fn parenthesized_trailing_comma() {
+        assert_pattern_snapshot!("(x,)");
     }
 
     #[test]
     fn error_unclosed() {
         assert_pattern_error_snapshot!("(a, b");
-    }
-
-    #[test]
-    fn error_trailing_comma() {
-        assert_pattern_error_snapshot!("(a, b,)");
     }
 }

@@ -1,11 +1,11 @@
 ---
 source: crates/alder-parse/src/expression/record.rs
-description: "Code:\n\n{ x = 1"
+description: "{ x: 1"
 ---
 Record(
     End(
         1,
-        8,
+        7,
     ),
     1,
     1,

@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "{ r | }"
+---
+Record(
+    ExtField(
+        1,
+        7,
+    ),
+    1,
+    1,
+)

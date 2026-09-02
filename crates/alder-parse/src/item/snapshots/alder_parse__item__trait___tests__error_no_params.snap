@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Show {"
+---
+Params(
+    Open(
+        1,
+        12,
+    ),
+    1,
+    12,
+)

@@ -1,30 +1,50 @@
+//! Parser for Alder source code.
+//!
+//! A scannerless, byte-level recursive-descent parser in the style of the
+//! Elm compiler's `Parse/Primitives.hs`. See docs/parser-internals.md.
+
 use alder_region::{Located, Position, Region};
+use alder_source::Module;
 use bumpalo::Bump;
 
-mod declaration;
 pub mod error;
-mod exposing;
 mod expression;
-mod import;
+mod item;
 mod keyword;
+mod markup;
 mod module;
+mod name;
 mod number;
 mod pattern;
+mod query;
+mod raw;
 mod space;
+mod statement;
 mod string;
+mod style;
 mod symbol;
-#[cfg(test)]
-pub(crate) mod test_support;
+mod template;
 mod type_;
 
-pub type Row = u16;
-pub type Col = u16;
+// `Keyword` / `SqlWord` are payloads of public error variants
+// (`error::Expr::Reserved`, `error::Expr::SqlKeyword`, …); re-exported so an
+// error renderer in another crate can name them.
+pub use keyword::{Keyword, SqlWord};
+
+pub type Row = u32;
+pub type Col = u32;
+
+/// Nesting limit for the recursive parsers (§10.44). Counted by
+/// `expression`, `block`, `pattern`, `type_expr`, markup `child` and
+/// `style_block`; the 129th level is a `TooDeep` error at its first byte
+/// instead of a stack overflow. Measured so the worst construct stays under
+/// a 2 MB debug-build thread stack with a 2× margin.
+pub const MAX_NESTING: u32 = 128;
 
 /// Saved parser state for backtracking.
 #[derive(Clone, Copy)]
-struct ParserState {
+pub(crate) struct ParserState {
     pos: usize,
-    indent: u16,
     row: Row,
     col: Col,
 }
@@ -43,12 +63,24 @@ pub struct Parser<'a> {
     src: &'a [u8],
     /// Current byte position
     pos: usize,
-    /// Current indentation level (for layout-sensitive parsing)
-    indent: u16,
     /// Current row (1-indexed)
     row: Row,
     /// Current column (1-indexed)
     col: Col,
+    /// Inside `query { }`: `in` is a binop, `^` pins, SQL words are not identifiers.
+    in_query: bool,
+    /// Set in if/while/for/match/provide/@directive heads: `Path {` is not a record constructor.
+    no_record_ctor: bool,
+    /// Current nesting of the recursive parsers (`nest`), capped at `MAX_NESTING`.
+    depth: u32,
+}
+
+/// Entry point used by the driver and by tests.
+pub fn parse_module<'a>(bump: &'a Bump, src: &'a str) -> Result<Module<'a>, error::Error<'a>> {
+    let mut parser = Parser::new(bump, src.as_bytes());
+    parser
+        .module()
+        .map_err(|e| error::Error::ParseError(bump.alloc(e)))
 }
 
 impl<'a> Parser<'a> {
@@ -60,11 +92,11 @@ impl<'a> Parser<'a> {
             bump,
             src,
             pos: 0,
-            // Elm starts at 0; 1 is behaviorally identical because
-            // `checkIndent`'s `col > 1` guard dominates at top level.
-            indent: 1,
             row: 1,
             col: 1,
+            in_query: false,
+            no_record_ctor: false,
+            depth: 0,
         }
     }
 
@@ -88,8 +120,7 @@ impl<'a> Parser<'a> {
     /// allocated directly in the arena.
     #[inline]
     pub fn add_end<T>(&self, start: Position, value: T) -> &'a Located<T> {
-        let end = self.get_position();
-        self.alloc(Located::at(Region::new(start, end), value))
+        self.alloc(self.located(start, value))
     }
 
     /// Current row (1-indexed).
@@ -104,63 +135,6 @@ impl<'a> Parser<'a> {
         self.col
     }
 
-    /// Current indentation level.
-    #[inline]
-    pub fn indent(&self) -> u16 {
-        self.indent
-    }
-
-    /// Set the indentation level.
-    #[inline]
-    pub fn set_indent(&mut self, indent: u16) {
-        self.indent = indent;
-    }
-
-    /// Run a parser with the current column as the indent level,
-    /// then restore the old indent level.
-    ///
-    /// Mirrors Elm's `withIndent`:
-    /// ```haskell
-    /// withIndent (Parser parser) =
-    ///   Parser $ \(State src pos end oldIndent row col) cok eok cerr eerr ->
-    ///     let
-    ///       cok' a (State s p e _ r c) = cok a (State s p e oldIndent r c)
-    ///       eok' a (State s p e _ r c) = eok a (State s p e oldIndent r c)
-    ///     in
-    ///     parser (State src pos end col row col) cok' eok' cerr eerr
-    /// ```
-    pub fn with_indent<T, E>(
-        &mut self,
-        parser: impl FnOnce(&mut Self) -> Result<T, E>,
-    ) -> Result<T, E> {
-        let old_indent = self.indent;
-        self.indent = self.col;
-        let result = parser(self);
-        self.indent = old_indent;
-        result
-    }
-
-    /// Run a parser with indent set to (current column - backset),
-    /// then restore the old indent level.
-    ///
-    /// Mirrors Elm's `withBacksetIndent`:
-    /// ```haskell
-    /// withBacksetIndent backset (Parser parser) =
-    ///   Parser $ \(State src pos end oldIndent row col) cok eok cerr eerr ->
-    ///     parser (State src pos end (col - backset) row col) ...
-    /// ```
-    pub fn with_backset_indent<T, E>(
-        &mut self,
-        backset: u16,
-        parser: impl FnOnce(&mut Self) -> Result<T, E>,
-    ) -> Result<T, E> {
-        let old_indent = self.indent;
-        self.indent = self.col.saturating_sub(backset);
-        let result = parser(self);
-        self.indent = old_indent;
-        result
-    }
-
     /// Check if we've reached the end of input.
     #[inline]
     pub fn is_eof(&self) -> bool {
@@ -169,10 +143,9 @@ impl<'a> Parser<'a> {
 
     /// Save current parser state for backtracking.
     #[inline]
-    fn save_state(&self) -> ParserState {
+    pub(crate) fn save_state(&self) -> ParserState {
         ParserState {
             pos: self.pos,
-            indent: self.indent,
             row: self.row,
             col: self.col,
         }
@@ -180,13 +153,98 @@ impl<'a> Parser<'a> {
 
     /// Restore parser state for backtracking.
     #[inline]
-    fn restore_state(&mut self, state: ParserState) {
+    pub(crate) fn restore_state(&mut self, state: ParserState) {
         self.pos = state.pos;
-        self.indent = state.indent;
         self.row = state.row;
         self.col = state.col;
     }
 
+    /// Inline `Located` spanning `start`..current (for names and other Copy leaves).
+    #[inline]
+    pub(crate) fn located<T>(&self, start: Position, value: T) -> Located<T> {
+        Located::at(Region::new(start, self.get_position()), value)
+    }
+}
+
+impl<'a> Parser<'a> {
+    /// Has a newline been crossed between `end` (a node's `region.end`) and here?
+    #[inline]
+    pub(crate) fn newline_since(&self, end: Position) -> bool {
+        end.line != self.row
+    }
+
+    /// Nothing (not even whitespace) has been consumed since `end`.
+    #[inline]
+    pub(crate) fn adjacent_to(&self, end: Position) -> bool {
+        end == self.get_position()
+    }
+
+    /// Run `f`, then restore position regardless of its result (lookahead).
+    pub(crate) fn lookahead<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let saved = self.save_state();
+        let result = f(self);
+        self.restore_state(saved);
+        result
+    }
+
+    /// Run `f` with query mode set to `on`, restoring the previous mode afterwards.
+    pub(crate) fn with_query<T, E>(
+        &mut self,
+        on: bool,
+        f: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let old = self.in_query;
+        self.in_query = on;
+        let result = f(self);
+        self.in_query = old;
+        result
+    }
+
+    /// Run `f` with record constructors allowed or not, restoring the previous
+    /// setting afterwards.
+    pub(crate) fn with_record_ctor<T, E>(
+        &mut self,
+        allowed: bool,
+        f: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let old = self.no_record_ctor;
+        self.no_record_ctor = !allowed;
+        let result = f(self);
+        self.no_record_ctor = old;
+        result
+    }
+
+    /// Run `f` one nesting level deeper; at `MAX_NESTING` report `too_deep`
+    /// at the cursor without consuming anything (§10.44).
+    pub(crate) fn nest<T, E>(
+        &mut self,
+        too_deep: impl FnOnce(Row, Col) -> E,
+        f: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        if self.depth >= MAX_NESTING {
+            let (row, col) = self.position();
+            return Err(too_deep(row, col));
+        }
+        self.depth += 1;
+        let result = f(self);
+        self.depth -= 1;
+        result
+    }
+
+    /// Are we inside `query { }`?
+    #[inline]
+    pub(crate) fn in_query(&self) -> bool {
+        self.in_query
+    }
+
+    /// May `Path {` start a record constructor here?
+    #[inline]
+    pub(crate) fn record_ctor_allowed(&self) -> bool {
+        !self.no_record_ctor
+    }
+}
+
+impl<'a> Parser<'a> {
     // -------------------------------------------------------------------------
     // Combinators
     // -------------------------------------------------------------------------
@@ -481,6 +539,8 @@ mod tests {
         assert_eq!(parser.col(), 1);
         assert_eq!(parser.peek(), Some(b'h'));
         assert!(!parser.is_eof());
+        assert!(!parser.in_query());
+        assert!(parser.record_ctor_allowed());
     }
 
     #[test]
@@ -510,5 +570,171 @@ mod tests {
         parser.advance();
         assert!(parser.is_eof());
         assert_eq!(parser.peek(), None);
+    }
+
+    #[test]
+    fn newline_since_and_adjacent_to() {
+        let bump = Bump::new();
+        let src = bump.alloc_str("a \nb");
+        let mut parser = Parser::new(&bump, src.as_bytes());
+
+        parser.advance(); // 'a'
+        let end = parser.get_position();
+        assert!(parser.adjacent_to(end));
+        assert!(!parser.newline_since(end));
+        parser.advance(); // ' '
+        assert!(!parser.adjacent_to(end));
+        assert!(!parser.newline_since(end));
+        parser.advance(); // '\n'
+        assert!(parser.newline_since(end));
+    }
+
+    #[test]
+    fn lookahead_restores_position() {
+        let bump = Bump::new();
+        let src = bump.alloc_str("abc");
+        let mut parser = Parser::new(&bump, src.as_bytes());
+
+        let seen = parser.lookahead(|p| {
+            p.advance();
+            p.advance();
+            p.peek()
+        });
+        assert_eq!(seen, Some(b'c'));
+        assert_eq!(parser.position(), (1, 1));
+    }
+
+    /// Parse `src` as a module and report whether it hit the nesting limit.
+    /// Runs on the test harness's default (2 MB) thread, which is the
+    /// stack budget `MAX_NESTING` is measured against.
+    fn nesting(src: &str) -> Result<(), String> {
+        let bump = Bump::new();
+        let src = bump.alloc_str(src);
+        match parse_module(&bump, src) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!("{e:?}")),
+        }
+    }
+
+    /// The deepest input each family accepts, one level past it, and a
+    /// mixed one; the limit must be reached before the stack runs out.
+    fn assert_nesting_limit(ok: &str, too_deep: &str) {
+        assert_eq!(nesting(ok), Ok(()), "\n{}", &ok[..ok.len().min(80)]);
+        let err = nesting(too_deep).expect_err("expected TooDeep");
+        assert!(
+            err.contains("TooDeep"),
+            "expected TooDeep, got {}",
+            &err[..err.len().min(200)]
+        );
+    }
+
+    #[test]
+    fn nesting_limit_parens() {
+        // `let x = (((…1…)))`: the value is level 1, each `(` adds one.
+        let n = (MAX_NESTING - 1) as usize;
+        assert_nesting_limit(
+            &format!("let x = {}1{}", "(".repeat(n), ")".repeat(n)),
+            &format!("let x = {}1{}", "(".repeat(n + 1), ")".repeat(n + 1)),
+        );
+    }
+
+    #[test]
+    fn nesting_limit_blocks() {
+        // `while` nests blocks without an expression in between: the fn
+        // body is level 1, each `while a {` adds one, the innermost `1`
+        // is one more.
+        let n = (MAX_NESTING - 2) as usize;
+        let src = |n: usize| format!("fn f() {{ {}1{} }}", "while a { ".repeat(n), " }".repeat(n));
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_markup() {
+        // The outer element is level 2 (expression + child).
+        let n = (MAX_NESTING - 2) as usize;
+        let src = |n: usize| format!("let x = <a>{}1{}</a>", "<a>".repeat(n), "</a>".repeat(n));
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_patterns() {
+        // The `match` is level 1, each `Some(` adds one, the `_` is one more.
+        let n = (MAX_NESTING - 2) as usize;
+        let src = |n: usize| {
+            format!(
+                "let x = match y {{ {}_{} => 1 }}",
+                "Some(".repeat(n),
+                ")".repeat(n)
+            )
+        };
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_types() {
+        let n = (MAX_NESTING - 1) as usize;
+        let src = |n: usize| format!("let x: {}a{} = 1", "Array[".repeat(n), "]".repeat(n));
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_styles() {
+        // The outer `style { }` is level 2 (expression + style block), each
+        // `a: {` adds one, the innermost value expression is one more.
+        let n = (MAX_NESTING - 3) as usize;
+        let src = |n: usize| {
+            format!(
+                "let x = style {{ {}a: 1{} }}",
+                "a: { ".repeat(n),
+                " }".repeat(n)
+            )
+        };
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_query_pins() {
+        // The deepest measured frame use per level: each `query { … ^( … ) }`
+        // costs two levels (the `where` expression and the pinned operand).
+        let n = (MAX_NESTING / 2 - 1) as usize;
+        let src = |n: usize| {
+            format!(
+                "let x = {}1{}",
+                "query { select { a } from t where a == ^(".repeat(n),
+                ") }".repeat(n)
+            )
+        };
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn mode_flags_are_scoped() {
+        let bump = Bump::new();
+        let src = bump.alloc_str("");
+        let mut parser = Parser::new(&bump, src.as_bytes());
+
+        let r: Result<bool, ()> = parser.with_query(true, |p| {
+            assert!(p.in_query());
+            p.with_query(false, |p| {
+                assert!(!p.in_query());
+                Ok(())
+            })?;
+            assert!(p.in_query());
+            Ok(p.in_query())
+        });
+        assert_eq!(r, Ok(true));
+        assert!(!parser.in_query());
+
+        let r: Result<(), ()> = parser.with_record_ctor(false, |p| {
+            assert!(!p.record_ctor_allowed());
+            p.with_record_ctor(true, |p| {
+                assert!(p.record_ctor_allowed());
+                Ok(())
+            })?;
+            assert!(!p.record_ctor_allowed());
+            Err(())
+        });
+        assert_eq!(r, Err(()));
+        assert!(parser.record_ctor_allowed());
     }
 }
