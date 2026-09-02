@@ -65,12 +65,12 @@ impl Region {
 
 #[derive(Clone, Debug, Eq, Copy, PartialEq, Hash)]
 pub struct Position {
-    pub line: u16,
-    pub column: u16,
+    pub line: u32,
+    pub column: u32,
 }
 
 impl Position {
-    pub const fn new(line: u16, column: u16) -> Self {
+    pub const fn new(line: u32, column: u32) -> Self {
         Self { line, column }
     }
 

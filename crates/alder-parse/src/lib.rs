@@ -31,8 +31,8 @@ mod type_;
 // error renderer in another crate can name them.
 pub use keyword::{Keyword, SqlWord};
 
-pub type Row = u16;
-pub type Col = u16;
+pub type Row = u32;
+pub type Col = u32;
 
 /// Saved parser state for backtracking.
 #[derive(Clone, Copy)]

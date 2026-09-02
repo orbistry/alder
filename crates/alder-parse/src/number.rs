@@ -238,7 +238,7 @@ mod tests {
         }
     }
 
-    fn with_parser<T>(src: &str, f: impl FnOnce(&mut Parser<'_>) -> T) -> (T, (u16, u16)) {
+    fn with_parser<T>(src: &str, f: impl FnOnce(&mut Parser<'_>) -> T) -> (T, (u32, u32)) {
         let bump = Bump::new();
         let text = bump.alloc_str(src);
         let mut parser = Parser::new(&bump, text.as_bytes());
@@ -248,7 +248,7 @@ mod tests {
 
     /// `number_literal` outcome plus the cursor position afterwards.
     /// Errors render as `"<problem> <row>:<col>"`, expectations as `"expect <row>:<col>"`.
-    fn literal(src: &str) -> (Result<Lit, String>, (u16, u16)) {
+    fn literal(src: &str) -> (Result<Lit, String>, (u32, u32)) {
         with_parser(src, |p| {
             p.number_literal(
                 |r, c| format!("expect {r}:{c}"),
@@ -259,7 +259,7 @@ mod tests {
     }
 
     /// `chomp_number` outcome plus the cursor position afterwards.
-    fn chomp(src: &str) -> (Result<Lit, String>, (u16, u16)) {
+    fn chomp(src: &str) -> (Result<Lit, String>, (u32, u32)) {
         with_parser(src, |p| {
             p.chomp_number()
                 .map(Lit::from)

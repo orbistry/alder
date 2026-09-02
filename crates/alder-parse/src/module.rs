@@ -757,4 +757,34 @@ mod tests {
             "#
         );
     }
+
+    /// Positions are `u32`: a line longer than `u16::MAX` bytes keeps exact
+    /// columns (the old `u16` counters overflowed in debug and wrapped in
+    /// release, misplacing every later region and error).
+    #[test]
+    fn long_line_keeps_exact_columns() {
+        let bump = bumpalo::Bump::new();
+        let text = "a".repeat(70_000);
+        let src = bump.alloc_str(&format!("let x = \"{text}\"\n"));
+        let module = crate::parse_module(&bump, src).unwrap_or_else(|e| panic!("{e:#?}"));
+        let [item] = module.items else {
+            panic!("expected one item")
+        };
+        assert_eq!(item.region.start, alder_region::Position::new(1, 1));
+        // `let x = "` is 9 bytes, the text 70_000, the closing quote 1.
+        assert_eq!(item.region.end, alder_region::Position::new(1, 70_011));
+    }
+
+    /// Positions are `u32`: a file with more than `u16::MAX` lines keeps
+    /// exact rows.
+    #[test]
+    fn many_lines_keep_exact_rows() {
+        let bump = bumpalo::Bump::new();
+        let src = bump.alloc_str(&"let x = 1\n".repeat(70_000));
+        let module = crate::parse_module(&bump, src).unwrap_or_else(|e| panic!("{e:#?}"));
+        assert_eq!(module.items.len(), 70_000);
+        let last = module.items.last().unwrap();
+        assert_eq!(last.region.start, alder_region::Position::new(70_000, 1));
+        assert_eq!(last.region.end, alder_region::Position::new(70_000, 10));
+    }
 }

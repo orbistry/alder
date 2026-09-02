@@ -40,7 +40,7 @@ let mut parser = Parser::new(&bump, src.as_bytes());
 
 - Small enums (e.g., `VarType`, `Associativity`) - just store the value
 - Newtypes around primitives (e.g., `Precedence(u16)`) - just store the value
-- `Region` (8 bytes of integers) - same size as a pointer, no benefit to indirection
+- `Region` (16 bytes: two `u32` line/column pairs) - two words, still cheaper to copy than to chase a pointer
 
 **Use `&'a T` for**:
 

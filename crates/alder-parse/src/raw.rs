@@ -247,9 +247,9 @@ mod tests {
 
     /// Interior text with its region, or the error rendered as text with its
     /// position; plus where the cursor stopped.
-    type Outcome = (Result<(String, Region), (String, u16, u16)>, Position);
+    type Outcome = (Result<(String, Region), (String, u32, u32)>, Position);
 
-    type Region = ((u16, u16), (u16, u16));
+    type Region = ((u32, u32), (u32, u32));
 
     fn raw(src: &str, open: u8, close: u8) -> Outcome {
         let bump = Bump::new();
@@ -287,15 +287,15 @@ mod tests {
         }
     }
 
-    fn ok(text: &str, region: Region) -> Result<(String, Region), (String, u16, u16)> {
+    fn ok(text: &str, region: Region) -> Result<(String, Region), (String, u32, u32)> {
         Ok((text.to_owned(), region))
     }
 
-    fn err(what: &str, row: u16, col: u16) -> Result<(String, Region), (String, u16, u16)> {
+    fn err(what: &str, row: u32, col: u32) -> Result<(String, Region), (String, u32, u32)> {
         Err((what.to_owned(), row, col))
     }
 
-    fn at(line: u16, column: u16) -> Position {
+    fn at(line: u32, column: u32) -> Position {
         Position::new(line, column)
     }
 
@@ -344,12 +344,11 @@ mod tests {
     #[test]
     fn deep_nesting() {
         // 20_000 levels overflowed the recursive scanner's stack; the
-        // explicit frame stack is depth-independent. Kept on one line and
-        // under `u16::MAX` columns.
+        // explicit frame stack is depth-independent. Kept on one line.
         let depth = 20_000;
         let src = format!("{}{}", "(".repeat(depth), ")".repeat(depth));
         let interior = &src[1..src.len() - 1];
-        let end = u16::try_from(src.len()).unwrap();
+        let end = u32::try_from(src.len()).unwrap();
         assert_eq!(
             parens(&src),
             (ok(interior, ((1, 2), (1, end))), at(1, end + 1))
@@ -362,7 +361,7 @@ mod tests {
         let depth = 5_000;
         let src = format!("({}x{})", "`${ ".repeat(depth), " }`".repeat(depth));
         let interior = &src[1..src.len() - 1];
-        let end = u16::try_from(src.len()).unwrap();
+        let end = u32::try_from(src.len()).unwrap();
         assert_eq!(
             parens(&src),
             (ok(interior, ((1, 2), (1, end))), at(1, end + 1))

@@ -1969,8 +1969,8 @@ rather than `SqlWord`, which cannot name it.)
 ### 5.1 `lib.rs`
 
 ```rust
-pub type Row = u16;
-pub type Col = u16;
+pub type Row = u32;
+pub type Col = u32;
 
 #[derive(Clone, Copy)]
 pub(crate) struct ParserState {

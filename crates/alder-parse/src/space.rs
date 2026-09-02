@@ -48,7 +48,7 @@ mod tests {
     use super::*;
     use bumpalo::Bump;
 
-    fn chomped(input: &str) -> (usize, u16, u16) {
+    fn chomped(input: &str) -> (usize, u32, u32) {
         let bump = Bump::new();
         let src = bump.alloc_str(input);
         let mut parser = Parser::new(&bump, src.as_bytes());

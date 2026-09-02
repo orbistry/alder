@@ -278,7 +278,7 @@ mod tests {
 
     /// Parse a string literal; returns the value or `"<error> at row:col"`,
     /// plus the cursor (row, col) afterwards.
-    fn string(src: &str) -> (Result<String, String>, (u16, u16)) {
+    fn string(src: &str) -> (Result<String, String>, (u32, u32)) {
         let bump = Bump::new();
         let text = bump.alloc_str(src);
         let mut parser = Parser::new(&bump, text.as_bytes());

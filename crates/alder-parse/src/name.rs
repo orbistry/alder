@@ -193,7 +193,7 @@ mod tests {
     use super::*;
     use bumpalo::Bump;
 
-    fn with_parser<T>(src: &str, in_query: bool, f: impl FnOnce(&mut Parser<'_>) -> T) -> (T, u16) {
+    fn with_parser<T>(src: &str, in_query: bool, f: impl FnOnce(&mut Parser<'_>) -> T) -> (T, u32) {
         let bump = Bump::new();
         let text = bump.alloc_str(src);
         let mut parser = Parser::new(&bump, text.as_bytes());
@@ -202,7 +202,7 @@ mod tests {
         (result, col)
     }
 
-    fn lower(src: &str, in_query: bool) -> (Result<String, (u16, u16)>, u16) {
+    fn lower(src: &str, in_query: bool) -> (Result<String, (u32, u32)>, u32) {
         let (r, col) = with_parser(src, in_query, |p| {
             p.lower_name(|r, c| (r, c)).map(str::to_owned)
         });
@@ -254,7 +254,7 @@ mod tests {
         assert_eq!((r, col), (Err((1, 1)), 1));
     }
 
-    fn path(src: &str) -> (Result<Vec<String>, String>, u16) {
+    fn path(src: &str) -> (Result<Vec<String>, String>, u32) {
         with_parser(src, false, |p| {
             p.path(
                 |r, c| format!("expect {r}:{c}"),
@@ -300,7 +300,7 @@ mod tests {
         assert_eq!((region.end.line, region.end.column), (1, 13));
     }
 
-    fn tag(src: &str) -> (Result<(String, u16, u16), String>, u16) {
+    fn tag(src: &str) -> (Result<(String, u32, u32), String>, u32) {
         with_parser(src, false, |p| {
             p.tag_name(
                 |r, c| format!("expect {r}:{c}"),
@@ -338,7 +338,7 @@ mod tests {
         assert_eq!(tag("x"), (Err("expect 1:1".into()), 1));
     }
 
-    fn dashed(src: &str) -> (Result<String, (u16, u16)>, u16) {
+    fn dashed(src: &str) -> (Result<String, (u32, u32)>, u32) {
         with_parser(src, false, |p| {
             p.dashed_name(|r, c| (r, c)).map(|n| n.value.to_owned())
         })

@@ -113,7 +113,7 @@ mod tests {
     use bumpalo::Bump;
 
     /// `Err` carries the `BadOperator` rendered with `Debug` (error types are not `PartialEq`).
-    fn binop_at(src: &str, in_query: bool) -> (Result<Option<BinOp>, String>, u16) {
+    fn binop_at(src: &str, in_query: bool) -> (Result<Option<BinOp>, String>, u32) {
         let bump = Bump::new();
         let text = bump.alloc_str(src);
         let mut parser = Parser::new(&bump, text.as_bytes());
@@ -122,7 +122,7 @@ mod tests {
         (result.map(|op| op.map(|l| l.value)), col)
     }
 
-    fn assign_at(src: &str) -> (Option<AssignOp>, u16) {
+    fn assign_at(src: &str) -> (Option<AssignOp>, u32) {
         let bump = Bump::new();
         let text = bump.alloc_str(src);
         let mut parser = Parser::new(&bump, text.as_bytes());
