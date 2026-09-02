@@ -71,11 +71,13 @@ interprets them and the compiler emits `wrangler.jsonc` and bindings.
 type Counter = { count: Number }
 
 impl DurableObject<Counter> {
-    fn fetch(self: Counter, req: Request) -> Response { ... }
+    fn fetch(obj: Counter, req: Request) -> Response { ... }
 }
 
-#[binding("KV_CACHE")]
-let cache: Kv
+fn handler(req: Request) -> Response {
+    use Kv                      // bound to the worker's KV namespace via wrangler config
+    Kv.get(cache, "key").await
+}
 ```
 
 - Bindings (KV, D1, R2, Queues, Hyperdrive, Workflows) are available
