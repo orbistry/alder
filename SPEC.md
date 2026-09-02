@@ -280,10 +280,10 @@ the solver. Snapshot tests per construct as today.
 - [ ] Typed markup checking against an HTML schema
 - [ ] `component` and `state`, compile-time dependency tracking, DOM codegen
 - [ ] SSR renderer and hydration in the kernel
-- [ ] Folder routing: `+page.ald`, `+layout.ald`, `+server.ald`, typed `Routes`
-- [ ] `#[server]` split with reachability analysis and RPC stubs
+- [ ] Folder routing: `+page.ald`, `+page.server.ald`, `+layout.ald`, `+layout.server.ald`, `+server.ald`, `+error.ald`, typed `Routes` and generated `PageData`
+- [ ] `*.remote.ald` modules and `+page.server.ald` as server boundaries, reachability analysis, typed HTTP stubs
 - [ ] Module stores, request-scoped on the server
-- [ ] `#[static]`/`#[server]`/`#[client]` render modes
+- [ ] SvelteKit page options (`prerender`, `ssr`, `csr`) inherited down the route tree
 - [ ] `alder dev` on vendored miniflare; `alder deploy` generating `wrangler.jsonc`
 - [ ] Cloudflare bindings via traits and attributes
 

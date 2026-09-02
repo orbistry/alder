@@ -9,27 +9,39 @@ enhancement mode.
 
 ## Routing
 
-SvelteKit's model. The folder is the route; the file name says what the
-file is.
+SvelteKit's model, copied deliberately. The folder is the route; the file
+name says what the file is.
 
 ```
 src/routes/
-├── +layout.ald            # wraps the whole subtree
-├── +page.ald              # /
+├── +layout.ald                # layout component + universal load for the subtree
+├── +layout.server.ald         # server-only load for the subtree
+├── +page.ald                  # /            page component + universal load
+├── +error.ald                 # error boundary for the subtree
 ├── users/
-│   ├── +page.ald          # /users
+│   ├── +page.ald              # /users
+│   ├── +page.server.ald       # server load + actions scoped to /users
 │   └── [id]/
-│       ├── +page.ald      # /users/:id
-│       └── +server.ald    # JSON handlers for /users/:id
-└── api/
-    └── health/+server.ald
+│       ├── +page.ald          # /users/:id
+│       ├── +page.server.ald
+│       └── +server.ald        # HTTP handlers for /users/:id
+├── api/health/+server.ald     # endpoint with no page
+└── lib/
+    └── users.remote.ald       # remote functions callable from anywhere
 ```
 
-- `+page.ald` exports `load` and a `page` component.
-- `+layout.ald` exports `load` and a `layout` component that renders
-  `children`; it controls the whole subtree (auth, data, render mode).
+- `+page.ald` exports a `page` component and may export a universal
+  `load` that runs on the server for the first render and in the browser
+  on navigation.
+- `+page.server.ald` exports a server-only `load` and `actions`, both
+  scoped to that page. Anything here may `use Db`; nothing here ships to
+  the browser.
+- `+layout.ald` and `+layout.server.ald` are the same pair for a subtree;
+  the layout component renders `children`. Layout `load` data is available
+  to every page beneath it.
 - `+server.ald` exports `get`, `post`, ... returning typed responses. A
   route may return pure JSON this way with no page at all.
+- `+error.ald` renders when a `load` or page in the subtree fails.
 - `[id]` params are typed from the folder name. The compiler generates a
   typed `Routes` module so `href(Routes.users.show, { id })` is checked
   and links to unknown routes fail at compile time.
@@ -37,42 +49,81 @@ src/routes/
   with typed path params parsed from the string literal. Both systems
   share handler and middleware types.
 
-## Render modes
+## Page options
 
-Per route, with an app default in `alder.jsonc`:
+Exactly SvelteKit's, exported as values from `+page.ald`,
+`+page.server.ald`, `+layout.ald`, or `+layout.server.ald`, and inherited
+down the tree. There is no `alder.jsonc` default; the root `+layout.ald`
+is where app-wide choices go.
 
 ```alder
-#[static]           // prerendered at build time
-#[server]           // SSR per request (default)
-#[client]           // CSR only
+pub let prerender = true      // build-time render (SSG); default false
+pub let ssr = false           // skip server render for this subtree; default true
+pub let csr = false           // ship no JS for this subtree; default true
+pub let trailingSlash = Never // Never | Always | Ignore
 ```
 
-A `+layout.ald` attribute applies to its subtree.
+- `prerender = true` on a dynamic route requires `entries` to enumerate
+  params, as in SvelteKit.
+- `ssr = false` makes the page render only in the browser; `csr = false`
+  makes it static HTML. Both false is a compile error.
 
-## Server and client code
-
-One web package holds both. The split is per function.
+## Loading data
 
 ```alder
-#[server]
-fn loadUser(id: Id) -> Result[User] {
+// users/[id]/+page.server.ald
+pub fn load(event: LoadEvent) -> Result[{ user: User, posts: Array[Post] }] {
     use Db
-    Db.get(users, id).await
+    let user = db.run(query { select * from users where users.id == event.params.id }).await?
+    let posts = loadPosts(user.id).await?
+    Ok({ user, posts })
 }
 
-pub component UserCard(props: { id: Id }) {
-    let user = resource(fn() loadUser(props.id))
-    ...
+// users/[id]/+page.ald
+pub component page(props: { data: PageData }) {
+    <h1>{props.data.user.name}</h1>
 }
 ```
 
-- `#[server]` functions run only on the worker. Calls from
-  client-reachable code are replaced with typed RPC stubs that carry the
-  same `Result` type.
-- The compiler performs whole-program reachability from each entry point
-  and rejects server-only stdlib (Db, Kv) in client code with a path
-  explaining how it got there.
-- Components are isomorphic by default.
+- `PageData` for a route is generated from the return types of its own
+  `load` functions merged with every parent layout's, so `props.data` is
+  fully typed with no annotation.
+- `event.params` is typed from the folder names on the way down.
+- Errors from `load` are open `:tag` errors; `+error.ald` matches on them.
+
+## Remote functions
+
+SvelteKit's remote functions, which are the same idea as server functions
+in Solid and TanStack. Any module named `*.remote.ald` is server-only:
+every `pub` function in it can be called from anywhere, including
+components, and the compiler replaces the call with a typed stub over
+HTTP when the caller runs in the browser. The `Result` type crosses the
+wire intact.
+
+```alder
+// lib/users.remote.ald
+pub fn getUser(id: Id) -> Result[User] { ... }              // query
+pub fn deleteUser(id: Id) -> Result[()] { ... }             // command
+pub fn signUp(input: SignUp) -> Result[User] { ... }        // form action, typed by schema
+
+// any component
+component UserCard(props: { id: Id }) {
+    let user = resource(fn() getUser(props.id))
+    <button onClick={fn() deleteUser(props.id)}>Delete</button>
+}
+```
+
+- Queries and commands are just functions; the framework caches queries
+  by arguments and invalidates them when a command in the same module
+  runs, following SvelteKit's `query`/`command` semantics. **Open:** the
+  exact cache and invalidation API.
+- A remote function whose argument is a `schema` type is usable as a
+  `Form` action.
+- Remote modules and `+page.server.ald` are the only server-only
+  boundaries; there is no per-function attribute. The compiler performs
+  whole-program reachability from each entry point and rejects
+  server-only stdlib (Db, Kv) in client code with a path explaining how it
+  got there. Components are isomorphic by default.
 
 ## Reactivity
 
@@ -138,8 +189,8 @@ schema SignUp from users {
     confirm: String, equals(password)
 }
 
-#[server]
-fn signUp(input: SignUp) -> Result[User] { ... }
+// lib/auth.remote.ald
+pub fn signUp(input: SignUp) -> Result[User] { ... }
 
 <Form action={signUp}>
     <Field name="email" />
@@ -148,7 +199,8 @@ fn signUp(input: SignUp) -> Result[User] { ... }
 ```
 
 - `SignUp` is a record type plus a parser. Form components are typed from
-  it; server actions receive the parsed value; errors map back to fields.
+  it; the remote function (or a `+page.server.ald` action) receives the
+  parsed value; errors map back to fields.
 - Validation errors are open `:tag` errors so custom rules compose.
 
 ## API
@@ -169,7 +221,7 @@ embedded runtime).
 component App() {
     let mut selected = state(0)
     <box direction="column" border="round">
-        <text bold>Tasks[/text]
+        <text bold>Tasks</text>
         {for (task, i) in tasks { <text inverse={i == selected}>{task}</text> }}
     </box>
 }

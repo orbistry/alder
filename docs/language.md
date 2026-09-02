@@ -417,7 +417,7 @@ control-flow blocks both work inside braces.
     {for item in items {
         <li key={item.id}>{item.name}</li>
     }}
-    {if items.length == 0 { <li>Nothing here[/li] }}
+    {if items.length == 0 { <li>Nothing here</li> }}
     {match status {
         Loading => <Spinner />,
         Ready(n) => <span>{n}</span>,
@@ -458,9 +458,6 @@ build time in the compiler's embedded V8, with Elixir-style
 `quote`/`unquote` and Jai-style `comptime` blocks.
 
 ```alder
-#[server]
-fn loadUser(id: Id) -> Result[User] { ... }
-
 #[derive(Show, Eq, Json)]
 type Point = { x: Number, y: Number }
 
