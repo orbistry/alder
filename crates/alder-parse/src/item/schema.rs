@@ -19,8 +19,18 @@
 //! accepted here because `confirm: String` is the natural way to declare
 //! an unconstrained field). `pick` is contextual: `pick: …` is a field
 //! named `pick`. A trailing comma is accepted after pick names and after
-//! rules; the list ends when `}` or the next `name :` follows the comma.
-//! Rules are parsed by `modifier()` (item/table.rs).
+//! rules; the list ends when `}`, the next `name :` or the next `pick`
+//! item follows the comma. Rules are parsed by `modifier()`
+//! (item/table.rs).
+//!
+//! Consequences of the §10.28 type-vs-rule rule, for the Wave 4 SPEC
+//! amendment: a schema field type can never start with a lowercase
+//! identifier (`a: t` is the rule `t`; `a: r[x], min(1)` is the rule `r`
+//! followed by `Schema::End` at `[`), so SPEC's `[ type ',' ]` must
+//! exclude type variables and their applications there. And after a
+//! finished item, a lowercase word that is neither `pick …` nor `name :`
+//! is `Schema::End` at the word (a rule or pick name missing its `,`),
+//! not a field missing its `:`.
 //!
 //! `schema_decl` stops right after the closing `}` without chomping, so
 //! `item()` computes the item region before its own chomp.
@@ -32,11 +42,11 @@ use bumpalo::collections::Vec as BumpVec;
 use crate::keyword::is_reserved;
 use crate::{Parser, error};
 
-// Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
-// Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `schema`.
+    // Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
+    // Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
+    #[allow(unused)]
     pub(crate) fn schema_decl(&mut self) -> Result<&'a SchemaDecl<'a>, error::Schema<'a>> {
         self.chomp();
         let name = self.located_upper(error::Schema::Name)?;
@@ -62,8 +72,16 @@ impl<'a> Parser<'a> {
                 Some(b) if b.is_ascii_lowercase() => {
                     let item = if self.peek_keyword(b"pick") && !self.peek_ident_colon() {
                         self.pick()?
-                    } else {
+                    } else if items.is_empty() || self.peek_ident_colon() {
                         self.field()?
+                    } else {
+                        // A word after a finished item that starts neither
+                        // `pick …` nor `name :` is a rule or pick name that
+                        // lost its `,` (`min(3)\n max(10)`, `String min(1)`,
+                        // `pick email name`): report it at the word, not as
+                        // a missing `:` further on.
+                        let (row, col) = self.position();
+                        return Err(error::Schema::End(row, col));
                     };
                     items.push(item);
                 }
@@ -150,10 +168,12 @@ impl<'a> Parser<'a> {
         !self.at_item_boundary()
     }
 
-    /// After a trailing comma: is the cursor on `}` or on the next item's
-    /// `name :`? Does not consume.
+    /// After a trailing comma: is the cursor on `}`, on the next item's
+    /// `name :`, or on the next `pick` item? Does not consume.
     fn at_item_boundary(&mut self) -> bool {
-        self.peek() == Some(b'}') || self.peek_ident_colon()
+        self.peek() == Some(b'}')
+            || self.peek_ident_colon()
+            || (self.peek_keyword(b"pick") && !self.peek_ident_colon())
     }
 }
 
@@ -283,6 +303,35 @@ mod tests {
             }
         "#
         );
+    }
+
+    #[test]
+    fn schema_pick_trailing_comma_then_pick() {
+        assert_schema_snapshot!(
+            r#"
+            schema S from users {
+                pick a,
+                pick b
+            }
+        "#
+        );
+    }
+
+    #[test]
+    fn schema_rules_trailing_comma_then_pick() {
+        assert_schema_snapshot!(
+            r#"
+            schema S from users {
+                name: min(3),
+                pick email
+            }
+        "#
+        );
+    }
+
+    #[test]
+    fn schema_type_var_is_rule() {
+        assert_schema_snapshot!("schema S { a: t }");
     }
 
     #[test]
@@ -456,6 +505,38 @@ mod tests {
     #[test]
     fn error_rule_reserved() {
         assert_schema_error_snapshot!("schema S { name: min(3), fn }");
+    }
+
+    #[test]
+    fn error_rule_missing_comma_next_line() {
+        assert_schema_error_snapshot!(
+            r#"
+            schema S {
+                name: min(3)
+                    max(10)
+            }
+        "#
+        );
+    }
+
+    #[test]
+    fn error_rules_missing_comma() {
+        assert_schema_error_snapshot!("schema S { a: min(3) max(5) }");
+    }
+
+    #[test]
+    fn error_type_then_rule_missing_comma() {
+        assert_schema_error_snapshot!("schema S { a: String min(1) }");
+    }
+
+    #[test]
+    fn error_pick_names_missing_comma() {
+        assert_schema_error_snapshot!("schema S from users { pick email name }");
+    }
+
+    #[test]
+    fn error_type_var_applied() {
+        assert_schema_error_snapshot!("schema S { a: r[x], min(1) }");
     }
 
     #[test]

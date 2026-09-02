@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/schema.rs
+description: "schema S { a: String min(1) }"
+---
+End(
+    1,
+    22,
+)
