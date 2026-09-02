@@ -1,0 +1,17 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { padding: else }"
+---
+Style(
+    Value(
+        Reserved(
+            Else,
+            1,
+            18,
+        ),
+        1,
+        18,
+    ),
+    1,
+    1,
+)

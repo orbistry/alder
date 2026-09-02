@@ -1,0 +1,106 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { \":hover\": { color: theme.accent } }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 44,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                        },
+                        value: Str(
+                            ":hover",
+                        ),
+                    },
+                    value: Nested(
+                        Style {
+                            entries: [
+                                StyleEntry {
+                                    key: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 21,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 26,
+                                            },
+                                        },
+                                        value: Ident(
+                                            "color",
+                                        ),
+                                    },
+                                    value: Expr(
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 28,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 40,
+                                                },
+                                            },
+                                            value: Access {
+                                                record: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 28,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 33,
+                                                        },
+                                                    },
+                                                    value: Var(
+                                                        "theme",
+                                                    ),
+                                                },
+                                                field: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 34,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 40,
+                                                        },
+                                                    },
+                                                    value: "accent",
+                                                },
+                                            },
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                },
+            ],
+        },
+    ),
+}

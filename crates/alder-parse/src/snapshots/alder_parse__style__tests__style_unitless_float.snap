@@ -1,0 +1,59 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { opacity: 0.5 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                        },
+                        value: Ident(
+                            "opacity",
+                        ),
+                    },
+                    value: Expr(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 18,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 21,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 0.5,
+                                    text: "0.5",
+                                },
+                            ),
+                        },
+                    ),
+                },
+            ],
+        },
+    ),
+}

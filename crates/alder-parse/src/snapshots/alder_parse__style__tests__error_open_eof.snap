@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/style.rs
+description: style
+---
+Style(
+    Open(
+        1,
+        6,
+    ),
+    1,
+    1,
+)

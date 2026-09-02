@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { padding: 16px,, color: red }"
+---
+Style(
+    Key(
+        1,
+        23,
+    ),
+    1,
+    1,
+)
