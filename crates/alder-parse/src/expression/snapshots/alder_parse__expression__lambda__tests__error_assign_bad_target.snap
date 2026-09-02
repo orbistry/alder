@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: fn() 1 += 2
+---
+Lambda(
+    Body(
+        Start(
+            1,
+            6,
+        ),
+        1,
+        6,
+    ),
+    1,
+    1,
+)
