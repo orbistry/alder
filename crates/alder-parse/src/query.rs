@@ -1,69 +1,65 @@
-//! Type expressions.
+//! `query { }` blocks (docs/parser-internals.md §6.3).
 //!
-//! See docs/parser-internals.md §5.15.
-// OWNER: type_.rs (Wave 1)
+//! See docs/parser-internals.md §5.17.
+// OWNER: query.rs (Wave 3)
 
 use alder_region::{Located, Position};
-use alder_source::{FieldType, Name, TagVariant, Type};
+use alder_source::{Expr, Query, Select, TableRef};
 
 use crate::{Parser, error};
 
 #[allow(unused)]
 impl<'a> Parser<'a> {
-    /// `fn` type or term. Chomps trailing whitespace.
-    pub fn type_expr(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
-        todo!()
-    }
-
-    /// path[args] | var[args] | ( ) | tuple | record | error row.
-    pub(crate) fn type_term(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
-        todo!()
-    }
-
-    /// At `[`: `[T, U]`.
-    pub(crate) fn type_args(&mut self) -> Result<&'a [&'a Located<Type<'a>>], error::TArgs<'a>> {
-        todo!()
-    }
-
-    /// `:tag[(T, …)]` — shared by error rows and `error` groups.
-    pub(crate) fn tag_variant(&mut self) -> Result<TagVariant<'a>, error::TagVariant<'a>> {
-        todo!()
-    }
-
-    /// After `{`: fields with `?` and `r |` extension. Shared with enum record variants.
-    pub(crate) fn field_types(
-        &mut self,
-    ) -> Result<(&'a [FieldType<'a>], Option<Name<'a>>), error::TRecord<'a>> {
-        todo!()
-    }
-
-    fn type_fn(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, error::TFn<'a>> {
-        todo!()
-    }
-
-    fn type_tuple(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, error::TTuple<'a>> {
-        todo!()
-    }
-
-    fn type_error_row(
+    /// After `query`: `{` … `}` under `with_query(true, …)`.
+    pub(crate) fn query(
         &mut self,
         start: Position,
-    ) -> Result<&'a Located<Type<'a>>, error::TErrorRow<'a>> {
+    ) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        todo!()
+    }
+
+    fn query_body(&mut self) -> Result<&'a Query<'a>, error::Query<'a>> {
+        todo!()
+    }
+
+    fn select(&mut self) -> Result<&'a Select<'a>, error::Select<'a>> {
+        todo!()
+    }
+
+    fn insert(&mut self) -> Result<Query<'a>, error::Insert<'a>> {
+        todo!()
+    }
+
+    fn update(&mut self) -> Result<Query<'a>, error::Update<'a>> {
+        todo!()
+    }
+
+    fn delete(&mut self) -> Result<Query<'a>, error::Delete<'a>> {
+        todo!()
+    }
+
+    fn table_ref(&mut self) -> Result<TableRef<'a>, error::TableRef> {
+        todo!()
+    }
+
+    /// `^` + postfix parsed with `with_query(false, …)` so `^select` and `^{ a, b }` work.
+    /// The operand is the whole postfix chain (`^user.id` pins `user.id`; §10.20).
+    pub(crate) fn pinned_value(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
         todo!()
     }
 }
 
-/// Snapshot test macro for successful type parsing.
+/// Snapshot test macro for successful query parsing.
 #[cfg(test)]
 #[allow(unused)]
-macro_rules! assert_type_snapshot {
+macro_rules! assert_query_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
         let code = indoc::indoc!($code);
         let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
         let result = parser
-            .type_expr()
+            .expression()
             .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
         assert!(
             parser.is_eof(),
@@ -79,17 +75,17 @@ macro_rules! assert_type_snapshot {
     }};
 }
 
-/// Snapshot test macro for type parse errors.
+/// Snapshot test macro for query parse errors.
 #[cfg(test)]
 #[allow(unused)]
-macro_rules! assert_type_error_snapshot {
+macro_rules! assert_query_error_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
         let code = indoc::indoc!($code);
         let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
         let err = parser
-            .type_expr()
+            .expression()
             .err()
             .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
         insta::with_settings!({
@@ -103,10 +99,10 @@ macro_rules! assert_type_error_snapshot {
 
 #[cfg(test)]
 #[allow(unused)]
-pub(crate) use assert_type_error_snapshot;
+pub(crate) use assert_query_error_snapshot;
 #[cfg(test)]
 #[allow(unused)]
-pub(crate) use assert_type_snapshot;
+pub(crate) use assert_query_snapshot;
 
 #[cfg(test)]
 mod tests {}

@@ -1,49 +1,40 @@
-//! Patterns.
+//! Template literals: `` `…${expr}…` `` (docs/parser-internals.md §6.1).
 //!
-//! See docs/parser-internals.md §5.14.
-// OWNER: pattern/mod.rs (Wave 1)
+//! See docs/parser-internals.md §5.7.
+// OWNER: template.rs (Wave 2)
 
-mod array;
-mod ctor;
-mod record;
-mod tuple;
-
-use alder_region::Located;
-use alder_source::Pattern;
+use alder_region::{Located, Position};
+use alder_source::{Expr, TemplatePart};
 
 use crate::{Parser, error};
 
 #[allow(unused)]
 impl<'a> Parser<'a> {
-    /// `pattern_atom [as name]`. Chomps trailing whitespace.
-    pub fn pattern(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+    /// At the opening backtick. Used by primary and by tagged templates.
+    pub(crate) fn template_parts(&mut self) -> Result<&'a [TemplatePart<'a>], error::Template<'a>> {
         todo!()
     }
 
-    /// `p | q | r` (match arms).
-    pub(crate) fn pattern_alternatives(
+    /// `Expr::Template` primary.
+    pub(crate) fn template(
         &mut self,
-    ) -> Result<&'a [&'a Located<Pattern<'a>>], error::Pattern<'a>> {
-        todo!()
-    }
-
-    /// Dispatch on first byte: `_`, lower, upper (ctor), `:`, `^`, `-`/digit, `"`, `(`, `[`, `{`, true/false.
-    pub(crate) fn pattern_atom(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+        start: Position,
+    ) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
         todo!()
     }
 }
 
-/// Snapshot test macro for successful pattern parsing.
+/// Snapshot test macro for successful template parsing.
 #[cfg(test)]
 #[allow(unused)]
-macro_rules! assert_pattern_snapshot {
+macro_rules! assert_template_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
         let code = indoc::indoc!($code);
         let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
         let result = parser
-            .pattern()
+            .expression()
             .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
         assert!(
             parser.is_eof(),
@@ -59,17 +50,17 @@ macro_rules! assert_pattern_snapshot {
     }};
 }
 
-/// Snapshot test macro for pattern parse errors.
+/// Snapshot test macro for template parse errors.
 #[cfg(test)]
 #[allow(unused)]
-macro_rules! assert_pattern_error_snapshot {
+macro_rules! assert_template_error_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
         let code = indoc::indoc!($code);
         let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
         let err = parser
-            .pattern()
+            .expression()
             .err()
             .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
         insta::with_settings!({
@@ -83,10 +74,10 @@ macro_rules! assert_pattern_error_snapshot {
 
 #[cfg(test)]
 #[allow(unused)]
-pub(crate) use assert_pattern_error_snapshot;
+pub(crate) use assert_template_error_snapshot;
 #[cfg(test)]
 #[allow(unused)]
-pub(crate) use assert_pattern_snapshot;
+pub(crate) use assert_template_snapshot;
 
 #[cfg(test)]
 mod tests {}

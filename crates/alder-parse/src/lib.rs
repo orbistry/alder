@@ -1,20 +1,29 @@
+//! Parser for Alder source code.
+//!
+//! A scannerless, byte-level recursive-descent parser in the style of the
+//! Elm compiler's `Parse/Primitives.hs`. See docs/parser-internals.md.
+
 use alder_region::{Located, Position, Region};
+use alder_source::Module;
 use bumpalo::Bump;
 
-mod declaration;
 pub mod error;
-mod exposing;
 mod expression;
-mod import;
+mod item;
 mod keyword;
+mod markup;
 mod module;
+mod name;
 mod number;
 mod pattern;
+mod query;
+mod raw;
 mod space;
+mod statement;
 mod string;
+mod style;
 mod symbol;
-#[cfg(test)]
-pub(crate) mod test_support;
+mod template;
 mod type_;
 
 pub type Row = u16;
@@ -22,9 +31,8 @@ pub type Col = u16;
 
 /// Saved parser state for backtracking.
 #[derive(Clone, Copy)]
-struct ParserState {
+pub(crate) struct ParserState {
     pos: usize,
-    indent: u16,
     row: Row,
     col: Col,
 }
@@ -43,12 +51,23 @@ pub struct Parser<'a> {
     src: &'a [u8],
     /// Current byte position
     pos: usize,
-    /// Current indentation level (for layout-sensitive parsing)
-    indent: u16,
     /// Current row (1-indexed)
     row: Row,
     /// Current column (1-indexed)
     col: Col,
+    /// Inside `query { }`: `in` is a binop, `^` pins, SQL words are not identifiers.
+    in_query: bool,
+    /// Set in if/while/for/match/provide/@directive heads: `Path {` is not a record constructor.
+    #[allow(unused)]
+    no_record_ctor: bool,
+}
+
+/// Entry point used by the driver and by tests.
+pub fn parse_module<'a>(bump: &'a Bump, src: &'a str) -> Result<Module<'a>, error::Error<'a>> {
+    let mut parser = Parser::new(bump, src.as_bytes());
+    parser
+        .module()
+        .map_err(|e| error::Error::ParseError(bump.alloc(e)))
 }
 
 impl<'a> Parser<'a> {
@@ -60,11 +79,10 @@ impl<'a> Parser<'a> {
             bump,
             src,
             pos: 0,
-            // Elm starts at 0; 1 is behaviorally identical because
-            // `checkIndent`'s `col > 1` guard dominates at top level.
-            indent: 1,
             row: 1,
             col: 1,
+            in_query: false,
+            no_record_ctor: false,
         }
     }
 
@@ -88,8 +106,7 @@ impl<'a> Parser<'a> {
     /// allocated directly in the arena.
     #[inline]
     pub fn add_end<T>(&self, start: Position, value: T) -> &'a Located<T> {
-        let end = self.get_position();
-        self.alloc(Located::at(Region::new(start, end), value))
+        self.alloc(self.located(start, value))
     }
 
     /// Current row (1-indexed).
@@ -104,63 +121,6 @@ impl<'a> Parser<'a> {
         self.col
     }
 
-    /// Current indentation level.
-    #[inline]
-    pub fn indent(&self) -> u16 {
-        self.indent
-    }
-
-    /// Set the indentation level.
-    #[inline]
-    pub fn set_indent(&mut self, indent: u16) {
-        self.indent = indent;
-    }
-
-    /// Run a parser with the current column as the indent level,
-    /// then restore the old indent level.
-    ///
-    /// Mirrors Elm's `withIndent`:
-    /// ```haskell
-    /// withIndent (Parser parser) =
-    ///   Parser $ \(State src pos end oldIndent row col) cok eok cerr eerr ->
-    ///     let
-    ///       cok' a (State s p e _ r c) = cok a (State s p e oldIndent r c)
-    ///       eok' a (State s p e _ r c) = eok a (State s p e oldIndent r c)
-    ///     in
-    ///     parser (State src pos end col row col) cok' eok' cerr eerr
-    /// ```
-    pub fn with_indent<T, E>(
-        &mut self,
-        parser: impl FnOnce(&mut Self) -> Result<T, E>,
-    ) -> Result<T, E> {
-        let old_indent = self.indent;
-        self.indent = self.col;
-        let result = parser(self);
-        self.indent = old_indent;
-        result
-    }
-
-    /// Run a parser with indent set to (current column - backset),
-    /// then restore the old indent level.
-    ///
-    /// Mirrors Elm's `withBacksetIndent`:
-    /// ```haskell
-    /// withBacksetIndent backset (Parser parser) =
-    ///   Parser $ \(State src pos end oldIndent row col) cok eok cerr eerr ->
-    ///     parser (State src pos end (col - backset) row col) ...
-    /// ```
-    pub fn with_backset_indent<T, E>(
-        &mut self,
-        backset: u16,
-        parser: impl FnOnce(&mut Self) -> Result<T, E>,
-    ) -> Result<T, E> {
-        let old_indent = self.indent;
-        self.indent = self.col.saturating_sub(backset);
-        let result = parser(self);
-        self.indent = old_indent;
-        result
-    }
-
     /// Check if we've reached the end of input.
     #[inline]
     pub fn is_eof(&self) -> bool {
@@ -169,10 +129,9 @@ impl<'a> Parser<'a> {
 
     /// Save current parser state for backtracking.
     #[inline]
-    fn save_state(&self) -> ParserState {
+    pub(crate) fn save_state(&self) -> ParserState {
         ParserState {
             pos: self.pos,
-            indent: self.indent,
             row: self.row,
             col: self.col,
         }
@@ -180,13 +139,84 @@ impl<'a> Parser<'a> {
 
     /// Restore parser state for backtracking.
     #[inline]
-    fn restore_state(&mut self, state: ParserState) {
+    pub(crate) fn restore_state(&mut self, state: ParserState) {
         self.pos = state.pos;
-        self.indent = state.indent;
         self.row = state.row;
         self.col = state.col;
     }
 
+    /// Inline `Located` spanning `start`..current (for names and other Copy leaves).
+    #[inline]
+    pub(crate) fn located<T>(&self, start: Position, value: T) -> Located<T> {
+        Located::at(Region::new(start, self.get_position()), value)
+    }
+}
+
+// Newline / adjacency / mode helpers. Callers arrive with Waves 1-3; the
+// `allow` goes away in Wave 4 (docs/parser-internals.md §9 step 4.2).
+#[allow(unused)]
+impl<'a> Parser<'a> {
+    /// Has a newline been crossed between `end` (a node's `region.end`) and here?
+    #[inline]
+    pub(crate) fn newline_since(&self, end: Position) -> bool {
+        end.line != self.row
+    }
+
+    /// Nothing (not even whitespace) has been consumed since `end`.
+    #[inline]
+    pub(crate) fn adjacent_to(&self, end: Position) -> bool {
+        end == self.get_position()
+    }
+
+    /// Run `f`, then restore position regardless of its result (lookahead).
+    pub(crate) fn lookahead<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let saved = self.save_state();
+        let result = f(self);
+        self.restore_state(saved);
+        result
+    }
+
+    /// Run `f` with query mode set to `on`, restoring the previous mode afterwards.
+    pub(crate) fn with_query<T, E>(
+        &mut self,
+        on: bool,
+        f: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let old = self.in_query;
+        self.in_query = on;
+        let result = f(self);
+        self.in_query = old;
+        result
+    }
+
+    /// Run `f` with record constructors allowed or not, restoring the previous
+    /// setting afterwards.
+    pub(crate) fn with_record_ctor<T, E>(
+        &mut self,
+        allowed: bool,
+        f: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let old = self.no_record_ctor;
+        self.no_record_ctor = !allowed;
+        let result = f(self);
+        self.no_record_ctor = old;
+        result
+    }
+
+    /// Are we inside `query { }`?
+    #[inline]
+    pub(crate) fn in_query(&self) -> bool {
+        self.in_query
+    }
+
+    /// May `Path {` start a record constructor here?
+    #[inline]
+    pub(crate) fn record_ctor_allowed(&self) -> bool {
+        !self.no_record_ctor
+    }
+}
+
+impl<'a> Parser<'a> {
     // -------------------------------------------------------------------------
     // Combinators
     // -------------------------------------------------------------------------
@@ -481,6 +511,8 @@ mod tests {
         assert_eq!(parser.col(), 1);
         assert_eq!(parser.peek(), Some(b'h'));
         assert!(!parser.is_eof());
+        assert!(!parser.in_query());
+        assert!(parser.record_ctor_allowed());
     }
 
     #[test]
@@ -510,5 +542,68 @@ mod tests {
         parser.advance();
         assert!(parser.is_eof());
         assert_eq!(parser.peek(), None);
+    }
+
+    #[test]
+    fn newline_since_and_adjacent_to() {
+        let bump = Bump::new();
+        let src = bump.alloc_str("a \nb");
+        let mut parser = Parser::new(&bump, src.as_bytes());
+
+        parser.advance(); // 'a'
+        let end = parser.get_position();
+        assert!(parser.adjacent_to(end));
+        assert!(!parser.newline_since(end));
+        parser.advance(); // ' '
+        assert!(!parser.adjacent_to(end));
+        assert!(!parser.newline_since(end));
+        parser.advance(); // '\n'
+        assert!(parser.newline_since(end));
+    }
+
+    #[test]
+    fn lookahead_restores_position() {
+        let bump = Bump::new();
+        let src = bump.alloc_str("abc");
+        let mut parser = Parser::new(&bump, src.as_bytes());
+
+        let seen = parser.lookahead(|p| {
+            p.advance();
+            p.advance();
+            p.peek()
+        });
+        assert_eq!(seen, Some(b'c'));
+        assert_eq!(parser.position(), (1, 1));
+    }
+
+    #[test]
+    fn mode_flags_are_scoped() {
+        let bump = Bump::new();
+        let src = bump.alloc_str("");
+        let mut parser = Parser::new(&bump, src.as_bytes());
+
+        let r: Result<bool, ()> = parser.with_query(true, |p| {
+            assert!(p.in_query());
+            p.with_query(false, |p| {
+                assert!(!p.in_query());
+                Ok(())
+            })?;
+            assert!(p.in_query());
+            Ok(p.in_query())
+        });
+        assert_eq!(r, Ok(true));
+        assert!(!parser.in_query());
+
+        let r: Result<(), ()> = parser.with_record_ctor(false, |p| {
+            assert!(!p.record_ctor_allowed());
+            p.with_record_ctor(true, |p| {
+                assert!(p.record_ctor_allowed());
+                Ok(())
+            })?;
+            assert!(!p.record_ctor_allowed());
+            Err(())
+        });
+        assert_eq!(r, Err(()));
+        assert!(parser.record_ctor_allowed());
     }
 }

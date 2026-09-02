@@ -1,49 +1,45 @@
-//! Patterns.
+//! `style { }` blocks (docs/parser-internals.md §6.4).
 //!
-//! See docs/parser-internals.md §5.14.
-// OWNER: pattern/mod.rs (Wave 1)
+//! See docs/parser-internals.md §5.18.
+// OWNER: style.rs (Wave 3)
 
-mod array;
-mod ctor;
-mod record;
-mod tuple;
-
-use alder_region::Located;
-use alder_source::Pattern;
+use alder_region::{Located, Position};
+use alder_source::{Expr, Style, StyleValue};
 
 use crate::{Parser, error};
 
 #[allow(unused)]
 impl<'a> Parser<'a> {
-    /// `pattern_atom [as name]`. Chomps trailing whitespace.
-    pub fn pattern(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
-        todo!()
-    }
-
-    /// `p | q | r` (match arms).
-    pub(crate) fn pattern_alternatives(
+    /// After `style`.
+    pub(crate) fn style(
         &mut self,
-    ) -> Result<&'a [&'a Located<Pattern<'a>>], error::Pattern<'a>> {
+        start: Position,
+    ) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
         todo!()
     }
 
-    /// Dispatch on first byte: `_`, lower, upper (ctor), `:`, `^`, `-`/digit, `"`, `(`, `[`, `{`, true/false.
-    pub(crate) fn pattern_atom(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+    /// At `{`.
+    pub(crate) fn style_block(&mut self) -> Result<&'a Style<'a>, error::Style<'a>> {
+        todo!()
+    }
+
+    /// `{` → nested style; digit, or `-` + digit → dimension attempt; otherwise `expression()`.
+    fn style_value(&mut self) -> Result<StyleValue<'a>, error::Style<'a>> {
         todo!()
     }
 }
 
-/// Snapshot test macro for successful pattern parsing.
+/// Snapshot test macro for successful style parsing.
 #[cfg(test)]
 #[allow(unused)]
-macro_rules! assert_pattern_snapshot {
+macro_rules! assert_style_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
         let code = indoc::indoc!($code);
         let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
         let result = parser
-            .pattern()
+            .expression()
             .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
         assert!(
             parser.is_eof(),
@@ -59,17 +55,17 @@ macro_rules! assert_pattern_snapshot {
     }};
 }
 
-/// Snapshot test macro for pattern parse errors.
+/// Snapshot test macro for style parse errors.
 #[cfg(test)]
 #[allow(unused)]
-macro_rules! assert_pattern_error_snapshot {
+macro_rules! assert_style_error_snapshot {
     ($code:expr) => {{
         let bump = bumpalo::Bump::new();
         let code = indoc::indoc!($code);
         let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
         let err = parser
-            .pattern()
+            .expression()
             .err()
             .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
         insta::with_settings!({
@@ -83,10 +79,10 @@ macro_rules! assert_pattern_error_snapshot {
 
 #[cfg(test)]
 #[allow(unused)]
-pub(crate) use assert_pattern_error_snapshot;
+pub(crate) use assert_style_error_snapshot;
 #[cfg(test)]
 #[allow(unused)]
-pub(crate) use assert_pattern_snapshot;
+pub(crate) use assert_style_snapshot;
 
 #[cfg(test)]
 mod tests {}

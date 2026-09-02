@@ -1,7 +1,7 @@
-//! `if` / `else if` / `else` expressions.
+//! `:tag` / `:tag(args)` expressions.
 //!
 //! See docs/parser-internals.md §5.13.
-// OWNER: expression/if_.rs (Wave 2)
+// OWNER: expression/tag.rs (Wave 2)
 
 use alder_region::{Located, Position};
 use alder_source::Expr;
@@ -10,8 +10,8 @@ use crate::{Parser, error};
 
 #[allow(unused)]
 impl<'a> Parser<'a> {
-    /// After `if`.
-    pub(crate) fn if_(
+    /// At `:` followed by a lowercase letter.
+    pub(crate) fn tag(
         &mut self,
         start: Position,
     ) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
