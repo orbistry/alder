@@ -31,7 +31,7 @@ static resolution wherever the type is known.
   implementations behind `#[derive(...)]`, to be replaced by macro derives
   in M5 without changing user code.
 - `+`, `-`, `*`, `/`, `%`, comparisons, and `==` have their final typing
-  (see open decision 1).
+  (decision 1): `Eq`, `Ord`, and `Num` traits with static resolution.
 
 ## Settled decisions
 
@@ -49,13 +49,20 @@ static resolution wherever the type is known.
 
 ## Open decisions (recommendation in bold)
 
-1. Arithmetic and equality. **`==` and `!=` stay structural and built in
-   for all non-function types (Elm's rule), so no `Eq` bound is needed to
-   compare; `Eq` exists as a trait only for user-defined equality on
-   opaque types and as a bound name. Arithmetic operators are methods of a
-   `Num` trait with instances for `Number` and `BigInt`; comparisons are
-   `Ord`.** This keeps `if a == b` free of bounds in generic code, which
-   is what JS developers expect, while letting `BigInt` arithmetic work.
+1. Arithmetic and equality (settled in discussion, recorded here).
+   **`==` and `!=` are the `Eq` trait, as in Rust.** `Eq` is derived
+   automatically (no `#[derive]` needed) for records, enums, tuples,
+   arrays, options, results, and any type whose parts are `Eq`; it is
+   overridable for opaque types; functions have no `Eq`, so comparing
+   them is a compile error rather than Elm's runtime crash. Generic code
+   writes `where a: Eq`. Identity comparison is explicit (`Ref.same(a, b)`).
+   Cost model: when both sides have a known primitive type (`Number`,
+   `String`, `Bool`, `BigInt`, unit variants) the codegen emits `===`
+   directly; known records and enums call their generated `eq_T`; only
+   polymorphic code pays a dictionary indirection. Cycles built with
+   `mut` are the user's responsibility, as in Rust. **Arithmetic
+   operators are methods of a `Num` trait with instances for `Number` and
+   `BigInt`; comparisons are `Ord`.**
 2. Coherence beyond orphans. **Overlapping impls are an error; no
    specialization.**
 3. Instance resolution strategy. **Elm's solver gains deferred
@@ -111,8 +118,9 @@ Design panel producing `docs/traits-internals.md`:
   static resolution at monomorphic sites, default method inlining.
 - `std/`: `Show`, `Eq`, `Ord`, `Hash`, `Num`, `Functor`, `Applicative`,
   `Monad`, `Traversable`, `Iterator` (with `Item`), `Json` traits and
-  instances for the primitives and containers; arithmetic moved onto
-  `Num`.
+  instances for the primitives and containers; `==` moved onto `Eq` with
+  automatic structural instances and `===` emission for known primitives;
+  `Ref.same` for identity; arithmetic moved onto `Num`.
 - Built-in derives.
 - e2e projects exercising generic functions, HKT `map`, derives.
 
@@ -130,7 +138,9 @@ Design panel producing `docs/traits-internals.md`:
 - Errors: missing instance with suggestion, ambiguous, orphan, overlap,
   unsatisfied bound in a nested call, kind mismatch (`impl Functor[Number]`).
 - Codegen: dictionary snapshots; runtime tests that `describe` and `map`
-  produce expected output for three instances each.
+  produce expected output for three instances each; `==` on `Number`
+  emits `===` (snapshot), on a record calls `eq_T`, on a function is a
+  compile error, and `Some(1) == Some(1)` is true at runtime.
 
 ## Risks
 

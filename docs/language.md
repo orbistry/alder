@@ -313,7 +313,9 @@ fn describe(xs: Array[a]) -> String where a: Show {
   defines the trait or the type.
 - There is no method-call sugar. `show(user)` or `user |> show`, never
   `user.show()`. `.` is for modules, record fields, and tuple indices.
-- Derives (`#[derive(Show, Eq, Json)]`) are macros.
+- `Eq` is derived automatically for every type whose parts are `Eq`;
+  `Show`, `Ord`, `Hash`, and `Json` are `#[derive(...)]` macros. Arithmetic
+  is the `Num` trait (`Number`, `BigInt`); comparisons are `Ord`.
 
 ### Errors
 
@@ -440,6 +442,10 @@ fn main() {
   linked `List`.
 - `Option[a]` compiles to `a | null`; nested `Option[Option[a]]` boxes the
   inner value. FFI values that may be null are typed `Option`.
+- `==` and `!=` are the `Eq` trait (see Traits): structural for records,
+  enums, tuples, arrays, `Option`, and `Result`, derived automatically, a
+  compile error on functions. Known primitives compile to `===`.
+  `Ref.same(a, b)` compares identity.
 - `Map[k, v]` and `Set[a]` are JS Map/Set with identity keys. Record keys
   compare by reference; the docs warn about it. There is no structural
   dictionary in the first version.
