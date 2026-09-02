@@ -1,0 +1,122 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: "fn(a, b) a + b"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 15,
+        },
+    },
+    value: Lambda(
+        Lambda {
+            params: [
+                Param {
+                    mutable: None,
+                    pattern: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                        },
+                        value: Var(
+                            "a",
+                        ),
+                    },
+                    annotation: None,
+                },
+                Param {
+                    mutable: None,
+                    pattern: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 7,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 8,
+                            },
+                        },
+                        value: Var(
+                            "b",
+                        ),
+                    },
+                    annotation: None,
+                },
+            ],
+            ret: None,
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 15,
+                    },
+                },
+                value: BinOps {
+                    operands: [
+                        BinOpOperand {
+                            expr: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 10,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 11,
+                                    },
+                                },
+                                value: Var(
+                                    "a",
+                                ),
+                            },
+                            op: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 12,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                },
+                                value: Add,
+                            },
+                        },
+                    ],
+                    last: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                        },
+                        value: Var(
+                            "b",
+                        ),
+                    },
+                },
+            },
+        },
+    ),
+}

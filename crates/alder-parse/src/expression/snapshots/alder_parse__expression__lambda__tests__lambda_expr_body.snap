@@ -1,0 +1,106 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: fn(x) x + 1
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 12,
+        },
+    },
+    value: Lambda(
+        Lambda {
+            params: [
+                Param {
+                    mutable: None,
+                    pattern: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                        },
+                        value: Var(
+                            "x",
+                        ),
+                    },
+                    annotation: None,
+                },
+            ],
+            ret: None,
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 7,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: BinOps {
+                    operands: [
+                        BinOpOperand {
+                            expr: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 7,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 8,
+                                    },
+                                },
+                                value: Var(
+                                    "x",
+                                ),
+                            },
+                            op: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 9,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 10,
+                                    },
+                                },
+                                value: Add,
+                            },
+                        },
+                    ],
+                    last: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 1.0,
+                                text: "1",
+                            },
+                        ),
+                    },
+                },
+            },
+        },
+    ),
+}

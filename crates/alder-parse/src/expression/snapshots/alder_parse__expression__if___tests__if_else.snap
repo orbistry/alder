@@ -1,0 +1,109 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "if a { 1 } else { 2 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 22,
+        },
+    },
+    value: If {
+        branches: [
+            IfBranch {
+                condition: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                    },
+                    value: Block {
+                        stmts: [],
+                        tail: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 8,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 9,
+                                    },
+                                },
+                                value: Number(
+                                    NumberLit {
+                                        value: 1.0,
+                                        text: "1",
+                                    },
+                                ),
+                            },
+                        ),
+                    },
+                },
+            },
+        ],
+        final_else: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 22,
+                    },
+                },
+                value: Block {
+                    stmts: [],
+                    tail: Some(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 19,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 20,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 2.0,
+                                    text: "2",
+                                },
+                            ),
+                        },
+                    ),
+                },
+            },
+        ),
+    },
+}

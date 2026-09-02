@@ -1,0 +1,140 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match x { 1 | 2 if ok => a, _ => b }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 37,
+        },
+    },
+    value: Match {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Var(
+                "x",
+            ),
+        },
+        arms: [
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 1.0,
+                                text: "1",
+                            },
+                        ),
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 2.0,
+                                text: "2",
+                            },
+                        ),
+                    },
+                ],
+                guard: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 20,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 22,
+                            },
+                        },
+                        value: Var(
+                            "ok",
+                        ),
+                    },
+                ),
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 26,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 27,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+            },
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 29,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 30,
+                            },
+                        },
+                        value: Anything,
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 34,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 35,
+                        },
+                    },
+                    value: Var(
+                        "b",
+                    ),
+                },
+            },
+        ],
+    },
+}

@@ -1,0 +1,134 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match s { _ => Shape::Rect { width: 1 } }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 42,
+        },
+    },
+    value: Match {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Var(
+                "s",
+            ),
+        },
+        arms: [
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: Anything,
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 40,
+                        },
+                    },
+                    value: RecordCtor {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 16,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 21,
+                                        },
+                                    },
+                                    value: "Shape",
+                                },
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 23,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 27,
+                                        },
+                                    },
+                                    value: "Rect",
+                                },
+                            ],
+                        },
+                        fields: [
+                            Field {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 30,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 35,
+                                        },
+                                    },
+                                    value: "width",
+                                },
+                                value: Some(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 37,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 38,
+                                            },
+                                        },
+                                        value: Number(
+                                            NumberLit {
+                                                value: 1.0,
+                                                text: "1",
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    },
+}

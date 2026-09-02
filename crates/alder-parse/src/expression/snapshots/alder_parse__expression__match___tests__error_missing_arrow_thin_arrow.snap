@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match x { 1 -> a }"
+---
+Match(
+    Arm(
+        Arrow(
+            1,
+            13,
+        ),
+        1,
+        11,
+    ),
+    1,
+    1,
+)

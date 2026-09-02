@@ -1,0 +1,133 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: "fn((a, b)) a + b"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 17,
+        },
+    },
+    value: Lambda(
+        Lambda {
+            params: [
+                Param {
+                    mutable: None,
+                    pattern: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                        },
+                        value: Tuple {
+                            first: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 5,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 6,
+                                    },
+                                },
+                                value: Var(
+                                    "a",
+                                ),
+                            },
+                            second: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 8,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 9,
+                                    },
+                                },
+                                value: Var(
+                                    "b",
+                                ),
+                            },
+                            rest: [],
+                        },
+                    },
+                    annotation: None,
+                },
+            ],
+            ret: None,
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                },
+                value: BinOps {
+                    operands: [
+                        BinOpOperand {
+                            expr: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 12,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                },
+                                value: Var(
+                                    "a",
+                                ),
+                            },
+                            op: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 15,
+                                    },
+                                },
+                                value: Add,
+                            },
+                        },
+                    ],
+                    last: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                        },
+                        value: Var(
+                            "b",
+                        ),
+                    },
+                },
+            },
+        },
+    ),
+}

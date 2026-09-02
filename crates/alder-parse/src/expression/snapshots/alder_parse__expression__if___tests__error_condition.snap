@@ -1,0 +1,17 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "if else { 1 }"
+---
+If(
+    Condition(
+        Reserved(
+            Else,
+            1,
+            4,
+        ),
+        1,
+        4,
+    ),
+    1,
+    1,
+)

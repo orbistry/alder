@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match x { 1 => }"
+---
+Match(
+    Arm(
+        Body(
+            Start(
+                1,
+                16,
+            ),
+            1,
+            16,
+        ),
+        1,
+        11,
+    ),
+    1,
+    1,
+)
