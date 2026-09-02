@@ -233,6 +233,15 @@ impl<'a> Parser<'a> {
                 |bump, e, row, col| error::DirMatch::Block(bump.alloc(e), row, col),
                 |p| p.child_block(),
             )?,
+            // `</` is the terminator `child(CloseTag)` must never be
+            // called on (its debug assertion): a close tag after `=>`
+            // (`A => </b>`) is reported as `child()` reports a stray one
+            // elsewhere, `Child::Element(Markup::CloseName)`.
+            Some(b'<') if self.peek_at(1) == Some(b'/') => {
+                let close = self.alloc(error::Markup::CloseName(row, col + 2));
+                let child = self.alloc(error::Child::Element(close, row, col));
+                return Err(error::DirMatch::Body(child, row, col));
+            }
             Some(b'<') | Some(b'@') => {
                 let child = self.specialize(
                     |bump, e, row, col| error::DirMatch::Body(bump.alloc(e), row, col),
@@ -784,6 +793,28 @@ mod tests {
     #[test]
     fn error_match_bare_text() {
         assert_markup_error_snapshot!("<p>@match x { A => hi }</p>");
+    }
+
+    /// A close tag as an arm body: `child(CloseTag)` must not be entered on
+    /// its own terminator (debug assertion; the release build reported the
+    /// same error by accident).
+    #[test]
+    fn error_match_close_tag_body() {
+        assert_markup_error_snapshot!("<p>@match x { A => </p>");
+    }
+
+    #[test]
+    fn error_match_close_tag_body_multiline() {
+        assert_markup_error_snapshot!(
+            r#"
+            <div>
+                @match status {
+                    Loading => </pinner />,
+                    Ready(n) => <span>{n}</span>,
+                }
+            </div>
+            "#
+        );
     }
 
     #[test]
