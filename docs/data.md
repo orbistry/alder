@@ -63,7 +63,7 @@ db.run(query { insert into users values { email, name } }).await?
 db.run(query { update users set { name } where users.id == id }).await?
 ```
 
-- A `query` block produces a `Query<row>` value; `db.run` executes it
+- A `query` block produces a `Query[row]` value; `db.run` executes it
   against the provided `Db` context.
 - The block desugars to a chain API (`Query.select(...).from(...)`) so
   packages can extend and compose queries programmatically.

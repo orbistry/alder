@@ -24,7 +24,7 @@ A package declares its target in `alder.jsonc`:
 
 - One JS module per Alder module, bundled with rolldown (as a Rust library
   inside the compiler) for a Vite-like experience with no separate tool.
-- `Option<a>` is `a | null`. Nested options box the inner value.
+- `Option[a]` is `a | null`. Nested options box the inner value.
 - `Number` is a JS number, `BigInt` a JS bigint, `Array` a JS array,
   records are plain objects, enums are tagged objects.
   **Open:** the exact enum representation (`{ $: "Some", 0: x }` vs
@@ -70,7 +70,7 @@ interprets them and the compiler emits `wrangler.jsonc` and bindings.
 #[durable_object]
 type Counter = { count: Number }
 
-impl DurableObject<Counter> {
+impl DurableObject[Counter] {
     fn fetch(obj: Counter, req: Request) -> Response { ... }
 }
 

@@ -55,7 +55,7 @@ One web package holds both. The split is per function.
 
 ```alder
 #[server]
-fn loadUser(id: Id) -> Result<User> {
+fn loadUser(id: Id) -> Result[User] {
     use Db
     Db.get(users, id).await
 }
@@ -139,7 +139,7 @@ schema SignUp from users {
 }
 
 #[server]
-fn signUp(input: SignUp) -> Result<User> { ... }
+fn signUp(input: SignUp) -> Result[User] { ... }
 
 <Form action={signUp}>
     <Field name="email" />
@@ -169,7 +169,7 @@ embedded runtime).
 component App() {
     let mut selected = state(0)
     <box direction="column" border="round">
-        <text bold>Tasks</text>
+        <text bold>Tasks[/text]
         {for (task, i) in tasks { <text inverse={i == selected}>{task}</text> }}
     </box>
 }

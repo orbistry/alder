@@ -121,8 +121,9 @@ let block = fn(x) {
 - Partial application uses `_` placeholders: `add(1, _)` and
   `Array.map(_, double)` each become a lambda with one parameter per `_`,
   in order. Lambdas remain for anything more involved.
-- Generics use angle brackets and lowercase type variables:
-  `fn first<a>(xs: Array<a>) -> Option<a>`.
+- Functions have no generic parameter list. Lowercase names in type
+  positions are type variables, generalized per declaration:
+  `fn first(xs: Array[a]) -> Option[a]`. Bounds go in a `where` clause.
 
 ## Statements and control flow
 
@@ -157,12 +158,43 @@ let found = loop {
 
 ## Types
 
+### Type application and variables
+
+Type arguments use square brackets with commas: `Array[User]`,
+`Map[String, Array[User]]`, `Result[User, AuthError]`. Lowercase names are
+type variables and never need declaring on functions; only definitions
+that fix an arity name them in their head (`enum Result[a, e]`,
+`type Cache[k, v] = ...`, `trait Functor[f]`).
+
+```alder
+fn zip(xs: Array[a], ys: Array[b]) -> Array[(a, b)]
+
+fn lookup(cache: Cache[k, v], key: k) -> Option[v]
+    where k: Eq + Hash
+
+fn traverse(xs: t[f[a]], g: fn(a) -> f[b]) -> f[t[b]]
+    where
+        t: Traversable,
+        f: Applicative,
+```
+
+- `where` takes any number of comma-separated clauses; `+` joins several
+  bounds on one variable; `i.Item == Number` constrains an associated type.
+- Higher-kinded variables (`f` above) are applied like any other type; their
+  kind is inferred from use.
+- A type variable named in a nested lambda's annotation refers to the
+  enclosing function's variable of the same name; otherwise it is fresh.
+- There are no explicit type arguments at call sites. Annotate the binding
+  instead: `let users: Array[User] = parse(body)?`.
+- A type that starts with `[` is an error row (`[:not_found(Id) | r]`), so
+  `Result[User, [:timeout | r]]` is unambiguous.
+
 ### Enums
 
 Constructors are namespaced under the type, as in Rust.
 
 ```alder
-pub enum Option<a> {
+pub enum Option[a] {
     Some(a),
     None,
 }
@@ -187,10 +219,10 @@ Anonymous records with Elm's row polymorphism stay. Optional fields are new.
 type User = {
     id: Id,
     name: String,
-    nickname?: String,        // read as Option<String>
+    nickname?: String,        // read as Option[String]
 }
 
-fn rename<r>(user: { r | name: String }, name: String) { r | name: String } {
+fn rename(user: { r | name: String }, name: String) -> { r | name: String } {
     { ..user, name }
 }
 
@@ -202,9 +234,9 @@ match u.nickname {
 ```
 
 - `field?: T` declares an optional field. Construction may omit it; reading
-  it yields `Option<T>`. Callers never write `Some(...)` for props.
+  it yields `Option[T]`. Callers never write `Some(...)` for props.
 - `{ ..r, x: 1 }` is record update. `r.x` is access, `t.0` tuple index.
-- `type Name<a> = ...` declares an alias.
+- `type Name[a] = ...` declares an alias.
 
 ### Traits
 
@@ -213,20 +245,20 @@ parameters. No `self`; trait functions are ordinary functions called by
 name or through the pipe.
 
 ```alder
-pub trait Show<a> {
+pub trait Show[a] {
     fn show(value: a) -> String
 }
 
-impl Show<User> {
+impl Show[User] {
     fn show(user: User) -> String { user.name }
 }
 
-pub trait Functor<f> {
-    fn map<a, b>(fa: f<a>, g: fn(a) -> b) f<b>
+pub trait Functor[f] {
+    fn map(fa: f[a], g: fn(a) -> b) f[b]
 }
 
-impl Functor<Option> {
-    fn map<a, b>(fa: Option<a>, g: fn(a) -> b) -> Option<b> {
+impl Functor[Option] {
+    fn map(fa: Option[a], g: fn(a) -> b) -> Option[b] {
         match fa {
             Some(x) => Some(g(x)),
             None => None,
@@ -234,13 +266,16 @@ impl Functor<Option> {
     }
 }
 
-fn describe<a: Show>(xs: Array<a>) -> String {
+fn describe(xs: Array[a]) -> String where a: Show {
     xs |> Array.map(show) |> String.join(", ")
 }
 ```
 
-- Bounds: `<a: Show>`, multiple bounds `<a: Show + Eq>`.
-- Associated types: `trait Iterator<i> { type Item; fn next(it: i) -> Option<Item> }`.
+- Bounds live in `where` clauses: `where a: Show + Eq, k: Hash`. Traits
+  may constrain their own parameters the same way
+  (`trait Ord[a] where a: Eq`), and impls too
+  (`impl Show[Cache[k, v]] where k: Show, v: Show`).
+- Associated types: `trait Iterator[i] { type Item; fn next(it: i) -> Option[Item] }`.
 - Default method bodies are allowed in the trait.
 - Rust's orphan rule applies: an `impl` must live in the package that
   defines the trait or the type.
@@ -250,28 +285,28 @@ fn describe<a: Show>(xs: Array<a>) -> String {
 
 ### Errors
 
-`Result<a, e>` is the only failure mechanism. The error position accepts
+`Result[a, e]` is the only failure mechanism. The error position accepts
 open tagged constructors written `:tag(payload)`; their type is a row that
 grows as errors flow through `?`. The error is inferred: writing
-`Result<User>` in a signature leaves the row to the compiler, which
+`Result[User]` in a signature leaves the row to the compiler, which
 collects every tag the body can produce. Spell the row out only to close
 it or to document it.
 
 ```alder
-fn find(id: Id) -> Result<User> {              // error inferred: [:not_found(Id) | r]
+fn find(id: Id) -> Result[User] {              // error inferred: [:not_found(Id) | r]
     match db.get(id) {
         Some(u) => Ok(u),
         None => Err(:not_found(id)),
     }
 }
 
-fn load(id: Id) -> Result<Profile> {           // inferred: [:not_found(Id) | :timeout | r]
+fn load(id: Id) -> Result[Profile] {           // inferred: [:not_found(Id) | :timeout | r]
     let user = find(id)?          // rows merge through ?
     let prefs = fetchPrefs(user).await?
     Ok({ user, prefs })
 }
 
-fn loadStrict(id: Id) -> Result<Profile, [:not_found(Id) | :timeout]> {
+fn loadStrict(id: Id) -> Result[Profile, [:not_found(Id) | :timeout]] {
     load(id)                       // explicit, closed row
 }
 
@@ -291,10 +326,10 @@ pub error AuthError {
     :expired(Timestamp),
 }
 
-fn check(token: String) -> Result<Session, AuthError>
+fn check(token: String) -> Result[Session, AuthError]
 ```
 
-- `Result<a>` with one argument means an inferred error row. Hover, docs,
+- `Result[a]` with one argument means an inferred error row. Hover, docs,
   and the generated `.d.ts` show the inferred row, so `pub` functions still
   have a readable error surface. **Open:** whether `pub` items should be
   required to spell the row for API stability (semver diffing needs it).
@@ -302,7 +337,7 @@ fn check(token: String) -> Result<Session, AuthError>
   general polymorphic-variant feature.
 - A closed `error` group is matched exhaustively. An open row requires `_`.
 - A named group is only a name for a closed row. `?` on a
-  `Result<a, AuthError>` inside a function with an open error row flattens
+  `Result[a, AuthError]` inside a function with an open error row flattens
   the group's tags into that row; callers can match `:expired` directly.
   Groups never become wrappers.
 - Panics exist for programmer errors and are not catchable by user code;
@@ -311,13 +346,13 @@ fn check(token: String) -> Result<Session, AuthError>
 ## Async and fibers
 
 There is no `async` keyword. A function that uses `.await` is inferred to
-return `Task<a>`; callers `.await` it in turn. Everything compiles to
+return `Task[a]`; callers `.await` it in turn. Everything compiles to
 generator-based fibers (`yield*`) on a scheduler in the JS kernel, giving
 structured concurrency, interruption, and scopes without an `Effect` type
 in user code.
 
 ```alder
-fn profile(id: Id) -> Result<Profile> {
+fn profile(id: Id) -> Result[Profile] {
     let user = Http.get(`/users/${id}`).await?
     let posts = Http.get(`/users/${id}/posts`).await?
     Ok({ user, posts })
@@ -327,7 +362,7 @@ let (a, b) = Fiber.all(profile(1), profile(2)).await
 ```
 
 - `Task` is a visible type. Signatures may write it
-  (`fn load(id: Id) -> Task<Result<User>>`), hover shows
+  (`fn load(id: Id) -> Task[Result[User]]`), hover shows
   it when inferred, and an un-awaited call is a `Task` value you can pass
   to `Fiber.fork`, `Fiber.all`, or `Fiber.race`.
 - **Open:** how a top-level entry point runs the scheduler; the exact fiber
@@ -339,7 +374,7 @@ Services are requested by type with `use` and supplied by `provide` in an
 enclosing scope. Missing providers are compile errors at entry points.
 
 ```alder
-fn saveUser(user: User) -> Result<()> {
+fn saveUser(user: User) -> Result[()] {
     use Db
     Db.insert(users, user).await
 }
@@ -363,11 +398,11 @@ fn main() {
 - Strings are JS strings. Interpolation uses template literals:
   `` `Hello ${name}` ``. Tagged templates exist for escape hatches such as
   `sql` and `css`. Double-quoted strings do not interpolate.
-- `Array<a>` is a mutable JS array. Literals `[1, 2, 3]`. There is no
+- `Array[a]` is a mutable JS array. Literals `[1, 2, 3]`. There is no
   linked `List`.
-- `Option<a>` compiles to `a | null`; nested `Option<Option<a>>` boxes the
+- `Option[a]` compiles to `a | null`; nested `Option[Option[a]]` boxes the
   inner value. FFI values that may be null are typed `Option`.
-- `Map<k, v>` and `Set<a>` are JS Map/Set with identity keys. Record keys
+- `Map[k, v]` and `Set[a]` are JS Map/Set with identity keys. Record keys
   compare by reference; the docs warn about it. There is no structural
   dictionary in the first version.
 
@@ -382,7 +417,7 @@ control-flow blocks both work inside braces.
     {for item in items {
         <li key={item.id}>{item.name}</li>
     }}
-    {if items.length == 0 { <li>Nothing here</li> }}
+    {if items.length == 0 { <li>Nothing here[/li] }}
     {match status {
         Loading => <Spinner />,
         Ready(n) => <span>{n}</span>,
@@ -424,7 +459,7 @@ build time in the compiler's embedded V8, with Elixir-style
 
 ```alder
 #[server]
-fn loadUser(id: Id) -> Result<User> { ... }
+fn loadUser(id: Id) -> Result[User] { ... }
 
 #[derive(Show, Eq, Json)]
 type Point = { x: Number, y: Number }
@@ -482,15 +517,15 @@ TypeScript can consume Alder modules.
 fn randomUUID() -> String
 
 #[extern("node:fs/promises", "readFile")]
-fn readFile(path: String, encoding: String) -> Task<Result<String, [:io(String)]>>
+fn readFile(path: String, encoding: String) -> Task[Result[String, [:io(String)]]]
 
 #[extern("globalThis", "JSON.parse")]
-fn parseJson(s: String) -> Result<Json, [:syntax(String)]>
+fn parseJson(s: String) -> Result[Json, [:syntax(String)]]
 ```
 
 - If the declared return type is `Result`, the kernel wraps the call in
   try/catch and tags the thrown error. Otherwise a throw is a panic.
-- A JS function returning a promise must be declared `Task<...>`.
+- A JS function returning a promise must be declared `Task[...]`.
 - Plain-data JS objects are typed as records and used directly at zero
   cost. Class instances are opaque types declared with
   `#[extern] type Response` and accessed through extern functions.
