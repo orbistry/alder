@@ -44,12 +44,13 @@ mod type_alias;
 
 use alder_region::{Located, Position, Region};
 use alder_source::{
-    Constraint, FnDecl, ImplItem, ImportTail, Item, ItemKind, Modifier, SchemaItem, TraitItem,
-    VariantPayload, Visibility,
+    FnDecl, ImplItem, ImportTail, Item, ItemKind, Modifier, SchemaItem, TraitItem, VariantPayload,
+    Visibility,
 };
 use bumpalo::collections::Vec as BumpVec;
 
 use crate::{Parser, error};
+use fn_::constraint_end;
 
 impl<'a> Parser<'a> {
     /// attributes* [pub] item_body. Chomps trailing whitespace.
@@ -428,16 +429,6 @@ fn fn_lower_bound(decl: &FnDecl<'_>) -> Position {
             })
         })
         .unwrap_or(decl.name.region.end)
-}
-
-fn constraint_end(constraint: &Constraint<'_>) -> Position {
-    match constraint {
-        Constraint::Bound { var, bounds } => bounds
-            .last()
-            .map(|b| b.region().end)
-            .unwrap_or(var.region.end),
-        Constraint::AssocEq { typ, .. } => typ.region.end,
-    }
 }
 
 fn modifier_end(modifier: &Modifier<'_>) -> Position {

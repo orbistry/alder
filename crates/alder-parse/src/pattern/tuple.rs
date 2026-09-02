@@ -52,19 +52,18 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        if rest.is_empty() {
+        match rest.into_bump_slice().split_first() {
             // `(p)`: the inner node, re-spanned to include the parentheses.
-            return Ok(self.add_end(start, first.value));
+            None => Ok(self.add_end(start, first.value)),
+            Some((second, rest)) => Ok(self.add_end(
+                start,
+                Pattern::Tuple {
+                    first,
+                    second,
+                    rest,
+                },
+            )),
         }
-        let second = rest.remove(0);
-        Ok(self.add_end(
-            start,
-            Pattern::Tuple {
-                first,
-                second,
-                rest: rest.into_bump_slice(),
-            },
-        ))
     }
 
     fn pattern_tuple_entry(&mut self) -> Result<&'a Located<Pattern<'a>>, PTuple<'a>> {

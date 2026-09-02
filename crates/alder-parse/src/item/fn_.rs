@@ -114,7 +114,7 @@ impl<'a> Parser<'a> {
 /// The position right after a `where` constraint's last byte. A trailing
 /// comma consumed by `where_clause()` is not included; it sits on the
 /// constraint's line in any layout the formatter emits.
-fn constraint_end(constraint: &Constraint<'_>) -> Position {
+pub(super) fn constraint_end(constraint: &Constraint<'_>) -> Position {
     match constraint {
         Constraint::Bound { var, bounds } => bounds
             .last()
@@ -257,13 +257,10 @@ mod tests {
 
     // Deviation from §7.1 (one `assert_<thing>` pair per module, defined at
     // module level): the macros below drive `fn_decl()`, `params()` and
-    // `where_clause()` directly. They exist because the §7.2-named tests go
-    // through `item()` otherwise and would stay ignored until item/mod.rs
-    // lands; the `params` / `where` pairs also pin positions the item-level
-    // tests cannot isolate (`Params::End`, `Where::AssocEq`, …). They are
-    // private to this `mod tests` (not re-exported). Only the `pub` and
-    // attribute forms still go through `item()`. Wave 4 decides whether to
-    // keep or fold them; recorded for §10.
+    // `where_clause()` directly; the `params` / `where` pairs pin positions
+    // the item-level tests cannot isolate (`Params::End`, `Where::AssocEq`,
+    // …). They are private to this `mod tests` (not re-exported). The `pub`
+    // and attribute forms go through `item()`.
 
     /// Snapshot test macro for a successful `params()` parse (input starts at `(`).
     macro_rules! assert_params_snapshot {
