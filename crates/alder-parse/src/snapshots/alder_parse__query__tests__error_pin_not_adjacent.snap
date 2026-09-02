@@ -1,16 +1,16 @@
 ---
 source: crates/alder-parse/src/query.rs
-description: "query { update users set { name = ^n } }"
+description: "query { select * from users where users.id == ^ x }"
 ---
 Query(
-    Update(
-        Record(
-            EqualsNotColon(
+    Select(
+        Where(
+            Unary(
                 1,
-                33,
+                48,
             ),
             1,
-            26,
+            35,
         ),
         1,
         9,
