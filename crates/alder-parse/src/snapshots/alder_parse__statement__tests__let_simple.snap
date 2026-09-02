@@ -1,0 +1,55 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: let x = 1
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 10,
+        },
+    },
+    value: Let(
+        LetDecl {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                },
+                value: Var(
+                    "x",
+                ),
+            },
+            annotation: None,
+            value: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                },
+                value: Number(
+                    NumberLit {
+                        value: 1.0,
+                        text: "1",
+                    },
+                ),
+            },
+        },
+    ),
+}

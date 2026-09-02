@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "{\n    x\n    = 1\n}\n"
+---
+End(
+    3,
+    5,
+)

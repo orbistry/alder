@@ -78,7 +78,6 @@ mod tests {
     use super::super::{assert_expression_error_snapshot, assert_expression_snapshot};
 
     #[test]
-    #[ignore = "waits for statement.rs"]
     fn loop_simple() {
         assert_expression_snapshot!(
             r#"
@@ -90,7 +89,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for statement.rs"]
     fn loop_break_value() {
         assert_expression_snapshot!(
             r#"
@@ -103,7 +101,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for statement.rs"]
     fn loop_nested() {
         assert_expression_snapshot!(
             r#"
@@ -127,7 +124,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for statement.rs"]
     fn error_loop_missing_block() {
         assert_expression_error_snapshot!("loop x");
     }

@@ -1,0 +1,33 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: ^expected
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 10,
+        },
+    },
+    value: Pin(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 10,
+                },
+            },
+            value: Var(
+                "expected",
+            ),
+        },
+    ),
+}

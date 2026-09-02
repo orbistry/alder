@@ -191,7 +191,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/lambda.rs"]
     fn call_on_lambda_result() {
         assert_expression_snapshot!("(fn(x) x + 1)(2)");
     }
@@ -293,13 +292,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for template.rs"]
     fn tagged_template_adjacent() {
         assert_expression_snapshot!("sql`select ${x}`");
     }
 
     #[test]
-    #[ignore = "waits for template.rs"]
     fn tagged_template_after_access() {
         assert_expression_snapshot!("Db.sql`select 1`");
     }

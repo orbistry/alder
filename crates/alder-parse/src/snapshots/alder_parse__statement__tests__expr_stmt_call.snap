@@ -1,0 +1,64 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: process(item)
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 14,
+        },
+    },
+    value: Expr(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 14,
+                },
+            },
+            value: Call {
+                function: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Var(
+                        "process",
+                    ),
+                },
+                arguments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                        },
+                        value: Var(
+                            "item",
+                        ),
+                    },
+                ],
+            },
+        },
+    ),
+}

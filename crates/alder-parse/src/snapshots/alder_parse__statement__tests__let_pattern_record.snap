@@ -1,0 +1,86 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "let { name, age } = user"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 25,
+        },
+    },
+    value: Let(
+        LetDecl {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 18,
+                    },
+                },
+                value: Record {
+                    fields: [
+                        FieldPattern {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 7,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 11,
+                                    },
+                                },
+                                value: "name",
+                            },
+                            pattern: None,
+                        },
+                        FieldPattern {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 16,
+                                    },
+                                },
+                                value: "age",
+                            },
+                            pattern: None,
+                        },
+                    ],
+                    rest: None,
+                },
+            },
+            annotation: None,
+            value: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 21,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 25,
+                    },
+                },
+                value: Var(
+                    "user",
+                ),
+            },
+        },
+    ),
+}

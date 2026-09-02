@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "{ let x = 1; }"
+---
+Stmt(
+    Semicolon(
+        1,
+        12,
+    ),
+    1,
+    12,
+)

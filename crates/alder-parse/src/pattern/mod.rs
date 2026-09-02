@@ -360,25 +360,21 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn pin_var() {
         assert_pattern_snapshot!("^expected");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn pin_access() {
         assert_pattern_snapshot!("^user.id");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn pin_call() {
         assert_pattern_snapshot!("^f(x)");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn pin_parens() {
         assert_pattern_snapshot!("^(a + b)");
     }

@@ -197,7 +197,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for statement.rs"]
     fn block_vs_record_let() {
         assert_expression_snapshot!(
             r#"
@@ -210,7 +209,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for statement.rs"]
     fn block_vs_record_call() {
         assert_expression_snapshot!("{ f(x) }");
     }

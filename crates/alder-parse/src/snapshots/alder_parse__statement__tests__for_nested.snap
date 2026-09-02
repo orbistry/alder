@@ -1,0 +1,196 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "for row in grid {\n    for cell in row {\n        total += cell\n    }\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 5,
+            column: 2,
+        },
+    },
+    value: For {
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 5,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Var(
+                "row",
+            ),
+        },
+        iter: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 12,
+                },
+                end: Position {
+                    line: 1,
+                    column: 16,
+                },
+            },
+            value: Var(
+                "grid",
+            ),
+        },
+        body: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 17,
+                },
+                end: Position {
+                    line: 5,
+                    column: 2,
+                },
+            },
+            value: Block {
+                stmts: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 4,
+                                column: 6,
+                            },
+                        },
+                        value: For {
+                            pattern: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 9,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 13,
+                                    },
+                                },
+                                value: Var(
+                                    "cell",
+                                ),
+                            },
+                            iter: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 17,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 20,
+                                    },
+                                },
+                                value: Var(
+                                    "row",
+                                ),
+                            },
+                            body: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 21,
+                                    },
+                                    end: Position {
+                                        line: 4,
+                                        column: 6,
+                                    },
+                                },
+                                value: Block {
+                                    stmts: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 3,
+                                                    column: 9,
+                                                },
+                                                end: Position {
+                                                    line: 3,
+                                                    column: 22,
+                                                },
+                                            },
+                                            value: Assign {
+                                                place: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 9,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 14,
+                                                        },
+                                                    },
+                                                    value: Place {
+                                                        root: Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 3,
+                                                                    column: 9,
+                                                                },
+                                                                end: Position {
+                                                                    line: 3,
+                                                                    column: 14,
+                                                                },
+                                                            },
+                                                            value: "total",
+                                                        },
+                                                        steps: [],
+                                                    },
+                                                },
+                                                op: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 15,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 17,
+                                                        },
+                                                    },
+                                                    value: Add,
+                                                },
+                                                value: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 18,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 22,
+                                                        },
+                                                    },
+                                                    value: Var(
+                                                        "cell",
+                                                    ),
+                                                },
+                                            },
+                                        },
+                                    ],
+                                    tail: None,
+                                },
+                            },
+                        },
+                    },
+                ],
+                tail: None,
+            },
+        },
+    },
+}

@@ -554,13 +554,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn block_tail_only() {
         assert_block_snapshot!("{ x }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn block_stmt_and_tail() {
         assert_block_snapshot!(
             r#"
@@ -573,7 +571,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn block_stmts_no_tail() {
         assert_block_snapshot!(
             r#"
@@ -586,7 +583,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn block_nested() {
         // The inner body must be unambiguously a block: `{ x }` alone sits in
         // expression position, where §2.2 makes it a record.
@@ -618,7 +614,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn block_tag_stmt_after_name() {
         // `x` then `:timeout` is a name statement and a tag tail, not the
         // record-field shape: the hint must not cross the line break.
@@ -662,37 +657,31 @@ mod tests {
     // ---- let
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn let_simple() {
         assert_statement_snapshot!("let x = 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn let_mut() {
         assert_statement_snapshot!("let mut count = 0");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn let_annotated() {
         assert_statement_snapshot!("let x: Number = 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn let_pattern_tuple() {
         assert_statement_snapshot!("let (a, b) = pair");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn let_pattern_record() {
         assert_statement_snapshot!("let { name, age } = user");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn let_multiline_value() {
         assert_statement_snapshot!(
             r#"
@@ -705,49 +694,41 @@ mod tests {
     // ---- assignment
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assign_var() {
         assert_statement_snapshot!("x = 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assign_field() {
         assert_statement_snapshot!("user.name = \"Ada\"");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assign_tuple_index() {
         assert_statement_snapshot!("pair.0 = 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assign_index() {
         assert_statement_snapshot!("items[i] = 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assign_add() {
         assert_statement_snapshot!("count += 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assign_sub() {
         assert_statement_snapshot!("count -= 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assign_mul() {
         assert_statement_snapshot!("total *= 2");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assign_div() {
         assert_statement_snapshot!("total /= 2");
     }
@@ -755,13 +736,11 @@ mod tests {
     // ---- expression statements
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn expr_stmt_call() {
         assert_statement_snapshot!("process(item)");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn expr_stmt_if_then_stmt() {
         assert_block_snapshot!(
             r#"
@@ -776,19 +755,16 @@ mod tests {
     // ---- loops
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn for_simple() {
         assert_statement_snapshot!("for item in items { total += item }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn for_pattern() {
         assert_statement_snapshot!("for (key, value) in pairs { total += value }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn for_nested() {
         assert_statement_snapshot!(
             r#"
@@ -802,7 +778,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn while_simple() {
         assert_statement_snapshot!("while pending.length > 0 { process(pending.pop()) }");
     }
@@ -815,13 +790,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn return_value() {
         assert_statement_snapshot!("return x + 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn return_newline_no_value() {
         assert_block_snapshot!(
             r#"
@@ -844,7 +817,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn break_value() {
         assert_statement_snapshot!("break next");
     }
@@ -882,13 +854,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn provide_simple() {
         assert_statement_snapshot!("provide Db = fakeDb() { run() }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn provide_nested() {
         assert_statement_snapshot!(
             r#"
@@ -904,19 +874,16 @@ mod tests {
     // ---- assert
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assert_simple() {
         assert_statement_snapshot!("assert ok");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assert_comparison() {
         assert_statement_snapshot!("assert add(1, 2) == 3");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn assert_await() {
         assert_statement_snapshot!("assert find(1).await == Ok(ada)");
     }
@@ -924,7 +891,7 @@ mod tests {
     // ---- style
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for style.rs"]
     fn style_let() {
         assert_statement_snapshot!("let card = style { padding: 16px }");
     }
@@ -932,7 +899,6 @@ mod tests {
     // ---- newline rules (§2.1)
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn two_calls_on_lines() {
         assert_block_snapshot!(
             r#"
@@ -945,7 +911,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn call_after_newline_is_new_stmt() {
         assert_block_snapshot!(
             r#"
@@ -958,7 +923,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn index_after_newline_is_new_stmt() {
         assert_block_snapshot!(
             r#"
@@ -971,7 +935,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn array_after_newline_is_new_stmt() {
         assert_block_snapshot!(
             r#"
@@ -984,7 +947,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for markup/mod.rs"]
     fn markup_after_expr_on_next_line() {
         assert_block_snapshot!(
             r#"
@@ -997,7 +960,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn negative_after_newline_is_new_stmt() {
         assert_block_snapshot!(
             r#"
@@ -1010,7 +972,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn minus_with_space_after_newline_continues() {
         assert_block_snapshot!(
             r#"
@@ -1023,7 +984,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn pipe_after_newline_continues() {
         assert_block_snapshot!(
             r#"
@@ -1038,26 +998,22 @@ mod tests {
     // ---- errors
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_same_line() {
         assert_block_error_snapshot!("{ let x = 1 2 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_close_paren_same_line() {
         // `)` cannot start a statement: `End`, not `SameLine`.
         assert_block_error_snapshot!("{ let x = 1 )");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_close_paren_stmt_start() {
         assert_block_error_snapshot!("{ )");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_assign_op_on_next_line() {
         // `=` is a chain terminator, not a line continuer: the statement is
         // `x`, and the `=` on the next line cannot start a statement.
@@ -1072,19 +1028,16 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_assign_target() {
         assert_statement_error_snapshot!("foo() = 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_assign_target_slash_equals() {
         assert_statement_error_snapshot!("foo() /= 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_semicolon() {
         assert_block_error_snapshot!("{ let x = 1; }");
     }
@@ -1100,13 +1053,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_unclosed_block() {
         assert_block_error_snapshot!("{ let x = 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_stmt_start() {
         assert_statement_error_snapshot!(")");
     }

@@ -1,0 +1,142 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "{\n    let y = 1\n    count += y\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Block {
+        stmts: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 14,
+                    },
+                },
+                value: Let(
+                    LetDecl {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 9,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 10,
+                                },
+                            },
+                            value: Var(
+                                "y",
+                            ),
+                        },
+                        annotation: None,
+                        value: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 13,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 14,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 1.0,
+                                    text: "1",
+                                },
+                            ),
+                        },
+                    },
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 15,
+                    },
+                },
+                value: Assign {
+                    place: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 10,
+                            },
+                        },
+                        value: Place {
+                            root: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 5,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 10,
+                                    },
+                                },
+                                value: "count",
+                            },
+                            steps: [],
+                        },
+                    },
+                    op: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 13,
+                            },
+                        },
+                        value: Add,
+                    },
+                    value: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 14,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 15,
+                            },
+                        },
+                        value: Var(
+                            "y",
+                        ),
+                    },
+                },
+            },
+        ],
+        tail: None,
+    },
+}

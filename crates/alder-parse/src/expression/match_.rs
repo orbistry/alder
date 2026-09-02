@@ -165,7 +165,6 @@ mod tests {
     use super::super::{assert_expression_error_snapshot, assert_expression_snapshot};
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_simple() {
         assert_expression_snapshot!(
             r#"
@@ -177,7 +176,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_multiple_arms() {
         assert_expression_snapshot!(
             r#"
@@ -191,19 +189,16 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_trailing_comma() {
         assert_expression_snapshot!("match x { 1 => a, }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_no_trailing_comma() {
         assert_expression_snapshot!("match x { 1 => a, 2 => b }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_newline_separated_arms() {
         assert_expression_snapshot!(
             r#"
@@ -216,37 +211,31 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_no_comma_same_line() {
         assert_expression_snapshot!("match x { 1 => a 2 => b }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_empty() {
         assert_expression_snapshot!("match x {}");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_alternatives() {
         assert_expression_snapshot!("match x { 1 | 2 | 3 => small, _ => big }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_guard() {
         assert_expression_snapshot!("match n { n if n > 0 => pos, _ => other }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_alternatives_with_guard() {
         assert_expression_snapshot!("match x { 1 | 2 if ok => a, _ => b }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn match_block_body() {
         assert_expression_snapshot!(
             r#"
@@ -262,13 +251,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn match_block_single_name_is_block() {
         assert_expression_snapshot!("match x { _ => { y } }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_ctor_args() {
         assert_expression_snapshot!(
             r#"
@@ -281,7 +268,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_tag_patterns() {
         assert_expression_snapshot!(
             r#"
@@ -296,13 +282,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_wildcard() {
         assert_expression_snapshot!("match x { _ => 0 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and template.rs"]
     fn match_pin() {
         assert_expression_snapshot!(
             r#"
@@ -315,55 +299,46 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_scrutinee_path_no_record_ctor() {
         assert_expression_snapshot!("match Shape::Empty { Shape::Empty => 1 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn match_record_ctor_in_arm() {
         assert_expression_snapshot!("match s { _ => Shape::Rect { width: 1 } }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_missing_arrow_thin_arrow() {
         assert_expression_error_snapshot!("match x { 1 -> a }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_of_keyword() {
         assert_expression_error_snapshot!("match x of { 1 => a }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_missing_body() {
         assert_expression_error_snapshot!("match x { 1 => }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_unclosed() {
         assert_expression_error_snapshot!("match x { 1 => a");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_bad_pattern() {
         assert_expression_error_snapshot!("match x { +1 => a }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_guard() {
         assert_expression_error_snapshot!("match x { n if => a }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_end_after_body() {
         assert_expression_error_snapshot!("match x { 1 => a ) }");
     }

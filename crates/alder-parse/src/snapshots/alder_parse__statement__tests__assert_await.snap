@@ -1,0 +1,174 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: assert find(1).await == Ok(ada)
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 32,
+        },
+    },
+    value: Assert(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 8,
+                },
+                end: Position {
+                    line: 1,
+                    column: 32,
+                },
+            },
+            value: BinOps {
+                operands: [
+                    BinOpOperand {
+                        expr: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 21,
+                                },
+                            },
+                            value: Await(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 8,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 15,
+                                        },
+                                    },
+                                    value: Call {
+                                        function: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 8,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 12,
+                                                },
+                                            },
+                                            value: Var(
+                                                "find",
+                                            ),
+                                        },
+                                        arguments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 13,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 14,
+                                                    },
+                                                },
+                                                value: Number(
+                                                    NumberLit {
+                                                        value: 1.0,
+                                                        text: "1",
+                                                    },
+                                                ),
+                                            },
+                                        ],
+                                    },
+                                },
+                            ),
+                        },
+                        op: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 22,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 24,
+                                },
+                            },
+                            value: Eq,
+                        },
+                    },
+                ],
+                last: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 25,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 32,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 25,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 27,
+                                },
+                            },
+                            value: Path(
+                                Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 25,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 27,
+                                                },
+                                            },
+                                            value: "Ok",
+                                        },
+                                    ],
+                                },
+                            ),
+                        },
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 28,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 31,
+                                    },
+                                },
+                                value: Var(
+                                    "ada",
+                                ),
+                            },
+                        ],
+                    },
+                },
+            },
+        },
+    ),
+}

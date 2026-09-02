@@ -1,0 +1,135 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "for item in items { total += item }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 36,
+        },
+    },
+    value: For {
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 5,
+                },
+                end: Position {
+                    line: 1,
+                    column: 9,
+                },
+            },
+            value: Var(
+                "item",
+            ),
+        },
+        iter: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 13,
+                },
+                end: Position {
+                    line: 1,
+                    column: 18,
+                },
+            },
+            value: Var(
+                "items",
+            ),
+        },
+        body: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 19,
+                },
+                end: Position {
+                    line: 1,
+                    column: 36,
+                },
+            },
+            value: Block {
+                stmts: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 21,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 34,
+                            },
+                        },
+                        value: Assign {
+                            place: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 21,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 26,
+                                    },
+                                },
+                                value: Place {
+                                    root: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 21,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 26,
+                                            },
+                                        },
+                                        value: "total",
+                                    },
+                                    steps: [],
+                                },
+                            },
+                            op: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 27,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 29,
+                                    },
+                                },
+                                value: Add,
+                            },
+                            value: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 30,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 34,
+                                    },
+                                },
+                                value: Var(
+                                    "item",
+                                ),
+                            },
+                        },
+                    },
+                ],
+                tail: None,
+            },
+        },
+    },
+}

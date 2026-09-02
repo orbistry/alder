@@ -1,0 +1,140 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: (fn(x) x + 1)(2)
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 2,
+        },
+        end: Position {
+            line: 1,
+            column: 17,
+        },
+    },
+    value: Call {
+        function: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 13,
+                },
+            },
+            value: Lambda(
+                Lambda {
+                    params: [
+                        Param {
+                            mutable: None,
+                            pattern: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 5,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 6,
+                                    },
+                                },
+                                value: Var(
+                                    "x",
+                                ),
+                            },
+                            annotation: None,
+                        },
+                    ],
+                    ret: None,
+                    body: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 8,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                        },
+                        value: BinOps {
+                            operands: [
+                                BinOpOperand {
+                                    expr: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 8,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 9,
+                                            },
+                                        },
+                                        value: Var(
+                                            "x",
+                                        ),
+                                    },
+                                    op: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 10,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 11,
+                                            },
+                                        },
+                                        value: Add,
+                                    },
+                                },
+                            ],
+                            last: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 12,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                },
+                                value: Number(
+                                    NumberLit {
+                                        value: 1.0,
+                                        text: "1",
+                                    },
+                                ),
+                            },
+                        },
+                    },
+                },
+            ),
+        },
+        arguments: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 15,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                },
+                value: Number(
+                    NumberLit {
+                        value: 2.0,
+                        text: "2",
+                    },
+                ),
+            },
+        ],
+    },
+}

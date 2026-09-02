@@ -100,31 +100,26 @@ mod tests {
     use super::super::{assert_expression_error_snapshot, assert_expression_snapshot};
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_no_else() {
         assert_expression_snapshot!("if ready { go() }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_else() {
         assert_expression_snapshot!("if a { 1 } else { 2 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_else_if() {
         assert_expression_snapshot!("if a { 1 } else if b { 2 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_else_if_else() {
         assert_expression_snapshot!("if a { 1 } else if b { 2 } else { 3 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_multiline() {
         assert_expression_snapshot!(
             r#"
@@ -140,7 +135,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_else_next_line() {
         assert_expression_snapshot!(
             r#"
@@ -155,31 +149,26 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_condition_call() {
         assert_expression_snapshot!("if isReady(x) { go() }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_condition_path_no_record_ctor() {
         assert_expression_snapshot!("if s == Shape::Empty { 1 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_condition_parenthesized_record_ctor() {
         assert_expression_snapshot!("if (s == Shape::Rect { width: 1 }) { 2 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_nested() {
         assert_expression_snapshot!("if a { if b { 1 } else { 2 } } else { 3 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn if_block_tail_values() {
         assert_expression_snapshot!(
             r#"
@@ -195,25 +184,21 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_missing_block() {
         assert_expression_error_snapshot!("if x");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_then_keyword() {
         assert_expression_error_snapshot!("if x then y else z");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_else_dangling() {
         assert_expression_error_snapshot!("if x { 1 } else");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_condition() {
         assert_expression_error_snapshot!("if else { 1 }");
     }

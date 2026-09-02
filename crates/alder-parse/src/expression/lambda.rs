@@ -126,37 +126,31 @@ mod tests {
     use super::super::{assert_expression_error_snapshot, assert_expression_snapshot};
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_expr_body() {
         assert_expression_snapshot!("fn(x) x + 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_no_params() {
         assert_expression_snapshot!("fn() 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_multiple_params() {
         assert_expression_snapshot!("fn(a, b) a + b");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_typed_params() {
         assert_expression_snapshot!("fn(a: Number, b: String) a");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_return_type() {
         assert_expression_snapshot!("fn(x) -> Number { x * 2 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_block_body() {
         assert_expression_snapshot!(
             r#"
@@ -169,55 +163,46 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_block_single_name_is_block() {
         assert_expression_snapshot!("fn() { x }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_assign_body() {
         assert_expression_snapshot!("fn() count += 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_pattern_param() {
         assert_expression_snapshot!("fn((a, b)) a + b");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_mut_param() {
         assert_expression_snapshot!("fn(mut x) x");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_missing_parens() {
         assert_expression_error_snapshot!("fn x");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_missing_body() {
         assert_expression_error_snapshot!("fn()");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_bad_param() {
         assert_expression_error_snapshot!("fn(+) 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_assign_no_value() {
         assert_expression_error_snapshot!("fn() x +=");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_assign_bad_target() {
         assert_expression_error_snapshot!("fn() 1 += 2");
     }

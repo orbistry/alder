@@ -143,7 +143,7 @@ impl<'a> Parser<'a> {
 // `expression/mod.rs` dispatches `primary` to `template`, that would send
 // all 19 tests into `todo!()` and force `#[ignore]` on every one of them,
 // so both macros call `template(start)` directly (plus the trailing chomp
-// `expression` does) and only the hole tests are ignored. The snapshots
+// `expression` does); the hole tests were ignored until Wave 2 landed. The snapshots
 // are byte-identical either way (`template` already wraps errors as
 // `Expr::Template(_, row, col)`). Wave 4 step 4.2 (§9) makes the
 // mechanical swap in both macros: replace `.template(start)` with
@@ -219,37 +219,31 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn single_hole() {
         assert_template_snapshot!("`Hello ${name}!`");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn hole_at_start() {
         assert_template_snapshot!("`${name} says hi`");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn hole_at_end() {
         assert_template_snapshot!("`/users/${id}`");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn adjacent_holes() {
         assert_template_snapshot!("`${a}${b}`");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn text_around_holes() {
         assert_template_snapshot!("`/users/${id}/posts/${postId}/edit`");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn nested_template() {
         assert_template_snapshot!("`outer ${`inner ${x}`} done`");
     }
@@ -257,7 +251,6 @@ mod tests {
     // Snapshot committed and hand-checked (record 1:5-1:13, `x` 1:7-1:8,
     // `1` 1:10-1:11, no empty text parts); un-ignoring must not change it.
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn record_in_hole() {
         assert_template_snapshot!("`${ { x: 1 } }`");
     }
@@ -303,13 +296,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_hole_unclosed() {
         assert_template_error_snapshot!("`a ${ x `");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
     fn error_hole_bad_expr() {
         assert_template_error_snapshot!("`a ${ ) } b`");
     }
