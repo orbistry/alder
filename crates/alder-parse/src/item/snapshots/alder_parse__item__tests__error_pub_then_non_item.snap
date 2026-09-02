@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/mod.rs
+description: pub 42
+---
+AfterPub(
+    1,
+    5,
+)

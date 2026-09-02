@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: "import @alder/http.{ 1 }"
+---
+Import(
+    Name(
+        1,
+        22,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/type_alias.rs
+description: type id = Number
+---
+TypeAlias(
+    Name(
+        1,
+        6,
+    ),
+    1,
+    1,
+)

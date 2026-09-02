@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: import http
+---
+Import(
+    Path(
+        Start(
+            1,
+            8,
+        ),
+        1,
+        8,
+    ),
+    1,
+    1,
+)

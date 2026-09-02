@@ -1,0 +1,300 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "import @alder/http.{ get, Request }\nimport ~/db/users\n\ntype Id = Number\n\nlet base = \"https://example.com\"\n"
+---
+Module {
+    items: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 36,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: Import(
+                    Import {
+                        path: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 19,
+                                },
+                            },
+                            value: ModulePath {
+                                root: Package {
+                                    author: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 9,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 14,
+                                            },
+                                        },
+                                        value: "alder",
+                                    },
+                                    package: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 15,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 19,
+                                            },
+                                        },
+                                        value: "http",
+                                    },
+                                },
+                                segments: [],
+                            },
+                        },
+                        tail: Names(
+                            [
+                                ImportName {
+                                    name: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 22,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 25,
+                                            },
+                                        },
+                                        value: "get",
+                                    },
+                                    alias: None,
+                                },
+                                ImportName {
+                                    name: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 27,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 34,
+                                            },
+                                        },
+                                        value: "Request",
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                        ),
+                    },
+                ),
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 2,
+                    column: 1,
+                },
+                end: Position {
+                    line: 2,
+                    column: 18,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: Import(
+                    Import {
+                        path: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 8,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 18,
+                                },
+                            },
+                            value: ModulePath {
+                                root: Local(
+                                    Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 8,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 9,
+                                        },
+                                    },
+                                ),
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 10,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 12,
+                                            },
+                                        },
+                                        value: "db",
+                                    },
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 13,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 18,
+                                            },
+                                        },
+                                        value: "users",
+                                    },
+                                ],
+                            },
+                        },
+                        tail: Module,
+                    },
+                ),
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 4,
+                    column: 1,
+                },
+                end: Position {
+                    line: 4,
+                    column: 17,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: TypeAlias(
+                    TypeAlias {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 6,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 8,
+                                },
+                            },
+                            value: "Id",
+                        },
+                        params: [],
+                        typ: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 11,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 17,
+                                },
+                            },
+                            value: Named {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 4,
+                                                    column: 11,
+                                                },
+                                                end: Position {
+                                                    line: 4,
+                                                    column: 17,
+                                                },
+                                            },
+                                            value: "Number",
+                                        },
+                                    ],
+                                },
+                                args: [],
+                            },
+                        },
+                    },
+                ),
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 6,
+                    column: 1,
+                },
+                end: Position {
+                    line: 6,
+                    column: 33,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: Let(
+                    LetDecl {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 6,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 6,
+                                    column: 9,
+                                },
+                            },
+                            value: Var(
+                                "base",
+                            ),
+                        },
+                        annotation: None,
+                        value: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 6,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 6,
+                                    column: 33,
+                                },
+                            },
+                            value: Str(
+                                "https://example.com",
+                            ),
+                        },
+                    },
+                ),
+            },
+        },
+    ],
+}

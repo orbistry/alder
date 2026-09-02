@@ -1,0 +1,71 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: "import ~.{ config }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 20,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Import(
+            Import {
+                path: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                    },
+                    value: ModulePath {
+                        root: Local(
+                            Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 9,
+                                },
+                            },
+                        ),
+                        segments: [],
+                    },
+                },
+                tail: Names(
+                    [
+                        ImportName {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 12,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 18,
+                                    },
+                                },
+                                value: "config",
+                            },
+                            alias: None,
+                        },
+                    ],
+                ),
+            },
+        ),
+    },
+}

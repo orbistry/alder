@@ -1,0 +1,64 @@
+---
+source: crates/alder-parse/src/item/type_alias.rs
+description: "#[extern]\ntype Response\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 2,
+            column: 14,
+        },
+    },
+    value: Item {
+        attributes: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                },
+                value: Attribute {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 3,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                        },
+                        value: "extern",
+                    },
+                    args: [],
+                },
+            },
+        ],
+        visibility: Private,
+        kind: OpaqueType(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 14,
+                    },
+                },
+                value: "Response",
+            },
+        ),
+    },
+}

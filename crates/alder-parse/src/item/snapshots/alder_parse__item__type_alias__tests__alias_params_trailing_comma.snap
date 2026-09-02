@@ -1,0 +1,112 @@
+---
+source: crates/alder-parse/src/item/type_alias.rs
+description: "type Pair[a, b,] = (a, b)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 26,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: TypeAlias(
+            TypeAlias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: "Pair",
+                },
+                params: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: "a",
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                        },
+                        value: "b",
+                    },
+                ],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 20,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 26,
+                        },
+                    },
+                    value: Tuple {
+                        first: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 21,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 22,
+                                },
+                            },
+                            value: Var {
+                                name: "a",
+                                args: [],
+                            },
+                        },
+                        second: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 24,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 25,
+                                },
+                            },
+                            value: Var {
+                                name: "b",
+                                args: [],
+                            },
+                        },
+                        rest: [],
+                    },
+                },
+            },
+        ),
+    },
+}

@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/attribute.rs
+description: "#[extern]"
+---
+Attribute(
+    Dangling(
+        1,
+        10,
+    ),
+    1,
+    1,
+)
