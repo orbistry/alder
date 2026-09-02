@@ -1,0 +1,110 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "(\n    a: Number,\n    b: String,\n)\n"
+---
+[
+    Param {
+        mutable: None,
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 2,
+                    column: 5,
+                },
+                end: Position {
+                    line: 2,
+                    column: 6,
+                },
+            },
+            value: Var(
+                "a",
+            ),
+        },
+        annotation: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 14,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 8,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 14,
+                                    },
+                                },
+                                value: "Number",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+        ),
+    },
+    Param {
+        mutable: None,
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 5,
+                },
+                end: Position {
+                    line: 3,
+                    column: 6,
+                },
+            },
+            value: Var(
+                "b",
+            ),
+        },
+        annotation: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 14,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 8,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 14,
+                                    },
+                                },
+                                value: "String",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+        ),
+    },
+]

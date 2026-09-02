@@ -182,6 +182,8 @@ mod tests {
             let result = parser
                 .params()
                 .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
+            // `params()` stops at the `)`; its callers chomp.
+            parser.chomp();
             assert!(
                 parser.is_eof(),
                 "unconsumed input at {:?}\n\nSource:\n{code}",
