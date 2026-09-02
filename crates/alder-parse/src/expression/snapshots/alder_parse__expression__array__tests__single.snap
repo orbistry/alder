@@ -1,0 +1,38 @@
+---
+source: crates/alder-parse/src/expression/array.rs
+description: "[1]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 4,
+        },
+    },
+    value: Array(
+        [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 2,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 3,
+                    },
+                },
+                value: Number(
+                    NumberLit {
+                        value: 1.0,
+                        text: "1",
+                    },
+                ),
+            },
+        ],
+    ),
+}

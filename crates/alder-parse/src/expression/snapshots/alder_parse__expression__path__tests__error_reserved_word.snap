@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/path.rs
+description: type
+---
+Reserved(
+    Type,
+    1,
+    1,
+)

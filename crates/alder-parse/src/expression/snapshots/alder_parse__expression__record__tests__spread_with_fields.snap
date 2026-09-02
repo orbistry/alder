@@ -1,0 +1,107 @@
+---
+source: crates/alder-parse/src/expression/record.rs
+description: "{ ..r, x: 1, y: 2 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 20,
+        },
+    },
+    value: Record(
+        [
+            Spread(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                    },
+                    value: Var(
+                        "r",
+                    ),
+                },
+            ),
+            Field {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                    },
+                    value: "x",
+                },
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 1.0,
+                                text: "1",
+                            },
+                        ),
+                    },
+                ),
+            },
+            Field {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                    },
+                    value: "y",
+                },
+                value: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 18,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 2.0,
+                                text: "2",
+                            },
+                        ),
+                    },
+                ),
+            },
+        ],
+    ),
+}

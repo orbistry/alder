@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: ^x
+---
+PinOutsideQuery(
+    1,
+    1,
+)

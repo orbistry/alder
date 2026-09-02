@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/record.rs
+description: "{ x = 1 }"
+---
+Record(
+    EqualsNotColon(
+        1,
+        5,
+    ),
+    1,
+    1,
+)

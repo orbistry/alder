@@ -1,0 +1,52 @@
+---
+source: crates/alder-parse/src/expression/record.rs
+description: "{ user, prefs }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 16,
+        },
+    },
+    value: Record(
+        [
+            Field {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: "user",
+                },
+                value: None,
+            },
+            Field {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                    },
+                    value: "prefs",
+                },
+                value: None,
+            },
+        ],
+    ),
+}

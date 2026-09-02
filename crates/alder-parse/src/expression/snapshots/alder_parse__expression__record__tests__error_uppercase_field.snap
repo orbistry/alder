@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/record.rs
+description: "{ x: 1, Foo: 2 }"
+---
+Record(
+    Field(
+        1,
+        9,
+    ),
+    1,
+    1,
+)

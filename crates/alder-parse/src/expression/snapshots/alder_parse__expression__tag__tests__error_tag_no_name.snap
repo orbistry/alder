@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/tag.rs
+description: ":Foo"
+---
+Tag(
+    Name(
+        1,
+        1,
+    ),
+    1,
+    1,
+)

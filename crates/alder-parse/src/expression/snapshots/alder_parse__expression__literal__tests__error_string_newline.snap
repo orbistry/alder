@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/literal.rs
+description: "\"abc\ndef\"\n"
+---
+String(
+    Newline,
+    1,
+    5,
+)

@@ -1,0 +1,11 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "f!(a]"
+---
+MacroCall(
+    Unbalanced(
+        93,
+    ),
+    1,
+    5,
+)

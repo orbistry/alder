@@ -1,0 +1,109 @@
+---
+source: crates/alder-parse/src/expression/loop_.rs
+description: state(props.start ?? 0)
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 24,
+        },
+    },
+    value: State(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 23,
+                },
+            },
+            value: BinOps {
+                operands: [
+                    BinOpOperand {
+                        expr: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 7,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 18,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 7,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 12,
+                                        },
+                                    },
+                                    value: Var(
+                                        "props",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 13,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 18,
+                                        },
+                                    },
+                                    value: "start",
+                                },
+                            },
+                        },
+                        op: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 19,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 21,
+                                },
+                            },
+                            value: Coalesce,
+                        },
+                    },
+                ],
+                last: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 22,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 23,
+                        },
+                    },
+                    value: Number(
+                        NumberLit {
+                            value: 0.0,
+                            text: "0",
+                        },
+                    ),
+                },
+            },
+        },
+    ),
+}

@@ -1,0 +1,69 @@
+---
+source: crates/alder-parse/src/expression/path.rs
+description: "Point { x, y }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 15,
+        },
+    },
+    value: RecordCtor {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                    },
+                    value: "Point",
+                },
+            ],
+        },
+        fields: [
+            Field {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: "x",
+                },
+                value: None,
+            },
+            Field {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                    },
+                    value: "y",
+                },
+                value: None,
+            },
+        ],
+    },
+}

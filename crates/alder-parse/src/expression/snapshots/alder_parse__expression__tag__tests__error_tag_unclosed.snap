@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/tag.rs
+description: ":not_found(id"
+---
+Tag(
+    End(
+        1,
+        14,
+    ),
+    1,
+    1,
+)

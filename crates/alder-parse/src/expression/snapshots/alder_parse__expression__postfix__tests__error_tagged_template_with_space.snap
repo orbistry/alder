@@ -1,0 +1,19 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "tag `x`"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 4,
+        },
+    },
+    value: Var(
+        "tag",
+    ),
+}

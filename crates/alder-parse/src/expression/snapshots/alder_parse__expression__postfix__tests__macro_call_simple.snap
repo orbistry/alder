@@ -1,0 +1,44 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "assert_eq!(a, b)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 17,
+        },
+    },
+    value: MacroCall {
+        name: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 10,
+                },
+            },
+            value: "assert_eq",
+        },
+        tokens: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 12,
+                },
+                end: Position {
+                    line: 1,
+                    column: 16,
+                },
+            },
+            value: "a, b",
+        },
+    },
+}

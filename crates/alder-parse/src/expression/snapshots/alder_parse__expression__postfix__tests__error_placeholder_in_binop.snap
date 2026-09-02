@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: f(_ + 1)
+---
+Call(
+    Arg(
+        Placeholder(
+            1,
+            3,
+        ),
+        1,
+        3,
+    ),
+    1,
+    2,
+)

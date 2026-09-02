@@ -1,0 +1,61 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "f(_, _)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 8,
+        },
+    },
+    value: Call {
+        function: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 2,
+                },
+            },
+            value: Var(
+                "f",
+            ),
+        },
+        arguments: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 3,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 4,
+                    },
+                },
+                value: Placeholder,
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 7,
+                    },
+                },
+                value: Placeholder,
+            },
+        ],
+    },
+}

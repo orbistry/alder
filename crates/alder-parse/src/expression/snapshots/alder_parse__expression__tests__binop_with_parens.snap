@@ -1,0 +1,111 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: (a + b) * c
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 2,
+        },
+        end: Position {
+            line: 1,
+            column: 12,
+        },
+    },
+    value: BinOps {
+        operands: [
+            BinOpOperand {
+                expr: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: BinOps {
+                        operands: [
+                            BinOpOperand {
+                                expr: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 2,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 3,
+                                        },
+                                    },
+                                    value: Var(
+                                        "a",
+                                    ),
+                                },
+                                op: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 4,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 5,
+                                        },
+                                    },
+                                    value: Add,
+                                },
+                            },
+                        ],
+                        last: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 6,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 7,
+                                },
+                            },
+                            value: Var(
+                                "b",
+                            ),
+                        },
+                    },
+                },
+                op: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: Mul,
+                },
+            },
+        ],
+        last: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 11,
+                },
+                end: Position {
+                    line: 1,
+                    column: 12,
+                },
+            },
+            value: Var(
+                "c",
+            ),
+        },
+    },
+}

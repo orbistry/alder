@@ -1,0 +1,97 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "xs[i + 1]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 10,
+        },
+    },
+    value: Index {
+        target: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 3,
+                },
+            },
+            value: Var(
+                "xs",
+            ),
+        },
+        index: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 4,
+                },
+                end: Position {
+                    line: 1,
+                    column: 9,
+                },
+            },
+            value: BinOps {
+                operands: [
+                    BinOpOperand {
+                        expr: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 4,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 5,
+                                },
+                            },
+                            value: Var(
+                                "i",
+                            ),
+                        },
+                        op: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 6,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 7,
+                                },
+                            },
+                            value: Add,
+                        },
+                    },
+                ],
+                last: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                    },
+                    value: Number(
+                        NumberLit {
+                            value: 1.0,
+                            text: "1",
+                        },
+                    ),
+                },
+            },
+        },
+    },
+}

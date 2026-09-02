@@ -1,0 +1,9 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: a +
+---
+OperatorRight(
+    Add,
+    1,
+    4,
+)
