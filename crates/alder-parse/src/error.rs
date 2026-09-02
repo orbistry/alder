@@ -599,6 +599,8 @@ pub enum Insert<'a> {
 pub enum Update<'a> {
     Table(Row, Col),
     Set(Row, Col),
+    /// `set` not followed by `{`.
+    RecordOpen(Row, Col),
     Record(&'a Record<'a>, Row, Col),
     Where(&'a Expr<'a>, Row, Col),
 }

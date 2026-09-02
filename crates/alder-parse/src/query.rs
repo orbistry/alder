@@ -347,12 +347,10 @@ impl<'a> Parser<'a> {
         self.chomp();
         self.keyword(b"set", error::Update::Set)?;
         self.chomp();
-        // TODO(wave0): a dedicated `Update::RecordOpen` variant for a missing
-        // `{` after `set`, reported where the `{` should be (this position);
-        // `Update::Set` ("expected `set { … }`") stands in.
+        // A missing `{` after `set` is reported where the `{` should be.
         if self.peek() != Some(b'{') {
             let (row, col) = self.position();
-            return Err(error::Update::Set(row, col));
+            return Err(error::Update::RecordOpen(row, col));
         }
         // The `{` is consumed inside `specialize` so the `Record` context is
         // anchored at the brace, as `Expr::Record` is (expression/record.rs).

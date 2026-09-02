@@ -4,7 +4,7 @@ description: "query { update users set name: ^n }"
 ---
 Query(
     Update(
-        Set(
+        RecordOpen(
             1,
             26,
         ),
