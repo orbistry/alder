@@ -1,0 +1,83 @@
+---
+source: crates/alder-parse/src/pattern/record.rs
+description: "{ point: (x, y) }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 18,
+        },
+    },
+    value: Record {
+        fields: [
+            FieldPattern {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: "point",
+                },
+                pattern: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 16,
+                            },
+                        },
+                        value: Tuple {
+                            first: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 11,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 12,
+                                    },
+                                },
+                                value: Var(
+                                    "x",
+                                ),
+                            },
+                            second: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 15,
+                                    },
+                                },
+                                value: Var(
+                                    "y",
+                                ),
+                            },
+                            rest: [],
+                        },
+                    },
+                ),
+            },
+        ],
+        rest: None,
+    },
+}

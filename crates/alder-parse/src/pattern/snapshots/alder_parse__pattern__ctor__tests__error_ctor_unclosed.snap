@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/pattern/ctor.rs
+description: Some(x
+---
+Ctor(
+    End(
+        1,
+        7,
+    ),
+    1,
+    1,
+)

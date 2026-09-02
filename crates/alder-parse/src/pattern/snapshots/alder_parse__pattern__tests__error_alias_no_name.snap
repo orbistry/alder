@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: x as
+---
+Alias(
+    1,
+    5,
+)

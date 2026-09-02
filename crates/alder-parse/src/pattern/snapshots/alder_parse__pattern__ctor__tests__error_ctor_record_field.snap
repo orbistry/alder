@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/pattern/ctor.rs
+description: "Rect { 1 }"
+---
+Ctor(
+    Record(
+        Field(
+            1,
+            8,
+        ),
+        1,
+        6,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,86 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: None | Some(x)
+---
+[
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 5,
+            },
+        },
+        value: Ctor {
+            path: Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 1,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                        },
+                        value: "None",
+                    },
+                ],
+            },
+            args: [],
+        },
+    },
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 8,
+            },
+            end: Position {
+                line: 1,
+                column: 15,
+            },
+        },
+        value: Ctor {
+            path: Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 8,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: "Some",
+                    },
+                ],
+            },
+            args: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                    },
+                    value: Var(
+                        "x",
+                    ),
+                },
+            ],
+        },
+    },
+]

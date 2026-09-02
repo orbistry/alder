@@ -1,0 +1,82 @@
+---
+source: crates/alder-parse/src/pattern/ctor.rs
+description: "Node(left, value, right)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 25,
+        },
+    },
+    value: Ctor {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: "Node",
+                },
+            ],
+        },
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                },
+                value: Var(
+                    "left",
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                },
+                value: Var(
+                    "value",
+                ),
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 24,
+                    },
+                },
+                value: Var(
+                    "right",
+                ),
+            },
+        ],
+    },
+}

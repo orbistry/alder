@@ -1,0 +1,76 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: "(a, b) as pair"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 15,
+        },
+    },
+    value: Alias {
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 7,
+                },
+            },
+            value: Tuple {
+                first: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                    },
+                    value: Var(
+                        "a",
+                    ),
+                },
+                second: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                    },
+                    value: Var(
+                        "b",
+                    ),
+                },
+                rest: [],
+            },
+        },
+        name: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 11,
+                },
+                end: Position {
+                    line: 1,
+                    column: 15,
+                },
+            },
+            value: "pair",
+        },
+    },
+}
