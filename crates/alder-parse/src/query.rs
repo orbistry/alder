@@ -135,39 +135,39 @@ impl<'a> Parser<'a> {
             let Some(clause) = self.peek_clause() else {
                 break;
             };
-            // Strictly later than the last clause, except that joins repeat.
-            if !(clause > last || (clause == Clause::Join && last == Clause::Join)) {
-                break;
-            }
+            // Each clause must be strictly later than the last one accepted,
+            // except that joins repeat; anything else (a second `from`, a
+            // clause at or before the last) stops the loop for `query_block`
+            // to report as `ClauseOrder`.
             match clause {
-                Clause::From => unreachable!("`from` is never later than the last clause"),
-                Clause::Join => {
+                Clause::Join if last <= Clause::Join => {
                     let join = self.specialize(
                         |bump, e, row, col| error::Select::Join(bump.alloc(e), row, col),
                         |p| p.join(),
                     )?;
                     joins.push(join);
                 }
-                Clause::Where => {
+                Clause::Where if last < clause => {
                     self.advance_by(b"where".len());
                     where_ = Some(self.clause_expr(error::Select::Where)?);
                 }
-                Clause::GroupBy => {
+                Clause::GroupBy if last < clause => {
                     self.advance_by(b"groupBy".len());
                     group_by = self.clause_exprs(error::Select::GroupBy)?;
                 }
-                Clause::OrderBy => {
+                Clause::OrderBy if last < clause => {
                     self.advance_by(b"orderBy".len());
                     order_by = self.orders()?;
                 }
-                Clause::Limit => {
+                Clause::Limit if last < clause => {
                     self.advance_by(b"limit".len());
                     limit = Some(self.clause_expr(error::Select::Limit)?);
                 }
-                Clause::Offset => {
+                Clause::Offset if last < clause => {
                     self.advance_by(b"offset".len());
                     offset = Some(self.clause_expr(error::Select::Offset)?);
                 }
+                _ => break,
             }
             last = clause;
         }
@@ -348,11 +348,20 @@ impl<'a> Parser<'a> {
         self.keyword(b"set", error::Update::Set)?;
         self.chomp();
         // TODO(wave0): a dedicated `Update::RecordOpen` variant for a missing
-        // `{` after `set`; `Update::Set` ("expected `set { … }`") stands in.
-        self.word1(b'{', error::Update::Set)?;
+        // `{` after `set`, reported where the `{` should be (this position);
+        // `Update::Set` ("expected `set { … }`") stands in.
+        if self.peek() != Some(b'{') {
+            let (row, col) = self.position();
+            return Err(error::Update::Set(row, col));
+        }
+        // The `{` is consumed inside `specialize` so the `Record` context is
+        // anchored at the brace, as `Expr::Record` is (expression/record.rs).
         let set = self.specialize(
             |bump, e, row, col| error::Update::Record(bump.alloc(e), row, col),
-            |p| p.record_fields(),
+            |p| {
+                p.advance();
+                p.record_fields()
+            },
         )?;
         let where_ = self.optional_where(error::Update::Where)?;
         Ok(Query::Update { table, set, where_ })
@@ -728,8 +737,24 @@ mod tests {
     }
 
     #[test]
-    fn nested_query_in_pin_leaves_mode() {
+    fn select_where_pin_sql_word_access() {
         assert_query_snapshot!("query { select * from users where users.id == ^select.id }");
+    }
+
+    #[test]
+    fn select_where_pin_nested_query() {
+        assert_query_snapshot!(
+            "query { select * from users where users.id in ^(query { select { id } from admins }) }"
+        );
+    }
+
+    #[test]
+    fn select_where_pin_nested_query_restores_mode() {
+        // The second `in` is a binop only if query mode is back on after the
+        // nested query (off inside the pin, on again inside `query { }`).
+        assert_query_snapshot!(
+            "query { select * from users where users.id in ^(query { select { id } from admins }) && users.role in ^roles }"
+        );
     }
 
     // ---- errors -------------------------------------------------------------
@@ -812,6 +837,20 @@ mod tests {
     #[test]
     fn error_pin_no_operand() {
         assert_query_error_snapshot!("query { select * from users where users.id == ^ }");
+    }
+
+    #[test]
+    fn error_pin_not_adjacent() {
+        // The operand must touch the `^`, as in patterns.
+        assert_query_error_snapshot!("query { select * from users where users.id == ^ x }");
+    }
+
+    #[test]
+    fn error_sql_keyword_after_nested_pin() {
+        // Query mode is restored after the nested query inside the pin.
+        assert_query_error_snapshot!(
+            "query { select * from users where users.id in ^(query { select { id } from admins }) && limit > 1 }"
+        );
     }
 
     #[test]
