@@ -154,6 +154,9 @@ impl<'a> Parser<'a> {
                     return Err(error::Pattern::Reserved(kw, row, col));
                 }
                 // Only a SQL word inside `query { }` can still be refused here.
+                // TODO(wave0): `error::Pattern` has no `SqlKeyword(SqlWord, …)`
+                // for parity with `Expr::SqlKeyword` (§6.3); `Start` is the
+                // nearest existing variant.
                 let name = self.lower_name(error::Pattern::Start)?;
                 Ok(self.add_end(start, Pattern::Var(name)))
             }
@@ -287,6 +290,27 @@ mod tests {
         }};
     }
 
+    /// Like `assert_pattern_error_snapshot!` but with query mode on, so a
+    /// SQL word is refused (`lower_name`, §5.8).
+    macro_rules! assert_query_pattern_error_snapshot {
+        ($code:expr) => {{
+            let bump = bumpalo::Bump::new();
+            let code = indoc::indoc!($code);
+            let src = bump.alloc_str(code);
+            let mut parser = $crate::Parser::new(&bump, src.as_bytes());
+            let err = parser
+                .with_query(true, |p| p.pattern())
+                .err()
+                .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
+            insta::with_settings!({
+                description => code,
+                omit_expression => true,
+            }, {
+                insta::assert_debug_snapshot!(err);
+            });
+        }};
+    }
+
     #[test]
     fn wildcard() {
         assert_pattern_snapshot!("_");
@@ -403,5 +427,10 @@ mod tests {
     #[test]
     fn error_start() {
         assert_pattern_error_snapshot!("=>");
+    }
+
+    #[test]
+    fn error_sql_word_in_query() {
+        assert_query_pattern_error_snapshot!("select");
     }
 }

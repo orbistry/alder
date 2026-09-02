@@ -1,8 +1,12 @@
 //! Unit, parenthesized and tuple patterns.
 //!
 //! `()` is `Pattern::Unit` (§10.17), `(p)` is `p` itself (the parentheses
-//! leave no node, as in Elm), `(p, q, …)` is `Pattern::Tuple`. A trailing
-//! comma is accepted (§10.8), so `(p,)` is also just `p`.
+//! leave no node, exactly as Elm's `tupleHelp` returns `firstPattern`), so
+//! the node's region excludes the parentheses while the cursor is past `)`:
+//! `(x)` is `Var("x")` at 1:2-1:3 with the cursor at 1:4. `Pattern` is not
+//! `Copy`, so re-wrapping the inner value with the paren region would need
+//! an AST change. `(p, q, …)` is `Pattern::Tuple`. A trailing comma is
+//! accepted (§10.8), so `(p,)` is also just `p`.
 //!
 //! See docs/parser-internals.md §5.14.
 // OWNER: pattern/tuple.rs (Wave 1)
@@ -93,6 +97,11 @@ mod tests {
     #[test]
     fn parenthesized_single() {
         assert_pattern_snapshot!("(x)");
+    }
+
+    #[test]
+    fn parenthesized_trailing_comma() {
+        assert_pattern_snapshot!("(x,)");
     }
 
     #[test]

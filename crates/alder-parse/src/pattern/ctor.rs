@@ -22,6 +22,16 @@ impl<'a> Parser<'a> {
         start: Position,
     ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
         let path = self.path(error::Pattern::Start, error::Pattern::PathMember)?;
+        if self.peek() == Some(b':') && self.peek_at(1) == Some(b':') {
+            // `path()` stops before `::lower` (§5.8). `Foo::bar` names a value,
+            // which a pattern can only match through `^Foo::bar`; consume the
+            // `::` like a dangling one (§10.42) and report after it.
+            // TODO(wave0): a `Pattern::PathVar` variant would carry that hint;
+            // `PathMember` is the nearest existing one.
+            self.advance_by(2);
+            let (row, col) = self.position();
+            return Err(error::Pattern::PathMember(row, col));
+        }
         let end = self.get_position();
         self.chomp();
         let same_line = !self.newline_since(end);
@@ -72,8 +82,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// At `(`: `( pattern { ',' pattern } [','] )` — at least one argument.
-    /// Consumes the closing `)` and nothing after it.
+    /// At `(`: `( pattern { ',' pattern } [','] )` — at least one argument,
+    /// as SPEC's `variant` has no zero-type tuple form either, so `Foo()`
+    /// is `Arg(Start)` at `)`. Consumes the closing `)` and nothing after it.
     fn pattern_ctor_args(&mut self) -> Result<&'a [&'a Located<Pattern<'a>>], PCtor<'a>> {
         self.advance();
         self.chomp();
@@ -179,5 +190,15 @@ mod tests {
     #[test]
     fn error_path_dangling() {
         assert_pattern_error_snapshot!("Foo::");
+    }
+
+    #[test]
+    fn error_path_lower_member() {
+        assert_pattern_error_snapshot!("Foo::bar");
+    }
+
+    #[test]
+    fn error_ctor_empty_args() {
+        assert_pattern_error_snapshot!("Foo()");
     }
 }

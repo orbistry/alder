@@ -1,8 +1,10 @@
 //! Array patterns `[a, b, ..rest]`.
 //!
 //! `[]`, `[a]`, `[a, b]`, `[a, ..]`, `[a, ..rest]`, `[..]`. The rest must be
-//! the last element (a trailing comma after it is fine); a rest name must
-//! follow `..` directly. Trailing commas are accepted (§10.8).
+//! the last element (a trailing comma after it is fine); whitespace may
+//! separate `..` from its name (SPEC: `'..' [ lower_ident ]`). After the
+//! rest, `,` followed by anything but `]` is `RestNotLast`; anything else
+//! is `End`. Trailing commas are accepted (§10.8).
 //!
 //! See docs/parser-internals.md §5.14.
 // OWNER: pattern/array.rs (Wave 1)
@@ -33,26 +35,42 @@ impl<'a> Parser<'a> {
                 Some(b'.') if self.peek_at(1) == Some(b'.') => {
                     let rest_start = self.get_position();
                     self.advance_by(2);
+                    let mut rest_end = self.get_position();
+                    self.chomp();
                     let name = if self.peek_lower() {
-                        Some(self.located_lower(PArray::End)?)
+                        // TODO(wave0): a `PArray::RestName` variant would describe a
+                        // reserved word here (`[..type]`) better than `End`.
+                        let name = self.located_lower(PArray::End)?;
+                        rest_end = name.region.end;
+                        self.chomp();
+                        Some(name)
                     } else {
                         None
                     };
                     rest = Some(ArrayRest {
-                        region: Region::new(rest_start, self.get_position()),
+                        region: Region::new(rest_start, rest_end),
                         name,
                     });
-                    self.chomp();
-                    if self.peek() == Some(b',') {
-                        self.advance();
-                        self.chomp();
+                    match self.peek() {
+                        Some(b']') => {
+                            self.advance();
+                            break;
+                        }
+                        Some(b',') => {
+                            self.advance();
+                            self.chomp();
+                            if self.peek() == Some(b']') {
+                                self.advance();
+                                break;
+                            }
+                            let (row, col) = self.position();
+                            return Err(PArray::RestNotLast(row, col));
+                        }
+                        _ => {
+                            let (row, col) = self.position();
+                            return Err(PArray::End(row, col));
+                        }
                     }
-                    if self.peek() == Some(b']') {
-                        self.advance();
-                        break;
-                    }
-                    let (row, col) = self.position();
-                    return Err(PArray::RestNotLast(row, col));
                 }
                 _ => {
                     let element = self.specialize(
@@ -122,8 +140,28 @@ mod tests {
     }
 
     #[test]
+    fn rest_named_spaced() {
+        assert_pattern_snapshot!("[a, .. rest]");
+    }
+
+    #[test]
+    fn rest_trailing_comma() {
+        assert_pattern_snapshot!("[a, ..rest,]");
+    }
+
+    #[test]
     fn error_rest_not_last() {
         assert_pattern_error_snapshot!("[..rest, x]");
+    }
+
+    #[test]
+    fn error_rest_no_comma() {
+        assert_pattern_error_snapshot!("[..rest x]");
+    }
+
+    #[test]
+    fn error_rest_reserved_name() {
+        assert_pattern_error_snapshot!("[..type]");
     }
 
     #[test]

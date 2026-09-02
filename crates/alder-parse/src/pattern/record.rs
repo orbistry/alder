@@ -1,8 +1,10 @@
 //! Record patterns `{ a, b: p, .. }` — shared with `CtorRecord`.
 //!
 //! `{}`, `{ x }`, `{ x, y: p }`, `{ x, .. }`. Each field is a shorthand
-//! binding or `name: pattern`; `..` must be last (a trailing comma after
-//! it is fine). Trailing commas are accepted (§10.8).
+//! binding or `name: pattern`; `..` takes no name and must be last (a
+//! trailing comma after it is fine): `,` followed by anything but `}` is
+//! `RestNotLast`, anything else after `..` (`{ ..r }`) is `End`. Trailing
+//! commas are accepted (§10.8).
 //!
 //! See docs/parser-internals.md §5.14.
 // OWNER: pattern/record.rs (Wave 1)
@@ -32,16 +34,26 @@ impl<'a> Parser<'a> {
                     self.advance_by(2);
                     let rest = Region::new(rest_start, self.get_position());
                     self.chomp();
-                    if self.peek() == Some(b',') {
-                        self.advance();
-                        self.chomp();
+                    match self.peek() {
+                        Some(b'}') => {
+                            self.advance();
+                            return Ok((fields.into_bump_slice(), Some(rest)));
+                        }
+                        Some(b',') => {
+                            self.advance();
+                            self.chomp();
+                            if self.peek() == Some(b'}') {
+                                self.advance();
+                                return Ok((fields.into_bump_slice(), Some(rest)));
+                            }
+                            let (row, col) = self.position();
+                            return Err(PRecord::RestNotLast(row, col));
+                        }
+                        _ => {
+                            let (row, col) = self.position();
+                            return Err(PRecord::End(row, col));
+                        }
                     }
-                    if self.peek() == Some(b'}') {
-                        self.advance();
-                        return Ok((fields.into_bump_slice(), Some(rest)));
-                    }
-                    let (row, col) = self.position();
-                    return Err(PRecord::RestNotLast(row, col));
                 }
                 _ => {
                     let name = self.located_lower(PRecord::Field)?;
@@ -112,8 +124,18 @@ mod tests {
     }
 
     #[test]
+    fn rest_trailing_comma() {
+        assert_pattern_snapshot!("{ x, .., }");
+    }
+
+    #[test]
     fn error_rest_not_last() {
         assert_pattern_error_snapshot!("{ .., x }");
+    }
+
+    #[test]
+    fn error_rest_named() {
+        assert_pattern_error_snapshot!("{ ..r }");
     }
 
     #[test]
