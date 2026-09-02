@@ -247,7 +247,8 @@ the solver. Snapshot tests per construct as today.
 - [ ] `alder-codegen`: JS emission for the core language; decide enum/record representation
 - [ ] Prelude and stdlib skeleton: `Option`, `Result`, `Array`, `String`, `Number`, `BigInt`, `Map`
 - [ ] JS kernel skeleton and `extern` binding
-- [ ] Embed `deno_core` in `alder-cli`; `alder run` for `server` target
+- [ ] Embed `deno_core` plus the web-standard extension crates in `alder-cli`; `alder run` for `server` and `cli` targets
+- [ ] `Cli` module with `Args`/`Subcommand` derives
 - [ ] rolldown integration for `alder build`
 - [ ] `alder fmt`
 

@@ -7,13 +7,16 @@
 A package declares its target in `alder.jsonc`:
 
 ```jsonc
-{ "type": "application", "target": "cloudflare" } // or "server" | "browser" | "tui"
+{ "type": "application", "target": "cloudflare" } // or "server" | "cli" | "tui" | "browser"
 ```
 
 - One standard library with target-gated modules (like Rust `cfg`).
   Importing `Cloudflare.Kv` in a `tui` package is a compile error.
 - Library packages are target-neutral unless they say otherwise; the
   compiler checks that only target-neutral code is reachable from them.
+- `server` runs an HTTP listener from `deno_http`; `cli` runs `main` to
+  completion and maps its `Result` to an exit code; `tui` owns the
+  terminal. All three share the embedded runtime.
 - Multiple entry points (a worker, a migration CLI, a TUI admin) are
   multiple workspace members, each with its own target. Workspaces already
   exist in `alder-config`.
@@ -65,6 +68,10 @@ Deno's web-standard surface provides is what Alder targets.
 - Macros and `comptime` blocks execute in the same embedded V8 at build
   time.
 - TUI I/O is provided from Rust (terminal raw mode, events, layout).
+- CLI argument parsing is a stdlib derive, not a compiler feature:
+  `#[derive(Args)]` on a record and `#[derive(Subcommand)]` on an enum,
+  with doc comments as help text, optional fields as optional flags, and
+  `Cli.parse()` typed by annotation (clap's derive model).
 - Binary size (~100MB) is accepted.
 - npm packages that need Node built-ins are out of scope for `extern`
   until wrapped by a first-party package.
