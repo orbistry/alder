@@ -113,8 +113,8 @@ lengths, then add rules (`min`, `equals`, custom functions returning
 
 ## Drivers
 
-- SQLite: D1 on Cloudflare, embedded SQLite under deno_core for `server`
-  and `tui`.
+- SQLite: D1 on Cloudflare, embedded SQLite under deno_core for
+  `standalone`.
 - PostgreSQL and MySQL: through Hyperdrive on Cloudflare, direct drivers
   elsewhere.
 - Drivers are `extern` wrappers in first-party packages implementing a

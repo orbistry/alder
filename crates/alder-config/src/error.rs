@@ -66,9 +66,7 @@ pub enum ConfigError {
         pos: Position,
     },
 
-    #[error(
-        "'{path}' at {pos}: unknown target '{value}' (expected one of cloudflare, server, cli, tui, browser)"
-    )]
+    #[error("'{path}' at {pos}: unknown target '{value}' (expected cloudflare or standalone)")]
     InvalidTarget {
         path: PathBuf,
         value: String,

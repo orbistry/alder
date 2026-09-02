@@ -73,7 +73,7 @@ are kept through the redesign and adapted incrementally.
 - **Format:** JSONC (`alder.jsonc`) - JSON with comments, parsed via `jsonc-parser`
 - **Config types:** Three separate types: `application`, `package`, `workspace`
 - **Field naming:** camelCase (`testDependencies`)
-- **Target:** `target` (`cloudflare` | `server` | `cli` | `tui` | `browser`) is required on applications and optional on packages (absent = target-neutral)
+- **Target:** `target` (`cloudflare` | `standalone`) is required on applications and optional on packages (absent = target-neutral); the web framework is enabled by `src/routes/`, not by the target
 - **Lock file:** Single shared `alder.lock` at workspace root (TBD in driver)
 - **Dependencies:** Runtime-agnostic (no mandatory core deps), `author/project` naming
 - **Dependency syntax:** Constraint string or object (`{ "workspace": true }`, `{ "path": "..." }`, `{ "git": "..." }`)
@@ -300,7 +300,7 @@ then, by design.
 - [ ] `table` declarations with dialect modules (`@alder/sqlite`, `@alder/postgres`, `@alder/mysql`)
 - [ ] SQL-shaped query expressions with `^` pinned parameters, type-checked projections, desugar to chain API
 - [ ] `alder db generate`/`migrate`/`push` with diff-generated SQL
-- [ ] D1 and Hyperdrive drivers; embedded SQLite for `server`/`tui`
+- [ ] D1 and Hyperdrive drivers; embedded SQLite for `standalone`
 - [ ] `schema` declarations with `from table` and validation rules
 
 ### M8: Styles, forms, API

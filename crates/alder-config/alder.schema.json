@@ -96,8 +96,8 @@
     },
     "target": {
       "type": "string",
-      "description": "Platform the project is built for. Required for applications; optional for packages (absent means target-neutral).",
-      "enum": ["cloudflare", "server", "cli", "tui", "browser"]
+      "description": "Runtime the project is built for: cloudflare (workerd) or standalone (the embedded runtime: CLIs, TUIs, self-hosted servers). Required for applications; optional for packages (absent means target-neutral). The web framework is enabled by src/routes/, not by the target.",
+      "enum": ["cloudflare", "standalone"]
     },
     "dependencies": {
       "type": "object",

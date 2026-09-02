@@ -447,7 +447,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
-                "target": "server",
+                "target": "standalone",
                 "dependencies": {
                     "alder/core": { "workspace": true }
                 }
@@ -473,7 +473,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
-                "target": "server",
+                "target": "standalone",
                 "dependencies": {
                     "bob/my-lib": { "path": "../packages/my-lib" }
                 }
@@ -499,7 +499,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
-                "target": "server",
+                "target": "standalone",
                 "dependencies": {
                     "alice/experimental": {
                         "git": "https://github.com/alice/experimental",
@@ -655,7 +655,7 @@ mod tests {
             {
                 // This is a comment
                 "type": "application",
-                "target": "server",
+                "target": "standalone",
                 "dependencies": {
                     /* Multi-line
                        comment */
@@ -673,7 +673,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
-                "target": "server",
+                "target": "standalone",
                 "dependencies": {
                     "alder/core": { "workspace": false }
                 }
@@ -691,7 +691,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
-                "target": "cli",
+                "target": "standalone",
                 "compiler": "0.2.0",
                 "dependencies": {
                     "alder/core": "1.0.0 <= v < 2.0.0"
@@ -735,7 +735,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
-                "target": "server",
+                "target": "standalone",
                 "dependencies": {}
             }
         "#};
@@ -749,7 +749,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
-                "target": "server",
+                "target": "standalone",
                 "dependencies": {
                     "Invalid Name": "1.0.0"
                 }

@@ -17,4 +17,4 @@ with more than 65535 lines no longer overflows the position counters.
 Nesting deeper than `alder_parse::MAX_NESTING` (128 levels) is a `TooDeep`
 syntax error instead of a stack overflow.
 
-`alder-config`: drop `exposedModules` and `sourceDirectories`; add the required application `target` and optional package `target` (`cloudflare` | `server` | `cli` | `tui` | `browser`).
+`alder-config`: drop `exposedModules` and `sourceDirectories`; add the required application `target` and optional package `target` (`cloudflare` | `standalone`).

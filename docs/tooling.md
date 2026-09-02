@@ -12,7 +12,7 @@ A single `alder` binary (crate `alder-cli`) that embeds V8 via
 | `alder init`    | Scaffold a package or application                                    |
 | `alder check`   | Type-check without emitting JavaScript                               |
 | `alder build`   | Compile and bundle (rolldown) for the package target                 |
-| `alder run`     | Run `server`/`tui` targets on the embedded runtime                   |
+| `alder run`     | Run `standalone` targets on the embedded runtime                     |
 | `alder dev`     | Dev server with HMR; miniflare for `cloudflare`, deno_core otherwise |
 | `alder test`    | Run `test` declarations on the target's runtime                      |
 | `alder fmt`     | Formatter                                                            |

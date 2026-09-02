@@ -7,19 +7,34 @@
 A package declares its target in `alder.jsonc`:
 
 ```jsonc
-{ "type": "application", "target": "cloudflare" } // or "server" | "cli" | "tui" | "browser"
+{ "type": "application", "target": "cloudflare" } // or "standalone"
 ```
 
-- One standard library with target-gated modules (like Rust `cfg`).
-  Importing `Cloudflare.Kv` in a `tui` package is a compile error.
-- Library packages are target-neutral unless they say otherwise; the
+There are two targets because there are two runtimes. Everything else is
+a library or a framework switch, not a target.
+
+|                | you write `main`                  | entry generated from `src/routes/` |
+| -------------- | --------------------------------- | ---------------------------------- |
+| **cloudflare** | a worker with a `fetch` handler   | the web framework on Workers       |
+| **standalone** | CLI, TUI, self-hosted HTTP server | the web framework self-hosted      |
+
+- `cloudflare` runs on workerd. `standalone` runs on the embedded runtime
+  inside the `alder` binary, with no platform underneath.
+- A CLI is `fn main()`. A TUI is `fn main() { Tui.run(App) }`. A server is
+  `fn main() { Http.serve(handler).await }`. Same target, same toolchain;
+  `Tui` and `Http.serve` are modules.
+- The web framework switches on when `src/routes/` exists. A purely
+  client-side app is the web framework with `ssr = false` and
+  `prerender = true` on the root layout, producing static files; there is
+  no separate browser target.
+- One standard library with target-gated modules (like Rust `cfg`). `Fs`,
+  `Tui`, and raw sockets are `standalone`-only; KV, D1, and the other
+  bindings are `cloudflare`-only; the web-standard surface is both.
+  Importing `Cloudflare.Kv` in a `standalone` package is a compile error.
+- Library packages are target-neutral unless they declare a `target`; the
   compiler checks that only target-neutral code is reachable from them.
-- `server` runs an HTTP listener from `deno_http`; `cli` runs `main` to
-  completion and maps its `Result` to an exit code; `tui` owns the
-  terminal. All three share the embedded runtime.
 - Multiple entry points (a worker, a migration CLI, a TUI admin) are
-  multiple workspace members, each with its own target. Workspaces already
-  exist in `alder-config`.
+  multiple workspace members. Workspaces already exist in `alder-config`.
 - Web packages additionally split server and client code within one
   package. See `web.md`.
 
@@ -59,10 +74,10 @@ Deno's web-standard surface provides is what Alder targets.
 
 - That surface is, by design, the same one Cloudflare Workers expose
   (`fetch`, `Request`/`Response`, `URL`, streams, `crypto.subtle`, timers,
-  WebSocket). The kernel and stdlib are written once against it; `server`
-  and `tui` targets add file system and raw network access on top.
-- `alder run` executes `server` and `tui` targets with no external runtime
-  installed. A `server` build can also emit a self-contained binary (as
+  WebSocket). The kernel and stdlib are written once against it; `standalone`
+  adds file system and raw network access on top.
+- `alder run` executes `standalone` targets with no external runtime
+  installed. A `standalone` build can also emit a self-contained binary (as
   `deno compile` does), and a container image is that binary; there is no
   external runtime to pick.
 - Macros and `comptime` blocks execute in the same embedded V8 at build
@@ -99,7 +114,7 @@ fn handler(req: Request) -> Response {
 - Bindings (KV, D1, R2, Queues, Hyperdrive, Workflows) are available
   through context (`use Kv`), provided by the generated entry point.
 - Development runs on a vendored miniflare shipped as compiler support
-  files, never by delegating to `wrangler dev` or Vite. `server` and `tui`
+  files, never by delegating to `wrangler dev` or Vite. `standalone`
   targets use deno_core with HMR.
 
 ## Deployment
@@ -108,6 +123,6 @@ fn handler(req: Request) -> Response {
 
 - Generates `wrangler.jsonc` from the package and its attributes.
 - Runs pending D1/Hyperdrive migrations as part of deploy.
-- Builds container images for `server` targets.
+- Builds container images for `standalone` targets that serve HTTP.
 - **Open:** how secrets and environments (`preview`, `production`) are
   modeled in `alder.jsonc`.

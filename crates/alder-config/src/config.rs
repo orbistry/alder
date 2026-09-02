@@ -76,43 +76,31 @@ pub struct Package {
     pub test_dependencies: BTreeMap<PackageName, Dependency>,
 }
 
-/// The platform a project is built for.
+/// The runtime a project is built for.
 ///
-/// Selects the target-gated part of the standard library and the runtime
-/// `alder run` / `alder dev` / `alder deploy` use.
+/// Selects the target-gated part of the standard library and what
+/// `alder run` / `alder dev` / `alder deploy` do with the output. Whether a
+/// project is a web app is not a target: the web framework switches on
+/// when `src/routes/` exists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Target {
-    /// Cloudflare Workers and the surrounding platform.
+    /// Cloudflare Workers and the surrounding platform (workerd).
     Cloudflare,
-    /// A long-running HTTP server on the embedded runtime.
-    Server,
-    /// A command-line program on the embedded runtime.
-    Cli,
-    /// A terminal UI on the embedded runtime.
-    Tui,
-    /// Client-side only, shipped to a browser.
-    Browser,
+    /// The embedded runtime shipped inside the `alder` binary: CLIs, TUIs,
+    /// and self-hosted servers, with no platform underneath.
+    Standalone,
 }
 
 impl Target {
     /// Every target, in the order used for messages.
-    pub const ALL: [Target; 5] = [
-        Target::Cloudflare,
-        Target::Server,
-        Target::Cli,
-        Target::Tui,
-        Target::Browser,
-    ];
+    pub const ALL: [Target; 2] = [Target::Cloudflare, Target::Standalone];
 
     /// The name used in `alder.jsonc`.
     pub fn as_str(self) -> &'static str {
         match self {
             Target::Cloudflare => "cloudflare",
-            Target::Server => "server",
-            Target::Cli => "cli",
-            Target::Tui => "tui",
-            Target::Browser => "browser",
+            Target::Standalone => "standalone",
         }
     }
 
