@@ -8,10 +8,16 @@
 //! hands back the interior as a zero-copy slice. `quote` / `unquote` /
 //! `stringify` are M5's problem; in M1 the text is opaque.
 //!
+//! Nesting is tracked on an explicit arena stack of expected closers, not
+//! by recursion, so the depth of a body is bounded by memory rather than by
+//! the thread's stack (`((((…))))` and `` `${ `${ … }` }` `` chains never
+//! overflow).
+//!
 //! See docs/parser-internals.md §5.9.
 // OWNER: raw.rs (Wave 1)
 
 use alder_region::Located;
+use bumpalo::collections::Vec;
 
 use crate::error::{RawTokens, StringError};
 use crate::string::EscapeResult;
@@ -19,6 +25,19 @@ use crate::{Col, Parser, Row};
 
 /// A raw-scan failure with the position it should be reported at.
 type RawError = (RawTokens, Row, Col);
+
+/// One open construct waiting for its closer: a bracket (`close` is `)`,
+/// `]` or `}`) or a template (`close` is `` ` ``). `row` / `col` locate the
+/// opener; only templates report there (`String(Endless)`), brackets report
+/// `Endless` at the outermost opener.
+#[derive(Clone, Copy)]
+struct Frame {
+    close: u8,
+    row: Row,
+    col: Col,
+}
+
+const BACKTICK: u8 = b'`';
 
 // `raw_balanced` is called from `expression/postfix.rs` (`name!(`) and
 // `item/macro_.rs` (`macro … { }`), both still stubs; the `allow` goes away
@@ -34,12 +53,15 @@ impl<'a> Parser<'a> {
     ///
     /// - not at `open` → `Endless` at the cursor, nothing consumed (the body
     ///   never opened, so it certainly never closed);
-    /// - EOF anywhere inside → `Endless` at `open`;
+    /// - EOF anywhere inside (including inside a `${ … }` hole) → `Endless`
+    ///   at `open`;
     /// - a closer that is not the one expected for the innermost open bracket
-    ///   (`( ]`) → `Unbalanced(byte)` at that byte;
-    /// - a string or template problem → `String(_)` positioned as
-    ///   `string_literal` would: `Endless` at the opening quote / backtick,
-    ///   `Newline` at the newline, `Escape` at the backslash.
+    ///   (`( ]`, or `( a }` at depth zero) → `Unbalanced(byte)` at that byte;
+    /// - a string problem → `String(_)` positioned as `string_literal`
+    ///   does (§5.6): `Endless` at the cursor where the scan stopped,
+    ///   `Newline` at the newline, `Escape` at the backslash;
+    /// - a template problem → `String(_)` positioned as template mode does
+    ///   (§6.1): `Endless` at the opening backtick, `Escape` at the backslash.
     pub(crate) fn raw_balanced<E>(
         &mut self,
         open: u8,
@@ -48,13 +70,19 @@ impl<'a> Parser<'a> {
     ) -> Result<Located<&'a str>, E> {
         let (open_row, open_col) = self.position();
         if self.peek() != Some(open) {
+            // TODO(wave0): `Macro::Body(RawTokens, Row, Col)` ("`{` expected,
+            // or raw body problem") has no expected-opener variant, so a
+            // missing `open` is reported as `Endless` at the cursor. Either
+            // `error::RawTokens` gains an `Open` variant or the callers
+            // (`item/macro_.rs`, `expression/postfix.rs`) peek for the opener
+            // first and report their own expectation.
             return Err(to_error(RawTokens::Endless, open_row, open_col));
         }
         self.advance();
 
         let start = self.get_position();
         let start_pos = self.pos;
-        match self.raw_code(close, open_row, open_col) {
+        match self.raw_scan(close, open_row, open_col) {
             Ok(()) => {
                 // The cursor sits on `close`; slice before consuming it so the
                 // region ends where the text does.
@@ -67,35 +95,85 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Code mode: scan until `close` at nesting depth zero, leaving the cursor
-    /// on it. `open_row` / `open_col` locate the construct being balanced for
-    /// `Endless`.
-    fn raw_code(&mut self, close: u8, open_row: Row, open_col: Col) -> Result<(), RawError> {
+    /// After the opener: scan until the `close` that matches it, leaving the
+    /// cursor on it. `open_row` / `open_col` locate the construct being
+    /// balanced for `Endless`.
+    ///
+    /// The stack holds one frame per open bracket or template; the top frame
+    /// decides the mode. In code mode (top is a bracket) brackets push and
+    /// pop, strings and comments are stepped over, and a backtick pushes a
+    /// template frame. In template mode (top is a backtick) only `` ` ``,
+    /// `\` and `${` mean anything; `${` pushes a `}` frame, so the hole is
+    /// code again until its `}` pops back to the template.
+    fn raw_scan(&mut self, close: u8, open_row: Row, open_col: Col) -> Result<(), RawError> {
+        let mut stack: Vec<Frame> = Vec::new_in(self.bump);
+        stack.push(Frame {
+            close,
+            row: open_row,
+            col: open_col,
+        });
+
         loop {
-            match self.peek() {
-                None => return Err((RawTokens::Endless, open_row, open_col)),
-                Some(b) if b == close => return Ok(()),
-                Some(b'(') => self.raw_nested(b')', open_row, open_col)?,
-                Some(b'[') => self.raw_nested(b']', open_row, open_col)?,
-                Some(b'{') => self.raw_nested(b'}', open_row, open_col)?,
-                Some(b @ (b')' | b']' | b'}')) => {
-                    let (row, col) = self.position();
-                    return Err((RawTokens::Unbalanced(b), row, col));
+            let top = *stack
+                .last()
+                .expect("the outer frame stays until its closer returns");
+            if top.close == BACKTICK {
+                match self.peek() {
+                    None => return Err((string_err(StringError::Endless), top.row, top.col)),
+                    Some(BACKTICK) => {
+                        self.advance();
+                        stack.pop();
+                    }
+                    Some(b'\\') => self.raw_escape(Some((top.row, top.col)))?,
+                    Some(b'$') if self.peek_at(1) == Some(b'{') => {
+                        let (row, col) = self.position();
+                        self.advance_by(2);
+                        stack.push(Frame {
+                            close: b'}',
+                            row,
+                            col,
+                        });
+                    }
+                    Some(_) => self.advance(),
                 }
-                Some(b'"') => self.raw_string()?,
-                Some(b'`') => self.raw_template(open_row, open_col)?,
-                Some(b'/') if self.peek_at(1) == Some(b'/') => self.raw_comment(),
-                Some(_) => self.advance(),
+            } else {
+                match self.peek() {
+                    None => return Err((RawTokens::Endless, open_row, open_col)),
+                    Some(b @ (b')' | b']' | b'}')) => {
+                        if b != top.close {
+                            let (row, col) = self.position();
+                            return Err((RawTokens::Unbalanced(b), row, col));
+                        }
+                        stack.pop();
+                        if stack.is_empty() {
+                            return Ok(());
+                        }
+                        self.advance();
+                    }
+                    Some(b @ (b'(' | b'[' | b'{')) => {
+                        let (row, col) = self.position();
+                        self.advance();
+                        stack.push(Frame {
+                            close: closer_of(b),
+                            row,
+                            col,
+                        });
+                    }
+                    Some(BACKTICK) => {
+                        let (row, col) = self.position();
+                        self.advance();
+                        stack.push(Frame {
+                            close: BACKTICK,
+                            row,
+                            col,
+                        });
+                    }
+                    Some(b'"') => self.raw_string()?,
+                    Some(b'/') if self.peek_at(1) == Some(b'/') => self.raw_comment(),
+                    Some(_) => self.advance(),
+                }
             }
         }
-    }
-
-    /// At a nested opener: consume it, scan through its matching `close`.
-    fn raw_nested(&mut self, close: u8, open_row: Row, open_col: Col) -> Result<(), RawError> {
-        self.advance();
-        self.raw_code(close, open_row, open_col)?;
-        self.advance();
-        Ok(())
     }
 
     /// At `//`: skip to the end of the line (the newline itself is left for
@@ -110,12 +188,15 @@ impl<'a> Parser<'a> {
     }
 
     /// At `"`: step over a single-line string, consuming the closing quote.
+    /// Positions follow `string_literal` (§5.6).
     fn raw_string(&mut self) -> Result<(), RawError> {
-        let (quote_row, quote_col) = self.position();
         self.advance();
         loop {
             match self.peek() {
-                None => return Err((string_err(StringError::Endless), quote_row, quote_col)),
+                None => {
+                    let (row, col) = self.position();
+                    return Err((string_err(StringError::Endless), row, col));
+                }
                 Some(b'\n') => {
                     let (row, col) = self.position();
                     return Err((string_err(StringError::Newline), row, col));
@@ -124,52 +205,44 @@ impl<'a> Parser<'a> {
                     self.advance();
                     return Ok(());
                 }
-                Some(b'\\') => self.raw_escape(false, quote_row, quote_col)?,
+                Some(b'\\') => self.raw_escape(None)?,
                 Some(_) => self.advance(),
             }
         }
     }
 
-    /// At `` ` ``: step over a template, consuming the closing backtick.
-    /// Newlines are text; `${ … }` holes are code and may nest anything.
-    fn raw_template(&mut self, open_row: Row, open_col: Col) -> Result<(), RawError> {
-        let (tick_row, tick_col) = self.position();
-        self.advance();
-        loop {
-            match self.peek() {
-                None => return Err((string_err(StringError::Endless), tick_row, tick_col)),
-                Some(b'`') => {
-                    self.advance();
-                    return Ok(());
-                }
-                Some(b'\\') => self.raw_escape(true, tick_row, tick_col)?,
-                Some(b'$') if self.peek_at(1) == Some(b'{') => {
-                    self.advance();
-                    self.raw_nested(b'}', open_row, open_col)?;
-                }
-                Some(_) => self.advance(),
-            }
-        }
-    }
-
-    /// At `\` inside a string (`template == false`) or template: consume the
-    /// backslash and the escape it introduces, using the string scanner's
-    /// escape rules.
-    fn raw_escape(&mut self, template: bool, lit_row: Row, lit_col: Col) -> Result<(), RawError> {
+    /// At `\` inside a string (`template == None`) or a template
+    /// (`template == Some(backtick position)`): consume the backslash and the
+    /// escape it introduces, using the string scanner's escape rules. A bad
+    /// escape is reported at the backslash in both modes; EOF right after
+    /// the backslash is `Endless` at the cursor for a string and at the
+    /// opening backtick for a template.
+    fn raw_escape(&mut self, template: Option<(Row, Col)>) -> Result<(), RawError> {
         let (slash_row, slash_col) = self.position();
         self.advance();
-        match self.eat_escape(template) {
+        match self.eat_escape(template.is_some()) {
             EscapeResult::Normal(width) | EscapeResult::Unicode(width) => {
                 self.advance_by(width);
                 Ok(())
             }
-            EscapeResult::EndOfFile => Err((string_err(StringError::Endless), lit_row, lit_col)),
+            EscapeResult::EndOfFile => {
+                let (row, col) = template.unwrap_or_else(|| self.position());
+                Err((string_err(StringError::Endless), row, col))
+            }
             EscapeResult::Problem(escape) => Err((
                 string_err(StringError::Escape(escape)),
                 slash_row,
                 slash_col,
             )),
         }
+    }
+}
+
+fn closer_of(open: u8) -> u8 {
+    match open {
+        b'(' => b')',
+        b'[' => b']',
+        _ => b'}',
     }
 }
 
@@ -279,10 +352,31 @@ mod tests {
     }
 
     #[test]
-    fn other_closer_is_text_at_depth_zero() {
-        // `]` and `}` are only unbalanced when something is open; the outer
-        // `close` byte itself is what we are looking for.
-        assert_eq!(parens("(a)]"), (ok("a", ((1, 2), (1, 3))), at(1, 4)));
+    fn deep_nesting() {
+        // 20_000 levels overflowed the recursive scanner's stack; the
+        // explicit frame stack is depth-independent. Kept on one line and
+        // under `u16::MAX` columns.
+        let depth = 20_000;
+        let src = format!("{}{}", "(".repeat(depth), ")".repeat(depth));
+        let interior = &src[1..src.len() - 1];
+        let end = u16::try_from(src.len()).unwrap();
+        assert_eq!(
+            parens(&src),
+            (ok(interior, ((1, 2), (1, end))), at(1, end + 1))
+        );
+    }
+
+    #[test]
+    fn deep_template_holes() {
+        // Every `${` re-enters code mode; 5_000 nested holes.
+        let depth = 5_000;
+        let src = format!("({}x{})", "`${ ".repeat(depth), " }`".repeat(depth));
+        let interior = &src[1..src.len() - 1];
+        let end = u16::try_from(src.len()).unwrap();
+        assert_eq!(
+            parens(&src),
+            (ok(interior, ((1, 2), (1, end))), at(1, end + 1))
+        );
     }
 
     #[test]
@@ -428,6 +522,12 @@ mod tests {
     }
 
     #[test]
+    fn error_endless_deep() {
+        let src = "(".repeat(20_000);
+        assert_eq!(parens(&src), (err("endless", 1, 1), at(1, 20_001)));
+    }
+
+    #[test]
     fn error_endless_in_hole() {
         assert_eq!(parens("(`${ a"), (err("endless", 1, 1), at(1, 7)));
     }
@@ -435,6 +535,13 @@ mod tests {
     #[test]
     fn error_unbalanced() {
         assert_eq!(parens("(a]"), (err("unbalanced ']'", 1, 3), at(1, 3)));
+    }
+
+    #[test]
+    fn error_unbalanced_other_closer_at_depth_zero() {
+        // A foreign closer is unbalanced even when nothing nested is open:
+        // the only closer wanted at depth zero is `close` itself.
+        assert_eq!(parens("(a}"), (err("unbalanced '}'", 1, 3), at(1, 3)));
     }
 
     #[test]
@@ -452,9 +559,10 @@ mod tests {
 
     #[test]
     fn error_string_endless() {
+        // Where the scan stopped, as `string_literal` reports it.
         assert_eq!(
             parens(r#"(a, "b)"#),
-            (err("string endless", 1, 5), at(1, 8))
+            (err("string endless", 1, 8), at(1, 8))
         );
     }
 
@@ -478,11 +586,27 @@ mod tests {
     #[test]
     #[ignore = "waits for string.rs"]
     fn error_string_escape_at_eof() {
-        assert_eq!(parens(r#"("\"#), (err("string endless", 1, 2), at(1, 4)));
+        assert_eq!(parens(r#"("\"#), (err("string endless", 1, 4), at(1, 4)));
     }
 
     #[test]
     fn error_template_endless() {
+        // At the opening backtick, as template mode reports it (§6.1).
         assert_eq!(parens("(a, `b)"), (err("string endless", 1, 5), at(1, 8)));
+    }
+
+    #[test]
+    #[ignore = "waits for string.rs"]
+    fn error_template_bad_escape() {
+        assert_eq!(
+            parens(r"(`\q`)"),
+            (err("string escape Unknown", 1, 3), at(1, 4))
+        );
+    }
+
+    #[test]
+    #[ignore = "waits for string.rs"]
+    fn error_template_escape_at_eof() {
+        assert_eq!(parens(r"(`a\"), (err("string endless", 1, 2), at(1, 5)));
     }
 }
