@@ -138,17 +138,8 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Snapshot test macro for successful template parsing.
-// TODO(wave4): §7.1 has this pair call `expression()`. Until
-// `expression/mod.rs` dispatches `primary` to `template`, that would send
-// all 19 tests into `todo!()` and force `#[ignore]` on every one of them,
-// so both macros call `template(start)` directly (plus the trailing chomp
-// `expression` does); the hole tests were ignored until Wave 2 landed. The snapshots
-// are byte-identical either way (`template` already wraps errors as
-// `Expr::Template(_, row, col)`). Wave 4 step 4.2 (§9) makes the
-// mechanical swap in both macros: replace `.template(start)` with
-// `.expression()` and delete the `let start = …` and `parser.chomp();`
-// lines; no snapshot changes.
+/// Snapshot test macro for successful template parsing. The input starts
+/// at a backtick and goes through `expression()` (§7.1).
 #[cfg(test)]
 macro_rules! assert_template_snapshot {
     ($code:expr) => {{
@@ -156,11 +147,9 @@ macro_rules! assert_template_snapshot {
         let code = indoc::indoc!($code);
         let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        let start = parser.get_position();
         let result = parser
-            .template(start)
+            .expression()
             .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
-        parser.chomp();
         assert!(
             parser.is_eof(),
             "unconsumed input at {:?}\n\nSource:\n{code}",
@@ -183,9 +172,8 @@ macro_rules! assert_template_error_snapshot {
         let code = indoc::indoc!($code);
         let src = bump.alloc_str(code);
         let mut parser = $crate::Parser::new(&bump, src.as_bytes());
-        let start = parser.get_position();
         let err = parser
-            .template(start)
+            .expression()
             .err()
             .unwrap_or_else(|| panic!("expected Err, got Ok\n\nSource:\n{code}"));
         insta::with_settings!({
