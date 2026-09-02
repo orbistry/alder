@@ -1,0 +1,63 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`/users/${id}/posts/${postId}/edit`"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 36,
+        },
+    },
+    value: Template(
+        [
+            Text(
+                "/users/",
+            ),
+            Expr(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                    },
+                    value: Var(
+                        "id",
+                    ),
+                },
+            ),
+            Text(
+                "/posts/",
+            ),
+            Expr(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 23,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 29,
+                        },
+                    },
+                    value: Var(
+                        "postId",
+                    ),
+                },
+            ),
+            Text(
+                "/edit",
+            ),
+        ],
+    ),
+}

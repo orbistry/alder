@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`abc"
+---
+Template(
+    Endless(
+        1,
+        1,
+    ),
+    1,
+    1,
+)

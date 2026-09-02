@@ -1,0 +1,43 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`Hello ${name}!`"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 17,
+        },
+    },
+    value: Template(
+        [
+            Text(
+                "Hello ",
+            ),
+            Expr(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                    },
+                    value: Var(
+                        "name",
+                    ),
+                },
+            ),
+            Text(
+                "!",
+            ),
+        ],
+    ),
+}

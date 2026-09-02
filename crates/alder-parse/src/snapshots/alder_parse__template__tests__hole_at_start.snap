@@ -1,0 +1,40 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`${name} says hi`"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 18,
+        },
+    },
+    value: Template(
+        [
+            Expr(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Var(
+                        "name",
+                    ),
+                },
+            ),
+            Text(
+                " says hi",
+            ),
+        ],
+    ),
+}
