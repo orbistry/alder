@@ -1047,6 +1047,51 @@ mod tests {
     }
 
     #[test]
+    fn error_while_condition() {
+        assert_statement_error_snapshot!("while ) { }");
+    }
+
+    #[test]
+    fn error_while_body() {
+        assert_statement_error_snapshot!("while ready x");
+    }
+
+    #[test]
+    fn error_provide_name() {
+        assert_statement_error_snapshot!("provide db = x { }");
+    }
+
+    #[test]
+    fn error_provide_equals() {
+        assert_statement_error_snapshot!("provide Db { }");
+    }
+
+    #[test]
+    fn error_provide_value() {
+        assert_statement_error_snapshot!("provide Db = ) { }");
+    }
+
+    #[test]
+    fn error_provide_body() {
+        assert_statement_error_snapshot!("provide Db = db");
+    }
+
+    #[test]
+    fn error_assert_value() {
+        assert_statement_error_snapshot!(r#"assert "x"#);
+    }
+
+    #[test]
+    fn error_return_value() {
+        assert_statement_error_snapshot!("return )");
+    }
+
+    #[test]
+    fn error_break_value() {
+        assert_statement_error_snapshot!("break )");
+    }
+
+    #[test]
     fn error_for_missing_in() {
         assert_statement_error_snapshot!("for item of items { }");
     }

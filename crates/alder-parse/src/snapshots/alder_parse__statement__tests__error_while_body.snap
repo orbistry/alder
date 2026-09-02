@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: while ready x
+---
+While(
+    Body(
+        Open(
+            1,
+            13,
+        ),
+        1,
+        13,
+    ),
+    1,
+    1,
+)

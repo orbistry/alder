@@ -713,6 +713,27 @@ mod tests {
         );
     }
 
+    /// docs/runtime.md "Cloudflare" with the `{ ... }` placeholder body
+    /// replaced by a real one.
+    #[test]
+    fn docs_runtime_cloudflare() {
+        assert_module_snapshot!(
+            r#"
+            #[durable_object]
+            type Counter = { count: Number }
+
+            impl DurableObject[Counter] {
+                fn fetch(obj: Counter, req: Request) -> Response { obj.count }
+            }
+
+            fn handler(req: Request) -> Response {
+                use Kv                      // bound to the worker's KV namespace via wrangler config
+                Kv.get(cache, "key").await
+            }
+            "#
+        );
+    }
+
     #[test]
     fn error_bad_end() {
         assert_module_error_snapshot!(

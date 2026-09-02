@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/item/let_.rs
+description: "let x: = 1"
+---
+Let(
+    Type(
+        Start(
+            1,
+            8,
+        ),
+        1,
+        8,
+    ),
+    1,
+    1,
+)

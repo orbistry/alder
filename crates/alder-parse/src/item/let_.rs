@@ -62,7 +62,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::item::assert_item_snapshot;
+    use crate::item::{assert_item_error_snapshot, assert_item_snapshot};
 
     #[test]
     fn let_top() {
@@ -93,5 +93,15 @@ mod tests {
     #[test]
     fn let_top_parens() {
         assert_item_snapshot!("let x = (a)");
+    }
+
+    #[test]
+    fn error_let_type() {
+        assert_item_error_snapshot!("let x: = 1");
+    }
+
+    #[test]
+    fn error_let_body() {
+        assert_item_error_snapshot!(r#"let x = "oops"#);
     }
 }
