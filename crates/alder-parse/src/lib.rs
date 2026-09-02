@@ -26,6 +26,11 @@ mod symbol;
 mod template;
 mod type_;
 
+// `Keyword` / `SqlWord` are payloads of public error variants
+// (`error::Expr::Reserved`, `error::Expr::SqlKeyword`, …); re-exported so an
+// error renderer in another crate can name them.
+pub use keyword::{Keyword, SqlWord};
+
 pub type Row = u16;
 pub type Col = u16;
 
@@ -58,7 +63,6 @@ pub struct Parser<'a> {
     /// Inside `query { }`: `in` is a binop, `^` pins, SQL words are not identifiers.
     in_query: bool,
     /// Set in if/while/for/match/provide/@directive heads: `Path {` is not a record constructor.
-    #[allow(unused)]
     no_record_ctor: bool,
 }
 

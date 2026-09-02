@@ -66,15 +66,21 @@ impl<'a> Parser<'a> {
     }
 
     /// `Upper { '::' Upper }`; stops before `::lower` (the expression layer
-    /// consumes that as `PathVar`). `Foo::` followed by anything else is
-    /// `to_member_error` at the position after the `::`.
+    /// consumes that as `PathVar`).
+    ///
+    /// `Foo::` followed by anything else is `to_member_error` at the position
+    /// after the `::`, and the `::` stays consumed: this is a **committed**
+    /// failure (nothing else can parse `Foo::(`), so inside `one_of` it
+    /// propagates instead of falling through. `to_expectation` (no uppercase
+    /// letter at the cursor) fails without consuming.
     pub(crate) fn path<E>(
         &mut self,
         to_expectation: impl FnOnce(Row, Col) -> E,
         to_member_error: impl FnOnce(Row, Col) -> E,
     ) -> Result<Path<'a>, E> {
         let first = self.located_upper(to_expectation)?;
-        let mut segments = vec![first];
+        let mut segments = bumpalo::collections::Vec::new_in(self.bump);
+        segments.push(first);
         while self.peek() == Some(b':') && self.peek_at(1) == Some(b':') {
             match self.peek_at(2) {
                 Some(b) if b.is_ascii_uppercase() => {
@@ -91,7 +97,7 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(Path {
-            segments: self.alloc_slice_copy(&segments),
+            segments: segments.into_bump_slice(),
         })
     }
 
@@ -173,11 +179,13 @@ impl<'a> Parser<'a> {
     }
 
     /// The source text from `start_pos` (a byte offset) to the cursor.
+    ///
+    /// Panics if either end is not on a character boundary: every scanner
+    /// must advance by whole characters (string, template, raw and markup
+    /// text owners take note when stepping through multibyte input).
     pub(crate) fn slice_from(&self, start_pos: usize) -> &'a str {
-        let bytes = &self.src[start_pos..self.pos];
-        // SAFETY: `src` is valid UTF-8 and every scanner advances by whole
-        // characters, so both ends are on character boundaries.
-        unsafe { std::str::from_utf8_unchecked(bytes) }
+        std::str::from_utf8(&self.src[start_pos..self.pos])
+            .expect("scanner left the cursor mid-character")
     }
 }
 

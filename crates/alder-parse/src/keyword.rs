@@ -327,8 +327,8 @@ impl<'a> Parser<'a> {
     pub(crate) fn peek_word(&self) -> &'a str {
         let rest = self.remaining();
         let len = rest.iter().take_while(|b| is_ident_byte(**b)).count();
-        // SAFETY: identifier bytes are ASCII, so the prefix is valid UTF-8.
-        unsafe { std::str::from_utf8_unchecked(&rest[..len]) }
+        // Identifier bytes are ASCII, so the prefix is always valid UTF-8.
+        std::str::from_utf8(&rest[..len]).expect("identifier bytes are ASCII")
     }
 }
 
