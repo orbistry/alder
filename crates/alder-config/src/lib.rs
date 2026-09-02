@@ -12,6 +12,7 @@
 //! ```jsonc
 //! {
 //!     "type": "application",
+//!     "target": "cloudflare",
 //!     "dependencies": {
 //!         "alder/core": "1.0.0 <= v < 2.0.0"
 //!     }
@@ -27,7 +28,6 @@
 //!     "version": "1.0.0",
 //!     "summary": "A helpful package",
 //!     "license": "MIT",
-//!     "exposedModules": ["MyModule"],
 //!     "dependencies": {
 //!         "alder/core": "1.0.0 <= v < 2.0.0"
 //!     }
@@ -60,8 +60,8 @@ mod name;
 mod parse;
 
 pub use config::{
-    Application, CONFIG_FILE_NAME, Config, Dependency, DependencySource, ExposedModules, GitDep,
-    Package, PathDep, Workspace, WorkspaceDep,
+    Application, CONFIG_FILE_NAME, Config, Dependency, DependencySource, GitDep, Package, PathDep,
+    Target, Workspace, WorkspaceDep,
 };
 pub use error::{ConfigError, Position};
 pub use name::{PackageName, PackageNameError};

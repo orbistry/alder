@@ -72,11 +72,12 @@ are kept through the redesign and adapted incrementally.
 
 - **Format:** JSONC (`alder.jsonc`) - JSON with comments, parsed via `jsonc-parser`
 - **Config types:** Three separate types: `application`, `package`, `workspace`
-- **Field naming:** camelCase (`sourceDirectories`, `exposedModules`, `testDependencies`)
+- **Field naming:** camelCase (`testDependencies`)
+- **Target:** `target` (`cloudflare` | `server` | `cli` | `tui` | `browser`) is required on applications and optional on packages (absent = target-neutral)
 - **Lock file:** Single shared `alder.lock` at workspace root (TBD in driver)
 - **Dependencies:** Runtime-agnostic (no mandatory core deps), `author/project` naming
 - **Dependency syntax:** Constraint string or object (`{ "workspace": true }`, `{ "path": "..." }`, `{ "git": "..." }`)
-- **Source discovery:** Convention-based (`src/` default)
+- **Source discovery:** fixed at `src/` (one root per package, so `~/` is unambiguous)
 - **Error messages:** Line/column accurate via AST-based parsing
 
 **Config Types:**
@@ -85,7 +86,7 @@ are kept through the redesign and adapted incrementally.
 // Application - compiles to a JavaScript app
 {
     "type": "application",
-    "sourceDirectories": ["src"],
+    "target": "cloudflare",
     "dependencies": {
         "alder/core": "1.0.0 <= v < 2.0.0",
         "alice/json": { "workspace": true },
@@ -102,7 +103,7 @@ are kept through the redesign and adapted incrementally.
     "version": "1.0.0",
     "summary": "Short description",
     "license": "MIT",
-    "exposedModules": ["Module.Name"],  // or { "Category": ["Module"] }
+    "target": "cloudflare",           // optional; absent = target-neutral
     "dependencies": { },
     "testDependencies": { }
 }

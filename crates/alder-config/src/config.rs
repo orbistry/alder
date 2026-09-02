@@ -28,9 +28,8 @@ pub struct Application {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compiler: Option<String>,
 
-    /// Source directories. Defaults to `["src"]` if not specified.
-    #[serde(default = "default_source_dirs")]
-    pub source_directories: Vec<String>,
+    /// Platform the application is built for.
+    pub target: Target,
 
     /// Direct dependencies with version constraints or source references.
     #[serde(default)]
@@ -39,10 +38,6 @@ pub struct Application {
     /// Test dependencies with version constraints or source references.
     #[serde(default)]
     pub test_dependencies: BTreeMap<PackageName, Dependency>,
-}
-
-fn default_source_dirs() -> Vec<String> {
-    vec!["src".to_string()]
 }
 
 /// A package (library) configuration.
@@ -67,8 +62,10 @@ pub struct Package {
     /// SPDX license identifier.
     pub license: String,
 
-    /// Modules exposed by this package.
-    pub exposed_modules: ExposedModules,
+    /// Platform this package is specific to. Absent means target-neutral:
+    /// the package may only reach target-neutral code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<Target>,
 
     /// Dependencies with version constraints or source references.
     #[serde(default)]
@@ -79,25 +76,55 @@ pub struct Package {
     pub test_dependencies: BTreeMap<PackageName, Dependency>,
 }
 
-/// Exposed modules can be a flat list or categorized.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum ExposedModules {
-    /// A flat list of module names.
-    List(Vec<String>),
-    /// Modules organized by category.
-    Categorized(BTreeMap<String, Vec<String>>),
+/// The platform a project is built for.
+///
+/// Selects the target-gated part of the standard library and the runtime
+/// `alder run` / `alder dev` / `alder deploy` use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Target {
+    /// Cloudflare Workers and the surrounding platform.
+    Cloudflare,
+    /// A long-running HTTP server on the embedded runtime.
+    Server,
+    /// A command-line program on the embedded runtime.
+    Cli,
+    /// A terminal UI on the embedded runtime.
+    Tui,
+    /// Client-side only, shipped to a browser.
+    Browser,
 }
 
-impl ExposedModules {
-    /// Get all exposed module names as a flat list.
-    pub fn flatten(&self) -> Vec<&str> {
+impl Target {
+    /// Every target, in the order used for messages.
+    pub const ALL: [Target; 5] = [
+        Target::Cloudflare,
+        Target::Server,
+        Target::Cli,
+        Target::Tui,
+        Target::Browser,
+    ];
+
+    /// The name used in `alder.jsonc`.
+    pub fn as_str(self) -> &'static str {
         match self {
-            ExposedModules::List(modules) => modules.iter().map(|s| s.as_str()).collect(),
-            ExposedModules::Categorized(categories) => {
-                categories.values().flatten().map(|s| s.as_str()).collect()
-            }
+            Target::Cloudflare => "cloudflare",
+            Target::Server => "server",
+            Target::Cli => "cli",
+            Target::Tui => "tui",
+            Target::Browser => "browser",
         }
+    }
+
+    /// Parse the `alder.jsonc` spelling.
+    pub fn from_name(name: &str) -> Option<Target> {
+        Target::ALL.into_iter().find(|t| t.as_str() == name)
+    }
+}
+
+impl std::fmt::Display for Target {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

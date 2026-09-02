@@ -10,9 +10,9 @@ For IDE support and validation, use the [JSON Schema](https://github.com/orbistr
 
 ```jsonc
 {
-    "$schema": "https://raw.githubusercontent.com/orbistry/alder/main/crates/alder-config/alder.schema.json",
-    "type": "application",
-    // ...
+  "$schema": "https://raw.githubusercontent.com/orbistry/alder/main/crates/alder-config/alder.schema.json",
+  "type": "application",
+  // ...
 }
 ```
 
@@ -26,15 +26,15 @@ An application compiles to a JavaScript application (Cloudflare is the primary t
 
 ```jsonc
 {
-    "type": "application",
-    "sourceDirectories": ["src"],
-    "dependencies": {
-        "alder/core": "1.0.0 <= v < 2.0.0",
-        "alice/json": { "workspace": true }
-    },
-    "testDependencies": {
-        "alder/test": "1.0.0 <= v < 2.0.0"
-    }
+  "type": "application",
+  "target": "cloudflare",
+  "dependencies": {
+    "alder/core": "1.0.0 <= v < 2.0.0",
+    "alice/json": { "workspace": true },
+  },
+  "testDependencies": {
+    "alder/test": "1.0.0 <= v < 2.0.0",
+  },
 }
 ```
 
@@ -44,28 +44,18 @@ A publishable library that can be used as a dependency.
 
 ```jsonc
 {
-    "type": "package",
-    "name": "alice/json-parser",
-    "version": "1.0.0",
-    "summary": "A JSON parser for Alder",
-    "license": "MIT",
-    "exposedModules": ["Json", "Json.Decode", "Json.Encode"],
-    "dependencies": {
-        "alder/core": "1.0.0 <= v < 2.0.0"
-    }
+  "type": "package",
+  "name": "alice/json-parser",
+  "version": "1.0.0",
+  "summary": "A JSON parser for Alder",
+  "license": "MIT",
+  "dependencies": {
+    "alder/core": "1.0.0 <= v < 2.0.0",
+  },
 }
 ```
 
-Exposed modules can also be categorized:
-
-```jsonc
-{
-    "exposedModules": {
-        "Decoding": ["Json.Decode", "Json.Decode.Pipeline"],
-        "Encoding": ["Json.Encode"]
-    }
-}
-```
+Every module in a package is importable; `pub` items are its API. A package may declare a `target` when it is platform-specific (`"target": "cloudflare"`); without one it is target-neutral and may only reach target-neutral code. Sources live under `src/`.
 
 ### Workspace
 
@@ -73,12 +63,12 @@ A collection of related projects that share dependencies.
 
 ```jsonc
 {
-    "type": "workspace",
-    "members": ["packages/*", "apps/my-app"],
-    "dependencies": {
-        "alder/core": "1.0.0 <= v < 2.0.0",
-        "alice/json": "2.0.0 <= v < 3.0.0"
-    }
+  "type": "workspace",
+  "members": ["packages/*", "apps/my-app"],
+  "dependencies": {
+    "alder/core": "1.0.0 <= v < 2.0.0",
+    "alice/json": "2.0.0 <= v < 3.0.0",
+  },
 }
 ```
 
@@ -87,15 +77,14 @@ Members can inherit workspace dependencies:
 ```jsonc
 // packages/my-lib/alder.jsonc
 {
-    "type": "package",
-    "name": "bob/my-lib",
-    "version": "1.0.0",
-    "summary": "My library",
-    "license": "MIT",
-    "exposedModules": ["MyLib"],
-    "dependencies": {
-        "alder/core": { "workspace": true }
-    }
+  "type": "package",
+  "name": "bob/my-lib",
+  "version": "1.0.0",
+  "summary": "My library",
+  "license": "MIT",
+  "dependencies": {
+    "alder/core": { "workspace": true },
+  },
 }
 ```
 

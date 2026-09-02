@@ -1,4 +1,5 @@
 ---
+cargo/alder-config: minor
 cargo/alder-region: minor
 cargo/alder-source: minor
 cargo/alder-parse: minor
@@ -15,3 +16,5 @@ aliases) from `u16` to `u32`, so a line longer than 65535 bytes or a file
 with more than 65535 lines no longer overflows the position counters.
 Nesting deeper than `alder_parse::MAX_NESTING` (128 levels) is a `TooDeep`
 syntax error instead of a stack overflow.
+
+`alder-config`: drop `exposedModules` and `sourceDirectories`; add the required application `target` and optional package `target` (`cloudflare` | `server` | `cli` | `tui` | `browser`).

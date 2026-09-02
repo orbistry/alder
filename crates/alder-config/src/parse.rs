@@ -11,8 +11,8 @@ use jsonc_parser::common::{Range, Ranged};
 use jsonc_parser::{CollectOptions, ParseOptions, parse_to_ast};
 
 use crate::config::{
-    Application, Config, Dependency, DependencySource, ExposedModules, GitDep, Package, PathDep,
-    Workspace, WorkspaceDep,
+    Application, Config, Dependency, DependencySource, GitDep, Package, PathDep, Target, Workspace,
+    WorkspaceDep,
 };
 use crate::error::{ConfigError, Position};
 use crate::name::{PackageName, PackageNameError};
@@ -75,11 +75,8 @@ fn parse_application(
 ) -> Result<Application, ConfigError> {
     let compiler = parse_optional_string(contents, path, obj, "compiler")?;
 
-    let source_directories = if let Some(prop) = find_property(obj, "sourceDirectories") {
-        parse_string_array(contents, path, &prop.value, "sourceDirectories")?
-    } else {
-        vec!["src".to_string()]
-    };
+    let target = parse_required_string(contents, path, obj, "target")?;
+    let target = parse_target(contents, path, obj, &target)?;
 
     let dependencies = if let Some(prop) = find_property(obj, "dependencies") {
         parse_dependencies(contents, path, &prop.value)?
@@ -95,7 +92,7 @@ fn parse_application(
 
     Ok(Application {
         compiler,
-        source_directories,
+        target,
         dependencies,
         test_dependencies,
     })
@@ -117,11 +114,9 @@ fn parse_package(contents: &str, path: &Path, obj: &Object) -> Result<Package, C
     let summary = parse_required_string(contents, path, obj, "summary")?;
     let license = parse_required_string(contents, path, obj, "license")?;
 
-    let exposed_modules = {
-        let prop = find_property(obj, "exposedModules").ok_or_else(|| {
-            ConfigError::missing_field(path, "exposedModules", position_of(contents, obj.range))
-        })?;
-        parse_exposed_modules(contents, path, &prop.value)?
+    let target = match parse_optional_string(contents, path, obj, "target")? {
+        Some(name) => Some(parse_target(contents, path, obj, &name)?),
+        None => None,
     };
 
     let dependencies = if let Some(prop) = find_property(obj, "dependencies") {
@@ -142,7 +137,7 @@ fn parse_package(contents: &str, path: &Path, obj: &Object) -> Result<Package, C
         version,
         summary,
         license,
-        exposed_modules,
+        target,
         dependencies,
         test_dependencies,
     })
@@ -308,34 +303,22 @@ fn parse_dependency(contents: &str, path: &Path, value: &Value) -> Result<Depend
     ))
 }
 
-fn parse_exposed_modules(
+fn parse_target(
     contents: &str,
     path: &Path,
-    value: &Value,
-) -> Result<ExposedModules, ConfigError> {
-    // Array = flat list
-    if let Some(arr) = value.as_array() {
-        let modules = parse_string_array_inner(contents, path, arr, "exposedModules")?;
-        return Ok(ExposedModules::List(modules));
-    }
-
-    // Object = categorized
-    if let Some(obj) = value.as_object() {
-        let mut categories = BTreeMap::new();
-
-        for prop in &obj.properties {
-            let category = prop.name.as_str().to_string();
-            let modules = parse_string_array(contents, path, &prop.value, &category)?;
-            categories.insert(category, modules);
-        }
-
-        return Ok(ExposedModules::Categorized(categories));
-    }
-
-    Err(ConfigError::expected_array_or_object(
-        path,
-        position_of(contents, value.range()),
-    ))
+    obj: &Object,
+    name: &str,
+) -> Result<Target, ConfigError> {
+    Target::from_name(name).ok_or_else(|| {
+        ConfigError::invalid_target(
+            path,
+            name,
+            position_of(
+                contents,
+                find_property(obj, "target").unwrap().value.range(),
+            ),
+        )
+    })
 }
 
 fn parse_string_array(
@@ -436,6 +419,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
+                "target": "cloudflare",
                 "dependencies": {
                     "alder/core": "1.0.0 <= v < 2.0.0"
                 }
@@ -446,7 +430,7 @@ mod tests {
 
         match config {
             Config::Application(app) => {
-                assert_eq!(app.source_directories, vec!["src"]);
+                assert_eq!(app.target, Target::Cloudflare);
                 assert_eq!(app.dependencies.len(), 1);
                 let dep = app
                     .dependencies
@@ -463,6 +447,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
+                "target": "server",
                 "dependencies": {
                     "alder/core": { "workspace": true }
                 }
@@ -488,6 +473,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
+                "target": "server",
                 "dependencies": {
                     "bob/my-lib": { "path": "../packages/my-lib" }
                 }
@@ -513,6 +499,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
+                "target": "server",
                 "dependencies": {
                     "alice/experimental": {
                         "git": "https://github.com/alice/experimental",
@@ -591,7 +578,6 @@ mod tests {
                 "version": "1.0.0",
                 "summary": "A JSON parser for Alder",
                 "license": "MIT",
-                "exposedModules": ["Json", "Json.Decode", "Json.Encode"],
                 "dependencies": {
                     "alder/core": "1.0.0 <= v < 2.0.0"
                 }
@@ -606,28 +592,22 @@ mod tests {
                 assert_eq!(pkg.version, "1.0.0");
                 assert_eq!(pkg.summary, "A JSON parser for Alder");
                 assert_eq!(pkg.license, "MIT");
-                assert_eq!(
-                    pkg.exposed_modules.flatten(),
-                    vec!["Json", "Json.Decode", "Json.Encode"]
-                );
+                assert_eq!(pkg.target, None);
             }
             _ => panic!("expected package config"),
         }
     }
 
     #[test]
-    fn parse_package_with_categorized_modules() {
+    fn parse_package_with_target() {
         let json = indoc! {r#"
             {
                 "type": "package",
-                "name": "alice/json-parser",
+                "name": "alice/kv-cache",
                 "version": "1.0.0",
-                "summary": "A JSON parser",
+                "summary": "A KV cache",
                 "license": "MIT",
-                "exposedModules": {
-                    "Decoding": ["Json.Decode"],
-                    "Encoding": ["Json.Encode"]
-                },
+                "target": "cloudflare",
                 "dependencies": {}
             }
         "#};
@@ -635,16 +615,38 @@ mod tests {
         let config = parse(json, "test.jsonc").unwrap();
 
         match config {
-            Config::Package(pkg) => match &pkg.exposed_modules {
-                ExposedModules::Categorized(cats) => {
-                    assert_eq!(cats.len(), 2);
-                    assert!(cats.contains_key("Decoding"));
-                    assert!(cats.contains_key("Encoding"));
-                }
-                _ => panic!("expected categorized modules"),
-            },
+            Config::Package(pkg) => assert_eq!(pkg.target, Some(Target::Cloudflare)),
             _ => panic!("expected package config"),
         }
+    }
+
+    #[test]
+    fn application_requires_target() {
+        let json = indoc! {r#"
+            {
+                "type": "application",
+                "dependencies": {}
+            }
+        "#};
+
+        let err = parse(json, "test.jsonc").unwrap_err();
+        assert!(err.to_string().contains("target"), "{err}");
+    }
+
+    #[test]
+    fn reject_unknown_target() {
+        let json = indoc! {r#"
+            {
+                "type": "application",
+                "target": "toaster"
+            }
+        "#};
+
+        let err = parse(json, "test.jsonc").unwrap_err();
+        assert!(
+            err.to_string().contains("unknown target 'toaster'"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -653,6 +655,7 @@ mod tests {
             {
                 // This is a comment
                 "type": "application",
+                "target": "server",
                 "dependencies": {
                     /* Multi-line
                        comment */
@@ -670,6 +673,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
+                "target": "server",
                 "dependencies": {
                     "alder/core": { "workspace": false }
                 }
@@ -687,6 +691,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
+                "target": "cli",
                 "compiler": "0.2.0",
                 "dependencies": {
                     "alder/core": "1.0.0 <= v < 2.0.0"
@@ -730,6 +735,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
+                "target": "server",
                 "dependencies": {}
             }
         "#};
@@ -743,6 +749,7 @@ mod tests {
         let json = indoc! {r#"
             {
                 "type": "application",
+                "target": "server",
                 "dependencies": {
                     "Invalid Name": "1.0.0"
                 }
@@ -754,6 +761,6 @@ mod tests {
         let err = result.unwrap_err();
         // Error should contain line/column info
         let msg = err.to_string();
-        assert!(msg.contains("4:") || msg.contains("line 4"));
+        assert!(msg.contains("5:") || msg.contains("line 5"), "{msg}");
     }
 }

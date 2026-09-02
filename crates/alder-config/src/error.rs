@@ -47,9 +47,6 @@ pub enum ConfigError {
         pos: Position,
     },
 
-    #[error("'{path}' at {pos}: expected an array or object")]
-    ExpectedArrayOrObject { path: PathBuf, pos: Position },
-
     #[error("'{path}' at {pos}: expected a version constraint string or dependency object")]
     ExpectedDependency { path: PathBuf, pos: Position },
 
@@ -64,6 +61,15 @@ pub enum ConfigError {
         "'{path}' at {pos}: invalid config type '{value}' (expected 'application', 'package', or 'workspace')"
     )]
     InvalidType {
+        path: PathBuf,
+        value: String,
+        pos: Position,
+    },
+
+    #[error(
+        "'{path}' at {pos}: unknown target '{value}' (expected one of cloudflare, server, cli, tui, browser)"
+    )]
+    InvalidTarget {
         path: PathBuf,
         value: String,
         pos: Position,
@@ -151,13 +157,6 @@ impl ConfigError {
         }
     }
 
-    pub(crate) fn expected_array_or_object(path: impl Into<PathBuf>, pos: Position) -> Self {
-        Self::ExpectedArrayOrObject {
-            path: path.into(),
-            pos,
-        }
-    }
-
     pub(crate) fn expected_dependency(path: impl Into<PathBuf>, pos: Position) -> Self {
         Self::ExpectedDependency {
             path: path.into(),
@@ -183,6 +182,18 @@ impl ConfigError {
         pos: Position,
     ) -> Self {
         Self::InvalidType {
+            path: path.into(),
+            value: value.into(),
+            pos,
+        }
+    }
+
+    pub(crate) fn invalid_target(
+        path: impl Into<PathBuf>,
+        value: impl Into<String>,
+        pos: Position,
+    ) -> Self {
+        Self::InvalidTarget {
             path: path.into(),
             value: value.into(),
             pos,

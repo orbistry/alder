@@ -16,11 +16,8 @@
         "type": {
           "const": "application"
         },
-        "sourceDirectories": {
-          "type": "array",
-          "description": "Source directories (defaults to [\"src\"])",
-          "items": { "type": "string" },
-          "default": ["src"]
+        "target": {
+          "$ref": "#/$defs/target"
         },
         "dependencies": {
           "$ref": "#/$defs/dependencies"
@@ -29,7 +26,7 @@
           "$ref": "#/$defs/dependencies"
         }
       },
-      "required": ["type"],
+      "required": ["type", "target"],
       "additionalProperties": false
     },
     "package": {
@@ -58,8 +55,8 @@
           "description": "SPDX license identifier",
           "examples": ["MIT", "Apache-2.0", "BSD-3-Clause"]
         },
-        "exposedModules": {
-          "$ref": "#/$defs/exposedModules"
+        "target": {
+          "$ref": "#/$defs/target"
         },
         "dependencies": {
           "$ref": "#/$defs/dependencies"
@@ -68,7 +65,7 @@
           "$ref": "#/$defs/dependencies"
         }
       },
-      "required": ["type", "name", "version", "summary", "license", "exposedModules"],
+      "required": ["type", "name", "version", "summary", "license"],
       "additionalProperties": false
     },
     "workspace": {
@@ -97,27 +94,10 @@
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*/[a-z][a-z0-9]*(-[a-z0-9]+)*$",
       "examples": ["alder/core", "alice/json-parser", "bob123/my-lib2"]
     },
-    "exposedModules": {
-      "oneOf": [
-        {
-          "type": "array",
-          "description": "Flat list of exposed module names",
-          "items": { "type": "string" },
-          "examples": [["Json", "Json.Decode", "Json.Encode"]]
-        },
-        {
-          "type": "object",
-          "description": "Modules organized by category",
-          "additionalProperties": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "examples": [{
-            "Decoding": ["Json.Decode"],
-            "Encoding": ["Json.Encode"]
-          }]
-        }
-      ]
+    "target": {
+      "type": "string",
+      "description": "Platform the project is built for. Required for applications; optional for packages (absent means target-neutral).",
+      "enum": ["cloudflare", "server", "cli", "tui", "browser"]
     },
     "dependencies": {
       "type": "object",

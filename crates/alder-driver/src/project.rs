@@ -165,8 +165,7 @@ async fn load_workspace_members(
 /// Create a ProjectMember from config.
 fn make_member(root: &Path, config: Config) -> ProjectMember {
     let source_dirs = match &config {
-        Config::Application(app) => resolve_source_dirs(root, &app.source_directories),
-        Config::Package(_) => vec![root.join("src")],
+        Config::Application(_) | Config::Package(_) => vec![root.join("src")],
         Config::Workspace(_) => vec![], // Workspaces don't have source dirs directly
     };
 
@@ -175,11 +174,6 @@ fn make_member(root: &Path, config: Config) -> ProjectMember {
         config,
         source_dirs,
     }
-}
-
-/// Resolve source directory paths relative to project root.
-fn resolve_source_dirs(root: &Path, dirs: &[String]) -> Vec<PathBuf> {
-    dirs.iter().map(|d| root.join(d)).collect()
 }
 
 impl ProjectMember {
