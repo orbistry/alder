@@ -29,11 +29,11 @@ use bumpalo::collections::Vec as BumpVec;
 use crate::keyword::is_reserved;
 use crate::{Col, Parser, Row, error};
 
-// Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
-// Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `table`.
+    // Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
+    // Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
+    #[allow(unused)]
     pub(crate) fn table_decl(&mut self) -> Result<&'a TableDecl<'a>, error::Table<'a>> {
         self.chomp();
         let name = self.located_lower(error::Table::Name)?;
@@ -109,17 +109,21 @@ impl<'a> Parser<'a> {
 
     /// `name [ '(' expr { ',' expr } [ ',' ] ')' ]` — shared with schema rules.
     ///
-    /// The caller has checked that the cursor is on a lowercase letter
-    /// (`peek_modifier`). The `(` must be on the name's line; otherwise the
-    /// modifier is bare and the `(` is left for the caller. Chomps trailing
-    /// whitespace.
+    /// Precondition: the cursor is on a lowercase letter (callers check
+    /// `peek_modifier`). The signature (§5.11) has no name-error callback,
+    /// so a caller that skips the check gets `to_end_error` at the cursor
+    /// rather than a panic. The `(` must be on the name's line; otherwise
+    /// the modifier is bare and the `(` is left for the caller. Chomps
+    /// trailing whitespace.
     pub(crate) fn modifier<E>(
         &mut self,
         to_arg_error: impl Fn(&'a error::Expr<'a>, Row, Col) -> E + Copy,
         to_end_error: impl FnOnce(Row, Col) -> E,
     ) -> Result<Modifier<'a>, E> {
-        let name =
-            self.raw_lower(|_, _| unreachable!("caller peeked a lowercase modifier name"))?;
+        let name = match self.raw_lower(|row, col| (row, col)) {
+            Ok(name) => name,
+            Err((row, col)) => return Err(to_end_error(row, col)),
+        };
         self.chomp();
         let args = if self.peek() == Some(b'(') && !self.newline_since(name.region.end) {
             self.advance();
