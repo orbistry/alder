@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "[:not_found\n(Id)]\n"
+---
+ErrorRow(
+    End(
+        2,
+        1,
+    ),
+    1,
+    1,
+)

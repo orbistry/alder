@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "{ id: Id, nickname ?: String }"
+---
+Record(
+    Colon(
+        1,
+        20,
+    ),
+    1,
+    1,
+)

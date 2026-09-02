@@ -1,0 +1,37 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "f [a]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 6,
+        },
+    },
+    value: Var {
+        name: "f",
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 4,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                },
+                value: Var {
+                    name: "a",
+                    args: [],
+                },
+            },
+        ],
+    },
+}

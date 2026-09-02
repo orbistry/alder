@@ -12,10 +12,18 @@
 //!             | '(' ')' | '(' type ')' | '(' type ',' type { ',' type } [ ',' ] ')'
 //!             | '{' [ lower_ident '|' ] [ field_type { ',' field_type } [ ',' ] ] '}'
 //!             | '[' [ tag_variant { '|' tag_variant } ] [ '|' lower_ident ] ']' ;
-//! type_args   = '[' type { ',' type } [ ',' ] ']' ;        (* adjacent to the name *)
-//! field_type  = lower_ident [ '?' ] ':' type ;
-//! tag_variant = tag [ '(' type { ',' type } [ ',' ] ')' ] ; (* '(' adjacent to the tag *)
+//! type_args   = '[' type { ',' type } [ ',' ] ']' ;        (* '[' on the name's line *)
+//! field_type  = lower_ident [ '?' ] ':' type ;              (* '?' adjacent to the name *)
+//! tag_variant = tag [ '(' type { ',' type } [ ',' ] ')' ] ; (* '(' on the tag's line *)
 //! ```
+//!
+//! Type arguments and tag arguments follow the postfix rule of §2.1 (1): a
+//! `[` after a type name, or a `(` after a tag, attaches when it starts on
+//! the same line (`Array [a]` is `Array[a]`), and starts something new on a
+//! later line. A `?` marking an optional field must be adjacent to the
+//! field name (`nickname?: String`). `(T,)` is `(T)` (§10.8: trailing
+//! commas are accepted in every comma-separated list); `[r]` is an error
+//! row with no tags (§7.2 `error_row_var_only`).
 //!
 //! Conventions: `type_expr` chomps trailing whitespace; `type_term`,
 //! `type_args`, `tag_variant` and `field_types` stop right after their last
@@ -56,6 +64,13 @@ impl<'a> Parser<'a> {
         match self.peek() {
             Some(b) if b.is_ascii_uppercase() => {
                 let path = self.path(error::Type::Start, error::Type::PathMember)?;
+                // `path` stops before `::lower` (a value member); a type
+                // cannot be one, so report it like a dangling `::` (§10.42).
+                if self.peek() == Some(b':') && self.peek_at(1) == Some(b':') {
+                    self.advance_by(2);
+                    let (row, col) = self.position();
+                    return Err(error::Type::PathMember(row, col));
+                }
                 let args = self.type_args_opt()?;
                 Ok(self.add_end(start, Type::Named { path, args }))
             }
@@ -91,14 +106,20 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Type arguments when a `[` immediately follows the name; empty otherwise.
+    /// Type arguments when a `[` follows the name on the same line; empty
+    /// otherwise. Called right after the name, so the cursor is its end.
+    /// Consumes nothing when there are no arguments.
     fn type_args_opt(&mut self) -> Result<&'a [&'a Located<Type<'a>>], error::Type<'a>> {
-        if self.peek() == Some(b'[') {
+        let name_end = self.get_position();
+        let saved = self.save_state();
+        self.chomp();
+        if self.peek() == Some(b'[') && !self.newline_since(name_end) {
             self.specialize(
                 |bump, e, row, col| error::Type::Args(bump.alloc(e), row, col),
                 |p| p.type_args(),
             )
         } else {
+            self.restore_state(saved);
             Ok(&[])
         }
     }
@@ -142,12 +163,14 @@ impl<'a> Parser<'a> {
 
     /// `:tag[(T, …)]` — shared by error rows and `error` groups.
     ///
-    /// The `(` must be adjacent to the tag. Stops after the tag or its `)`;
-    /// does not chomp.
+    /// The `(` must start on the tag's line. Stops after the tag or its
+    /// `)`; does not chomp.
     pub(crate) fn tag_variant(&mut self) -> Result<TagVariant<'a>, error::TagVariant<'a>> {
         let name = self.tag_name(error::TagVariant::Name, error::TagVariant::Name)?;
         let mut args = BumpVec::new_in(self.bump);
-        if self.peek() == Some(b'(') {
+        let saved = self.save_state();
+        self.chomp();
+        if self.peek() == Some(b'(') && !self.newline_since(name.region.end) {
             self.advance();
             self.chomp();
             loop {
@@ -175,6 +198,8 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
+        } else {
+            self.restore_state(saved);
         }
         Ok(TagVariant {
             name,
@@ -197,6 +222,7 @@ impl<'a> Parser<'a> {
 
         // The first name is either the extension variable (`r |`) or a field.
         let name = self.located_lower(TRecord::Field)?;
+        let saved = self.save_state();
         self.chomp();
         let ext = if self.peek() == Some(b'|') {
             self.advance();
@@ -209,6 +235,8 @@ impl<'a> Parser<'a> {
             fields.push(self.field_type_after_name(first)?);
             Some(name)
         } else {
+            // Back to the name's end: a `?` must be adjacent to it.
+            self.restore_state(saved);
             fields.push(self.field_type_after_name(name)?);
             None
         };
@@ -238,18 +266,18 @@ impl<'a> Parser<'a> {
         Ok((fields.into_bump_slice(), ext))
     }
 
-    /// The rest of a field after its name: `[?] ':' type`.
+    /// The rest of a field after its name: `[?] ':' type`. The `?` must be
+    /// adjacent to the name (`nickname?: String`); the cursor is at the
+    /// name's end.
     fn field_type_after_name(&mut self, field: Name<'a>) -> Result<FieldType<'a>, TRecord<'a>> {
-        self.chomp();
         let optional = if self.peek() == Some(b'?') {
             let start = self.get_position();
             self.advance();
-            let region = Region::new(start, self.get_position());
-            self.chomp();
-            Some(region)
+            Some(Region::new(start, self.get_position()))
         } else {
             None
         };
+        self.chomp();
         self.word1(b':', TRecord::Colon)?;
         self.chomp();
         let typ = self.specialize(
@@ -391,6 +419,10 @@ impl<'a> Parser<'a> {
                     let (row, col) = self.position();
                     return Err(TErrorRow::Ext(row, col));
                 }
+                // TODO(wave0): a `[` followed by neither `:tag`, a row
+                // variable nor `]` (`[1]`, `[|]`, `[` at EOF) needs a
+                // `TErrorRow::Start` variant; until then it reports the
+                // tag's `TagVariant::Name`, whose message assumes a `:`.
                 let tag = self.specialize(
                     |bump, e, row, col| TErrorRow::Tag(bump.alloc(e), row, col),
                     |p| p.tag_variant(),
@@ -536,6 +568,32 @@ mod tests {
         assert_type_snapshot!("Map[String, Number,]");
     }
 
+    #[test]
+    fn app_args_after_space() {
+        assert_type_snapshot!("Array [User]");
+    }
+
+    #[test]
+    fn var_applied_after_space() {
+        assert_type_snapshot!("f [a]");
+    }
+
+    /// A `[` on a later line is not an argument list (§2.1 rule 1): the
+    /// type ends at the name and the `[` is left for the caller.
+    #[test]
+    fn app_args_newline_not_applied() {
+        let bump = bumpalo::Bump::new();
+        let code = "Array\n[a]";
+        let src = bump.alloc_str(code);
+        let mut parser = crate::Parser::new(&bump, src.as_bytes());
+        let result = parser.type_expr().expect("a bare name parses");
+        assert!(
+            matches!(result.value, alder_source::Type::Named { args: &[], .. }),
+            "expected `Array` without arguments, got {result:#?}"
+        );
+        assert_eq!(parser.position(), (2, 1), "the `[` is left unconsumed");
+    }
+
     // ---- functions
 
     #[test]
@@ -588,6 +646,11 @@ mod tests {
     #[test]
     fn parenthesized() {
         assert_type_snapshot!("(Array[a])");
+    }
+
+    #[test]
+    fn parenthesized_trailing_comma() {
+        assert_type_snapshot!("(Array[a],)");
     }
 
     // ---- records
@@ -648,6 +711,24 @@ mod tests {
     }
 
     #[test]
+    fn error_row_args_after_space() {
+        assert_type_snapshot!("[:invalid (String)]");
+    }
+
+    #[test]
+    fn error_row_multiline() {
+        assert_type_snapshot!(
+            r#"
+            [
+                :not_found(Id)
+                | :timeout
+                | r
+            ]
+            "#
+        );
+    }
+
+    #[test]
     fn error_row_open() {
         assert_type_snapshot!("[:not_found(Id) | :timeout | r]");
     }
@@ -682,6 +763,11 @@ mod tests {
     #[test]
     fn error_path_dangling() {
         assert_type_error_snapshot!("Option::");
+    }
+
+    #[test]
+    fn error_path_lower_member() {
+        assert_type_error_snapshot!("Option::foo");
     }
 
     #[test]
@@ -725,6 +811,16 @@ mod tests {
     }
 
     #[test]
+    fn error_record_optional_after_space() {
+        assert_type_error_snapshot!("{ nickname ?: String }");
+    }
+
+    #[test]
+    fn error_record_optional_after_space_second_field() {
+        assert_type_error_snapshot!("{ id: Id, nickname ?: String }");
+    }
+
+    #[test]
     fn error_record_unclosed() {
         assert_type_error_snapshot!("{ name: String");
     }
@@ -732,6 +828,31 @@ mod tests {
     #[test]
     fn error_row_bad_tag() {
         assert_type_error_snapshot!("[:1]");
+    }
+
+    #[test]
+    fn error_row_bad_start() {
+        assert_type_error_snapshot!("[1]");
+    }
+
+    #[test]
+    fn error_row_leading_bar() {
+        assert_type_error_snapshot!("[|]");
+    }
+
+    #[test]
+    fn error_row_eof() {
+        assert_type_error_snapshot!("[");
+    }
+
+    #[test]
+    fn error_row_tag_args_newline() {
+        assert_type_error_snapshot!(
+            r#"
+            [:not_found
+            (Id)]
+            "#
+        );
     }
 
     #[test]
