@@ -413,7 +413,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for string.rs"]
     fn string_escaped_quote() {
         assert_eq!(
             parens(r#"("a\")b")"#),
@@ -422,7 +421,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for string.rs"]
     fn string_unicode_escape() {
         assert_eq!(
             parens(r#"("\u{1F600}")"#),
@@ -473,7 +471,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for string.rs"]
     fn template_escaped_backtick() {
         assert_eq!(
             parens(r"(`a\`b`)"),
@@ -575,7 +572,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for string.rs"]
     fn error_string_bad_escape() {
         assert_eq!(
             parens(r#"("\q")"#),
@@ -584,7 +580,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for string.rs"]
     fn error_string_escape_at_eof() {
         assert_eq!(parens(r#"("\"#), (err("string endless", 1, 4), at(1, 4)));
     }
@@ -596,7 +591,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for string.rs"]
     fn error_template_bad_escape() {
         assert_eq!(
             parens(r"(`\q`)"),
@@ -605,7 +599,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for string.rs"]
     fn error_template_escape_at_eof() {
         assert_eq!(parens(r"(`a\"), (err("string endless", 1, 2), at(1, 5)));
     }

@@ -322,25 +322,21 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for number.rs"]
     fn number() {
         assert_pattern_snapshot!("42");
     }
 
     #[test]
-    #[ignore = "waits for number.rs"]
     fn negative_number() {
         assert_pattern_snapshot!("-1");
     }
 
     #[test]
-    #[ignore = "waits for number.rs"]
     fn bigint() {
         assert_pattern_snapshot!("123n");
     }
 
     #[test]
-    #[ignore = "waits for string.rs"]
     fn string() {
         assert_pattern_snapshot!(r#""hello""#);
     }
