@@ -1,0 +1,165 @@
+---
+source: crates/alder-parse/src/item/component.rs
+description: "component page(props: { data: PageData }) { props.data }"
+---
+ComponentDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 11,
+            },
+            end: Position {
+                line: 1,
+                column: 15,
+            },
+        },
+        value: "page",
+    },
+    params: [
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 21,
+                    },
+                },
+                value: Var(
+                    "props",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 23,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 41,
+                        },
+                    },
+                    value: Record {
+                        fields: [
+                            FieldType {
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 25,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 29,
+                                        },
+                                    },
+                                    value: "data",
+                                },
+                                optional: None,
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 31,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 39,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 31,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 39,
+                                                        },
+                                                    },
+                                                    value: "PageData",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            },
+                        ],
+                        ext: None,
+                    },
+                },
+            ),
+        },
+    ],
+    body: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 43,
+            },
+            end: Position {
+                line: 1,
+                column: 57,
+            },
+        },
+        value: Block {
+            stmts: [],
+            tail: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 45,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 55,
+                        },
+                    },
+                    value: Access {
+                        record: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 45,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 50,
+                                },
+                            },
+                            value: Var(
+                                "props",
+                            ),
+                        },
+                        field: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 51,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 55,
+                                },
+                            },
+                            value: "data",
+                        },
+                    },
+                },
+            ),
+        },
+    },
+}

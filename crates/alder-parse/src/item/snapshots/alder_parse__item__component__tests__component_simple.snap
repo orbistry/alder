@@ -1,0 +1,67 @@
+---
+source: crates/alder-parse/src/item/component.rs
+description: "component App() { render() }"
+---
+ComponentDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 11,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "App",
+    },
+    params: [],
+    body: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 17,
+            },
+            end: Position {
+                line: 1,
+                column: 29,
+            },
+        },
+        value: Block {
+            stmts: [],
+            tail: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 27,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 19,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 25,
+                                },
+                            },
+                            value: Var(
+                                "render",
+                            ),
+                        },
+                        arguments: [],
+                    },
+                },
+            ),
+        },
+    },
+}

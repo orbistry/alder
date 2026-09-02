@@ -1,0 +1,129 @@
+---
+source: crates/alder-parse/src/item/component.rs
+description: "component App() {\n    let mut selected = state(0)\n    selected\n}\n"
+---
+ComponentDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 11,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "App",
+    },
+    params: [],
+    body: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 17,
+            },
+            end: Position {
+                line: 4,
+                column: 2,
+            },
+        },
+        value: Block {
+            stmts: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 32,
+                        },
+                    },
+                    value: Let(
+                        LetDecl {
+                            mutable: Some(
+                                Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 9,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 12,
+                                    },
+                                },
+                            ),
+                            pattern: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 21,
+                                    },
+                                },
+                                value: Var(
+                                    "selected",
+                                ),
+                            },
+                            annotation: None,
+                            value: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 24,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 32,
+                                    },
+                                },
+                                value: State(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 30,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 31,
+                                            },
+                                        },
+                                        value: Number(
+                                            NumberLit {
+                                                value: 0.0,
+                                                text: "0",
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                        },
+                    ),
+                },
+            ],
+            tail: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 13,
+                        },
+                    },
+                    value: Var(
+                        "selected",
+                    ),
+                },
+            ),
+        },
+    },
+}

@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/component.rs
+description: "component 1() {}"
+---
+Name(
+    1,
+    11,
+)
