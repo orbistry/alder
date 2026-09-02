@@ -760,7 +760,7 @@ pub enum Pattern<'a> {
     /// `as` not followed by a lowercase name.
     Alias(Row, Col),
     /// `_foo` (name, width).
-    WildcardNotVar(&'a str, i32, Row, Col),
+    WildcardNotVar(&'a str, usize, Row, Col),
     /// Nested past `MAX_NESTING` (§10.44); the pattern's first byte.
     TooDeep(Row, Col),
 }
@@ -879,7 +879,7 @@ pub enum Escape {
     BadUnicodeFormat(u16),
     BadUnicodeCode(u16),
     BadUnicodeLength {
-        code: u16,
+        width: u16,
         expected: i32,
         actual: i32,
     },

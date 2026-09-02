@@ -1716,7 +1716,7 @@ pub enum Pattern<'a> {
     /// `as` not followed by a lowercase name.
     Alias(Row, Col),
     /// `_foo` (name, width).
-    WildcardNotVar(&'a str, i32, Row, Col),
+    WildcardNotVar(&'a str, usize, Row, Col),
 }
 
 #[derive(Debug)]
@@ -1830,7 +1830,7 @@ pub enum Escape {
     Unknown,
     BadUnicodeFormat(u16),
     BadUnicodeCode(u16),
-    BadUnicodeLength { code: u16, expected: i32, actual: i32 },
+    BadUnicodeLength { width: u16, expected: i32, actual: i32 },
 }
 
 #[derive(Debug)]

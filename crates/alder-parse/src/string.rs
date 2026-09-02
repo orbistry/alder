@@ -17,11 +17,11 @@
 //!   `code < 0` check fires first, but "needs at least four digits" is the
 //!   message a user wants there. Elm's format → code → length order holds
 //!   for every other input.
-//! - `error::Escape::BadUnicodeLength { code, expected, actual }` (§4,
-//!   verbatim) stands in for Elm's `BadUnicodeLength width numDigits
-//!   badCode`: `code` is the **width** of the escape from the backslash
-//!   (for the underline), `actual` is the digit count, and `expected` is
-//!   the nearest bound (4 or 6); the code point itself is not carried.
+//! - `error::Escape::BadUnicodeLength { width, expected, actual }` (§4)
+//!   stands in for Elm's `BadUnicodeLength width numDigits badCode`:
+//!   `width` is the width of the escape from the backslash (for the
+//!   underline), `actual` is the digit count, and `expected` is the
+//!   nearest bound (4 or 6); the code point itself is not carried.
 //!
 //! Columns advance one per byte (`Parser::advance`, §5.1), so non-ASCII
 //! text before an error shifts the reported column by the extra bytes
@@ -168,9 +168,8 @@ impl<'a> Parser<'a> {
             return EscapeResult::Problem(Escape::BadUnicodeCode(width.saturating_add(1)));
         }
         if !(4..=6).contains(&num_digits) {
-            // `code` carries the width `\u{digits}` (see the module docs).
             return EscapeResult::Problem(Escape::BadUnicodeLength {
-                code: width.saturating_add(1),
+                width: width.saturating_add(1),
                 expected: if num_digits < 4 { 4 } else { 6 },
                 actual: num_digits,
             });
@@ -431,14 +430,14 @@ mod tests {
         assert_eq!(
             string(r#""\u{41}""#),
             (
-                Err("Escape(BadUnicodeLength { code: 6, expected: 4, actual: 2 }) at 1:2".into()),
+                Err("Escape(BadUnicodeLength { width: 6, expected: 4, actual: 2 }) at 1:2".into()),
                 (1, 3)
             )
         );
         assert_eq!(
             string(r#""\u{0000041}""#),
             (
-                Err("Escape(BadUnicodeLength { code: 11, expected: 6, actual: 7 }) at 1:2".into()),
+                Err("Escape(BadUnicodeLength { width: 11, expected: 6, actual: 7 }) at 1:2".into()),
                 (1, 3)
             )
         );
@@ -450,7 +449,7 @@ mod tests {
         assert_eq!(
             string(r#""\u{}""#),
             (
-                Err("Escape(BadUnicodeLength { code: 4, expected: 4, actual: 0 }) at 1:2".into()),
+                Err("Escape(BadUnicodeLength { width: 4, expected: 4, actual: 0 }) at 1:2".into()),
                 (1, 3)
             )
         );
@@ -465,7 +464,7 @@ mod tests {
             string(&src),
             (
                 Err(
-                    "Escape(BadUnicodeLength { code: 65535, expected: 6, actual: 70000 }) at 1:2"
+                    "Escape(BadUnicodeLength { width: 65535, expected: 6, actual: 70000 }) at 1:2"
                         .into()
                 ),
                 (1, 3)

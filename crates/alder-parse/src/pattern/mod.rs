@@ -128,12 +128,7 @@ impl<'a> Parser<'a> {
         let word = self.peek_word();
         if word.len() > 1 {
             self.advance_by(word.len());
-            return Err(error::Pattern::WildcardNotVar(
-                word,
-                word.len() as i32,
-                row,
-                col,
-            ));
+            return Err(error::Pattern::WildcardNotVar(word, word.len(), row, col));
         }
         self.advance();
         Ok(self.add_end(start, Pattern::Anything))
@@ -339,6 +334,11 @@ mod tests {
     #[test]
     fn bigint() {
         assert_pattern_snapshot!("123n");
+    }
+
+    #[test]
+    fn negative_bigint() {
+        assert_pattern_snapshot!("-123n");
     }
 
     #[test]
