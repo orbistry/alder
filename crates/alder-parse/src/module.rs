@@ -179,9 +179,12 @@ mod tests {
         assert_eq!(imports[1].path.value.segments[0].value, "leaf");
     }
 
-    // §7.2 docs-example tests. Each input is the docs sample with the §10.35
-    // typo fixes applied (noted per test); Wave 4 un-ignores them as the
-    // item parsers land (§8).
+    // §7.2 docs-example tests: one per docs sample (language.md, web.md,
+    // data.md) that is a full module or a run of items, with the §10.35
+    // typo fixes applied (noted per test). Samples that are a statement,
+    // an expression or bare markup are covered by the statement /
+    // expression / markup tests instead. A `{ ... }` placeholder body in
+    // the docs is replaced by a one-line real body.
 
     #[test]
     fn docs_counter_component() {
@@ -417,6 +420,294 @@ mod tests {
                 db.run(query { update users set { name: ^newName } where users.id == ^user.id }).await?
                 db.run(query { delete from posts where posts.author == ^user.id }).await?
                 Ok(())
+            }
+            "#
+        );
+    }
+
+    // language.md "Modules": the import forms and the re-exports (the bare
+    // `http.get(url)` calls after them are statements, not items).
+    #[test]
+    fn docs_imports() {
+        assert_module_snapshot!(
+            r#"
+            import @alder/http                    // binds `http` (last segment, lowercase)
+            import @alder/http as h               // binds `h`
+            import @alder/http.{ get, Request }   // names into scope
+            import @alder/http.*                  // every pub name into scope
+            import ~/db/users                     // this package: binds `users`
+            import ~/db/users.{ find }
+
+            pub import ~/leaf.{ someFunc }
+            pub import ~/leaf.*                   // typical for mod.ald
+            "#
+        );
+    }
+
+    // language.md "Functions"; the trailing pipe chain is bound with `let`
+    // so it is an item.
+    #[test]
+    fn docs_functions() {
+        assert_module_snapshot!(
+            r#"
+            pub fn add(a: Number, b: Number) -> Number {
+                a + b
+            }
+
+            fn greet(name: String) -> String {
+                `Hello ${name}`
+            }
+
+            let inc = fn(x) x + 1
+            let block = fn(x) {
+                let y = x * 2
+                y + 1
+            }
+
+            let big = [1, 2, 3]
+                |> Array.map(fn(x) x * 2)
+                |> Array.filter(fn(x) x > 2)
+            "#
+        );
+    }
+
+    // language.md "Type application and variables": bodiless signatures
+    // with `where` clauses, including a trailing comma before EOF.
+    #[test]
+    fn docs_type_variables() {
+        assert_module_snapshot!(
+            r#"
+            fn zip(xs: Array[a], ys: Array[b]) -> Array[(a, b)]
+
+            fn lookup(cache: Cache[k, v], key: k) -> Option[v]
+                where k: Eq + Hash
+
+            fn traverse(xs: t[f[a]], g: fn(a) -> f[b]) -> f[t[b]]
+                where
+                    t: Traversable,
+                    f: Applicative,
+            "#
+        );
+    }
+
+    // language.md "Enums".
+    #[test]
+    fn docs_enums() {
+        assert_module_snapshot!(
+            r#"
+            pub enum Option[a] {
+                Some(a),
+                None,
+            }
+
+            pub enum Shape {
+                Circle(Number),
+                Rect { width: Number, height: Number },
+            }
+
+            let s = Shape::Rect { width: 1, height: 2 }
+            let o = Option::Some(3)
+            "#
+        );
+    }
+
+    // language.md "Records and rows"; the trailing `match u.nickname` is an
+    // expression, not an item.
+    #[test]
+    fn docs_records() {
+        assert_module_snapshot!(
+            r#"
+            type User = {
+                id: Id,
+                name: String,
+                nickname?: String,        // read as Option[String]
+            }
+
+            fn rename(user: { r | name: String }, name: String) -> { r | name: String } {
+                { ..user, name }
+            }
+
+            let u: User = { id, name: "Ada" }          // nickname omitted
+            "#
+        );
+    }
+
+    // language.md "Errors": the closed-row function, the `error` group and
+    // the bodiless signature using it.
+    #[test]
+    fn docs_error_group() {
+        assert_module_snapshot!(
+            r#"
+            fn loadStrict(id: Id) -> Result[Profile, [:not_found(Id) | :timeout]] {
+                load(id)                       // explicit, closed row
+            }
+
+            pub error AuthError {
+                :invalid_token,
+                :expired(Timestamp),
+            }
+
+            fn check(token: String) -> Result[Session, AuthError]
+            "#
+        );
+    }
+
+    // language.md "Async and fibers".
+    #[test]
+    fn docs_async_fibers() {
+        assert_module_snapshot!(
+            r#"
+            fn profile(id: Id) -> Result[Profile] {
+                let user = Http.get(`/users/${id}`).await?
+                let posts = Http.get(`/users/${id}/posts`).await?
+                Ok({ user, posts })
+            }
+
+            let (a, b) = Fiber.all(profile(1), profile(2)).await
+            "#
+        );
+    }
+
+    // language.md "Context (dependency injection)".
+    #[test]
+    fn docs_context() {
+        assert_module_snapshot!(
+            r#"
+            fn saveUser(user: User) -> Result[()] {
+                use Db
+                Db.insert(users, user).await
+            }
+
+            fn main() {
+                provide Db = Sqlite.open("app.db") {
+                    saveUser(u).await
+                }
+            }
+            "#
+        );
+    }
+
+    // language.md "Attributes and macros"; the `...` inside `comptime` is
+    // replaced by a real statement. Macro bodies are raw text in M1
+    // (§10.29), so `quote` / `unquote` / `stringify` never reach the parser.
+    #[test]
+    fn docs_macros() {
+        assert_module_snapshot!(
+            r#"
+            #[derive(Show, Eq, Json)]
+            type Point = { x: Number, y: Number }
+
+            macro assert_eq(left, right) {
+                quote {
+                    let l = unquote(left)
+                    let r = unquote(right)
+                    if l != r { Test.fail(unquote(stringify(left)), l, r) }
+                }
+            }
+
+            comptime {
+                let routes = Fs.readDir("routes")
+                Routes.generate(routes)
+            }
+            "#
+        );
+    }
+
+    // language.md "FFI", plus the `#[extern] type Response` opaque type the
+    // prose mentions.
+    #[test]
+    fn docs_ffi() {
+        assert_module_snapshot!(
+            r#"
+            #[extern("node:crypto", "randomUUID")]
+            fn randomUUID() -> String
+
+            #[extern("node:fs/promises", "readFile")]
+            fn readFile(path: String, encoding: String) -> Task[Result[String, [:io(String)]]]
+
+            #[extern("globalThis", "JSON.parse")]
+            fn parseJson(s: String) -> Result[Json, [:syntax(String)]]
+
+            #[extern] type Response
+            "#
+        );
+    }
+
+    // web.md "Server hooks" with `handleError`'s parameter renamed (`error`
+    // is reserved, §10.35). `handle` ends in `provide … { }`, which is a
+    // statement in M1, so its block has no tail (§10.40).
+    #[test]
+    fn docs_web_hooks() {
+        assert_module_snapshot!(
+            r#"
+            // src/hooks.server.ald
+            pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) -> Task[Response]) -> Task[Response] {
+                let session = Auth.fromCookie(event.cookies).await
+                provide Session = session {
+                    resolve(event).await
+                }
+            }
+
+            pub fn handleError(err: Error, event: RequestEvent) -> ErrorResponse { report(err) }
+            pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) -> Task[Response] { fetch(request) }
+            "#
+        );
+    }
+
+    // web.md "Page options".
+    #[test]
+    fn docs_web_page_options() {
+        assert_module_snapshot!(
+            r#"
+            pub let prerender = true      // build-time render (SSG); default false
+            pub let ssr = false           // skip server render for this subtree; default true
+            pub let csr = false           // ship no JS for this subtree; default true
+            pub let trailingSlash = Never // Never | Always | Ignore
+            "#
+        );
+    }
+
+    // web.md "Remote functions".
+    #[test]
+    fn docs_web_remote_functions() {
+        assert_module_snapshot!(
+            r#"
+            // lib/users.remote.ald
+            pub fn getUser(id: Id) -> Result[User] { db.get(id) }              // query
+            pub fn deleteUser(id: Id) -> Result[()] { db.delete(id) }           // command
+            pub fn signUp(input: SignUp) -> Result[User] { db.insert(input) }   // form action, typed by schema
+
+            // any component
+            component UserCard(props: { id: Id }) {
+                let user = resource(fn() getUser(props.id))
+                <button onClick={fn() deleteUser(props.id)}>Delete</button>
+            }
+            "#
+        );
+    }
+
+    // web.md "Stores".
+    #[test]
+    fn docs_web_stores() {
+        assert_module_snapshot!(
+            r#"
+            // src/stores/cart.ald
+            pub let mut items = state([])
+            pub fn add(item: Item) { items.push(item) }
+            "#
+        );
+    }
+
+    // web.md "Styles"; the `<div class={card}>` line is markup, not an item.
+    #[test]
+    fn docs_web_styles() {
+        assert_module_snapshot!(
+            r#"
+            let card = style {
+                padding: 16px,
+                color: theme.text,
+                ":hover": { color: theme.accent },
+                "@media (max-width: 600px)": { padding: 8px },
             }
             "#
         );
