@@ -272,7 +272,9 @@ impl<'a> Parser<'a> {
 
     /// Items until `}` (consumed). An item starts at the first
     /// non-whitespace byte: `let` / `use` there is a statement; anything
-    /// else (including that whitespace) is a child.
+    /// else (including that whitespace) is a child. This is the
+    /// `children(Brace)` loop with the statement case added (its result is
+    /// `ChildItem`s, which `children` cannot produce).
     fn child_items(&mut self) -> Result<&'a [ChildItem<'a>], error::ChildBlock<'a>> {
         let mut items = BumpVec::new_in(self.bump);
         loop {
@@ -289,13 +291,13 @@ impl<'a> Parser<'a> {
                 continue;
             }
             let (row, col) = self.position();
-            match self.peek() {
-                None => return Err(error::ChildBlock::End(row, col)),
-                Some(b'}') => {
-                    self.advance();
-                    return Ok(items.into_bump_slice());
+            if self.at_terminator(ChildTerminator::Brace) {
+                // EOF or `}`.
+                if self.is_eof() {
+                    return Err(error::ChildBlock::End(row, col));
                 }
-                _ => {}
+                self.advance();
+                return Ok(items.into_bump_slice());
             }
             match self.child(ChildTerminator::Brace) {
                 Ok(Some(child)) => items.push(ChildItem::Child(child)),
@@ -659,6 +661,37 @@ mod tests {
         assert_markup_snapshot!("<p>@if x { so let it be }</p>");
     }
 
+    // The `let` value is code mode: an operator on the next line continues
+    // it (§2.1 rule 2), so `- 2` is part of the value, not text.
+    #[test]
+    fn child_block_let_value_continues_on_operator_line() {
+        assert_markup_snapshot!(
+            r#"
+            <p>
+                @if x {
+                    let y = 1
+                     - 2
+                }
+            </p>
+            "#
+        );
+    }
+
+    // `(` on a new line does not continue the value (§2.1 rule 1): text.
+    #[test]
+    fn child_block_let_then_paren_text() {
+        assert_markup_snapshot!(
+            r#"
+            <p>
+                @if x {
+                    let y = 1
+                    (2)
+                }
+            </p>
+            "#
+        );
+    }
+
     #[test]
     fn nested_directives() {
         assert_markup_snapshot!(
@@ -686,9 +719,23 @@ mod tests {
         assert_markup_error_snapshot!("<p>@foo</p>");
     }
 
+    // After a hole the cursor is at a child start again (see the module
+    // doc of `markup/mod.rs`; `text_at_word_after_space` is the text case).
+    #[test]
+    fn error_directive_unknown_after_hole() {
+        assert_markup_error_snapshot!("<p>{x}@iffy</p>");
+    }
+
     #[test]
     fn error_else_without_if() {
         assert_markup_error_snapshot!("<p>@else { <b>x</b> }</p>");
+    }
+
+    // A `//` comment is text in child position (§6.2: nothing is chomped),
+    // so the `@else` after it no longer follows the `@if` block.
+    #[test]
+    fn error_else_after_comment_text() {
+        assert_markup_error_snapshot!("<p>@if x { a } // c\n@else { b }</p>");
     }
 
     #[test]
