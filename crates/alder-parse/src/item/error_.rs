@@ -71,9 +71,7 @@ mod tests {
 
     // Deviation from §7.1, following item/fn_.rs: the pair below drives
     // `error_decl()` directly (the input starts at the `error` keyword, which
-    // the macro consumes) so the §7.2 tests run before `item()` lands. The
-    // `pub` form goes through `item()` and stays ignored until item/mod.rs
-    // lands. Wave 4 decides whether to keep or fold them; recorded for §10.
+    // the macro consumes). The `pub` form goes through `item()`.
 
     /// Snapshot test macro for a successful `error_decl()` parse (input starts at `error`).
     macro_rules! assert_error_decl_snapshot {

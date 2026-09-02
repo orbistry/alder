@@ -116,16 +116,11 @@ mod tests {
 
     // Deviation from §7.1, following item/fn_.rs: the pair below drives
     // `trait_decl()` directly (the input starts at the `trait` keyword, which
-    // the macro consumes) so the §7.2 tests run before `item()` lands. The
-    // `pub` form goes through `item()` and stays ignored until item/mod.rs
-    // lands. Wave 4 decides whether to keep or fold them; recorded for §10.
+    // the macro consumes). The `pub` form goes through `item()`.
     //
-    // Every trait goes through `type_params()` (item/type_alias.rs), so all
-    // direct tests wait for that file; their snapshots were generated and
-    // verified against the real `type_params()` from the item/type_alias.rs
-    // branch (applied locally, not committed): `Open` at the cursor after the
-    // caller's chomp, `Empty` at the `[`, `Var` / `End` at the offending
-    // byte, stops after `]`.
+    // Every trait goes through `type_params()` (item/type_alias.rs): `Open`
+    // at the cursor after the caller's chomp, `Empty` at the `[`, `Var` /
+    // `End` at the offending byte, stops after `]`.
 
     /// Snapshot test macro for a successful `trait_decl()` parse (input starts at `trait`).
     macro_rules! assert_trait_snapshot {

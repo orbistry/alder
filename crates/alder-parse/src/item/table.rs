@@ -177,12 +177,10 @@ mod tests {
     use super::super::assert_item_snapshot;
 
     // Deviation from §7.1 (one `assert_<thing>` pair per module): like
-    // item/fn_.rs, the two macros below drive `table_decl()` directly
-    // because the §7.2 tests go through `item()`, which stays a stub until
-    // item/mod.rs lands. The input is a complete `table …` declaration; the
-    // macro consumes the keyword and hands the rest to `table_decl()`.
-    // Private to this `mod tests`. Wave 4 decides whether to keep or fold
-    // them; recorded for §10.
+    // item/fn_.rs, the two macros below drive `table_decl()` directly. The
+    // input is a complete `table …` declaration; the macro consumes the
+    // keyword and hands the rest to `table_decl()`. Private to this
+    // `mod tests`.
 
     /// Snapshot test macro for a successful `table_decl()` parse (input starts at `table`).
     macro_rules! assert_table_snapshot {

@@ -223,8 +223,8 @@ mod tests {
         assert_template_snapshot!("`outer ${`inner ${x}`} done`");
     }
 
-    // Snapshot committed and hand-checked (record 1:5-1:13, `x` 1:7-1:8,
-    // `1` 1:10-1:11, no empty text parts); un-ignoring must not change it.
+    // Hand-checked: record 1:5-1:13, `x` 1:7-1:8, `1` 1:10-1:11, no empty
+    // text parts.
     #[test]
     fn record_in_hole() {
         assert_template_snapshot!("`${ { x: 1 } }`");

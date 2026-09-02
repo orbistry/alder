@@ -52,10 +52,8 @@ mod tests {
 
     // Deviation from §7.1, following item/fn_.rs: the pair below drives
     // `component_decl()` directly (the input starts at the `component`
-    // keyword, which the macro consumes) so the §7.2 tests run before
-    // `item()` lands. The `pub` form goes through `item()` and stays ignored
-    // until item/mod.rs lands. Wave 4 decides whether to keep or fold them;
-    // recorded for §10.
+    // keyword, which the macro consumes). The `pub` form goes through
+    // `item()`.
 
     /// Snapshot test macro for a successful `component_decl()` parse (input starts at `component`).
     macro_rules! assert_component_snapshot {
