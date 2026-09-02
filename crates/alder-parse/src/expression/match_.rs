@@ -8,13 +8,27 @@
 //! ```
 //!
 //! The scrutinee is parsed under `no_record_ctor` (§2.3) so
-//! `match shape { … }` opens the arms rather than a record constructor;
-//! the arms run with constructors allowed again. A body starting with `{`
-//! is always a block (§2.2). The comma after an arm is optional, as the
-//! grammar and `Match::End` ("expected `,`, a pattern, or `}`") say: an
-//! arm may follow the previous body directly, usually on the next line.
-//! Guards are not heads: a `=>` always separates them from any `{`, so
-//! they inherit the surrounding constructor setting.
+//! `match shape { … }` opens the arms rather than a record constructor.
+//! The whole arm list runs under `with_record_ctor(true, …)`: the `{ … }`
+//! around the arms is a brace context like the brackets of §2.3, so an
+//! arm body `=> Shape::Rect { w: 1 }` parses even when the `match` itself
+//! sits unbracketed inside another head (Rust's rule; `if_.rs` and
+//! `lambda.rs` make the same choice for their `{` bodies, recorded for
+//! §10). Guards are not heads: a `=>` always separates them from any `{`,
+//! so they inherit the surrounding setting. A body starting with `{` is
+//! always a block (§2.2).
+//!
+//! Arm separation: the comma after an arm is optional, as the grammar's
+//! `[ ',' ]` and `Match::End` ("expected `,`, a pattern, or `}`") say, and
+//! §2.1 rule 3 exempts comma-separated members from the line-break rule.
+//! So a comma-less arm may follow the previous body directly, on the next
+//! line (`match_newline_separated_arms`) or even on the same line
+//! (`match_no_comma_same_line`); there is no `SameLine` check for arms.
+//! The price is that a comma-less arm whose pattern starts with an
+//! operator-shaped byte (`^p`, `| p`, `- 1` with a space) is swallowed by
+//! the previous expression body's binop chain (§2.1 rule 2) and reported
+//! there (`OperatorReserved` / `Match::End` at the `=>`); a comma fixes
+//! it. Recorded for §10 so the formatter emits the comma.
 // OWNER: expression/match_.rs (Wave 2)
 
 use alder_region::{Located, Position};
@@ -33,17 +47,14 @@ impl<'a> Parser<'a> {
         start: Position,
     ) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
         let (row, col) = (start.line, start.column);
-        let (scrutinee, arms) = self
+        let expr = self
             .match_body()
             .map_err(|e| error::Expr::Match(self.alloc(e), row, col))?;
-        Ok(self.add_end(start, Expr::Match { scrutinee, arms }))
+        Ok(self.add_end(start, expr))
     }
 
     /// Scrutinee and arms; consumes through the closing `}`.
-    #[allow(clippy::type_complexity)]
-    fn match_body(
-        &mut self,
-    ) -> Result<(&'a Located<Expr<'a>>, &'a [MatchArm<'a>]), error::Match<'a>> {
+    fn match_body(&mut self) -> Result<Expr<'a>, error::Match<'a>> {
         self.chomp();
         let scrutinee = self.specialize(
             |bump, e, row, col| error::Match::Scrutinee(bump.alloc(e), row, col),
@@ -54,7 +65,7 @@ impl<'a> Parser<'a> {
         self.word1(b'{', error::Match::Open)?;
         self.chomp();
         let arms = self.with_record_ctor(true, |p| p.match_arms())?;
-        Ok((scrutinee, arms))
+        Ok(Expr::Match { scrutinee, arms })
     }
 
     /// Arms until the closing `}` (consumed).
@@ -206,6 +217,12 @@ mod tests {
 
     #[test]
     #[ignore = "waits for expression/mod.rs"]
+    fn match_no_comma_same_line() {
+        assert_expression_snapshot!("match x { 1 => a 2 => b }");
+    }
+
+    #[test]
+    #[ignore = "waits for expression/mod.rs"]
     fn match_empty() {
         assert_expression_snapshot!("match x {}");
     }
@@ -229,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn match_block_body() {
         assert_expression_snapshot!(
             r#"
@@ -245,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn match_block_single_name_is_block() {
         assert_expression_snapshot!("match x { _ => { y } }");
     }
@@ -285,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and template.rs"]
     fn match_pin() {
         assert_expression_snapshot!(
             r#"

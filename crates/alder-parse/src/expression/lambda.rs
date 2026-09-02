@@ -13,6 +13,13 @@
 //! no tail. The lambda's region ends where its body ends; `primary` does
 //! not chomp, but a body parsed by `block()` / `expr_or_assign()` has
 //! already chomped its trailing whitespace.
+//!
+//! A `{` body runs under `with_record_ctor(true, …)`: it is a brace context
+//! that grammatically demands a block (§2.2), so it resets `no_record_ctor`
+//! like the brackets of §2.3 (Rust clears its struct-literal restriction
+//! inside blocks the same way). This only matters when the lambda itself
+//! sits unbracketed in an `if` / `while` / `for` / `match` head; the same
+//! choice is made for `if` branches and `match` arms (see those modules).
 // OWNER: expression/lambda.rs (Wave 2)
 
 use alder_region::{Located, Position, Region};
@@ -99,8 +106,10 @@ fn lambda_body_error<'a>(
         error::Stmt::AssignValue(e, row, col) => error::Lambda::AssignValue(e, row, col),
         // TODO(wave0): an `error::Lambda::AssignTarget(AssignOp, Row, Col)`
         // variant would name this precisely ("`fn() 1 += 2`: the left side
-        // is not a place"). Until then the nearest fit is "expected the body
-        // to end here", reported at the operator.
+        // is not a place"). `Stmt::AssignTarget` carries the statement start,
+        // i.e. the body start (statement.rs), so the nearest existing fit is
+        // "a body was expected here" at that position; the operator's own
+        // position is not in the error. Inaccurate wording, right anchor.
         error::Stmt::AssignTarget(_, row, col) => {
             error::Lambda::Body(parser.alloc(error::Expr::Start(row, col)), row, col)
         }
@@ -117,37 +126,37 @@ mod tests {
     use super::super::{assert_expression_error_snapshot, assert_expression_snapshot};
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_expr_body() {
         assert_expression_snapshot!("fn(x) x + 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_no_params() {
         assert_expression_snapshot!("fn() 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_multiple_params() {
         assert_expression_snapshot!("fn(a, b) a + b");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_typed_params() {
         assert_expression_snapshot!("fn(a: Number, b: String) a");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_return_type() {
         assert_expression_snapshot!("fn(x) -> Number { x * 2 }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_block_body() {
         assert_expression_snapshot!(
             r#"
@@ -160,50 +169,56 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_block_single_name_is_block() {
         assert_expression_snapshot!("fn() { x }");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_assign_body() {
         assert_expression_snapshot!("fn() count += 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_pattern_param() {
         assert_expression_snapshot!("fn((a, b)) a + b");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn lambda_mut_param() {
         assert_expression_snapshot!("fn(mut x) x");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_missing_parens() {
         assert_expression_error_snapshot!("fn x");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_missing_body() {
         assert_expression_error_snapshot!("fn()");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_bad_param() {
         assert_expression_error_snapshot!("fn(+) 1");
     }
 
     #[test]
-    #[ignore = "waits for expression/mod.rs"]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
     fn error_assign_no_value() {
         assert_expression_error_snapshot!("fn() x +=");
+    }
+
+    #[test]
+    #[ignore = "waits for expression/mod.rs and statement.rs"]
+    fn error_assign_bad_target() {
+        assert_expression_error_snapshot!("fn() 1 += 2");
     }
 }

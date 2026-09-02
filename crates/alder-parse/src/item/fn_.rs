@@ -172,6 +172,15 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::super::{assert_item_error_snapshot, assert_item_snapshot};
 
+    // Deviation from §7.1 (one `assert_<thing>` pair per module, defined at
+    // module level): the four macros below drive `params()` and
+    // `where_clause()` directly. They exist because the §7.2-named tests at
+    // the bottom go through `item()` and stay ignored until item/mod.rs
+    // lands, while these two helpers are already live for lambdas. They are
+    // private to this `mod tests` (not re-exported) and pin positions the
+    // item-level tests cannot isolate (`Params::End`, `Where::AssocEq`, …).
+    // Wave 4 decides whether to keep or fold them; recorded for §10.
+
     /// Snapshot test macro for a successful `params()` parse (input starts at `(`).
     macro_rules! assert_params_snapshot {
         ($code:expr) => {{
