@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Iterator[i] { type item }"
+---
+AssocType(
+    1,
+    26,
+)

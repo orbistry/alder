@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Ord[a] where a: 1 {}"
+---
+Where(
+    Bound(
+        1,
+        23,
+    ),
+    1,
+    19,
+)

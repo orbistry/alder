@@ -1,0 +1,199 @@
+---
+source: crates/alder-parse/src/item/trait_.rs
+description: "trait Ord[a]\n    where\n        a: Eq,\n{\n    fn compare(x: a, y: a) -> Ordering\n}\n"
+---
+TraitDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 10,
+            },
+        },
+        value: "Ord",
+    },
+    params: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 11,
+                },
+                end: Position {
+                    line: 1,
+                    column: 12,
+                },
+            },
+            value: "a",
+        },
+    ],
+    where_clause: [
+        Bound {
+            var: Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 10,
+                    },
+                },
+                value: "a",
+            },
+            bounds: [
+                Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 14,
+                                },
+                            },
+                            value: "Eq",
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+    items: [
+        Fn(
+            FnDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 15,
+                        },
+                    },
+                    value: "compare",
+                },
+                params: [
+                    Param {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 16,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 17,
+                                },
+                            },
+                            value: Var(
+                                "x",
+                            ),
+                        },
+                        annotation: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 5,
+                                        column: 19,
+                                    },
+                                    end: Position {
+                                        line: 5,
+                                        column: 20,
+                                    },
+                                },
+                                value: Var {
+                                    name: "a",
+                                    args: [],
+                                },
+                            },
+                        ),
+                    },
+                    Param {
+                        mutable: None,
+                        pattern: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 22,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 23,
+                                },
+                            },
+                            value: Var(
+                                "y",
+                            ),
+                        },
+                        annotation: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 5,
+                                        column: 25,
+                                    },
+                                    end: Position {
+                                        line: 5,
+                                        column: 26,
+                                    },
+                                },
+                                value: Var {
+                                    name: "a",
+                                    args: [],
+                                },
+                            },
+                        ),
+                    },
+                ],
+                ret: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 31,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 39,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 31,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 39,
+                                            },
+                                        },
+                                        value: "Ordering",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ),
+                where_clause: [],
+                body: None,
+            },
+        ),
+    ],
+}
