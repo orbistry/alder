@@ -59,8 +59,13 @@ impl<'a> Parser<'a> {
         Ok(self.add_end(start, Expr::Style(style)))
     }
 
-    /// At `{`. Consumes the closing `}`; does not chomp after it.
+    /// At `{`. Consumes the closing `}`; does not chomp after it. Counts one
+    /// nesting level (§10.44).
     pub(crate) fn style_block(&mut self) -> Result<&'a Style<'a>, error::Style<'a>> {
+        self.nest(error::Style::TooDeep, Self::style_entries)
+    }
+
+    fn style_entries(&mut self) -> Result<&'a Style<'a>, error::Style<'a>> {
         self.word1(b'{', error::Style::Open)?;
         self.chomp();
         let mut entries = BumpVec::new_in(self.bump);

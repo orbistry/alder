@@ -318,6 +318,8 @@ pub enum Block<'a> {
     LooksLikeRecord(Row, Col),
     /// Expected a statement or `}`.
     End(Row, Col),
+    /// Nested past `MAX_NESTING` (§10.44); the block's `{`.
+    TooDeep(Row, Col),
 }
 
 #[derive(Debug)]
@@ -415,6 +417,8 @@ pub enum Expr<'a> {
     OperatorRight(BinOp, Row, Col),
     /// `</` in expression position.
     UnexpectedClose(Row, Col),
+    /// Nested past `MAX_NESTING` (§10.44); the expression's first byte.
+    TooDeep(Row, Col),
 }
 
 #[derive(Debug)]
@@ -540,6 +544,8 @@ pub enum Style<'a> {
     Nested(&'a Style<'a>, Row, Col),
     /// Expected `,` or `}`.
     End(Row, Col),
+    /// Nested past `MAX_NESTING` (§10.44); the block's `{`.
+    TooDeep(Row, Col),
 }
 
 #[derive(Debug)]
@@ -679,6 +685,8 @@ pub enum Child<'a> {
     StrayEmpty(Row, Col),
     /// `let` / `use` inside a child block.
     Stmt(&'a Stmt<'a>, Row, Col),
+    /// Nested past `MAX_NESTING` (§10.44); the child's first byte.
+    TooDeep(Row, Col),
 }
 
 #[derive(Debug)]
@@ -753,6 +761,8 @@ pub enum Pattern<'a> {
     Alias(Row, Col),
     /// `_foo` (name, width).
     WildcardNotVar(&'a str, i32, Row, Col),
+    /// Nested past `MAX_NESTING` (§10.44); the pattern's first byte.
+    TooDeep(Row, Col),
 }
 
 #[derive(Debug)]
@@ -802,6 +812,8 @@ pub enum Type<'a> {
     Tuple(&'a TTuple<'a>, Row, Col),
     Record(&'a TRecord<'a>, Row, Col),
     ErrorRow(&'a TErrorRow<'a>, Row, Col),
+    /// Nested past `MAX_NESTING` (§10.44); the type's first byte.
+    TooDeep(Row, Col),
 }
 
 #[derive(Debug)]

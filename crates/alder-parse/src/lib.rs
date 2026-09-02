@@ -34,6 +34,13 @@ pub use keyword::{Keyword, SqlWord};
 pub type Row = u32;
 pub type Col = u32;
 
+/// Nesting limit for the recursive parsers (§10.44). Counted by
+/// `expression`, `block`, `pattern`, `type_expr`, markup `child` and
+/// `style_block`; the 129th level is a `TooDeep` error at its first byte
+/// instead of a stack overflow. Measured so the worst construct stays under
+/// a 2 MB debug-build thread stack with a 2× margin.
+pub const MAX_NESTING: u32 = 128;
+
 /// Saved parser state for backtracking.
 #[derive(Clone, Copy)]
 pub(crate) struct ParserState {
@@ -64,6 +71,8 @@ pub struct Parser<'a> {
     in_query: bool,
     /// Set in if/while/for/match/provide/@directive heads: `Path {` is not a record constructor.
     no_record_ctor: bool,
+    /// Current nesting of the recursive parsers (`nest`), capped at `MAX_NESTING`.
+    depth: u32,
 }
 
 /// Entry point used by the driver and by tests.
@@ -87,6 +96,7 @@ impl<'a> Parser<'a> {
             col: 1,
             in_query: false,
             no_record_ctor: false,
+            depth: 0,
         }
     }
 
@@ -201,6 +211,23 @@ impl<'a> Parser<'a> {
         self.no_record_ctor = !allowed;
         let result = f(self);
         self.no_record_ctor = old;
+        result
+    }
+
+    /// Run `f` one nesting level deeper; at `MAX_NESTING` report `too_deep`
+    /// at the cursor without consuming anything (§10.44).
+    pub(crate) fn nest<T, E>(
+        &mut self,
+        too_deep: impl FnOnce(Row, Col) -> E,
+        f: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        if self.depth >= MAX_NESTING {
+            let (row, col) = self.position();
+            return Err(too_deep(row, col));
+        }
+        self.depth += 1;
+        let result = f(self);
+        self.depth -= 1;
         result
     }
 
@@ -575,6 +602,109 @@ mod tests {
         });
         assert_eq!(seen, Some(b'c'));
         assert_eq!(parser.position(), (1, 1));
+    }
+
+    /// Parse `src` as a module and report whether it hit the nesting limit.
+    /// Runs on the test harness's default (2 MB) thread, which is the
+    /// stack budget `MAX_NESTING` is measured against.
+    fn nesting(src: &str) -> Result<(), String> {
+        let bump = Bump::new();
+        let src = bump.alloc_str(src);
+        match parse_module(&bump, src) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!("{e:?}")),
+        }
+    }
+
+    /// The deepest input each family accepts, one level past it, and a
+    /// mixed one; the limit must be reached before the stack runs out.
+    fn assert_nesting_limit(ok: &str, too_deep: &str) {
+        assert_eq!(nesting(ok), Ok(()), "\n{}", &ok[..ok.len().min(80)]);
+        let err = nesting(too_deep).expect_err("expected TooDeep");
+        assert!(
+            err.contains("TooDeep"),
+            "expected TooDeep, got {}",
+            &err[..err.len().min(200)]
+        );
+    }
+
+    #[test]
+    fn nesting_limit_parens() {
+        // `let x = (((…1…)))`: the value is level 1, each `(` adds one.
+        let n = (MAX_NESTING - 1) as usize;
+        assert_nesting_limit(
+            &format!("let x = {}1{}", "(".repeat(n), ")".repeat(n)),
+            &format!("let x = {}1{}", "(".repeat(n + 1), ")".repeat(n + 1)),
+        );
+    }
+
+    #[test]
+    fn nesting_limit_blocks() {
+        // `while` nests blocks without an expression in between: the fn
+        // body is level 1, each `while a {` adds one, the innermost `1`
+        // is one more.
+        let n = (MAX_NESTING - 2) as usize;
+        let src = |n: usize| format!("fn f() {{ {}1{} }}", "while a { ".repeat(n), " }".repeat(n));
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_markup() {
+        // The outer element is level 2 (expression + child).
+        let n = (MAX_NESTING - 2) as usize;
+        let src = |n: usize| format!("let x = <a>{}1{}</a>", "<a>".repeat(n), "</a>".repeat(n));
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_patterns() {
+        // The `match` is level 1, each `Some(` adds one, the `_` is one more.
+        let n = (MAX_NESTING - 2) as usize;
+        let src = |n: usize| {
+            format!(
+                "let x = match y {{ {}_{} => 1 }}",
+                "Some(".repeat(n),
+                ")".repeat(n)
+            )
+        };
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_types() {
+        let n = (MAX_NESTING - 1) as usize;
+        let src = |n: usize| format!("let x: {}a{} = 1", "Array[".repeat(n), "]".repeat(n));
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_styles() {
+        // The outer `style { }` is level 2 (expression + style block), each
+        // `a: {` adds one, the innermost value expression is one more.
+        let n = (MAX_NESTING - 3) as usize;
+        let src = |n: usize| {
+            format!(
+                "let x = style {{ {}a: 1{} }}",
+                "a: { ".repeat(n),
+                " }".repeat(n)
+            )
+        };
+        assert_nesting_limit(&src(n), &src(n + 1));
+    }
+
+    #[test]
+    fn nesting_limit_query_pins() {
+        // The deepest measured frame use per level: each `query { … ^( … ) }`
+        // costs two levels (the `where` expression and the pinned operand).
+        let n = (MAX_NESTING / 2 - 1) as usize;
+        let src = |n: usize| {
+            format!(
+                "let x = {}1{}",
+                "query { select { a } from t where a == ^(".repeat(n),
+                ") }".repeat(n)
+            )
+        };
+        assert_nesting_limit(&src(n), &src(n + 1));
     }
 
     #[test]

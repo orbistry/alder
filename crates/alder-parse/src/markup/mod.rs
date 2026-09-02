@@ -289,6 +289,15 @@ impl<'a> Parser<'a> {
         &mut self,
         term: ChildTerminator,
     ) -> Result<Option<&'a Located<Child<'a>>>, error::Child<'a>> {
+        // Counts one nesting level (§10.44): elements, fragments and
+        // directives all recurse through here.
+        self.nest(error::Child::TooDeep, |p| p.child_unguarded(term))
+    }
+
+    fn child_unguarded(
+        &mut self,
+        term: ChildTerminator,
+    ) -> Result<Option<&'a Located<Child<'a>>>, error::Child<'a>> {
         debug_assert!(
             !self.at_terminator(term),
             "child() called on its own terminator {term:?} at {:?}",

@@ -26,8 +26,13 @@ use crate::number::NumberLiteral;
 use crate::{Keyword, Parser, SqlWord, error};
 
 impl<'a> Parser<'a> {
-    /// `pattern_atom [as name]`. Chomps trailing whitespace.
+    /// `pattern_atom [as name]`. Chomps trailing whitespace. Counts one
+    /// nesting level (§10.44).
     pub fn pattern(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
+        self.nest(error::Pattern::TooDeep, Self::pattern_aliased)
+    }
+
+    fn pattern_aliased(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
         let start = self.get_position();
         let atom = self.pattern_atom()?;
         self.chomp();

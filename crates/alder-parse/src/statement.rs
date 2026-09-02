@@ -60,8 +60,12 @@ use crate::{Parser, error};
 
 impl<'a> Parser<'a> {
     /// At `{`. Always a block. Enforces Block::SameLine; the last `Stmt::Expr`
-    /// before `}` becomes `tail`.
+    /// before `}` becomes `tail`. Counts one nesting level (§10.44).
     pub fn block(&mut self) -> Result<&'a Located<Block<'a>>, error::Block<'a>> {
+        self.nest(error::Block::TooDeep, Self::block_body)
+    }
+
+    fn block_body(&mut self) -> Result<&'a Located<Block<'a>>, error::Block<'a>> {
         let start = self.get_position();
         self.word1(b'{', error::Block::Open)?;
         self.chomp();

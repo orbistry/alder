@@ -39,8 +39,13 @@ use crate::keyword::is_ident_byte;
 use crate::{Keyword, Parser, SqlWord, error};
 
 impl<'a> Parser<'a> {
-    /// Flat binop chain over `unary`. Chomps trailing whitespace.
+    /// Flat binop chain over `unary`. Chomps trailing whitespace. Counts one
+    /// nesting level (§10.44).
     pub fn expression(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        self.nest(error::Expr::TooDeep, Self::expression_chain)
+    }
+
+    fn expression_chain(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
         let mut last = self.unary()?;
         let mut operands = BumpVec::new_in(self.bump);
         loop {

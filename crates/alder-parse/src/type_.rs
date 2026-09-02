@@ -41,8 +41,13 @@ use crate::error::{self, TArgs, TErrorRow, TFn, TRecord, TTuple};
 use crate::keyword::Keyword;
 
 impl<'a> Parser<'a> {
-    /// `fn` type or term. Chomps trailing whitespace.
+    /// `fn` type or term. Chomps trailing whitespace. Counts one nesting
+    /// level (§10.44).
     pub fn type_expr(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
+        self.nest(error::Type::TooDeep, Self::type_fn_or_term)
+    }
+
+    fn type_fn_or_term(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
         let start = self.get_position();
         let typ = if self.peek_keyword(b"fn") {
             self.specialize(
