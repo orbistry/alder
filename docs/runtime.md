@@ -48,17 +48,26 @@ Everything above the kernel is written in Alder.
 
 ## Embedded runtime
 
-The `alder` binary embeds `deno_core` (V8):
+The `alder` binary embeds V8 through `deno_core` plus the Deno extension
+crates that implement web standards: `deno_web`, `deno_url`,
+`deno_console`, `deno_fetch`, `deno_crypto`, `deno_net`, `deno_http`, and
+`deno_fs`. Not `deno_node`: Node compatibility is a non-goal, and whatever
+Deno's web-standard surface provides is what Alder targets.
 
-- `alder run` executes `server` and `tui` targets with no external
-  runtime installed.
+- That surface is, by design, the same one Cloudflare Workers expose
+  (`fetch`, `Request`/`Response`, `URL`, streams, `crypto.subtle`, timers,
+  WebSocket). The kernel and stdlib are written once against it; `server`
+  and `tui` targets add file system and raw network access on top.
+- `alder run` executes `server` and `tui` targets with no external runtime
+  installed. A `server` build can also emit a self-contained binary (as
+  `deno compile` does), and a container image is that binary; there is no
+  external runtime to pick.
 - Macros and `comptime` blocks execute in the same embedded V8 at build
   time.
 - TUI I/O is provided from Rust (terminal raw mode, events, layout).
 - Binary size (~100MB) is accepted.
-- **Open:** whether `server` targets deploy on deno_core in a container or
-  on an external runtime; Node compatibility surface needed by npm FFI
-  packages.
+- npm packages that need Node built-ins are out of scope for `extern`
+  until wrapped by a first-party package.
 
 ## Cloudflare
 
