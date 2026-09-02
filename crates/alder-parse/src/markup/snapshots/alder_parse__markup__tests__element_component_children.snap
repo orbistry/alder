@@ -1,0 +1,72 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<Card>text</Card>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 18,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 6,
+                        },
+                    },
+                    value: Component(
+                        Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 2,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 6,
+                                        },
+                                    },
+                                    value: "Card",
+                                },
+                            ],
+                        },
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 7,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                        },
+                        value: Text(
+                            "text",
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

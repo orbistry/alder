@@ -1,0 +1,72 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<div><>a</></div>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 18,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Tag(
+                        "div",
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: Fragment(
+                            [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 8,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 9,
+                                        },
+                                    },
+                                    value: Text(
+                                        "a",
+                                    ),
+                                },
+                            ],
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

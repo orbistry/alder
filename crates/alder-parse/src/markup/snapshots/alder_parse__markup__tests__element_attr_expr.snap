@@ -1,0 +1,102 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<ul class={styles.list}></ul>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 30,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: Tag(
+                        "ul",
+                    ),
+                },
+                attrs: [
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                            },
+                            value: "class",
+                        },
+                        value: Some(
+                            Expr(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 12,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 23,
+                                        },
+                                    },
+                                    value: Access {
+                                        record: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 12,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 18,
+                                                },
+                                            },
+                                            value: Var(
+                                                "styles",
+                                            ),
+                                        },
+                                        field: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 19,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 23,
+                                                },
+                                            },
+                                            value: "list",
+                                        },
+                                    },
+                                },
+                            ),
+                        ),
+                    },
+                ],
+                children: [],
+                self_closing: false,
+            },
+        ),
+    ),
+}

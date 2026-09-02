@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<style>.a { }</style>"
+---
+Markup(
+    Child(
+        HoleEmpty(
+            1,
+            13,
+        ),
+        1,
+        8,
+    ),
+    1,
+    1,
+)

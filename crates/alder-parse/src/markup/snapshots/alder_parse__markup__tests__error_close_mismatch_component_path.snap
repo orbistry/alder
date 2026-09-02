@@ -1,0 +1,14 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<Ui::Button></Ui::Btn>"
+---
+Markup(
+    CloseMismatch {
+        expected: "Ui::Button",
+        found: "Ui::Btn",
+        row: 1,
+        col: 15,
+    },
+    1,
+    1,
+)

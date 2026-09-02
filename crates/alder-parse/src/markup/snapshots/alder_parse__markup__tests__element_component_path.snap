@@ -1,0 +1,118 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<Ui::Button label=\"x\">go</Ui::Button>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 38,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                    },
+                    value: Component(
+                        Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 2,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 4,
+                                        },
+                                    },
+                                    value: "Ui",
+                                },
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 6,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 12,
+                                        },
+                                    },
+                                    value: "Button",
+                                },
+                            ],
+                        },
+                    ),
+                },
+                attrs: [
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 13,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 18,
+                                },
+                            },
+                            value: "label",
+                        },
+                        value: Some(
+                            Str(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 19,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 22,
+                                        },
+                                    },
+                                    value: "x",
+                                },
+                            ),
+                        ),
+                    },
+                ],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 25,
+                            },
+                        },
+                        value: Text(
+                            "go",
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

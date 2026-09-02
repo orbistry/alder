@@ -1,0 +1,126 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<table><tr><td>x</td></tr></table>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 35,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: Tag(
+                        "table",
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 8,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 27,
+                            },
+                        },
+                        value: Element(
+                            Element {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 9,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 11,
+                                        },
+                                    },
+                                    value: Tag(
+                                        "tr",
+                                    ),
+                                },
+                                attrs: [],
+                                children: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 12,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 22,
+                                            },
+                                        },
+                                        value: Element(
+                                            Element {
+                                                name: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 13,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 15,
+                                                        },
+                                                    },
+                                                    value: Tag(
+                                                        "td",
+                                                    ),
+                                                },
+                                                attrs: [],
+                                                children: [
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 16,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 17,
+                                                            },
+                                                        },
+                                                        value: Text(
+                                                            "x",
+                                                        ),
+                                                    },
+                                                ],
+                                                self_closing: false,
+                                            },
+                                        ),
+                                    },
+                                ],
+                                self_closing: false,
+                            },
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

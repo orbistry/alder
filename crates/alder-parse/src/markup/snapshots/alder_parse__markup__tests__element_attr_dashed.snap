@@ -1,0 +1,107 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<button aria-label=\"Close\" data-id={id} />"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 43,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Tag(
+                        "button",
+                    ),
+                },
+                attrs: [
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 9,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 19,
+                                },
+                            },
+                            value: "aria-label",
+                        },
+                        value: Some(
+                            Str(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 20,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 27,
+                                        },
+                                    },
+                                    value: "Close",
+                                },
+                            ),
+                        ),
+                    },
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 28,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 35,
+                                },
+                            },
+                            value: "data-id",
+                        },
+                        value: Some(
+                            Expr(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 37,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 39,
+                                        },
+                                    },
+                                    value: Var(
+                                        "id",
+                                    ),
+                                },
+                            ),
+                        ),
+                    },
+                ],
+                children: [],
+                self_closing: true,
+            },
+        ),
+    ),
+}

@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<div>text"
+---
+Markup(
+    Unclosed {
+        name: "div",
+        row: 1,
+        col: 1,
+    },
+    1,
+    1,
+)

@@ -1,0 +1,14 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<>hi</div>"
+---
+Markup(
+    CloseMismatch {
+        expected: "",
+        found: "div",
+        row: 1,
+        col: 7,
+    },
+    1,
+    1,
+)

@@ -463,4 +463,468 @@ pub(crate) use assert_markup_error_snapshot;
 pub(crate) use assert_markup_snapshot;
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    // ---- elements ---------------------------------------------------------
+
+    #[test]
+    fn element_empty() {
+        assert_markup_snapshot!("<div></div>");
+    }
+
+    #[test]
+    fn element_self_closing() {
+        assert_markup_snapshot!("<br />");
+    }
+
+    #[test]
+    fn element_self_closing_no_space() {
+        assert_markup_snapshot!("<br/>");
+    }
+
+    #[test]
+    fn element_text() {
+        assert_markup_snapshot!("<p>hello</p>");
+    }
+
+    #[test]
+    fn element_hole() {
+        assert_markup_snapshot!("<p>{name}</p>");
+    }
+
+    #[test]
+    fn element_text_and_holes() {
+        assert_markup_snapshot!("<p>{props.label}: {count} ({double})</p>");
+    }
+
+    #[test]
+    fn element_nested() {
+        assert_markup_snapshot!("<div><p>a</p><p>b</p></div>");
+    }
+
+    #[test]
+    fn element_attr_string() {
+        assert_markup_snapshot!(r#"<a href="/home">home</a>"#);
+    }
+
+    #[test]
+    fn element_attr_expr() {
+        assert_markup_snapshot!("<ul class={styles.list}></ul>");
+    }
+
+    #[test]
+    fn element_attr_boolean() {
+        assert_markup_snapshot!("<text bold>Tasks</text>");
+    }
+
+    #[test]
+    fn element_attr_dashed() {
+        assert_markup_snapshot!(r#"<button aria-label="Close" data-id={id} />"#);
+    }
+
+    #[test]
+    fn element_attr_reserved_name() {
+        assert_markup_snapshot!(r#"<Field name="password" type="password" />"#);
+    }
+
+    #[test]
+    fn element_attr_reserved_names_html() {
+        assert_markup_snapshot!(r#"<label for="x" style="color: red">Name</label>"#);
+    }
+
+    #[test]
+    fn element_attr_spaces_around_equals() {
+        assert_markup_snapshot!(r#"<a href = "/x" class = {c} />"#);
+    }
+
+    #[test]
+    fn element_attrs_multiline() {
+        assert_markup_snapshot!(
+            r#"
+            <input
+                type="text"
+                value={v}
+                disabled
+            />
+            "#
+        );
+    }
+
+    #[test]
+    fn element_reserved_tag_name() {
+        assert_markup_snapshot!("<table><tr><td>x</td></tr></table>");
+    }
+
+    // `style` is a reserved word but an ordinary tag name (§2.4); its
+    // children are ordinary children (raw-text elements are not part of M1).
+    #[test]
+    fn element_reserved_tag_name_style() {
+        assert_markup_snapshot!("<style>{css}</style>");
+    }
+
+    // A `{` in text is always a hole (§6.2), so a literal CSS body cannot be
+    // written as text: `{ }` is an empty hole.
+    #[test]
+    fn error_style_css_body_is_hole() {
+        assert_markup_error_snapshot!("<style>.a { }</style>");
+    }
+
+    #[test]
+    fn element_attr_lambda_assign() {
+        assert_markup_snapshot!("<button onClick={fn() count += 1}>+</button>");
+    }
+
+    #[test]
+    fn element_attr_expr_record_ctor() {
+        assert_markup_snapshot!("<Box size={Size::Fixed { px: 8 }} />");
+    }
+
+    #[test]
+    fn element_component() {
+        assert_markup_snapshot!("<Spinner />");
+    }
+
+    #[test]
+    fn element_component_children() {
+        assert_markup_snapshot!("<Card>text</Card>");
+    }
+
+    #[test]
+    fn element_component_path() {
+        assert_markup_snapshot!(r#"<Ui::Button label="x">go</Ui::Button>"#);
+    }
+
+    #[test]
+    fn element_custom_dashed() {
+        assert_markup_snapshot!(r#"<my-widget data-id="1"></my-widget>"#);
+    }
+
+    #[test]
+    fn fragment() {
+        assert_markup_snapshot!("<><p>a</p><p>b</p></>");
+    }
+
+    #[test]
+    fn fragment_empty() {
+        assert_markup_snapshot!("<></>");
+    }
+
+    #[test]
+    fn fragment_nested_in_element() {
+        assert_markup_snapshot!("<div><>a</></div>");
+    }
+
+    // ---- text -------------------------------------------------------------
+
+    #[test]
+    fn whitespace_only_lines_dropped() {
+        assert_markup_snapshot!(
+            r#"
+            <ul>
+                <li>a</li>
+                <li>b</li>
+            </ul>
+            "#
+        );
+    }
+
+    #[test]
+    fn text_keeps_inner_spaces() {
+        assert_markup_snapshot!("<p>  a   b  </p>");
+    }
+
+    #[test]
+    fn text_multiline_kept_verbatim() {
+        assert_markup_snapshot!(
+            r#"
+            <p>
+                two
+                lines
+            </p>
+            "#
+        );
+    }
+
+    #[test]
+    fn text_with_at_sign() {
+        assert_markup_snapshot!("<a>mail a@b.com or @iffy</a>");
+    }
+
+    #[test]
+    fn text_with_punctuation() {
+        assert_markup_snapshot!("<p>Hi, there! (see http://x.y/z) = 1 + 2 / 3;</p>");
+    }
+
+    #[test]
+    fn text_between_elements_same_line_kept() {
+        assert_markup_snapshot!("<p><b>a</b> <i>b</i></p>");
+    }
+
+    #[test]
+    fn text_unicode() {
+        assert_markup_snapshot!("<p>héllo → wörld</p>");
+    }
+
+    // ---- holes ------------------------------------------------------------
+
+    #[test]
+    fn hole_record() {
+        assert_markup_snapshot!("<Chart data={{ x: 1 }}>{{ y }}</Chart>");
+    }
+
+    #[test]
+    fn hole_string_literal_at() {
+        assert_markup_snapshot!(r#"<p>{"@"}</p>"#);
+    }
+
+    #[test]
+    fn hole_with_spaces() {
+        assert_markup_snapshot!("<p>{ a + b }</p>");
+    }
+
+    #[test]
+    fn hole_nested_markup() {
+        assert_markup_snapshot!("<p>{if x { <b>y</b> } else { <i>n</i> }}</p>");
+    }
+
+    // ---- markup inside code ----------------------------------------------
+
+    #[test]
+    fn markup_in_match_arm() {
+        assert_markup_snapshot!("match s { A => <p>a</p>, B => <p>b</p> }");
+    }
+
+    #[test]
+    fn markup_as_block_tail() {
+        assert_markup_snapshot!(
+            r#"
+            {
+                let x = 1
+                <p>{x}</p>
+            }
+            "#
+        );
+    }
+
+    #[test]
+    fn markup_after_newline_new_stmt() {
+        assert_markup_snapshot!(
+            r#"
+            {
+                x
+                <div />
+            }
+            "#
+        );
+    }
+
+    #[test]
+    fn markup_in_call_arg() {
+        assert_markup_snapshot!("render(<p>x</p>)");
+    }
+
+    #[test]
+    fn markup_with_trailing_whitespace() {
+        assert_markup_snapshot!("<p>x</p>  \n");
+    }
+
+    // ---- errors -----------------------------------------------------------
+
+    #[test]
+    fn error_name() {
+        assert_markup_error_snapshot!("<div>< </div>");
+    }
+
+    #[test]
+    fn error_name_component_dangling() {
+        assert_markup_error_snapshot!("<Ui:: />");
+    }
+
+    #[test]
+    fn error_tag_end() {
+        assert_markup_error_snapshot!("<div =>");
+    }
+
+    #[test]
+    fn error_tag_end_slash_not_close() {
+        assert_markup_error_snapshot!("<div / >");
+    }
+
+    #[test]
+    fn error_close_mismatch() {
+        assert_markup_error_snapshot!("<div></span>");
+    }
+
+    #[test]
+    fn error_close_mismatch_case() {
+        assert_markup_error_snapshot!("<div></Div>");
+    }
+
+    #[test]
+    fn error_close_mismatch_component_path() {
+        assert_markup_error_snapshot!("<Ui::Button></Ui::Btn>");
+    }
+
+    #[test]
+    fn error_close_name() {
+        assert_markup_error_snapshot!("<div></>");
+    }
+
+    #[test]
+    fn error_close_end() {
+        assert_markup_error_snapshot!("<div></div x>");
+    }
+
+    #[test]
+    fn error_unclosed() {
+        assert_markup_error_snapshot!("<div>text");
+    }
+
+    #[test]
+    fn error_unclosed_nested() {
+        assert_markup_error_snapshot!("<div><p>x</div>");
+    }
+
+    #[test]
+    fn error_fragment_unclosed() {
+        assert_markup_error_snapshot!("<>hi");
+    }
+
+    #[test]
+    fn error_fragment_closed_by_name() {
+        assert_markup_error_snapshot!("<>hi</div>");
+    }
+
+    #[test]
+    fn error_stray_close_brace() {
+        assert_markup_error_snapshot!("<div>}</div>");
+    }
+
+    #[test]
+    fn error_attr_value() {
+        assert_markup_error_snapshot!("<div class=>");
+    }
+
+    #[test]
+    fn error_attr_string() {
+        assert_markup_error_snapshot!(r#"<div class="x>"#);
+    }
+
+    #[test]
+    fn error_attr_expr() {
+        assert_markup_error_snapshot!("<div class={)}>");
+    }
+
+    // `<div class={x >` would be `x > …` with a missing operand; the `}`
+    // check fires only once the expression has stopped.
+    #[test]
+    fn error_attr_expr_unclosed() {
+        assert_markup_error_snapshot!(r#"<div class={x id="y">"#);
+    }
+
+    #[test]
+    fn error_hole_empty() {
+        assert_markup_error_snapshot!("<p>{}</p>");
+    }
+
+    #[test]
+    fn error_hole_unclosed() {
+        assert_markup_error_snapshot!("<p>{x y}</p>");
+    }
+
+    // `{x</p>` reads as the comparison `x < /p` — a missing operand, not a
+    // missing `}` (§11: `<` after an operand is an operator).
+    #[test]
+    fn error_hole_unclosed_at_close_tag() {
+        assert_markup_error_snapshot!("<p>{x</p>");
+    }
+
+    #[test]
+    fn error_hole_bad_expr() {
+        assert_markup_error_snapshot!("<p>{else}</p>");
+    }
+
+    #[test]
+    fn error_unexpected_close_at_start() {
+        assert_markup_error_snapshot!("</div>");
+    }
+
+    // ---- docs examples (language.md, web.md) ------------------------------
+
+    #[test]
+    fn docs_language_ul_directives() {
+        assert_markup_snapshot!(
+            r#"
+            <ul class={styles.list}>
+                @for item in items; key item.id {
+                    <li>{item.name}</li>
+                } @empty {
+                    <li>Nothing here</li>
+                }
+                @if status.loading {
+                    <Spinner />
+                } @else if status.failed {
+                    <p>Something went wrong</p>
+                } @else {
+                    <p>{count} items</p>
+                }
+                @match status {
+                    Loading => <Spinner />,
+                    Ready(n) => <span>{n}</span>,
+                }
+            </ul>
+            "#
+        );
+    }
+
+    #[test]
+    fn docs_language_counter_button() {
+        assert_markup_snapshot!(
+            r#"
+            <button onClick={fn() count += 1}>
+                {props.label}: {count} ({double})
+            </button>
+            "#
+        );
+    }
+
+    #[test]
+    fn docs_web_page_h1() {
+        assert_markup_snapshot!("<h1>{props.data.user.name}</h1>");
+    }
+
+    #[test]
+    fn docs_web_user_card_button() {
+        assert_markup_snapshot!("<button onClick={fn() deleteUser(props.id)}>Delete</button>");
+    }
+
+    #[test]
+    fn docs_web_style_class() {
+        assert_markup_snapshot!("<div class={card}>...</div>");
+    }
+
+    #[test]
+    fn docs_web_form_fields() {
+        assert_markup_snapshot!(
+            r#"
+            <Form action={signUp}>
+                <Field name="email" />
+                <Field name="password" type="password" />
+            </Form>
+            "#
+        );
+    }
+
+    #[test]
+    fn docs_web_tui_box() {
+        assert_markup_snapshot!(
+            r#"
+            <box direction="column" border="round">
+                <text bold>Tasks</text>
+                @for (task, i) in tasks; key task {
+                    <text inverse={i == selected}>{task}</text>
+                }
+            </box>
+            "#
+        );
+    }
+}

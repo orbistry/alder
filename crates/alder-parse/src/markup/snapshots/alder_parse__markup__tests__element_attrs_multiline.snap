@@ -1,0 +1,123 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<input\n    type=\"text\"\n    value={v}\n    disabled\n/>\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 5,
+            column: 3,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: Tag(
+                        "input",
+                    ),
+                },
+                attrs: [
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 9,
+                                },
+                            },
+                            value: "type",
+                        },
+                        value: Some(
+                            Str(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 10,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 16,
+                                        },
+                                    },
+                                    value: "text",
+                                },
+                            ),
+                        ),
+                    },
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 10,
+                                },
+                            },
+                            value: "value",
+                        },
+                        value: Some(
+                            Expr(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 12,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 13,
+                                        },
+                                    },
+                                    value: Var(
+                                        "v",
+                                    ),
+                                },
+                            ),
+                        ),
+                    },
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 13,
+                                },
+                            },
+                            value: "disabled",
+                        },
+                        value: None,
+                    },
+                ],
+                children: [],
+                self_closing: true,
+            },
+        ),
+    ),
+}
