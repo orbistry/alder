@@ -38,9 +38,9 @@ impl<'a> Parser<'a> {
                     let mut rest_end = self.get_position();
                     self.chomp();
                     let name = if self.peek_lower() {
-                        // TODO(wave0): a `PArray::RestName` variant would describe a
-                        // reserved word here (`[..type]`) better than `End`.
-                        let name = self.located_lower(PArray::End)?;
+                        // A lowercase word that `lower_name` refuses (reserved,
+                        // or a SQL word in query mode) is a bad rest name.
+                        let name = self.located_lower(PArray::RestName)?;
                         rest_end = name.region.end;
                         self.chomp();
                         Some(name)

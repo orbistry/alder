@@ -24,13 +24,11 @@ impl<'a> Parser<'a> {
         let path = self.path(error::Pattern::Start, error::Pattern::PathMember)?;
         if self.peek() == Some(b':') && self.peek_at(1) == Some(b':') {
             // `path()` stops before `::lower` (§5.8). `Foo::bar` names a value,
-            // which a pattern can only match through `^Foo::bar`; consume the
-            // `::` like a dangling one (§10.42) and report after it.
-            // TODO(wave0): a `Pattern::PathVar` variant would carry that hint;
-            // `PathMember` is the nearest existing one.
+            // which a pattern can only match through `^Foo::bar`. The `::` is
+            // consumed like a dangling one (§10.42) so the failure is committed;
+            // the position is the path start, where the `^` belongs.
             self.advance_by(2);
-            let (row, col) = self.position();
-            return Err(error::Pattern::PathMember(row, col));
+            return Err(error::Pattern::PathVar(start.line, start.column));
         }
         let end = self.get_position();
         self.chomp();

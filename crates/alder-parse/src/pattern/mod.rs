@@ -23,7 +23,7 @@ use alder_source::{NumberLit, Pattern};
 use bumpalo::collections::Vec as BumpVec;
 
 use crate::number::NumberLiteral;
-use crate::{Keyword, Parser, error};
+use crate::{Keyword, Parser, SqlWord, error};
 
 impl<'a> Parser<'a> {
     /// `pattern_atom [as name]`. Chomps trailing whitespace.
@@ -153,10 +153,13 @@ impl<'a> Parser<'a> {
                 if let Some(kw) = Keyword::from_word(word) {
                     return Err(error::Pattern::Reserved(kw, row, col));
                 }
-                // Only a SQL word inside `query { }` can still be refused here.
-                // TODO(wave0): `error::Pattern` has no `SqlKeyword(SqlWord, …)`
-                // for parity with `Expr::SqlKeyword` (§6.3); `Start` is the
-                // nearest existing variant.
+                if self.in_query()
+                    && let Some(sql) = SqlWord::from_word(word)
+                {
+                    return Err(error::Pattern::SqlKeyword(sql, row, col));
+                }
+                // Nothing is left for `lower_name` to refuse; `Start` is only
+                // the required expectation argument.
                 let name = self.lower_name(error::Pattern::Start)?;
                 Ok(self.add_end(start, Pattern::Var(name)))
             }

@@ -2,7 +2,8 @@
 source: crates/alder-parse/src/pattern/mod.rs
 description: select
 ---
-Start(
+SqlKeyword(
+    Select,
     1,
     1,
 )

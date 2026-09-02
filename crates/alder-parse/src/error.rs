@@ -719,11 +719,16 @@ pub enum ChildBlock<'a> {
 pub enum Pattern<'a> {
     Start(Row, Col),
     Reserved(Keyword, Row, Col),
+    /// Inside `query { }`: a SQL word used as a binding (`select`, `limit`).
+    SqlKeyword(SqlWord, Row, Col),
     Number(Number, Row, Col),
     String(StringError, Row, Col),
     Pin(&'a Expr<'a>, Row, Col),
     /// `::` not followed by a name.
     PathMember(Row, Col),
+    /// `Foo::bar` — a value path where a pattern was expected; pin it
+    /// (`^Foo::bar`) to compare against its value. Position of the path start.
+    PathVar(Row, Col),
     Ctor(&'a PCtor<'a>, Row, Col),
     Tag(&'a PCtor<'a>, Row, Col),
     /// `:` not followed by a lowercase name.
@@ -756,6 +761,8 @@ pub enum PArray<'a> {
     Pattern(&'a Pattern<'a>, Row, Col),
     /// `..` must be last.
     RestNotLast(Row, Col),
+    /// `..` followed by a reserved word (`[..type]`) or, in `query { }`, a SQL word.
+    RestName(Row, Col),
     End(Row, Col),
 }
 

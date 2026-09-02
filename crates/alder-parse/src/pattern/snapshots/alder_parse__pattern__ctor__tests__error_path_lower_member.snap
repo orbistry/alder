@@ -2,7 +2,7 @@
 source: crates/alder-parse/src/pattern/ctor.rs
 description: "Foo::bar"
 ---
-PathMember(
+PathVar(
     1,
-    6,
+    1,
 )

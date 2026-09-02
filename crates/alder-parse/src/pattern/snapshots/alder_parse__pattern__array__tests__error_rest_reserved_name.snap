@@ -3,7 +3,7 @@ source: crates/alder-parse/src/pattern/array.rs
 description: "[..type]"
 ---
 Array(
-    End(
+    RestName(
         1,
         4,
     ),
