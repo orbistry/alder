@@ -96,15 +96,6 @@ macro_rules! assert_module_error_snapshot {
     }};
 }
 
-// `module.rs` has no submodules; the re-export follows the §7.1 convention
-// so a later test file can import the pair like every other module's.
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_module_error_snapshot;
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_module_snapshot;
-
 #[cfg(test)]
 mod tests {
     #[test]

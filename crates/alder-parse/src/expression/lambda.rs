@@ -27,9 +27,6 @@ use alder_source::{Block, Expr, Lambda, Stmt};
 
 use crate::{Parser, error};
 
-// `primary()` (expression/mod.rs) is the only caller; the allow goes away
-// with the Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `fn`.
     pub(crate) fn lambda(

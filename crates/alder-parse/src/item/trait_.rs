@@ -34,9 +34,6 @@ use bumpalo::collections::Vec as BumpVec;
 
 use crate::{Parser, error};
 
-// Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
-// Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `trait`. `type_params` is required (missing `[` → Trait::Params(TypeParams::Open)).
     /// Body items are line-break separated (Trait::SameLine); a `;` after an item → Trait::Semicolon.

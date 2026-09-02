@@ -23,9 +23,6 @@ use alder_source::ComponentDecl;
 
 use crate::{Parser, error};
 
-// Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
-// Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `component`.
     pub(crate) fn component_decl(&mut self) -> Result<&'a ComponentDecl<'a>, error::Component<'a>> {

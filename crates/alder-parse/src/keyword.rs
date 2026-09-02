@@ -299,7 +299,6 @@ pub(crate) fn is_ident_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// Exact bytes followed by a non-identifier byte; fails without consuming.
     pub(crate) fn keyword<E>(

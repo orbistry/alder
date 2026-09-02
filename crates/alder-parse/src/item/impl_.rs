@@ -32,9 +32,6 @@ use bumpalo::collections::Vec as BumpVec;
 
 use crate::{Parser, error};
 
-// Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
-// Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `impl`. Body items are line-break separated (Impl::SameLine); a `;` after an item → Impl::Semicolon.
     pub(crate) fn impl_decl(&mut self) -> Result<&'a ImplDecl<'a>, error::Impl<'a>> {

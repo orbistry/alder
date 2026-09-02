@@ -486,15 +486,6 @@ macro_rules! assert_query_error_snapshot {
     }};
 }
 
-// Re-exported for child modules per §7.1; `query.rs` has none, so the
-// re-export itself is unused here (same as `statement.rs` / `type_.rs`).
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_query_error_snapshot;
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_query_snapshot;
-
 #[cfg(test)]
 mod tests {
     // ---- select -------------------------------------------------------------

@@ -44,9 +44,6 @@ use crate::{Parser, error};
 
 impl<'a> Parser<'a> {
     /// After `schema`.
-    // Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
-    // Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-    #[allow(unused)]
     pub(crate) fn schema_decl(&mut self) -> Result<&'a SchemaDecl<'a>, error::Schema<'a>> {
         self.chomp();
         let name = self.located_upper(error::Schema::Name)?;

@@ -26,9 +26,6 @@ use bumpalo::collections::Vec as BumpVec;
 
 use crate::{Parser, error};
 
-// `primary()` (expression/mod.rs) is the only caller; the allow goes away
-// with the Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `if`.
     pub(crate) fn if_(

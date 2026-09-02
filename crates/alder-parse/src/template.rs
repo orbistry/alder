@@ -25,10 +25,6 @@ use bumpalo::collections::Vec as BumpVec;
 use crate::string::{EscapeResult, utf8_char_width};
 use crate::{Parser, error};
 
-// No caller until `expression/mod.rs` (`primary`) and `expression/postfix.rs`
-// (`tagged_template`) land; the tests below exercise both entry points. The
-// `allow` goes away in Wave 4 (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// At the opening backtick. Used by primary and by tagged templates.
     ///
@@ -184,15 +180,6 @@ macro_rules! assert_template_error_snapshot {
         });
     }};
 }
-
-// Re-exported for submodules (§7.1); template.rs has none, so the `allow`
-// stays until Wave 4 step 4.2, as in `type_.rs`.
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_template_error_snapshot;
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_template_snapshot;
 
 #[cfg(test)]
 mod tests {

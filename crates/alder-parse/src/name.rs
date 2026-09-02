@@ -11,7 +11,6 @@ use alder_source::{Name, Path};
 use crate::keyword::{is_ident_byte, is_reserved, is_sql_word};
 use crate::{Col, Parser, Row};
 
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// `[a-z][A-Za-z0-9_]*`, not reserved, not a SQL word while `in_query()`.
     /// Fails without consuming.

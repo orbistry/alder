@@ -22,7 +22,6 @@ enum Scan {
     None,
 }
 
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// Longest-match over the fixed table. `Ok(None)` (nothing consumed) for
     /// chain terminators (`=`, `=>`, `+=`, `-=`, `*=`, `/=`) and non-operators.
@@ -106,29 +105,6 @@ impl<'a> Parser<'a> {
             _ => Scan::None,
         }
     }
-}
-
-/// Can `b` begin an operator or chain-terminator token?
-#[allow(unused)]
-#[inline]
-pub fn is_operator_char(b: u8) -> bool {
-    matches!(
-        b,
-        b'+' | b'-'
-            | b'*'
-            | b'/'
-            | b'%'
-            | b'='
-            | b'!'
-            | b'<'
-            | b'>'
-            | b'&'
-            | b'|'
-            | b'?'
-            | b'^'
-            | b':'
-            | b'.'
-    )
 }
 
 #[cfg(test)]
@@ -247,15 +223,5 @@ mod tests {
         assert_eq!(assign_at("=> 1"), (None, 1));
         assert_eq!(assign_at("+ 1"), (None, 1));
         assert_eq!(assign_at(""), (None, 1));
-    }
-
-    #[test]
-    fn operator_chars() {
-        for b in b"+-*/%=!<>&|?^:." {
-            assert!(is_operator_char(*b));
-        }
-        assert!(!is_operator_char(b'a'));
-        assert!(!is_operator_char(b' '));
-        assert!(!is_operator_char(b'('));
     }
 }

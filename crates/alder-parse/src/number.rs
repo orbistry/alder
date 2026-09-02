@@ -27,10 +27,6 @@ use crate::error;
 use crate::keyword::is_ident_byte;
 use crate::{Col, Parser, Row};
 
-// The scanners have no callers until Wave 2 (`expression/literal.rs`,
-// `expression/postfix.rs`, `pattern/`) and Wave 3 (`style.rs`) land; the
-// `allow` goes away in Wave 4 (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum NumberLiteral<'a> {
     Number(NumberLit<'a>),
@@ -38,7 +34,6 @@ pub(crate) enum NumberLiteral<'a> {
     BigInt(&'a str),
 }
 
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// Digit-led literal with Elm's dirty-end check (`123abc` → Number::End).
     ///

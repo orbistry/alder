@@ -31,9 +31,6 @@ use crate::{Col, Parser, Row, error};
 
 impl<'a> Parser<'a> {
     /// After `table`.
-    // Called by `item()` (item/mod.rs, Wave 3); the allow goes away with the
-    // Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-    #[allow(unused)]
     pub(crate) fn table_decl(&mut self) -> Result<&'a TableDecl<'a>, error::Table<'a>> {
         self.chomp();
         let name = self.located_lower(error::Table::Name)?;

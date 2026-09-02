@@ -39,10 +39,6 @@ struct Frame {
 
 const BACKTICK: u8 = b'`';
 
-// `raw_balanced` is called from `expression/postfix.rs` (`name!(`) and
-// `item/macro_.rs` (`macro … { }`), both still stubs; the `allow` goes away
-// in Wave 4 (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// At `open`. Consumes through the matching `close`, honoring nested
     /// `()[]{}`, strings, templates and `//` comments. Returns the interior text.

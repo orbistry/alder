@@ -478,16 +478,6 @@ macro_rules! assert_block_error_snapshot {
     }};
 }
 
-// The re-exports exist for submodules (docs/parser-internals.md §7.1);
-// `statement.rs` has none and its own tests reach the pairs through textual
-// scope, so the imports are unused until something imports them.
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_block_error_snapshot;
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_block_snapshot;
-
 /// Snapshot test macro for successful statement parsing.
 #[cfg(test)]
 macro_rules! assert_statement_snapshot {
@@ -533,13 +523,6 @@ macro_rules! assert_statement_error_snapshot {
         });
     }};
 }
-
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_statement_error_snapshot;
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_statement_snapshot;
 
 #[cfg(test)]
 mod tests {

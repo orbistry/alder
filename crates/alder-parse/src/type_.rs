@@ -504,16 +504,6 @@ macro_rules! assert_type_error_snapshot {
     }};
 }
 
-// The re-exports exist for submodules (docs/parser-internals.md §7.1);
-// `type_.rs` has none and its own tests reach the pair through textual
-// scope, so the imports are unused until something imports them.
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_type_error_snapshot;
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_type_snapshot;
-
 #[cfg(test)]
 mod tests {
     // ---- variables and names

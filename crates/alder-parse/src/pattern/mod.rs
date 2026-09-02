@@ -52,9 +52,6 @@ impl<'a> Parser<'a> {
     /// `p | q | r` (match arms). Each alternative is a full `pattern()`, so
     /// the cursor ends after trailing whitespace. A `|` that begins `||` or
     /// `|>` is not an alternative separator.
-    // Called by `arm_head` (expression/match_.rs, Wave 2); until then only
-    // tests reach it.
-    #[allow(unused)]
     pub(crate) fn pattern_alternatives(
         &mut self,
     ) -> Result<&'a [&'a Located<Pattern<'a>>], error::Pattern<'a>> {

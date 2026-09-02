@@ -240,15 +240,6 @@ macro_rules! assert_style_error_snapshot {
     }};
 }
 
-// The re-exports are unused until a submodule imports them (template.rs has
-// the same shape); the allow only covers them, not the parser code above.
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_style_error_snapshot;
-#[cfg(test)]
-#[allow(unused)]
-pub(crate) use assert_style_snapshot;
-
 #[cfg(test)]
 mod tests {
     // ---- blocks

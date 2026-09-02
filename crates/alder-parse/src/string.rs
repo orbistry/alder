@@ -59,9 +59,6 @@ impl<'a> Parser<'a> {
     /// a newline → `Newline` at the newline byte, a bad escape →
     /// `Escape(…)` at its backslash. Returns a zero-copy slice of the source
     /// unless an escape forced a cooked copy.
-    // No caller until `expression/literal.rs` (Wave 2) lands; the tests
-    // below exercise it.
-    #[allow(unused)]
     pub(crate) fn string_literal<E>(
         &mut self,
         to_expectation: impl FnOnce(Row, Col) -> E,

@@ -156,9 +156,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-// Newline / adjacency / mode helpers. Callers arrive with Waves 1-3; the
-// `allow` goes away in Wave 4 (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// Has a newline been crossed between `end` (a node's `region.end`) and here?
     #[inline]

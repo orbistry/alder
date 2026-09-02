@@ -37,9 +37,6 @@ use bumpalo::collections::Vec as BumpVec;
 
 use crate::{Col, Parser, Row, error};
 
-// `primary()` (expression/mod.rs) is the only caller; the allow goes away
-// with the Wave 4 sweep (docs/parser-internals.md §9 step 4.2).
-#[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `match`.
     pub(crate) fn match_(
@@ -123,9 +120,8 @@ impl<'a> Parser<'a> {
 
     /// `p | q [if guard] =>` — shared with @match (errors mapped by the caller).
     /// Chomps after the `=>`, leaving the cursor on the body.
-    // Required, not a stub allow: the §5.13 return type trips clippy's
-    // `type_complexity` under `-D warnings`. Step 4.2 strips `allow(unused)`
-    // only; this one stays.
+    // Required: the §5.13 return type trips clippy's `type_complexity`
+    // under `-D warnings` (§10.42).
     #[allow(clippy::type_complexity)]
     pub(crate) fn arm_head<E>(
         &mut self,
