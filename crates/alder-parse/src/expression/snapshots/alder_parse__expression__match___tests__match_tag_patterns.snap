@@ -1,0 +1,470 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match load(id) {\n    Ok(p) => render(p),\n    Err(:not_found(id)) => notFound(id),\n    Err(:timeout) => retry(),\n    Err(_) => fail(),\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 6,
+            column: 2,
+        },
+    },
+    value: Match {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 15,
+                },
+            },
+            value: Call {
+                function: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                    },
+                    value: Var(
+                        "load",
+                    ),
+                },
+                arguments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                        },
+                        value: Var(
+                            "id",
+                        ),
+                    },
+                ],
+            },
+        },
+        arms: [
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 10,
+                            },
+                        },
+                        value: Ctor {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 5,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 7,
+                                            },
+                                        },
+                                        value: "Ok",
+                                    },
+                                ],
+                            },
+                            args: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 8,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 9,
+                                        },
+                                    },
+                                    value: Var(
+                                        "p",
+                                    ),
+                                },
+                            ],
+                        },
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 14,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 23,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 14,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 20,
+                                },
+                            },
+                            value: Var(
+                                "render",
+                            ),
+                        },
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 21,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 22,
+                                    },
+                                },
+                                value: Var(
+                                    "p",
+                                ),
+                            },
+                        ],
+                    },
+                },
+            },
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 24,
+                            },
+                        },
+                        value: Ctor {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 5,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 8,
+                                            },
+                                        },
+                                        value: "Err",
+                                    },
+                                ],
+                            },
+                            args: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 9,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 23,
+                                        },
+                                    },
+                                    value: Tag {
+                                        name: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 3,
+                                                    column: 9,
+                                                },
+                                                end: Position {
+                                                    line: 3,
+                                                    column: 19,
+                                                },
+                                            },
+                                            value: "not_found",
+                                        },
+                                        args: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 3,
+                                                        column: 20,
+                                                    },
+                                                    end: Position {
+                                                        line: 3,
+                                                        column: 22,
+                                                    },
+                                                },
+                                                value: Var(
+                                                    "id",
+                                                ),
+                                            },
+                                        ],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 28,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 40,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 28,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 36,
+                                },
+                            },
+                            value: Var(
+                                "notFound",
+                            ),
+                        },
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 37,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 39,
+                                    },
+                                },
+                                value: Var(
+                                    "id",
+                                ),
+                            },
+                        ],
+                    },
+                },
+            },
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 4,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 4,
+                                column: 18,
+                            },
+                        },
+                        value: Ctor {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 4,
+                                                column: 5,
+                                            },
+                                            end: Position {
+                                                line: 4,
+                                                column: 8,
+                                            },
+                                        },
+                                        value: "Err",
+                                    },
+                                ],
+                            },
+                            args: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 4,
+                                            column: 9,
+                                        },
+                                        end: Position {
+                                            line: 4,
+                                            column: 17,
+                                        },
+                                    },
+                                    value: Tag {
+                                        name: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 4,
+                                                    column: 9,
+                                                },
+                                                end: Position {
+                                                    line: 4,
+                                                    column: 17,
+                                                },
+                                            },
+                                            value: "timeout",
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 4,
+                            column: 22,
+                        },
+                        end: Position {
+                            line: 4,
+                            column: 29,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 22,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 27,
+                                },
+                            },
+                            value: Var(
+                                "retry",
+                            ),
+                        },
+                        arguments: [],
+                    },
+                },
+            },
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 11,
+                            },
+                        },
+                        value: Ctor {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 5,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 8,
+                                            },
+                                        },
+                                        value: "Err",
+                                    },
+                                ],
+                            },
+                            args: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 5,
+                                            column: 9,
+                                        },
+                                        end: Position {
+                                            line: 5,
+                                            column: 10,
+                                        },
+                                    },
+                                    value: Anything,
+                                },
+                            ],
+                        },
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 5,
+                            column: 15,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 21,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 5,
+                                    column: 15,
+                                },
+                                end: Position {
+                                    line: 5,
+                                    column: 19,
+                                },
+                            },
+                            value: Var(
+                                "fail",
+                            ),
+                        },
+                        arguments: [],
+                    },
+                },
+            },
+        ],
+    },
+}
