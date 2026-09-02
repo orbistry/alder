@@ -1,0 +1,103 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table t { name: varchar(255) notNull }"
+---
+TableDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: "t",
+    },
+    columns: [
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 15,
+                    },
+                },
+                value: "name",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 29,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 24,
+                            },
+                        },
+                        value: Var(
+                            "varchar",
+                        ),
+                    },
+                    arguments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 25,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 28,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 255.0,
+                                    text: "255",
+                                },
+                            ),
+                        },
+                    ],
+                },
+            },
+            modifiers: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 30,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 37,
+                            },
+                        },
+                        value: "notNull",
+                    },
+                    args: [],
+                },
+            ],
+        },
+    ],
+}

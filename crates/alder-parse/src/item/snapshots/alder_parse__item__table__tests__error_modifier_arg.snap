@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table users { id: integer() default( }"
+---
+ModifierArg(
+    Start(
+        1,
+        38,
+    ),
+    1,
+    38,
+)

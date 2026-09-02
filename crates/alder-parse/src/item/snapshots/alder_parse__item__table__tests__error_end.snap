@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table users { id: integer() 5 }"
+---
+End(
+    1,
+    29,
+)

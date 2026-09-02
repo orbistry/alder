@@ -1,0 +1,143 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table posts {\n    author: integer() notNull references(users.id)\n}\n"
+---
+TableDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: "posts",
+    },
+    columns: [
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 11,
+                    },
+                },
+                value: "author",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 13,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 22,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 13,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 20,
+                            },
+                        },
+                        value: Var(
+                            "integer",
+                        ),
+                    },
+                    arguments: [],
+                },
+            },
+            modifiers: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 30,
+                            },
+                        },
+                        value: "notNull",
+                    },
+                    args: [],
+                },
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 31,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 41,
+                            },
+                        },
+                        value: "references",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 42,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 50,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 42,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 47,
+                                        },
+                                    },
+                                    value: Var(
+                                        "users",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 48,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 50,
+                                        },
+                                    },
+                                    value: "id",
+                                },
+                            },
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}

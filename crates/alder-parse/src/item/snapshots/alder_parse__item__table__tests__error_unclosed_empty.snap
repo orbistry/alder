@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table users {"
+---
+Column(
+    1,
+    14,
+)

@@ -1,0 +1,121 @@
+---
+source: crates/alder-parse/src/item/table.rs
+description: "table t { n: integer() between(1, 10,) }"
+---
+TableDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: "t",
+    },
+    columns: [
+        Column {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: "n",
+            },
+            builder: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 23,
+                    },
+                },
+                value: Call {
+                    function: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 21,
+                            },
+                        },
+                        value: Var(
+                            "integer",
+                        ),
+                    },
+                    arguments: [],
+                },
+            },
+            modifiers: [
+                Modifier {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 24,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 31,
+                            },
+                        },
+                        value: "between",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 32,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 33,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 1.0,
+                                    text: "1",
+                                },
+                            ),
+                        },
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 35,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 37,
+                                },
+                            },
+                            value: Number(
+                                NumberLit {
+                                    value: 10.0,
+                                    text: "10",
+                                },
+                            ),
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+}
