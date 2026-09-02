@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/style.rs
-description: "style {\n    padding: 16px\n    color: red\n}\n"
+description: "style {\n    padding: 16px\n    (x)\n}\n"
 ---
 Style(
     End(

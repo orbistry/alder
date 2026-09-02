@@ -1,9 +1,13 @@
 //! `style { }` blocks (docs/parser-internals.md §6.4).
 //!
-//! `style` then `{` (`Style::Open`); entries `key: value` separated by
-//! commas, with an optional trailing comma (the same shape as a record
-//! literal, which is what `Style::End` — "expected `,` or `}`" — reports
-//! between entries). A key is a `lower_name` (`padding`) or a string
+//! `style` then `{` (`Style::Open`); entries `key: value` with an optional
+//! `,` after each (§6.4, SPEC's `[ ',' ]`). Like match arms (§2.1 rule 3
+//! exempts comma-separated members from the line-break rule), a
+//! comma-less entry may follow the previous value on the next line
+//! (`style_newline_separated`) or on the same line
+//! (`style_no_comma_same_line`): after a value the next byte must be `,`,
+//! `}`, or the start of a key (`"` or a lowercase letter), else
+//! `Style::End`. A key is a `lower_name` (`padding`) or a string
 //! (`":hover"`, `"@media (max-width: 600px)"`). A value is:
 //!
 //! - `{` → a nested `style_block` (never a record; §10.27);
@@ -11,11 +15,18 @@
 //!   attempt via `chomp_number` (the `-` negates `value` and stays in
 //!   `text`, so `margin: -8px` is `Dimension { -8 "-8", "px" }`). A run of
 //!   ASCII letters or `%` right after the number is the unit. A space
-//!   before such a run (`16 px`) is `Style::Dimension(Number::End)` at the
-//!   space, where the unit had to start. A number with no unit restores
-//!   the saved state and falls through;
+//!   before a run of letters (`16 px`) is `Style::Dimension(Number::End)`
+//!   at the space, where the unit had to start; a spaced `%` is not a
+//!   unit but the `%` operator (`width: 10 % 3` is `BinOps`), so only
+//!   letters take part in that check. A number with no unit restores the
+//!   saved state and falls through;
 //! - otherwise `expression()` — `opacity: 1` is `Expr::Number`, `margin: -x`
 //!   is `Negate`, `color: theme.text` is an access.
+//!
+//! `chomp_number` takes an `e` only when digits follow, so `a: 1e` is
+//! `Dimension { 1, "e" }` rather than `Number::Exponent`; that is what
+//! makes `1em` / `1ex` work and is accepted as the literal reading of
+//! §6.4 (`style_dangling_exponent_is_dimension`).
 //!
 //! Keyword-led like `loop`, `Expr::Style` carries the position of `style`.
 //! Values run with record constructors re-enabled (§2.3: braces reset the
@@ -85,6 +96,9 @@ impl<'a> Parser<'a> {
                     self.advance();
                     break;
                 }
+                // The comma is optional: a key may start right here.
+                Some(b'"') => {}
+                Some(b) if b.is_ascii_lowercase() => {}
                 _ => {
                     let (row, col) = self.position();
                     return Err(error::Style::End(row, col));
@@ -148,12 +162,17 @@ impl<'a> Parser<'a> {
         }
 
         // `16 px`: a unit separated from its number by spaces on the same
-        // line. Report where the unit had to start.
+        // line. Report where the unit had to start. Only letters count: a
+        // spaced `%` is the rem operator (`10 % 3`), left to `expression()`.
         let mut offset = 0;
         while matches!(self.peek_at(offset), Some(b' ' | b'\t')) {
             offset += 1;
         }
-        if offset > 0 && self.peek_at(offset).is_some_and(is_unit_byte) {
+        if offset > 0
+            && self
+                .peek_at(offset)
+                .is_some_and(|b| b.is_ascii_alphabetic())
+        {
             let (row, col) = self.position();
             return Err(error::Style::Dimension(error::Number::End, row, col));
         }
@@ -272,6 +291,47 @@ mod tests {
     }
 
     #[test]
+    fn style_newline_separated() {
+        assert_style_snapshot!(
+            r#"
+            style {
+                padding: 16px
+                color: red
+            }
+            "#
+        );
+    }
+
+    #[test]
+    fn style_newline_separated_expr_value() {
+        assert_style_snapshot!(
+            r#"
+            style {
+                color: theme.text
+                padding: 8px
+            }
+            "#
+        );
+    }
+
+    #[test]
+    fn style_newline_separated_nested() {
+        assert_style_snapshot!(
+            r#"
+            style {
+                ":hover": { color: red }
+                "@media (max-width: 600px)": { padding: 8px }
+            }
+            "#
+        );
+    }
+
+    #[test]
+    fn style_no_comma_same_line() {
+        assert_style_snapshot!("style { padding: 16px color: red }");
+    }
+
+    #[test]
     fn style_with_comments() {
         assert_style_snapshot!(
             r#"
@@ -326,6 +386,16 @@ mod tests {
         assert_style_snapshot!("style { margin: 0px }");
     }
 
+    #[test]
+    fn style_dangling_exponent_is_dimension() {
+        assert_style_snapshot!("style { a: 1e }");
+    }
+
+    #[test]
+    fn style_exponent_unitless() {
+        assert_style_snapshot!("style { a: 1e5 }");
+    }
+
     // ---- expression values
 
     #[test]
@@ -371,6 +441,16 @@ mod tests {
     #[test]
     fn style_binop_value() {
         assert_style_snapshot!("style { width: base * 2 }");
+    }
+
+    #[test]
+    fn style_rem_operator() {
+        assert_style_snapshot!("style { width: 10 % 3 }");
+    }
+
+    #[test]
+    fn style_rem_operator_tight_right() {
+        assert_style_snapshot!("style { width: 10 %3 }");
     }
 
     #[test]
@@ -500,12 +580,22 @@ mod tests {
     }
 
     #[test]
-    fn error_missing_comma() {
+    fn error_entry_separator() {
+        assert_style_error_snapshot!("style { padding: 16px 8px }");
+    }
+
+    #[test]
+    fn error_semicolon_separator() {
+        assert_style_error_snapshot!("style { padding: 16px; color: red }");
+    }
+
+    #[test]
+    fn error_newline_non_key() {
         assert_style_error_snapshot!(
             r#"
             style {
                 padding: 16px
-                color: red
+                (x)
             }
             "#
         );
