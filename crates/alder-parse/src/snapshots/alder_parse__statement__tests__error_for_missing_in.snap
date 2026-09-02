@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "for item of items { }"
+---
+For(
+    In(
+        1,
+        10,
+    ),
+    1,
+    1,
+)
