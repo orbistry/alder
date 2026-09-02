@@ -139,10 +139,16 @@ impl<'a> Parser<'a> {
 }
 
 /// Snapshot test macro for successful template parsing.
-// TODO(wave4): §7.1 has this pair call `expression()`; until
-// `expression/mod.rs` dispatches `primary` to `template`, it calls
-// `template(start)` directly (plus the trailing chomp `expression` would
-// do) so the non-hole tests run now. The snapshots are identical either way.
+// TODO(wave4): §7.1 has this pair call `expression()`. Until
+// `expression/mod.rs` dispatches `primary` to `template`, that would send
+// all 19 tests into `todo!()` and force `#[ignore]` on every one of them,
+// so both macros call `template(start)` directly (plus the trailing chomp
+// `expression` does) and only the hole tests are ignored. The snapshots
+// are byte-identical either way (`template` already wraps errors as
+// `Expr::Template(_, row, col)`). Wave 4 step 4.2 (§9) makes the
+// mechanical swap in both macros: replace `.template(start)` with
+// `.expression()` and delete the `let start = …` and `parser.chomp();`
+// lines; no snapshot changes.
 #[cfg(test)]
 macro_rules! assert_template_snapshot {
     ($code:expr) => {{
@@ -248,6 +254,8 @@ mod tests {
         assert_template_snapshot!("`outer ${`inner ${x}`} done`");
     }
 
+    // Snapshot committed and hand-checked (record 1:5-1:13, `x` 1:7-1:8,
+    // `1` 1:10-1:11, no empty text parts); un-ignoring must not change it.
     #[test]
     #[ignore = "waits for expression/mod.rs"]
     fn record_in_hole() {
