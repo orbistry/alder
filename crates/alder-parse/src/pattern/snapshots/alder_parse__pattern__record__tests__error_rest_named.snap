@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/pattern/record.rs
+description: "{ ..r }"
+---
+Record(
+    End(
+        1,
+        5,
+    ),
+    1,
+    1,
+)

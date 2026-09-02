@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: "=>"
+---
+Start(
+    1,
+    1,
+)

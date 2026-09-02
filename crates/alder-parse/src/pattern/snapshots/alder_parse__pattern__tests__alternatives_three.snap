@@ -1,0 +1,102 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: Red | Green | Blue
+---
+[
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 4,
+            },
+        },
+        value: Ctor {
+            path: Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 1,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                        },
+                        value: "Red",
+                    },
+                ],
+            },
+            args: [],
+        },
+    },
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: Ctor {
+            path: Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 7,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                        },
+                        value: "Green",
+                    },
+                ],
+            },
+            args: [],
+        },
+    },
+    Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 15,
+            },
+            end: Position {
+                line: 1,
+                column: 19,
+            },
+        },
+        value: Ctor {
+            path: Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 19,
+                            },
+                        },
+                        value: "Blue",
+                    },
+                ],
+            },
+            args: [],
+        },
+    },
+]

@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/pattern/ctor.rs
+description: "Foo::"
+---
+PathMember(
+    1,
+    6,
+)

@@ -1,0 +1,10 @@
+---
+source: crates/alder-parse/src/pattern/mod.rs
+description: _foo
+---
+WildcardNotVar(
+    "_foo",
+    4,
+    1,
+    1,
+)

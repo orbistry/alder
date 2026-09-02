@@ -1,0 +1,19 @@
+---
+source: crates/alder-parse/src/pattern/tuple.rs
+description: "(x,)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 2,
+        },
+        end: Position {
+            line: 1,
+            column: 3,
+        },
+    },
+    value: Var(
+        "x",
+    ),
+}

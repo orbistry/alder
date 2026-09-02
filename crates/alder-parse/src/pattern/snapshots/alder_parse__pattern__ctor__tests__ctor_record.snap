@@ -1,0 +1,70 @@
+---
+source: crates/alder-parse/src/pattern/ctor.rs
+description: "Rect { width, height }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: CtorRecord {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: "Rect",
+                },
+            ],
+        },
+        fields: [
+            FieldPattern {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                    },
+                    value: "width",
+                },
+                pattern: None,
+            },
+            FieldPattern {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 21,
+                        },
+                    },
+                    value: "height",
+                },
+                pattern: None,
+            },
+        ],
+        rest: None,
+    },
+}

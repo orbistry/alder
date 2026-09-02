@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/pattern/tuple.rs
+description: "(a, b"
+---
+Tuple(
+    End(
+        1,
+        6,
+    ),
+    1,
+    1,
+)
