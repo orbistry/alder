@@ -11,6 +11,22 @@
 //! the only text dropped is a whitespace-only run containing a newline
 //! (the JSX rule, §10.22).
 //!
+//! `@` is position-dependent, and deliberately so. At a **child start**
+//! (right after `>`, a hole, a nested element or a directive block) `@` +
+//! identifier is a directive: `if` / `for` / `match` parse, `else` /
+//! `empty` are stray, any other word is `UnknownDirective` (§6.2, and the
+//! 7.2 test `error_directive_unknown`) so a typo like `@esle` is reported
+//! rather than rendered. **Inside a text run** only the five directive
+//! words (plus a non-identifier byte) end the run; every other `@` is text
+//! (§2, §10.22: `a@b.com`, `<p> @iffy</p>`). So `<p>@iffy</p>` is an error
+//! while `<p> @iffy</p>` is text — the same rule language.md states for
+//! disambiguation ("text never starts with `@if` …"): a run never *starts*
+//! with a directive-shaped `@word`, and `{"@"}` is the literal escape.
+//!
+//! Close tags: the name must follow `</` directly (HTML's rule: `</ p>` is
+//! `CloseName`), but whitespace and comments may separate the name from
+//! `>` (`</p >`, `</div\n>`), as they may in an open tag before `>`.
+//!
 //! Error positions: `Name` at the byte after `<`; `Attr` at the attribute
 //! name; `TagEnd` at the byte that is neither an attribute, `>` nor `/>`;
 //! `Child` where the children began (after the open tag's `>`; the nested
@@ -135,10 +151,6 @@ impl<'a> Parser<'a> {
         }
         // `children` stopped at `</`.
         self.advance_by(2);
-        if self.peek() == Some(b'>') {
-            self.advance();
-            return Ok(children);
-        }
         // `</name>` closing a fragment: say which name, not just "expected `>`".
         let name_start = self.pos;
         let (row, col) = self.position();
@@ -150,7 +162,9 @@ impl<'a> Parser<'a> {
                 col,
             });
         }
-        Err(error::Markup::CloseEnd(row, col))
+        self.chomp();
+        self.word1(b'>', error::Markup::CloseEnd)?;
+        Ok(children)
     }
 
     /// Attributes up to and including `>` or `/>`; the bool is `self_closing`.
@@ -236,6 +250,12 @@ impl<'a> Parser<'a> {
 
     /// Text mode loop until `</` (CloseTag) or `}` (Brace). Stops at EOF
     /// too; the caller reports `Unclosed` / `FragmentUnclosed` / `End`.
+    ///
+    /// Elements and fragments call this with `CloseTag`. A `child_block`
+    /// cannot: its items are `ChildItem`s (`let` / `use` statements or
+    /// children, §3 / §10.23), not `Child`ren, so `child_items` in
+    /// `directive.rs` runs the same loop over `at_terminator(Brace)` and
+    /// `child(Brace)` and adds the statement case.
     pub(crate) fn children(
         &mut self,
         term: ChildTerminator,
@@ -252,7 +272,7 @@ impl<'a> Parser<'a> {
     }
 
     /// EOF, `</` (CloseTag) or `}` (Brace).
-    fn at_terminator(&self, term: ChildTerminator) -> bool {
+    pub(super) fn at_terminator(&self, term: ChildTerminator) -> bool {
         match (self.peek(), term) {
             (None, _) => true,
             (Some(b'<'), ChildTerminator::CloseTag) => self.peek_at(1) == Some(b'/'),
@@ -261,14 +281,19 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// One child; None = droppable whitespace run. The cursor is not on the
-    /// loop's terminator (the caller checked it, which is why `term` is not
-    /// consulted here), so `</` and `}` are the wrong terminator: a close
-    /// tag inside a `child_block`, a bare `}` in an element.
+    /// One child; None = droppable whitespace run. The caller has already
+    /// checked `at_terminator(term)`, so a `</` or `}` seen here is the
+    /// *other* terminator — a close tag inside a `child_block`, a bare `}`
+    /// in an element — and an error; `term` only guards that invariant.
     pub(crate) fn child(
         &mut self,
-        _term: ChildTerminator,
+        term: ChildTerminator,
     ) -> Result<Option<&'a Located<Child<'a>>>, error::Child<'a>> {
+        debug_assert!(
+            !self.at_terminator(term),
+            "child() called on its own terminator {term:?} at {:?}",
+            self.position()
+        );
         let start = self.get_position();
         let (row, col) = self.position();
         match self.peek() {
@@ -360,7 +385,8 @@ impl<'a> Parser<'a> {
     /// The close name is lexed by its own shape (`dashed_name` for a
     /// lowercase start, `path` for an uppercase one) and compared as raw
     /// text with the opener, so `<div></Div>` is a `CloseMismatch` rather
-    /// than a `CloseName`.
+    /// than a `CloseName`. Whitespace (and comments) may precede the `>`,
+    /// as in an open tag; `CloseEnd` is reported after them.
     fn closing_tag(&mut self, name: Located<ElementName<'a>>) -> Result<(), error::Markup<'a>> {
         self.word2(b'<', b'/', error::Markup::CloseName)?;
         let name_start = self.pos;
@@ -377,6 +403,7 @@ impl<'a> Parser<'a> {
                 col,
             });
         }
+        self.chomp();
         self.word1(b'>', error::Markup::CloseEnd)
     }
 
@@ -613,6 +640,23 @@ mod tests {
         assert_markup_snapshot!("<div><>a</></div>");
     }
 
+    // ---- close tags -------------------------------------------------------
+
+    #[test]
+    fn close_tag_space_before_end() {
+        assert_markup_snapshot!("<p>x</p >");
+    }
+
+    #[test]
+    fn close_tag_newline_before_end() {
+        assert_markup_snapshot!("<div></div\n>");
+    }
+
+    #[test]
+    fn fragment_close_space_before_end() {
+        assert_markup_snapshot!("<>x</ >");
+    }
+
     // ---- text -------------------------------------------------------------
 
     #[test]
@@ -647,6 +691,14 @@ mod tests {
     #[test]
     fn text_with_at_sign() {
         assert_markup_snapshot!("<a>mail a@b.com or @iffy</a>");
+    }
+
+    // `@iffy` after a space is inside a text run, so it is text; the same
+    // word at a child start is `UnknownDirective` (module doc,
+    // `error_directive_unknown_after_hole`).
+    #[test]
+    fn text_at_word_after_space() {
+        assert_markup_snapshot!("<p> @iffy</p>");
     }
 
     #[test]
@@ -769,6 +821,13 @@ mod tests {
         assert_markup_error_snapshot!("<div></>");
     }
 
+    // The close name must follow `</` directly (HTML's rule).
+    #[test]
+    fn error_close_name_space() {
+        assert_markup_error_snapshot!("<div></ div>");
+    }
+
+    // `CloseEnd` is reported after the whitespace, at the offending byte.
     #[test]
     fn error_close_end() {
         assert_markup_error_snapshot!("<div></div x>");
@@ -779,8 +838,15 @@ mod tests {
         assert_markup_error_snapshot!("<div>text");
     }
 
+    // The inner `<p>` reaches EOF: `Unclosed` for `p`, not for `div`.
     #[test]
     fn error_unclosed_nested() {
+        assert_markup_error_snapshot!("<div><p>x");
+    }
+
+    // `</div>` closes the inner `<p>`: a mismatch, not an unclosed tag.
+    #[test]
+    fn error_close_mismatch_nested() {
         assert_markup_error_snapshot!("<div><p>x</div>");
     }
 

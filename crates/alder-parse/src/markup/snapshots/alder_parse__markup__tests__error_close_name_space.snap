@@ -1,11 +1,11 @@
 ---
 source: crates/alder-parse/src/markup/mod.rs
-description: "<div></div x>"
+description: "<div></ div>"
 ---
 Markup(
-    CloseEnd(
+    CloseName(
         1,
-        12,
+        8,
     ),
     1,
     1,
