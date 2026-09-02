@@ -26,8 +26,9 @@ src/routes/
 │       ├── +page.server.ald
 │       └── +server.ald        # HTTP handlers for /users/:id
 ├── api/health/+server.ald     # endpoint with no page
-└── lib/
-    └── users.remote.ald       # remote functions callable from anywhere
+├── lib/
+│   └── users.remote.ald       # remote functions callable from anywhere
+└── hooks.server.ald           # app-wide server hooks (auth, request setup)
 ```
 
 - `+page.ald` exports a `page` component and may export a universal
@@ -48,6 +49,38 @@ src/routes/
 - API-only packages can use a code-defined router builder (hono-like)
   with typed path params parsed from the string literal. Both systems
   share handler and middleware types.
+
+## Server hooks
+
+`src/hooks.server.ald` holds app-wide server hooks, as in SvelteKit. This
+is where authentication, request-scoped context, and error reporting are
+handled centrally instead of in every `load`.
+
+```alder
+// src/hooks.server.ald
+pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) -> Task[Response]) -> Task[Response] {
+    let session = Auth.fromCookie(event.cookies).await
+    provide Session = session {
+        resolve(event).await
+    }
+}
+
+pub fn handleError(error: Error, event: RequestEvent) -> ErrorResponse { ... }
+pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) -> Task[Response] { ... }
+```
+
+- `handle` wraps every request: pages, endpoints, remote functions, and
+  form actions. Values provided here (`provide Session = ...`) are
+  available through `use Session` in every `load`, action, and remote
+  function for that request, which replaces SvelteKit's untyped
+  `event.locals` with typed context.
+- `handleError` centralizes unexpected-error reporting; expected errors
+  stay `Result` values and never reach it.
+- `handleFetch` intercepts server-side `fetch` calls made during `load`.
+- `src/hooks.client.ald` mirrors this for the browser (`handleError`,
+  `init`).
+- **Open:** a `sequence` helper for composing several `handle` hooks, and
+  per-subtree hooks (SvelteKit does not have them either).
 
 ## Page options
 

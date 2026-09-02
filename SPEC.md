@@ -282,6 +282,7 @@ the solver. Snapshot tests per construct as today.
 - [ ] SSR renderer and hydration in the kernel
 - [ ] Folder routing: `+page.ald`, `+page.server.ald`, `+layout.ald`, `+layout.server.ald`, `+server.ald`, `+error.ald`, typed `Routes` and generated `PageData`
 - [ ] `*.remote.ald` modules and `+page.server.ald` as server boundaries, reachability analysis, typed HTTP stubs
+- [ ] `hooks.server.ald` / `hooks.client.ald` with `handle` providing typed request context
 - [ ] Module stores, request-scoped on the server
 - [ ] SvelteKit page options (`prerender`, `ssr`, `csr`) inherited down the route tree
 - [ ] `alder dev` on vendored miniflare; `alder deploy` generating `wrangler.jsonc`
