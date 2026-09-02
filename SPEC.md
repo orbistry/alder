@@ -1,35 +1,74 @@
 # Alder Language Specification
 
-## Current State
+**Status: current direction, everything provisional.** The language was
+redesigned on 2026-09-01. The pipeline below is a working Elm port; the
+surface syntax it parses today is Elm's and will be replaced by the
+grammar at the end of this document. Design rationale lives in `docs/`:
 
-**Parser complete!** Next phase: project configuration and driver infrastructure.
-
----
+- `docs/language.md` — syntax and semantics
+- `docs/runtime.md` — targets, JS output, kernel, embedded V8, Cloudflare
+- `docs/web.md` — routing, rendering, reactivity, styles, forms, TUI
+- `docs/data.md` — tables, queries, migrations
+- `docs/tooling.md` — CLI, dev server, tests, packages
 
 ## Compilation Target
 
-Alder compiles to **JavaScript**, with a special focus on targeting **Cloudflare** (Workers and the surrounding platform).
+Alder compiles to **JavaScript**, with a special focus on targeting
+**Cloudflare**, and also runs as a general-purpose language on an
+embedded V8 (`deno_core`) for servers and TUIs.
 
-**Key concepts:**
-- **Fork of Elm:** The compiler is a Rust port of the Elm compiler, but the language diverges deliberately.
-- **No TEA:** The runtime model is React-like rather than The Elm Architecture.
-- **SSR:** Server-side rendering is a first-class target.
-- **Built-in data layer:** A Drizzle-like query layer ships with the language.
-- **Curly-brace syntax:** Surface syntax uses braces instead of Elm's layout-sensitive syntax.
-
-Source files use the `.ald` extension.
+- Fork of the Elm compiler, ported to Rust. Type inference and rows are
+  Elm's; syntax and runtime semantics are not.
+- No TEA. Components with compile-time-tracked signals, SSR, stores.
+- Built-in data layer: `table`, SQL-shaped queries, migrations, `schema`.
+- Curly-brace syntax, `fn`/`enum`/`match`/`pub`/`trait`, `.await`,
+  open `:tag` errors on `Result`, real macros.
+- Source files use `.ald`; interface cache files use `.aldi` under `.alder/`.
 
 ---
 
-## Next Milestones
+## Pipeline
 
-### Phase 1: Project Configuration (`alder-config`) ✅
+Elm's pipeline per module: parse → canonicalize → constrain → solve →
+interface, then codegen. Interfaces only exist for solved modules; the
+driver compiles in dependency order.
+
+```
+orbistry/alder/
+├── crates/
+│   ├── alder-region/           # Source spans/positions
+│   ├── alder-source/           # Parsed AST types
+│   ├── alder-parse/            # Parser (to be rewritten for the new grammar)
+│   ├── alder-ast/              # Canonical/typed AST types
+│   ├── alder-can/              # Canonicalization
+│   ├── alder-constrain/        # Type constraint generation
+│   ├── alder-solve/            # Constraint solving (type inference)
+│   ├── alder-config/           # Project configuration (JSONC)
+│   ├── alder-driver/           # Build orchestration, FileSource
+│   ├── alder-codegen/          # JavaScript code generation (TBD)
+│   ├── alder-language-server/  # LSP implementation
+│   └── alder-cli/              # CLI binary (`alder`), embeds deno_core (TBD)
+├── docs/                       # Design documents
+├── tasks/                      # Workspace tasks (currently a stub)
+├── .alder/                     # Build artifacts (gitignored)
+└── alder.jsonc                 # Project config
+```
+
+---
+
+## Foundation (Elm port, done)
+
+These crates are complete against Elm's semantics and Elm's syntax. They
+are kept through the redesign and adapted incrementally.
+
+### Project configuration (`alder-config`) ✅
 
 **Goal:** Define project configuration types and parsing.
 
 **Status:** Complete
 
 **Architecture Decisions:**
+
 - **Format:** JSONC (`alder.jsonc`) - JSON with comments, parsed via `jsonc-parser`
 - **Config types:** Three separate types: `application`, `package`, `workspace`
 - **Field naming:** camelCase (`sourceDirectories`, `exposedModules`, `testDependencies`)
@@ -78,6 +117,7 @@ Source files use the `.ald` extension.
 ```
 
 **Crate contents:**
+
 - `config.rs` - Config, Application, Package, Workspace, Dependency types
 - `parse.rs` - AST-based JSONC parsing with position tracking
 - `error.rs` - Position-aware error types
@@ -89,11 +129,12 @@ Source files use the `.ald` extension.
 
 ---
 
-### Phase 2: Driver & Build System (`alder-driver`) ✅
+### Driver and build system (`alder-driver`) ✅
 
 **Goal:** File I/O abstraction, dependency graph, caching infrastructure.
 
 **Architecture Decisions:**
+
 - **Async model:** Runtime-agnostic (async traits, entry points pick runtime)
 - **FileSource trait:** In driver crate with implementations:
   - `FileSystemSource` (native, `#[cfg(not(wasm32))]`)
@@ -110,6 +151,7 @@ Source files use the `.ald` extension.
 - **Arenas:** Per-module bumpalo arenas
 
 **Implementation (`crates/alder-driver/`):**
+
 - `source.rs`: `FileSource` trait + `FileSystemSource`, `InMemorySource`, `OverlaySource`
 - `database.rs`: Compilation database with source caching and dependency tracking
 - `project.rs`: Project loading from `alder.jsonc`, workspace member discovery
@@ -119,17 +161,19 @@ Source files use the `.ald` extension.
 - `error.rs`: Driver error types with miette diagnostics
 
 **CLI (`crates/alder-cli/`):**
+
 - `alder check [PATH]` - Type check a Alder project
 
 **Reference:** `polarity/lang/driver/`, `elm/builder/src/Build.hs`
 
 ---
 
-### Phase 3: Canonicalization (`alder-can`)
+### Canonicalization (`alder-can`) ✅
 
 **Goal:** Name resolution, scope checking, desugar syntax.
 
 **Transforms:**
+
 - Resolve all names to fully qualified form
 - Check for duplicate definitions
 - Validate imports (module exists, exposed items exist)
@@ -141,18 +185,20 @@ Source files use the `.ald` extension.
 
 ---
 
-### Phase 4: Type Inference (`alder-constrain` + `alder-solve`)
+### Type inference (`alder-constrain` + `alder-solve`) ✅
 
 **Goal:** Hindley-Milner type inference via constraint generation and
 rank-based solving, ported from Elm's `Type/*`.
 
 **alder-constrain:**
+
 - Generate type constraints from the canonical AST, with the expectation
   contexts Elm uses for error messages (`Expected`/`Category`/...)
 - Pattern constraints with binding headers
 - Shared vocabulary: union-find variables, descriptors, inference types
 
 **alder-solve:**
+
 - Weight-balanced union-find unification with number/comparable/appendable
   supertypes, extensible records, and aliases
 - Let-polymorphism via rank-based generalization (Elm's pools)
@@ -166,434 +212,307 @@ rank-based solving, ported from Elm's `Type/*`.
 
 ---
 
-### Phase 5: JavaScript Code Generation
+---
 
-**Goal:** Compile typed AST to JavaScript suitable for Cloudflare Workers, including SSR output.
+## Roadmap
 
-**Crate:** TBD (alder-codegen? alder-js?)
+Ordered. Each milestone is the task list for that phase; check items off
+as they land and update the grammar section alongside.
+
+### M1: Parser rewrite (`alder-parse`)
+
+New parser for the grammar below, keeping `alder-ast`, `alder-can`, and
+the solver. Snapshot tests per construct as today.
+
+- [ ] Lexer: `//` comments, template literals, `:tag` tokens, `#[`, `::`, `=>`, `|>`, `??`, `?`
+- [ ] Items: `pub`, path-first `import` with `.{ }`/`.*`/`as`, re-exports (`pub import`)
+- [ ] `fn` declarations and lambdas, return type after params
+- [ ] Statements: `let`/`let mut`, assignment and compound assignment, `for`, `while`, `loop`, `break`/`continue` with values, `return`
+- [ ] Expressions: blocks, `if`/`else if`, `match` with `=>` and guards, `|>`, `.await`, `?`, `??`, calls, `_` placeholders, field/tuple access, paths (`Option::Some`)
+- [ ] Literals: numbers (JS semantics), template literals, arrays, tuples, records with spread and optional fields
+- [ ] Types: `Name<a>`, `fn(A) B`, tuples, records with `?` fields and rows, error rows `[:tag(A) | r]`
+- [ ] `type` aliases, `enum` with tuple and record variants
+- [ ] `trait` and `impl` (Haskell-style, HKT params, associated types, default bodies)
+- [ ] `error` groups
+- [ ] `#[attr]` attributes on items
+- [ ] `tests { }` blocks and `test "name" { }`
+- [ ] `#[extern(...)]` bodiless functions and `#[extern] type`
+- [ ] Typed markup expressions with `{expr}`, `{if}`, `{for}`, `{match}` blocks
+- [ ] `component`, `table`, `schema`, `style`, `query`, `macro`, `comptime` (grammar reserved; bodies may be parsed later)
+- [ ] Port/rewrite `Reporting/Error/Syntax.hs`-style error hierarchy for the new constructs
+
+### M2: Core language to JavaScript
+
+- [ ] Adapt `alder-can` to namespaced constructors, `pub` visibility, statements, `mut`
+- [ ] `alder-codegen`: JS emission for the core language; decide enum/record representation
+- [ ] Prelude and stdlib skeleton: `Option`, `Result`, `Array`, `String`, `Number`, `BigInt`, `Map`
+- [ ] JS kernel skeleton and `extern` binding
+- [ ] Embed `deno_core` in `alder-cli`; `alder run` for `server` target
+- [ ] rolldown integration for `alder build`
+- [ ] `alder fmt`
+
+### M3: Traits
+
+- [ ] Type-class constraints in `alder-constrain`/`alder-solve` (single param)
+- [ ] Higher-kinded type parameters
+- [ ] Dictionary-passing codegen with static resolution where possible
+- [ ] Derives via macros (`Show`, `Eq`, `Json`)
+- [ ] Orphan rule checking in `alder-can`
+
+### M4: Errors and async
+
+- [ ] Row-typed `:tag` errors in `Result`'s error position, `?` row merging
+- [ ] `error` groups and their unification with open rows
+- [ ] Exhaustiveness on closed groups, `_` requirement on open rows
+- [ ] Inferred `Task` from `.await`; generator codegen; fiber scheduler in the kernel
+- [ ] `provide`/`use` context resolution and compile-time provider checking
+
+### M5: Macros and comptime
+
+- [ ] Syntax API (`TokenStream`/AST) exposed to Alder
+- [ ] Compile macros to JS and execute in embedded V8 during the build
+- [ ] `quote`/`unquote`, attribute/derive/function-like forms, `comptime` blocks
+- [ ] Hygiene, caching, sandboxing
+
+### M6: Web vertical slice
+
+- [ ] Typed markup checking against an HTML schema
+- [ ] `component` and `state`, compile-time dependency tracking, DOM codegen
+- [ ] SSR renderer and hydration in the kernel
+- [ ] Folder routing: `+page.ald`, `+layout.ald`, `+server.ald`, typed `Routes`
+- [ ] `#[server]` split with reachability analysis and RPC stubs
+- [ ] Module stores, request-scoped on the server
+- [ ] `#[static]`/`#[server]`/`#[client]` render modes
+- [ ] `alder dev` on vendored miniflare; `alder deploy` generating `wrangler.jsonc`
+- [ ] Cloudflare bindings via traits and attributes
+
+### M7: Data layer
+
+- [ ] `table` declarations with dialect modules (`@alder/sqlite`, `@alder/postgres`, `@alder/mysql`)
+- [ ] SQL-shaped query expressions, type-checked projections, desugar to chain API
+- [ ] `alder db generate`/`migrate`/`push` with diff-generated SQL
+- [ ] D1 and Hyperdrive drivers; embedded SQLite for `server`/`tui`
+- [ ] `schema` declarations with `from table` and validation rules
+
+### M8: Styles, forms, API
+
+- [ ] `style` blocks to atomic CSS with typed properties
+- [ ] `Form`/`Field` components typed from `schema`
+- [ ] Typed client generation from `+server.ald`; `.d.ts` emission
+- [ ] Router builder for API-only packages
+
+### M9: Tooling and ecosystem
+
+- [ ] `test`/`tests` with power-assert, per-target runners
+- [ ] Package registry, `alder publish`, semver enforcement by API diff
+- [ ] Language server features on the new grammar; WASM playground
+- [ ] Documentation generator
+
+### M10: TUI
+
+- [ ] TUI element vocabulary and Rust-side layout/input in deno_core
+- [ ] Terminal renderer over the shared signal graph
 
 ---
 
-### Phase 6: Runtime
+## Grammar (draft)
 
-**Goal:** React-like runtime (no TEA), SSR support, and the built-in Drizzle-like data layer.
-
----
-
-### Phase 7: CLI (`alder-cli`)
-
-**Goal:** Full developer toolkit CLI — a single `alder` binary.
-
-**Commands:**
-- `alder check` - Type-check without generating JavaScript
-- `alder build` - Compile to JavaScript
-- `alder test` - Run tests
-- `alder lsp` - Start language server
-- `alder init` - Initialize new project
-- `alder repl` - True stateful REPL
-- `alder fmt` - Format source files
-- `alder docs` - Generate documentation
-
-**Compiler version management:**
-- Projects specify `"compiler": "X.Y.Z"` in `alder.jsonc`
-- If the running `alder` binary matches, it compiles directly
-- If not, checks `~/.alder/versions/<version>/alder` for a cached copy and exec's it
-
-**Architecture:**
-- Uses clap for argument parsing
-- Entry point picks tokio runtime
-- Thin wrapper around driver/compiler
-
-**Reference:** `polarity/app/src/cli/`
-
----
-
-### Phase 8: Language Server (`alder-language-server`)
-
-**Goal:** LSP implementation that works native and in WASM.
-
-**Architecture Decisions:**
-- **Library:** tower-lsp with `runtime-agnostic` feature
-- **Features:** Diagnostics, hover, goto-definition, formatting, code-actions
-- **Invalidation:** Reverse dependency tracking
-- **Unsaved buffers:** InMemorySource overlays FileSystemSource
-
-**Reference:** `polarity/lang/lsp/`
-
----
-
-### Phase 9: Playground (`web/`)
-
-**Goal:** Browser-based Alder playground with LSP support.
-
-**Architecture Decisions:**
-- **Editor:** Monaco + wasm-bindgen
-- **File loading:** HTTP fetch from server
-- **LSP transport:** JSON-RPC over streams
-
-**Structure:**
-- `web/crates/lsp-wasm/` - WASM LSP entry point
-- `web/packages/web-editor/` - Monaco editor UI
-
-**Reference:** `polarity/web/`
-
----
-
-### Phase 10: Package Registry & Dependency Resolution
-
-**Goal:** Publish packages, resolve dependencies.
-
-**Architecture Decisions:**
-- **Solver:** pubgrub crate
-- **Package naming:** author/project format
-- **Registry:** HTTP API (design TBD)
-
----
-
-## Crate Organization
-
-```
-orbistry/alder/
-├── crates/
-│   ├── alder-region/           # Source spans/positions
-│   ├── alder-source/           # Parsed AST types
-│   ├── alder-parse/            # Parser
-│   ├── alder-ast/              # Canonical/typed AST types
-│   ├── alder-can/              # Canonicalization
-│   ├── alder-constrain/        # Type constraint generation
-│   ├── alder-solve/            # Constraint solving (type inference)
-│   ├── alder-config/           # Project configuration (JSONC)
-│   ├── alder-driver/           # Build orchestration, FileSource
-│   ├── alder-codegen/          # JavaScript code generation (TBD)
-│   ├── alder-language-server/  # LSP implementation
-│   └── alder-cli/              # CLI binary (`alder`)
-├── web/                       # Playground (TBD)
-│   ├── crates/
-│   │   └── lsp-wasm/
-│   └── packages/
-│       └── web-editor/
-├── .alder/                     # Build artifacts (gitignored)
-└── alder.json                  # Project config
-```
-
----
-
-## Error Reporting
-
-**Library:** miette
-
-**Features:**
-- Rich terminal diagnostics with source snippets
-- JSON output via miette's serialization
-- Suggestion system (port Elm's Levenshtein-based Suggest.hs)
-
-**Reference:** `elm/compiler/src/Reporting/`, `polarity` (uses miette)
-
----
-
-## Current Working Files (Parser - Complete)
-
-Working files:
-- `crates/alder-parse/src/lib.rs` - Parser struct, combinators (`one_of`, `in_context`, `specialize`, `word1`, `word2`)
-- `crates/alder-parse/src/number.rs` - `number_literal` primitive
-- `crates/alder-parse/src/string.rs` - `string_literal` primitive
-- `crates/alder-parse/src/keyword.rs` - reserved words, keyword parsers (`keyword_if`, `keyword_then`, etc.)
-- `crates/alder-parse/src/space.rs` - whitespace, comments, indentation
-- `crates/alder-parse/src/expression/mod.rs` - `expression`, `term`, `possibly_negative_term`, `chomp_expr_end`
-- `crates/alder-parse/src/expression/accessor.rs` - `.field` accessor, `foo.bar` field access chains
-- `crates/alder-parse/src/expression/lambda.rs` - `\args -> body` lambda expressions
-- `crates/alder-parse/src/expression/if_.rs` - `if/then/else` expressions
-- `crates/alder-parse/src/expression/case.rs` - `case/of` expressions
-- `crates/alder-parse/src/expression/let_.rs` - `let/in` expressions
-- `crates/alder-parse/src/expression/number.rs` - `number` expression + tests
-- `crates/alder-parse/src/expression/string.rs` - `string` expression + tests
-- `crates/alder-parse/src/expression/variable.rs` - `variable`, `lower_name`, `upper_name`, `foreign_alpha` + tests
-- `crates/alder-parse/src/expression/list.rs` - `list` expression + tests
-- `crates/alder-parse/src/expression/tuple.rs` - `tuple`, unit, parens + tests
-- `crates/alder-parse/src/expression/record.rs` - `record`, record update + tests
-- `crates/alder-parse/src/pattern/mod.rs` - `pattern_term`, `pattern_expr` (cons, as, ctor args)
-- `crates/alder-parse/src/pattern/term.rs` - wildcard, var, ctor, number, string
-- `crates/alder-parse/src/pattern/record.rs` - `{ x, y, z }`
-- `crates/alder-parse/src/pattern/tuple.rs` - `()`, `(a, b)`
-- `crates/alder-parse/src/pattern/list.rs` - `[]`, `[a, b, c]`
-- `crates/alder-parse/src/type_.rs` - `type_term`, `type_expr` (variables, named, function, tuple, record)
-- `crates/alder-parse/src/declaration/mod.rs` - `declaration`, `Decl` enum, orchestration
-- `crates/alder-parse/src/declaration/value.rs` - value definitions with type annotations
-- `crates/alder-parse/src/declaration/type_alias.rs` - `type alias Name a = Type`
-- `crates/alder-parse/src/declaration/union.rs` - `type Name a = Ctor1 | Ctor2`
-- `crates/alder-parse/src/declaration/infix.rs` - `infix left 6 (|>) = apR`
-- `crates/alder-parse/src/exposing.rs` - `(..)`, `(foo, Bar(..), (+))`
-- `crates/alder-parse/src/import.rs` - `import Foo as F exposing (bar)`
-- `crates/alder-parse/src/module.rs` - full module parsing (header, imports, declarations)
-- `crates/alder-parse/src/error.rs` - Error hierarchy
-
-## File Mappings
-
-Elm parser modules → Alder parser modules:
-
-| Elm (`elm/compiler/src/Parse/`) | Alder (`crates/alder-parse/src/`) |
-|---------------------------------|---------------------------------|
-| `Primitives.hs`                 | `lib.rs` (Parser struct)        |
-| `Module.hs`                     | `module.rs`                     |
-| `Declaration.hs`                | `declaration.rs`                |
-| `Expression.hs`                 | `expression/`                   |
-| `Pattern.hs`                    | `pattern/`                      |
-| `Type.hs`                       | `type_.rs`                      |
-| `Number.hs`                     | `number.rs`                     |
-| `String.hs`                     | `string.rs`                     |
-| `Variable.hs`                   | `expression/variable.rs`        |
-| `Symbol.hs`                     | `symbol.rs`                     |
-| `Keyword.hs`                    | `keyword.rs`                    |
-| `Space.hs`                      | `space.rs`                      |
-| `Reporting/Error/Syntax.hs`     | `error.rs`                      |
-
-AST types: `crates/alder-source/src/lib.rs`
-
-## Implementation Progress
-
-### Parser Infrastructure
-- [x] Parser struct with state tracking (`Parser<'a>` in lib.rs)
-- [x] Basic methods (peek, advance, position)
-- [x] Snapshot test infrastructure (insta macros)
-- [x] Error type hierarchy (from Elm's Syntax.hs) - `error.rs`
-- [x] `one_of` / `one_of_with_fallback` combinators
-- [x] `in_context` / `specialize` for error wrapping
-- [x] `word1` / `word2` for byte matching
-- [x] Whitespace and comment handling (`space.rs`)
-- [x] Line comments (`--`)
-- [x] Multi-line comments (`{- -}`) with nesting
-- [x] Indentation checking
-
-### Literals
-- [x] Integer literals (`number.rs`)
-- [x] String literals (single-line) (`string.rs`)
-- [x] String literals (multi-line) (`string.rs`)
-
-### Identifiers
-- [x] Lowercase variables (`expression/variable.rs`)
-- [x] Uppercase variables (constructors)
-- [x] Qualified names (Module.name)
-- [x] Operators (`symbol.rs`)
-
-### Basic Expressions
-- [x] Unit `()` (`expression/tuple.rs`)
-- [x] Tuples (`expression/tuple.rs`)
-- [x] Lists (`expression/list.rs`)
-- [x] Records (`expression/record.rs`)
-- [x] Record update (`expression/record.rs`)
-
-### Patterns
-- [x] Wildcard `_` (`pattern/term.rs`)
-- [x] Variable binding (`pattern/term.rs`)
-- [x] Constructor patterns (`pattern/term.rs`, `pattern/mod.rs`)
-- [x] Tuple patterns (`pattern/tuple.rs`)
-- [x] List patterns (`pattern/list.rs`)
-- [x] Record patterns (`pattern/record.rs`)
-- [x] As-patterns (`pattern/mod.rs`)
-- [x] Cons patterns (`pattern/mod.rs`)
-
-### Types
-- [x] Type variables (`type_.rs`)
-- [x] Named types (`type_.rs`)
-- [x] Function types (`type_.rs`)
-- [x] Tuple types (`type_.rs`)
-- [x] Record types (`type_.rs`)
-
-### Expressions
-- [x] term / number (`expression/number.rs`)
-- [x] term / string (`expression/string.rs`)
-- [x] term / variable (`expression/variable.rs`)
-- [x] Accessor `.field` (`expression/accessor.rs`)
-- [x] Field access `foo.bar.baz` (`expression/accessor.rs`)
-- [x] Negation `-expr` (`expression/mod.rs`)
-- [x] Function application (`expression/mod.rs`)
-- [x] Lambda expressions (`expression/lambda.rs`)
-- [x] If expressions (`expression/if_.rs`)
-- [x] Case expressions (`expression/case.rs`)
-- [x] Let expressions (`expression/let_.rs`)
-- [x] Binary operators (`expression/mod.rs`, `symbol.rs`)
-- [x] Operator sections (`expression/tuple.rs`)
-
-### Declarations
-- [x] Value definitions (`declaration/value.rs`)
-- [x] Type annotations (`declaration/value.rs`)
-- [x] Type aliases (`declaration/type_alias.rs`)
-- [x] Custom types (unions) (`declaration/union.rs`)
-- [x] Infix declarations (`declaration/infix.rs`)
-
-### Module Structure
-- [x] Module header (`module.rs`)
-- [x] Exposing list (`exposing.rs`)
-- [x] Imports (`import.rs`)
-- [x] Full module parsing (`module.rs`)
-
-### Canonicalization
-- [x] Module header canonicalization (`crates/alder-can/src/module.rs`)
-- [x] Import environment with privacy (`crates/alder-can/src/environment/foreign.rs`)
-- [x] Local env: types, ctors, vars, binops, dup detection (`crates/alder-can/src/environment/local.rs`)
-- [x] Union/alias canonicalization with free-var checks and alias cycles (`crates/alder-can/src/module.rs`)
-- [x] Pattern canonicalization (`crates/alder-can/src/pattern.rs`)
-- [x] Type/annotation canonicalization with alias dealiasing (`crates/alder-can/src/types.rs`)
-- [x] Expression canonicalization with operator desugaring (`crates/alder-can/src/expression.rs`)
-- [x] Two-phase SCC cycle detection, exact `Data.Graph.stronglyConnComp` port (`crates/alder-can/src/scc.rs`)
-- [x] Export canonicalization and interface extraction (`crates/alder-can/src/interface.rs`)
-- [x] Foreign value/binop annotations flow from solved interfaces (`crates/alder-can/src/environment/foreign.rs`)
-- [ ] Prelude / default imports (deferred to prelude design)
-
-### Type Inference
-- [x] Union-find with weight balancing and path compression (`crates/alder-constrain/src/union_find.rs`)
-- [x] `Type.Type` data half: descriptors, inference types, constraints (`crates/alder-constrain/src/type_.rs`)
-- [x] Type error data (`Type/Error.hs` + `Reporting/Error/Type.hs`, rendering deferred) (`crates/alder-constrain/src/{error,error_type}.rs`)
-- [x] Canonical type instantiation (`crates/alder-constrain/src/instantiate.rs`)
-- [x] Pattern constraint generation (`crates/alder-constrain/src/pattern.rs`)
-- [x] Expression constraint generation incl. recursive defs (`crates/alder-constrain/src/expression.rs`)
-- [x] Module constraint entry point (`crates/alder-constrain/src/module.rs`)
-- [x] Unification incl. supertypes, records, aliases (`crates/alder-solve/src/unify.rs`)
-- [x] Occurs check (`crates/alder-solve/src/occurs.rs`)
-- [x] Solver with rank-based generalization and pools (`crates/alder-solve/src/solve.rs`)
-- [x] `toAnnotation`/`toErrorType` with fresh-name generation (`crates/alder-solve/src/annotation.rs`)
-- [x] Driver pipeline: dependency-ordered builds against solved interfaces (`crates/alder-driver/src/compile.rs`)
-- [ ] Exhaustiveness checking (Elm's `Nitpick/PatternMatches.hs`, a post-solve pass)
-- [ ] Type error rendering (deferred with the rest of error reporting)
-
----
-
-## Grammar (EBNF)
-
-The grammar is built up incrementally as features are implemented.
-
-### Notation
-```
-rule      = definition ;
-( ... )   = grouping
-[ ... ]   = optional
-{ ... }   = zero or more
-|         = alternation
-"..."     = terminal string
-'...'     = terminal char
-```
+EBNF for the new syntax. Provisional; `?`-marked productions are open
+questions. Whitespace and `//` comments are insignificant except inside
+template literals and markup text.
 
 ### Lexical
 
 ```ebnf
-digit     = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' ;
-lower     = 'a' | ... | 'z' ;
-upper     = 'A' | ... | 'Z' ;
+lower_ident   = lower { ident_char } ;
+upper_ident   = upper { ident_char } ;
+ident_char    = lower | upper | digit | '_' ;
+tag           = ':' lower_ident ;                       (* error tag *)
+number        = decimal | hex | float ;                 (* JS Number semantics *)
+bigint        = decimal 'n' ;
+string        = '"' { string_char | escape } '"' ;      (* no interpolation *)
+template      = '`' { template_char | '${' expression '}' } '`' ;
+path          = upper_ident { '::' upper_ident } ;
 ```
 
-### Literals
+### Module and items
 
 ```ebnf
-number_literal = decimal_int | hex_int ;
-decimal_int    = nonzero_digit { digit } | '0' ;
-hex_int        = '0' ( 'x' | 'X' ) hex_digit { hex_digit } ;
-nonzero_digit  = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' ;
-hex_digit      = digit | 'a' | 'b' | 'c' | 'd' | 'e' | 'f'
-                       | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' ;
+module        = { item } ;
+item          = { attribute } [ 'pub' ] item_body ;
+item_body     = import | reexport | fn_decl | let_decl | type_alias | enum_decl
+              | trait_decl | impl_decl | error_decl | extern_fn | extern_type
+              | component_decl | table_decl | schema_decl | style_decl
+              | macro_decl | comptime_block | test_decl | tests_block ;
 
-string_literal = single_string | multi_string ;
-single_string  = '"' { string_char | escape } '"' ;
-multi_string   = '"""' { any_char | escape } '"""' ;
-string_char    = (* any char except '"', '\', newline *) ;
-escape         = '\' ( 'n' | 'r' | 't' | '"' | '\'' | '\' | unicode_escape ) ;
-unicode_escape = 'u' '{' hex_digit hex_digit hex_digit hex_digit [ hex_digit [ hex_digit ] ] '}' ;
+attribute     = '#[' lower_ident [ '(' [ expression { ',' expression } ] ')' ] ']' ;
+
+import        = 'import' module_path [ 'as' lower_ident | '.' import_names ] ;
+import_names  = '{' import_name { ',' import_name } [ ',' ] '}' | '*' ;
+import_name   = ( lower_ident | upper_ident ) [ 'as' ( lower_ident | upper_ident ) ] ;
+reexport      = 'import' module_path '.' import_names ;                          (* after 'pub' *)
+module_path   = '@' lower_ident '/' lower_ident { '/' lower_ident }             (* package *)
+              | '~' { '/' lower_ident } ;                                       (* this package *)
+
+fn_decl       = 'fn' lower_ident [ generics ] '(' [ params ] ')' [ type ] block ;
+generics      = '<' generic { ',' generic } '>' ;
+generic       = lower_ident [ ':' bound { '+' bound } ] | lower_ident '<' '_' { ',' '_' } '>' ;
+bound         = path ;
+params        = param { ',' param } ;
+param         = [ 'mut' ] pattern [ ':' type ] ;
+
+let_decl      = 'let' [ 'mut' ] pattern [ ':' type ] '=' expression ;
+
+type_alias    = 'type' upper_ident [ generics ] '=' type ;
+enum_decl     = 'enum' upper_ident [ generics ] '{' [ variant { ',' variant } [ ',' ] ] '}' ;
+variant       = upper_ident [ '(' type { ',' type } ')' | record_type ] ;
+
+trait_decl    = 'trait' upper_ident generics '{' { trait_item } '}' ;
+trait_item    = 'type' upper_ident
+              | 'fn' lower_ident [ generics ] '(' [ params ] ')' [ type ] [ block ] ;
+impl_decl     = 'impl' [ generics ] path '<' type { ',' type } '>' '{' { impl_item } '}' ;
+impl_item     = 'type' upper_ident '=' type | fn_decl ;
+
+error_decl    = 'error' upper_ident '{' [ tag_variant { ',' tag_variant } [ ',' ] ] '}' ;
+tag_variant   = tag [ '(' type { ',' type } ')' ] ;
+
+extern_fn     = 'fn' lower_ident [ generics ] '(' [ params ] ')' [ type ] ;   (* requires #[extern("module", "name")] *)
+extern_type   = 'type' upper_ident ;                                           (* requires #[extern] *)
+
+component_decl = 'component' upper_ident '(' [ params ] ')' block ;
+table_decl    = 'table' lower_ident '{' { column } '}' ;
+column        = lower_ident ':' expression { lower_ident [ '(' [ expression { ',' expression } ] ')' ] } ;   (* ? *)
+schema_decl   = 'schema' upper_ident [ 'from' lower_ident ] '{' { schema_item } '}' ;   (* ? *)
+schema_item   = 'pick' lower_ident { ',' lower_ident }
+              | lower_ident ':' [ type ',' ] rule { ',' rule } ;
+rule          = lower_ident [ '(' [ expression { ',' expression } ] ')' ] ;
+style_decl    = 'let' lower_ident '=' 'style' style_block ;                 (* style is an expression *)
+
+macro_decl    = 'macro' lower_ident '(' [ lower_ident { ',' lower_ident } ] ')' block ;
+comptime_block = 'comptime' block ;
+test_decl     = 'test' string block ;
+tests_block   = 'tests' '{' { item } '}' ;
+```
+
+### Statements and blocks
+
+```ebnf
+block         = '{' { statement } [ expression ] '}' ;
+statement     = let_decl
+              | 'use' path
+              | 'provide' path '=' expression block
+              | assign
+              | 'for' pattern 'in' expression block
+              | 'while' expression block
+              | 'return' [ expression ]
+              | 'break' [ expression ]
+              | 'continue'
+              | expression ;
+assign        = place ( '=' | '+=' | '-=' | '*=' | '/=' ) expression ;
+place         = lower_ident { '.' ( lower_ident | digit ) | '[' expression ']' } ;
 ```
 
 ### Expressions
 
 ```ebnf
-expression     = let_expr | case_expr | if_expr | lambda | binop_expr ;
-binop_expr     = possibly_neg_term { term } { operator binop_rhs } ;
-binop_rhs      = possibly_neg_term { term } | let_expr | case_expr | if_expr | lambda ;
-let_expr       = 'let' let_def { let_def } 'in' expression ;
-let_def        = definition | destructure ;
-definition     = lower_var [ ':' type_expr ] { pattern } '=' expression ;
-destructure    = pattern '=' expression ;
-case_expr      = 'case' expression 'of' case_branch { case_branch } ;
-case_branch    = pattern '->' expression ;
-if_expr        = 'if' expression 'then' expression 'else' expression ;
-lambda         = '\' pattern { pattern } '->' expression ;
-possibly_neg_term = '-' term | term ;
-term           = ( variable | record | tuple ) { '.' lower_var }
-               | string | number | list | accessor ;
-accessor       = '.' lower_var ;
-variable       = lower_var | upper_var | qualified_var ;
-lower_var      = lower { inner_char } ;
-upper_var      = upper { inner_char } ;
-qualified_var  = upper { inner_char } '.' ( lower_var | upper_var | qualified_var ) ;
-inner_char     = lower | upper | digit | '_' ;
-string         = string_literal ;
-number         = number_literal ;  (* no floats in Alder *)
-list           = '[' [ expr { ',' expr } ] ']' ;
-tuple          = '(' ')' | '(' operator ')' | '(' expr ')' | '(' expr ',' expr { ',' expr } ')' ;
-record         = '{' '}' | '{' lower_var '=' expr { ',' field } '}'
-               | '{' lower_var '|' field { ',' field } '}' ;
-field          = lower_var '=' expr ;
-operator       = op_char { op_char } ;  (* except reserved: . | -> = : *)
-op_char        = '+' | '-' | '*' | '/' | '=' | '.' | '<' | '>' | ':' | '&' | '|' | '^' | '?' | '%' | '!' ;
+expression    = pipe ;
+pipe          = binop { '|>' binop } ;
+binop         = unary { operator unary } ;                (* precedence table TBD; '??' lowest *)
+unary         = [ '-' | '!' ] postfix ;
+postfix       = primary { call | '.' lower_ident | '.' digit | '.await' | '?' | '[' expression ']' } ;
+call          = '(' [ expression { ',' expression } ] ')' ;
+primary       = number | bigint | string | template | '_'            (* placeholder in call args *)
+              | lower_ident | path [ '::' lower_ident ] | tag [ call ]
+              | '(' ')' | '(' expression ')' | '(' expression ',' expression { ',' expression } ')'
+              | '[' [ expression { ',' expression } ] ']'
+              | record | block | lambda | if_expr | match_expr | loop_expr
+              | 'state' '(' expression ')'
+              | 'style' style_block
+              | 'query' '{' query_expr '}' | markup
+              | macro_call ;
+lambda        = 'fn' '(' [ params ] ')' ( block | expression ) ;
+if_expr       = 'if' expression block { 'else' 'if' expression block } [ 'else' block ] ;
+match_expr    = 'match' expression '{' { match_arm } '}' ;
+match_arm     = pattern { '|' pattern } [ 'if' expression ] '=>' ( block | expression ) [ ',' ] ;
+loop_expr     = 'loop' block ;
+record        = '{' [ record_field { ',' record_field } [ ',' ] ] '}' ;
+record_field  = lower_ident [ ':' expression ] | '..' expression ;
+macro_call    = lower_ident '!' '(' { token } ')' ;
+style_block   = '{' { ( lower_ident | string ) ':' ( expression | style_block ) [ ',' ] } '}' ;
+```
+
+### Markup
+
+```ebnf
+markup        = element | fragment ;
+element       = '<' element_name { attr } ( '/>' | '>' { child } '</' element_name '>' ) ;
+element_name  = lower_ident | path ;                     (* html element | component *)
+fragment      = '<>' { child } '</>' ;
+attr          = attr_name [ '=' ( string | '{' expression '}' ) ] ;
+attr_name     = lower_ident { '-' lower_ident } ;
+child         = element | fragment | text
+              | '{' expression '}'
+              | '{' 'if' expression block { 'else' 'if' expression block } [ 'else' block ] '}'
+              | '{' 'for' pattern 'in' expression block '}'
+              | '{' 'match' expression '{' { match_arm } '}' '}' ;
+text          = (* any run of characters not containing '<', '{', or '}' *) ;
+```
+
+Inside markup blocks, `block` bodies produce children rather than values.
+
+### Queries
+
+```ebnf
+query_expr    = select_expr | insert_expr | update_expr | delete_expr ;
+select_expr   = 'select' ( '{' expression { ',' expression } '}' | '*' )
+                'from' table_ref { join } [ 'where' expression ]
+                [ 'groupBy' expression { ',' expression } ] [ 'orderBy' order { ',' order } ]
+                [ 'limit' expression ] [ 'offset' expression ] ;
+table_ref     = lower_ident [ 'as' lower_ident ] ;
+join          = [ 'left' | 'inner' ] 'join' table_ref 'on' expression ;
+order         = expression [ 'asc' | 'desc' ] ;
+insert_expr   = 'insert' 'into' lower_ident 'values' ( record | expression ) ;
+update_expr   = 'update' lower_ident 'set' record [ 'where' expression ] ;
+delete_expr   = 'delete' 'from' lower_ident [ 'where' expression ] ;
 ```
 
 ### Patterns
 
 ```ebnf
-pattern_expr   = pattern_part { '::' pattern_part } [ 'as' lower_var ] ;
-pattern_part   = ctor_pattern | pattern_term ;
-ctor_pattern   = ( upper_var | qualified_upper ) { pattern_term } ;
-pattern_term   = wildcard | lower_var | ctor_no_args | number | string
-               | pattern_record | pattern_tuple | pattern_list ;
-wildcard       = '_' ;
-ctor_no_args   = upper_var | qualified_upper ;
-pattern_record = '{' '}' | '{' lower_var { ',' lower_var } '}' ;
-pattern_tuple  = '(' ')' | '(' pattern_expr ')'
-               | '(' pattern_expr ',' pattern_expr { ',' pattern_expr } ')' ;
-pattern_list   = '[' ']' | '[' pattern_expr { ',' pattern_expr } ']' ;
+pattern       = pattern_atom [ 'as' lower_ident ] ;
+pattern_atom  = '_' | lower_ident | number | bigint | string
+              | path [ '(' pattern { ',' pattern } ')' | pattern_record ]
+              | tag [ '(' pattern { ',' pattern } ')' ]
+              | '(' pattern { ',' pattern } ')'
+              | '[' [ pattern { ',' pattern } [ ',' '..' [ lower_ident ] ] ] ']'
+              | pattern_record ;
+pattern_record = '{' [ lower_ident [ ':' pattern ] { ',' lower_ident [ ':' pattern ] } [ ',' '..' ] ] '}' ;
 ```
 
 ### Types
 
 ```ebnf
-type_expr      = type_app [ '->' type_expr ] ;
-type_app       = upper_var { type_term } ;
-type_term      = type_var | type_named | type_tuple | type_record ;
-type_var       = lower_var ;
-type_named     = upper_var | qualified_upper ;
-type_tuple     = '(' ')' | '(' type_expr ')' | '(' type_expr ',' type_expr { ',' type_expr } ')' ;
-type_record    = '{' '}' | '{' lower_var ':' type_expr { ',' type_field } '}'
-               | '{' lower_var '|' type_field { ',' type_field } '}' ;
-type_field     = lower_var ':' type_expr ;
+type          = fn_type | type_app ;
+fn_type       = 'fn' '(' [ type { ',' type } ] ')' type ;
+type_app      = path [ '<' type { ',' type } '>' ]
+              | lower_ident                                            (* type variable *)
+              | '(' ')' | '(' type ',' type { ',' type } ')'
+              | record_type
+              | error_row ;
+record_type   = '{' [ lower_ident '|' ] [ field_type { ',' field_type } [ ',' ] ] '}' ;
+field_type    = lower_ident [ '?' ] ':' type ;
+error_row     = '[' [ tag_variant { '|' tag_variant } ] [ '|' lower_ident ] ']' ;
 ```
 
-### Declarations
+### Reserved words
 
-```ebnf
-declaration    = [ doc_comment ] ( type_decl | value_decl ) ;
-
-value_decl     = lower_var [ ':' type_expr ] { pattern_term } '=' expression ;
-
-type_decl      = 'type' ( alias_decl | union_decl ) ;
-
-alias_decl     = 'alias' upper_var { lower_var } '=' type_expr ;
-
-union_decl     = upper_var { lower_var } '=' variant { '|' variant } ;
-
-variant        = upper_var { type_term } ;
-
-infix_decl     = 'infix' associativity digit '(' operator ')' '=' lower_var ;
-
-associativity  = 'left' | 'right' | 'non' ;
+```
+as break comptime component continue else enum error false fn for if
+impl import in let loop macro match mut pub provide query return schema
+state style table test tests trait true type use while
 ```
 
-### Module
-
-```ebnf
-module         = [ module_header ] { import } { infix_decl } { declaration } ;
-module_header  = 'module' module_name 'exposing' exposing_list ;
-import         = 'import' module_name [ 'as' upper_var ] [ 'exposing' exposing_list ] ;
-module_name    = upper_var { '.' upper_var } ;
-
-exposing       = '(' ( '..' | exposed { ',' exposed } ) ')' ;
-exposed        = lower_var                        (* value *)
-               | '(' operator ')'                 (* operator *)
-               | upper_var [ '(' '..' ')' ]       (* type, optionally with constructors *)
-               ;
-```
+All SQL words (`select`, `insert`, `update`, `delete`, `from`, `where`,
+`join`, `on`, `set`, `into`, `values`, `orderBy`, `groupBy`, `limit`,
+`offset`, `asc`, `desc`, `left`, `inner`) are contextual keywords inside a
+`query { }` block only.
