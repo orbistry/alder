@@ -158,7 +158,6 @@ name = "alder-source"
 version = "0.1.0"
 dependencies = [
  "alder-region",
- "bumpalo",
 ]
 
 [[package]]
