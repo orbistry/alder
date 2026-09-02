@@ -42,9 +42,15 @@ impl<'a> Parser<'a> {
         Ok(self.add_end(start, Expr::State(initial)))
     }
 
-    /// `( expression )`, whitespace allowed before the `(`. Consumes the `)`.
+    /// `( expression )`, whitespace allowed before the `(` but not a line
+    /// break (§2.1 rule 1, as for `:tag(`, `f(` and `Path {`): `state\n(0)`
+    /// is `State::Open` right after `state`. Consumes the `)`.
     fn state_body(&mut self) -> Result<&'a Located<Expr<'a>>, error::State<'a>> {
+        let end = self.get_position();
         self.chomp();
+        if self.newline_since(end) {
+            return Err(error::State::Open(end.line, end.column));
+        }
         self.word1(b'(', error::State::Open)?;
         self.chomp();
         let initial = self.specialize(
@@ -129,5 +135,15 @@ mod tests {
     #[test]
     fn error_state_no_parens() {
         assert_expression_error_snapshot!("state 0");
+    }
+
+    #[test]
+    fn error_state_paren_next_line() {
+        assert_expression_error_snapshot!(
+            r#"
+            state
+            (0)
+            "#
+        );
     }
 }
