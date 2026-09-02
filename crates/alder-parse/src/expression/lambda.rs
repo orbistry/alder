@@ -104,15 +104,8 @@ fn lambda_body_error<'a>(
     match err {
         error::Stmt::Expr(e, row, col) => error::Lambda::Body(e, row, col),
         error::Stmt::AssignValue(e, row, col) => error::Lambda::AssignValue(e, row, col),
-        // TODO(wave0): an `error::Lambda::AssignTarget(AssignOp, Row, Col)`
-        // variant would name this precisely ("`fn() 1 += 2`: the left side
-        // is not a place"). `Stmt::AssignTarget` carries the statement start,
-        // i.e. the body start (statement.rs), so the nearest existing fit is
-        // "a body was expected here" at that position; the operator's own
-        // position is not in the error. Inaccurate wording, right anchor.
-        error::Stmt::AssignTarget(_, row, col) => {
-            error::Lambda::Body(parser.alloc(error::Expr::Start(row, col)), row, col)
-        }
+        // `Stmt::AssignTarget` carries the target's start, i.e. the body start.
+        error::Stmt::AssignTarget(op, row, col) => error::Lambda::AssignTarget(op, row, col),
         // `expr_or_assign` produces no other variant.
         _ => {
             let (row, col) = body_start;
@@ -205,5 +198,10 @@ mod tests {
     #[test]
     fn error_assign_bad_target() {
         assert_expression_error_snapshot!("fn() 1 += 2");
+    }
+
+    #[test]
+    fn error_assign_bad_target_slash_equals() {
+        assert_expression_error_snapshot!("fn() f() /= 2");
     }
 }

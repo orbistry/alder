@@ -456,6 +456,9 @@ pub enum Lambda<'a> {
     Ret(&'a Type<'a>, Row, Col),
     Body(&'a Expr<'a>, Row, Col),
     Block(&'a Block<'a>, Row, Col),
+    /// `fn() 1 += 2`: the left side of the assignment body is not a place
+    /// (renderer: for `/=` mention `!=`). Position is the target's start.
+    AssignTarget(AssignOp, Row, Col),
     /// `fn() x +=` with no value.
     AssignValue(&'a Expr<'a>, Row, Col),
 }
