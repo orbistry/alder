@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Shape { Rect { r | width: Number } }"
+---
+VariantRecordExt(
+    1,
+    21,
+)

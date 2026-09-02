@@ -1,0 +1,105 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Pair { Both(Number, String,) }"
+---
+EnumDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 10,
+            },
+        },
+        value: "Pair",
+    },
+    params: [],
+    variants: [
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                },
+                value: "Both",
+            },
+            payload: Tuple(
+                [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 18,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 24,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 18,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 24,
+                                            },
+                                        },
+                                        value: "Number",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 26,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 32,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 26,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 32,
+                                            },
+                                        },
+                                        value: "String",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ],
+            ),
+        },
+    ],
+}

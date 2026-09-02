@@ -1,0 +1,119 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Result[a, e] { Ok(a), Err(e) }"
+---
+EnumDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: "Result",
+    },
+    params: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 13,
+                },
+                end: Position {
+                    line: 1,
+                    column: 14,
+                },
+            },
+            value: "a",
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 16,
+                },
+                end: Position {
+                    line: 1,
+                    column: 17,
+                },
+            },
+            value: "e",
+        },
+    ],
+    variants: [
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 21,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 23,
+                    },
+                },
+                value: "Ok",
+            },
+            payload: Tuple(
+                [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 24,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 25,
+                            },
+                        },
+                        value: Var {
+                            name: "a",
+                            args: [],
+                        },
+                    },
+                ],
+            ),
+        },
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 28,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 31,
+                    },
+                },
+                value: "Err",
+            },
+            payload: Tuple(
+                [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 32,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 33,
+                            },
+                        },
+                        value: Var {
+                            name: "e",
+                            args: [],
+                        },
+                    },
+                ],
+            ),
+        },
+    ],
+}

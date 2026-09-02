@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Shape { Rect { width } }"
+---
+VariantRecord(
+    Colon(
+        1,
+        27,
+    ),
+    1,
+    19,
+)

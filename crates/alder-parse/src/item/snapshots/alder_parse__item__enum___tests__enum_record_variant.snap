@@ -1,0 +1,137 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Shape { Rect { width: Number, height: Number } }"
+---
+EnumDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 11,
+            },
+        },
+        value: "Shape",
+    },
+    params: [],
+    variants: [
+        Variant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 18,
+                    },
+                },
+                value: "Rect",
+            },
+            payload: Record(
+                [
+                    FieldType {
+                        field: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 21,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 26,
+                                },
+                            },
+                            value: "width",
+                        },
+                        optional: None,
+                        typ: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 28,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 34,
+                                },
+                            },
+                            value: Named {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 28,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 34,
+                                                },
+                                            },
+                                            value: "Number",
+                                        },
+                                    ],
+                                },
+                                args: [],
+                            },
+                        },
+                    },
+                    FieldType {
+                        field: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 36,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 42,
+                                },
+                            },
+                            value: "height",
+                        },
+                        optional: None,
+                        typ: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 44,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 50,
+                                },
+                            },
+                            value: Named {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 44,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 50,
+                                                },
+                                            },
+                                            value: "Number",
+                                        },
+                                    ],
+                                },
+                                args: [],
+                            },
+                        },
+                    },
+                ],
+            ),
+        },
+    ],
+}

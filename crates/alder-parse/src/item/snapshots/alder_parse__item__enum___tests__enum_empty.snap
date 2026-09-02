@@ -1,0 +1,21 @@
+---
+source: crates/alder-parse/src/item/enum_.rs
+description: "enum Never {}"
+---
+EnumDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 6,
+            },
+            end: Position {
+                line: 1,
+                column: 11,
+            },
+        },
+        value: "Never",
+    },
+    params: [],
+    variants: [],
+}
