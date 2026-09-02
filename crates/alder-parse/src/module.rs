@@ -118,7 +118,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/fn_.rs"]
     fn single_fn() {
         assert_module_snapshot!(
             r#"
@@ -194,7 +193,6 @@ mod tests {
     // item parsers land (§8).
 
     #[test]
-    #[ignore = "waits for item/component.rs"]
     fn docs_counter_component() {
         assert_module_snapshot!(
             r#"
@@ -211,7 +209,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/fn_.rs"]
     fn docs_classify_fn() {
         assert_module_snapshot!(
             r#"
@@ -229,7 +226,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/fn_.rs"]
     fn docs_find_result() {
         assert_module_snapshot!(
             r#"
@@ -244,7 +240,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/fn_.rs"]
     fn docs_load_await() {
         assert_module_snapshot!(
             r#"
@@ -260,7 +255,6 @@ mod tests {
     // language.md "Traits" with the missing `->` in `map` added and the
     // one-line `trait Iterator` written one item per line (§10.35, §10.38).
     #[test]
-    #[ignore = "waits for item/trait_.rs"]
     fn docs_traits_functor() {
         assert_module_snapshot!(
             r#"
@@ -322,7 +316,6 @@ mod tests {
 
     // web.md "Loading data" with `event.params.id` pinned (§10.35).
     #[test]
-    #[ignore = "waits for item/fn_.rs"]
     fn docs_web_load_page() {
         assert_module_snapshot!(
             r#"
@@ -346,7 +339,6 @@ mod tests {
     // replaced by a real one and the top-level markup is wrapped in a
     // component (markup is an expression, not an item).
     #[test]
-    #[ignore = "waits for item/schema.rs"]
     fn docs_web_login_form() {
         assert_module_snapshot!(
             r#"
@@ -373,7 +365,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/component.rs"]
     fn docs_web_tui_app() {
         assert_module_snapshot!(
             r#"
@@ -392,7 +383,6 @@ mod tests {
 
     // data.md "Tables" with the path-first import (§10.34).
     #[test]
-    #[ignore = "waits for item/table.rs"]
     fn docs_data_tables() {
         assert_module_snapshot!(
             r#"
@@ -418,7 +408,6 @@ mod tests {
     // data.md "Queries": the bare `db.run(...)` statements are wrapped in a
     // function (statements are not items).
     #[test]
-    #[ignore = "waits for query.rs"]
     fn docs_data_queries() {
         assert_module_snapshot!(
             r#"
@@ -458,7 +447,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/fn_.rs"]
     fn error_same_line_items() {
         assert_module_error_snapshot!("fn a() {} fn b() {}");
     }

@@ -184,7 +184,6 @@ mod tests {
 
     /// language.md "Traits" (`pub` dropped: the direct macro starts at `trait`).
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_single_fn() {
         assert_trait_snapshot!(
             r#"
@@ -197,7 +196,6 @@ mod tests {
 
     /// language.md "Traits" with the missing `->` restored (§10.35).
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_hkt() {
         assert_trait_snapshot!(
             r#"
@@ -209,7 +207,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_default_body() {
         assert_trait_snapshot!(
             r#"
@@ -221,7 +218,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_assoc_type() {
         assert_trait_snapshot!(
             r#"
@@ -234,7 +230,6 @@ mod tests {
 
     /// language.md's one-line `Iterator` example rewritten one item per line (§10.35).
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_assoc_type_and_fn() {
         assert_trait_snapshot!(
             r#"
@@ -248,7 +243,6 @@ mod tests {
 
     /// language.md "Traits": `trait Ord[a] where a: Eq`.
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_where() {
         assert_trait_snapshot!(
             r#"
@@ -260,7 +254,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_where_multiline_trailing_comma() {
         assert_trait_snapshot!(
             r#"
@@ -275,7 +268,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_multiple_items() {
         assert_trait_snapshot!(
             r#"
@@ -289,7 +281,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_fn_where() {
         assert_trait_snapshot!(
             r#"
@@ -302,7 +293,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_two_params() {
         assert_trait_snapshot!(
             r#"
@@ -314,14 +304,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn trait_empty() {
         assert_trait_snapshot!("trait Marker[a] {}");
     }
 
     /// language.md "Traits", as written.
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn trait_pub() {
         assert_item_snapshot!(
             r#"
@@ -333,37 +321,31 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_no_name() {
         assert_trait_error_snapshot!("trait [a] {}");
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_no_params() {
         assert_trait_error_snapshot!("trait Show {");
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_where() {
         assert_trait_error_snapshot!("trait Ord[a] where a: 1 {}");
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_open() {
         assert_trait_error_snapshot!("trait Show[a] fn");
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_bad_item() {
         assert_trait_error_snapshot!("trait Show[a] { let x = 1 }");
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_unclosed() {
         assert_trait_error_snapshot!(
             r#"
@@ -375,32 +357,27 @@ mod tests {
 
     /// EOF right after `{` is `Trait::Item`, like `Block::End` for a block.
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_unclosed_empty_body() {
         assert_trait_error_snapshot!("trait Show[a] {");
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_assoc_type_name() {
         assert_trait_error_snapshot!("trait Iterator[i] { type item }");
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_assoc_type_has_body() {
         assert_trait_error_snapshot!("trait Iterator[i] { type Item = Number }");
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_fn() {
         assert_trait_error_snapshot!("trait Show[a] { fn (value: a) -> String }");
     }
 
     /// language.md's one-line `Iterator` example (§10.35, §10.38).
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_semicolon_between_items() {
         assert_trait_error_snapshot!(
             "trait Iterator[i] { type Item; fn next(it: i) -> Option[Item] }"
@@ -408,13 +385,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_same_line_items() {
         assert_trait_error_snapshot!("trait Iterator[i] { type Item fn next(it: i) -> Item }");
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn error_same_line_after_body() {
         assert_trait_error_snapshot!(
             r#"

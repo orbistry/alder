@@ -574,7 +574,6 @@ mod tests {
     // ---- through `item()` (§7.2 names) -------------------------------------
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn schema_pub() {
         assert_item_snapshot!(
             r#"

@@ -502,13 +502,11 @@ pub(crate) use assert_item_snapshot;
 #[cfg(test)]
 mod tests {
     #[test]
-    #[ignore = "waits for item/fn_.rs"]
     fn pub_fn() {
         assert_item_snapshot!("pub fn add(a, b) { a + b }");
     }
 
     #[test]
-    #[ignore = "waits for item/enum_.rs"]
     fn pub_enum() {
         assert_item_snapshot!("pub enum Color { Red, Green }");
     }

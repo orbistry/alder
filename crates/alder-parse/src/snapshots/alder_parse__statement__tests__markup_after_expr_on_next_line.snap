@@ -1,0 +1,87 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: "{\n    x\n    <div />\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Block {
+        stmts: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 6,
+                    },
+                },
+                value: Expr(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 6,
+                            },
+                        },
+                        value: Var(
+                            "x",
+                        ),
+                    },
+                ),
+            },
+        ],
+        tail: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 3,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 3,
+                        column: 12,
+                    },
+                },
+                value: Markup(
+                    Element(
+                        Element {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 6,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 9,
+                                    },
+                                },
+                                value: Tag(
+                                    "div",
+                                ),
+                            },
+                            attrs: [],
+                            children: [],
+                            self_closing: true,
+                        },
+                    ),
+                ),
+            },
+        ),
+    },
+}

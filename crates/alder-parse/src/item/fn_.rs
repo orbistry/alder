@@ -772,7 +772,6 @@ mod tests {
 
     /// language.md "Functions".
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn fn_pub() {
         assert_item_snapshot!(
             r#"
@@ -785,7 +784,6 @@ mod tests {
 
     /// language.md "JavaScript interop".
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn fn_bodiless_with_extern_attr() {
         assert_item_snapshot!(
             r#"

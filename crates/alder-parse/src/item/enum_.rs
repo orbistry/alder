@@ -245,7 +245,6 @@ mod tests {
 
     /// language.md "Enums" (`pub` dropped: the direct macro starts at `enum`).
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn enum_params() {
         assert_enum_snapshot!(
             r#"
@@ -258,7 +257,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/type_alias.rs"]
     fn enum_params_two() {
         assert_enum_snapshot!("enum Result[a, e] { Ok(a), Err(e) }");
     }
@@ -286,7 +284,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn enum_pub() {
         assert_item_snapshot!(
             r#"

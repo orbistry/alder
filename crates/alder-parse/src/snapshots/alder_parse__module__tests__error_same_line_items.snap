@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "fn a() {} fn b() {}"
+---
+SameLine(
+    1,
+    11,
+)

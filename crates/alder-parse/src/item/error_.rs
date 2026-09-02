@@ -167,7 +167,6 @@ mod tests {
 
     /// language.md "Errors", as written.
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn error_group_pub() {
         assert_item_snapshot!(
             r#"

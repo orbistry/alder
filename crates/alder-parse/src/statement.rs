@@ -893,7 +893,6 @@ mod tests {
     // ---- style
 
     #[test]
-    #[ignore = "waits for style.rs"]
     fn style_let() {
         assert_statement_snapshot!("let card = style { padding: 16px }");
     }
@@ -949,7 +948,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "waits for markup/mod.rs"]
     fn markup_after_expr_on_next_line() {
         assert_block_snapshot!(
             r#"

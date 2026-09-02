@@ -1,0 +1,115 @@
+---
+source: crates/alder-parse/src/item/error_.rs
+description: "pub error AuthError {\n    :invalid_token,\n    :expired(Timestamp),\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Pub(
+            Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+        ),
+        kind: Error(
+            ErrorDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 20,
+                        },
+                    },
+                    value: "AuthError",
+                },
+                tags: [
+                    TagVariant {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 19,
+                                },
+                            },
+                            value: "invalid_token",
+                        },
+                        args: [],
+                    },
+                    TagVariant {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 13,
+                                },
+                            },
+                            value: "expired",
+                        },
+                        args: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 14,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 23,
+                                    },
+                                },
+                                value: Named {
+                                    path: Path {
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 3,
+                                                        column: 14,
+                                                    },
+                                                    end: Position {
+                                                        line: 3,
+                                                        column: 23,
+                                                    },
+                                                },
+                                                value: "Timestamp",
+                                            },
+                                        ],
+                                    },
+                                    args: [],
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+        ),
+    },
+}

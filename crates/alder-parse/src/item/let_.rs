@@ -65,31 +65,26 @@ mod tests {
     use crate::item::assert_item_snapshot;
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn let_top() {
         assert_item_snapshot!("let x = 1");
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn let_top_pub() {
         assert_item_snapshot!("pub let x = 1");
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn let_top_mut_state() {
         assert_item_snapshot!("let mut count = state(0)");
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn let_top_annotated() {
         assert_item_snapshot!("let x: Number = 1");
     }
 
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn let_style() {
         assert_item_snapshot!("let card = style { padding: 16px }");
     }

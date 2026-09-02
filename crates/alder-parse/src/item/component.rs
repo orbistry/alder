@@ -139,7 +139,6 @@ mod tests {
 
     /// web.md "Routing" (`pub component page`).
     #[test]
-    #[ignore = "waits for item/mod.rs"]
     fn component_pub() {
         assert_item_snapshot!(
             r#"
@@ -153,7 +152,6 @@ mod tests {
     /// language.md "Components and state" (`pub` dropped: the direct macro
     /// starts at `component`).
     #[test]
-    #[ignore = "waits for markup/mod.rs"]
     fn component_with_state_and_markup() {
         assert_component_snapshot!(
             r#"
