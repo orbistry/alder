@@ -9,9 +9,9 @@
 //! impl_item = 'type' upper_ident '=' type | fn_decl ;
 //! ```
 //!
-//! The trait is a `path` (`Show`, `Std::Show`); a dangling `::` is reported
-//! as `Impl::Trait` at the position after the `::` (§10.42), since `Impl`
-//! has no member variant (see the `TODO(wave0)` below). A lowercase member
+//! The trait is a `path` (`Show`, `Std::Show`); a dangling `::` is
+//! `Impl::PathMember` at the position after the `::` (§10.42), like the
+//! `PathMember` variants of `Expr`, `Pattern` and `Type`. A lowercase member
 //! (`impl Show::show[User]`) is not part of the path (§2: `path` stops
 //! before `::lower`), so it surfaces as `Impl::Open` at the `::`. The `[` is
 //! required (`impl Show {` → `Impl::Open`), and `[]` is
@@ -39,11 +39,7 @@ impl<'a> Parser<'a> {
     /// After `impl`. Body items are line-break separated (Impl::SameLine); a `;` after an item → Impl::Semicolon.
     pub(crate) fn impl_decl(&mut self) -> Result<&'a ImplDecl<'a>, error::Impl<'a>> {
         self.chomp();
-        // TODO(wave0): `error::Impl` has no member variant for a dangling `::`
-        // (`impl Show::[User]`), unlike the `PathMember` variants of the
-        // expression, pattern and type errors; until one is added the nearest
-        // variant, `Impl::Trait`, stands in for both of `path()`'s errors.
-        let trait_ = self.path(error::Impl::Trait, error::Impl::Trait)?;
+        let trait_ = self.path(error::Impl::Trait, error::Impl::PathMember)?;
         self.chomp();
         self.word1(b'[', error::Impl::Open)?;
         self.chomp();

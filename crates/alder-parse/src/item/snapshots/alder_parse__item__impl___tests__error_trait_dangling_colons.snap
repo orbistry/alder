@@ -2,7 +2,7 @@
 source: crates/alder-parse/src/item/impl_.rs
 description: "impl Show::[User] {}"
 ---
-Trait(
+PathMember(
     1,
     12,
 )

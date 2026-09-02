@@ -1175,6 +1175,8 @@ pub enum Trait<'a> {
 pub enum Impl<'a> {
     /// Expected a trait path.
     Trait(Row, Col),
+    /// `::` in the trait path not followed by a name (`impl Show::[User]`).
+    PathMember(Row, Col),
     /// Expected `[`.
     Open(Row, Col),
     Arg(&'a Type<'a>, Row, Col),
