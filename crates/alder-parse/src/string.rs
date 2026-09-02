@@ -9,6 +9,26 @@
 //! at the backslash; the widths carried by `error::Escape` are measured
 //! from that backslash (`\u` → 2, `\u{12` → 5, `\u{12}` → 6).
 //!
+//! Two deliberate deviations from Elm's `eatUnicode`, for the report
+//! renderer (Wave 4) to know about:
+//!
+//! - `\u{}` (no digits) is `BadUnicodeLength { actual: 0, .. }`, not
+//!   `BadUnicodeCode`: Elm's `chompHex` returns `-1` for zero digits and its
+//!   `code < 0` check fires first, but "needs at least four digits" is the
+//!   message a user wants there. Elm's format → code → length order holds
+//!   for every other input.
+//! - `error::Escape::BadUnicodeLength { code, expected, actual }` (§4,
+//!   verbatim) stands in for Elm's `BadUnicodeLength width numDigits
+//!   badCode`: `code` is the **width** of the escape from the backslash
+//!   (for the underline), `actual` is the digit count, and `expected` is
+//!   the nearest bound (4 or 6); the code point itself is not carried.
+//!
+//! Columns advance one per byte (`Parser::advance`, §5.1), so non-ASCII
+//! text before an error shifts the reported column by the extra bytes
+//! (`"é\u{41}"` reports the backslash at 1:4, Elm says 1:3). That is a
+//! crate-wide Wave 0 convention shared by every scanner, not a string.rs
+//! choice.
+//!
 //! `EscapeResult` is not `Copy`: `error::Escape` (§4, verbatim) is not `Clone`.
 // OWNER: string.rs (Wave 1)
 
@@ -117,7 +137,9 @@ impl<'a> Parser<'a> {
     ///
     /// Does not consume. Accepts 4 to 6 hex digits naming a Unicode scalar
     /// value (surrogates are refused: a `&str` cannot hold them). The widths
-    /// in the `Escape` payloads count from the backslash, as in Elm.
+    /// in the `Escape` payloads count from the backslash, as in Elm, and
+    /// saturate at `u16::MAX`. `\u{}` is a length error, not a code error
+    /// (module docs).
     pub(crate) fn eat_unicode(&self) -> EscapeResult {
         // Cursor is on `u`; the backslash is one byte behind it.
         if self.peek_at(1) != Some(b'{') {
@@ -137,17 +159,21 @@ impl<'a> Parser<'a> {
             offset += 1;
         }
         // `offset` is now the width of `u{digits`; `+ 1` adds the backslash.
-        let width = (offset + 1) as u16;
+        // Saturate rather than wrap on an absurdly long digit run (Elm's
+        // `fromIntegral` to `Word16` wraps; the `code` accumulator above
+        // already saturates).
+        let width = u16::try_from(offset + 1).unwrap_or(u16::MAX);
 
         if self.peek_at(offset) != Some(b'}') {
             return EscapeResult::Problem(Escape::BadUnicodeFormat(width));
         }
         if char::from_u32(code).is_none() {
-            return EscapeResult::Problem(Escape::BadUnicodeCode(width + 1));
+            return EscapeResult::Problem(Escape::BadUnicodeCode(width.saturating_add(1)));
         }
         if !(4..=6).contains(&num_digits) {
+            // `code` carries the width `\u{digits}` (see the module docs).
             return EscapeResult::Problem(Escape::BadUnicodeLength {
-                code: width + 1,
+                code: width.saturating_add(1),
                 expected: if num_digits < 4 { 4 } else { 6 },
                 actual: num_digits,
             });
@@ -416,6 +442,35 @@ mod tests {
             string(r#""\u{0000041}""#),
             (
                 Err("Escape(BadUnicodeLength { code: 11, expected: 6, actual: 7 }) at 1:2".into()),
+                (1, 3)
+            )
+        );
+    }
+
+    #[test]
+    fn error_bad_unicode_empty() {
+        // No digits at all: a length error (Elm would say `BadUnicodeCode`).
+        assert_eq!(
+            string(r#""\u{}""#),
+            (
+                Err("Escape(BadUnicodeLength { code: 4, expected: 4, actual: 0 }) at 1:2".into()),
+                (1, 3)
+            )
+        );
+    }
+
+    #[test]
+    fn error_bad_unicode_width_saturates() {
+        // A digit run longer than `u16::MAX` saturates the width instead of
+        // wrapping; the digit count itself is exact.
+        let src = format!("\"\\u{{{}}}\"", "0".repeat(70_000));
+        assert_eq!(
+            string(&src),
+            (
+                Err(
+                    "Escape(BadUnicodeLength { code: 65535, expected: 6, actual: 70000 }) at 1:2"
+                        .into()
+                ),
                 (1, 3)
             )
         );
