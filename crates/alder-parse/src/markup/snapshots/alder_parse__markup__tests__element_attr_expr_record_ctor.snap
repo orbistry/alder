@@ -1,0 +1,157 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<Box size={Size::Fixed { px: 8 }} />"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 37,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Component(
+                        Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 2,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 5,
+                                        },
+                                    },
+                                    value: "Box",
+                                },
+                            ],
+                        },
+                    ),
+                },
+                attrs: [
+                    Attr {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 6,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                            },
+                            value: "size",
+                        },
+                        value: Some(
+                            Expr(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 12,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 33,
+                                        },
+                                    },
+                                    value: RecordCtor {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 12,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 16,
+                                                        },
+                                                    },
+                                                    value: "Size",
+                                                },
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 18,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 23,
+                                                        },
+                                                    },
+                                                    value: "Fixed",
+                                                },
+                                            ],
+                                        },
+                                        fields: [
+                                            Field {
+                                                name: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 26,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 28,
+                                                        },
+                                                    },
+                                                    value: "px",
+                                                },
+                                                value: Some(
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 1,
+                                                                column: 30,
+                                                            },
+                                                            end: Position {
+                                                                line: 1,
+                                                                column: 31,
+                                                            },
+                                                        },
+                                                        value: Number(
+                                                            NumberLit {
+                                                                value: 8.0,
+                                                                text: "8",
+                                                            },
+                                                        ),
+                                                    },
+                                                ),
+                                            },
+                                        ],
+                                    },
+                                },
+                            ),
+                        ),
+                    },
+                ],
+                children: [],
+                self_closing: true,
+            },
+        ),
+    ),
+}

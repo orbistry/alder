@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<p>@if x { a } // c\n@else { b }</p>"
+---
+Markup(
+    Child(
+        StrayElse(
+            2,
+            1,
+        ),
+        1,
+        4,
+    ),
+    1,
+    1,
+)

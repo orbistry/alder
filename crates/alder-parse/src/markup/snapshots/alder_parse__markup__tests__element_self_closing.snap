@@ -1,0 +1,40 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<br />"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 7,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: Tag(
+                        "br",
+                    ),
+                },
+                attrs: [],
+                children: [],
+                self_closing: true,
+            },
+        ),
+    ),
+}

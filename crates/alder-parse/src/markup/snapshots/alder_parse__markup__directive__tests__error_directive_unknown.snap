@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<p>@foo</p>"
+---
+Markup(
+    Child(
+        UnknownDirective(
+            1,
+            4,
+        ),
+        1,
+        4,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,37 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<>x</ >"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 8,
+        },
+    },
+    value: Markup(
+        Fragment(
+            [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                    },
+                    value: Text(
+                        "x",
+                    ),
+                },
+            ],
+        ),
+    ),
+}

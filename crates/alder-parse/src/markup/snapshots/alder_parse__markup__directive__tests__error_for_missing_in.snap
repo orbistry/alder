@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<ul>@for x items { <li>{x}</li> }</ul>"
+---
+Markup(
+    Child(
+        For(
+            In(
+                1,
+                12,
+            ),
+            1,
+            5,
+        ),
+        1,
+        5,
+    ),
+    1,
+    1,
+)
