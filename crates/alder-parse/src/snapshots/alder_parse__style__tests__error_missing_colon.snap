@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { padding 16px }"
+---
+Style(
+    Colon(
+        1,
+        17,
+    ),
+    1,
+    1,
+)

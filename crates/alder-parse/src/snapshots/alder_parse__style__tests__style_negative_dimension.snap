@@ -1,0 +1,46 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { margin: -8px }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 15,
+                            },
+                        },
+                        value: Ident(
+                            "margin",
+                        ),
+                    },
+                    value: Dimension {
+                        number: NumberLit {
+                            value: -8.0,
+                            text: "-8",
+                        },
+                        unit: "px",
+                    },
+                },
+            ],
+        },
+    ),
+}

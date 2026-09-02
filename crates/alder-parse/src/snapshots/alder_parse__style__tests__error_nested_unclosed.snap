@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { \":hover\": { color: red }"
+---
+Style(
+    End(
+        1,
+        33,
+    ),
+    1,
+    1,
+)

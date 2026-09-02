@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { \":hover\": { color red } }"
+---
+Style(
+    Nested(
+        Colon(
+            1,
+            27,
+        ),
+        1,
+        19,
+    ),
+    1,
+    1,
+)

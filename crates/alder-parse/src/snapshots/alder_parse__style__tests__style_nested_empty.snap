@@ -1,0 +1,44 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { \":hover\": {} }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                        },
+                        value: Str(
+                            ":hover",
+                        ),
+                    },
+                    value: Nested(
+                        Style {
+                            entries: [],
+                        },
+                    ),
+                },
+            ],
+        },
+    ),
+}

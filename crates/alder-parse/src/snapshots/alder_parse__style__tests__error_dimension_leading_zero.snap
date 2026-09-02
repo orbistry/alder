@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { padding: 007px }"
+---
+Style(
+    Dimension(
+        NoLeadingZero,
+        1,
+        19,
+    ),
+    1,
+    1,
+)

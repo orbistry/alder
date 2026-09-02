@@ -1,0 +1,46 @@
+---
+source: crates/alder-parse/src/style.rs
+description: "style { fontSize: 1em }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 24,
+        },
+    },
+    value: Style(
+        Style {
+            entries: [
+                StyleEntry {
+                    key: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                        },
+                        value: Ident(
+                            "fontSize",
+                        ),
+                    },
+                    value: Dimension {
+                        number: NumberLit {
+                            value: 1.0,
+                            text: "1",
+                        },
+                        unit: "em",
+                    },
+                },
+            ],
+        },
+    ),
+}
