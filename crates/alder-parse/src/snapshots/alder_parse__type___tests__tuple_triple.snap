@@ -1,0 +1,116 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "(String, Number, Bool)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: Tuple {
+        first: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 2,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                            },
+                            value: "String",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+        second: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 10,
+                },
+                end: Position {
+                    line: 1,
+                    column: 16,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                            },
+                            value: "Number",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+        rest: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 18,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 22,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 18,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 22,
+                                    },
+                                },
+                                value: "Bool",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+        ],
+    },
+}

@@ -1,0 +1,117 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "{ id: Id, name: String }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 25,
+        },
+    },
+    value: Record {
+        fields: [
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: "id",
+                },
+                optional: None,
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 7,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 9,
+                                        },
+                                    },
+                                    value: "Id",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            },
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                    },
+                    value: "name",
+                },
+                optional: None,
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 23,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 17,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 23,
+                                        },
+                                    },
+                                    value: "String",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            },
+        ],
+        ext: None,
+    },
+}

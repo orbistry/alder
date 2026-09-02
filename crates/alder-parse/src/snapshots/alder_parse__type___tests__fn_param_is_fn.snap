@@ -1,0 +1,166 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "fn(fn(a) -> b, Array[a]) -> Array[b]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 37,
+        },
+    },
+    value: Fn {
+        params: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 4,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                },
+                value: Fn {
+                    params: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 7,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                            },
+                            value: Var {
+                                name: "a",
+                                args: [],
+                            },
+                        },
+                    ],
+                    ret: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                        },
+                        value: Var {
+                            name: "b",
+                            args: [],
+                        },
+                    },
+                },
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 24,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 16,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 21,
+                                    },
+                                },
+                                value: "Array",
+                            },
+                        ],
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 22,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 23,
+                                },
+                            },
+                            value: Var {
+                                name: "a",
+                                args: [],
+                            },
+                        },
+                    ],
+                },
+            },
+        ],
+        ret: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 29,
+                },
+                end: Position {
+                    line: 1,
+                    column: 37,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 29,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 34,
+                                },
+                            },
+                            value: "Array",
+                        },
+                    ],
+                },
+                args: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 35,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 36,
+                            },
+                        },
+                        value: Var {
+                            name: "b",
+                            args: [],
+                        },
+                    },
+                ],
+            },
+        },
+    },
+}

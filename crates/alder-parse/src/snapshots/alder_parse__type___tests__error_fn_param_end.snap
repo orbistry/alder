@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: fn(a b) -> c
+---
+Fn(
+    ParamEnd(
+        1,
+        6,
+    ),
+    1,
+    1,
+)

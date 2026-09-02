@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "[:not_found(Id]"
+---
+ErrorRow(
+    Tag(
+        ArgEnd(
+            1,
+            15,
+        ),
+        1,
+        2,
+    ),
+    1,
+    1,
+)

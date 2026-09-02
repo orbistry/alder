@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "42"
+---
+Start(
+    1,
+    1,
+)

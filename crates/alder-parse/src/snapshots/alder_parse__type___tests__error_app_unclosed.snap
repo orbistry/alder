@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Array[User"
+---
+Args(
+    End(
+        1,
+        11,
+    ),
+    1,
+    6,
+)

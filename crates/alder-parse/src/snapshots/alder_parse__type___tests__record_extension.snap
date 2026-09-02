@@ -1,0 +1,83 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "{ r | name: String }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 21,
+        },
+    },
+    value: Record {
+        fields: [
+            FieldType {
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                    },
+                    value: "name",
+                },
+                optional: None,
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 13,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 19,
+                                        },
+                                    },
+                                    value: "String",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            },
+        ],
+        ext: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 3,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 4,
+                    },
+                },
+                value: "r",
+            },
+        ),
+    },
+}

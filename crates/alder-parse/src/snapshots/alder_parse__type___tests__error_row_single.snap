@@ -1,0 +1,37 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "[:timeout]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 11,
+        },
+    },
+    value: ErrorRow {
+        tags: [
+            TagVariant {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: "timeout",
+                },
+                args: [],
+            },
+        ],
+        ext: None,
+    },
+}
