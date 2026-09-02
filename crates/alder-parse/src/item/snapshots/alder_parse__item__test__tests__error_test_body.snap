@@ -1,0 +1,24 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "test \"adds numbers\" {\n    assert\n}\n"
+---
+Test(
+    Body(
+        Stmt(
+            Assert(
+                Start(
+                    3,
+                    1,
+                ),
+                3,
+                1,
+            ),
+            2,
+            5,
+        ),
+        1,
+        21,
+    ),
+    1,
+    1,
+)

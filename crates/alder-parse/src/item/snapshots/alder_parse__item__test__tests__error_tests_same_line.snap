@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "tests { test \"a\" {} test \"b\" {} }"
+---
+Tests(
+    SameLine(
+        1,
+        21,
+    ),
+    1,
+    1,
+)

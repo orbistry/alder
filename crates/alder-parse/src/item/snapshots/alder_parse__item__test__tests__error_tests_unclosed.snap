@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "tests {\n    test \"a\" {}\n"
+---
+Tests(
+    End(
+        3,
+        1,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,51 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro nothing() {}"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 19,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Macro(
+            MacroDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                    },
+                    value: "nothing",
+                },
+                params: [],
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                    },
+                    value: "",
+                },
+            },
+        ),
+    },
+}

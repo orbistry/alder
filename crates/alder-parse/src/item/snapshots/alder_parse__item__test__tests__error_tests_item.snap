@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "tests {\n    test 42 {}\n}\n"
+---
+Tests(
+    Item(
+        Test(
+            Name(
+                2,
+                10,
+            ),
+            2,
+            5,
+        ),
+        2,
+        5,
+    ),
+    1,
+    1,
+)

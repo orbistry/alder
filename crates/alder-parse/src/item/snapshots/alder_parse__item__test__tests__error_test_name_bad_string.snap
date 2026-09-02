@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "test \"unterminated"
+---
+Test(
+    NameString(
+        Endless,
+        1,
+        19,
+    ),
+    1,
+    1,
+)

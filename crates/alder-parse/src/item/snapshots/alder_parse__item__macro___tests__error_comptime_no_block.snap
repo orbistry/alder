@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: comptime 42
+---
+Comptime(
+    Open(
+        1,
+        10,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,261 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "tests {\n    let ada = { name: \"Ada\" }\n    test \"has a name\" {\n        assert ada.name == \"Ada\"\n    }\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 6,
+            column: 2,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Tests(
+            [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 30,
+                        },
+                    },
+                    value: Item {
+                        attributes: [],
+                        visibility: Private,
+                        kind: Let(
+                            LetDecl {
+                                mutable: None,
+                                pattern: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 9,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 12,
+                                        },
+                                    },
+                                    value: Var(
+                                        "ada",
+                                    ),
+                                },
+                                annotation: None,
+                                value: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 15,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 30,
+                                        },
+                                    },
+                                    value: Record(
+                                        [
+                                            Field {
+                                                name: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 2,
+                                                            column: 17,
+                                                        },
+                                                        end: Position {
+                                                            line: 2,
+                                                            column: 21,
+                                                        },
+                                                    },
+                                                    value: "name",
+                                                },
+                                                value: Some(
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 2,
+                                                                column: 23,
+                                                            },
+                                                            end: Position {
+                                                                line: 2,
+                                                                column: 28,
+                                                            },
+                                                        },
+                                                        value: Str(
+                                                            "Ada",
+                                                        ),
+                                                    },
+                                                ),
+                                            },
+                                        ],
+                                    ),
+                                },
+                            },
+                        ),
+                    },
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 5,
+                            column: 6,
+                        },
+                    },
+                    value: Item {
+                        attributes: [],
+                        visibility: Private,
+                        kind: Test(
+                            TestDecl {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 10,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 22,
+                                        },
+                                    },
+                                    value: "has a name",
+                                },
+                                body: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 23,
+                                        },
+                                        end: Position {
+                                            line: 5,
+                                            column: 6,
+                                        },
+                                    },
+                                    value: Block {
+                                        stmts: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 4,
+                                                        column: 9,
+                                                    },
+                                                    end: Position {
+                                                        line: 4,
+                                                        column: 33,
+                                                    },
+                                                },
+                                                value: Assert(
+                                                    Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 4,
+                                                                column: 16,
+                                                            },
+                                                            end: Position {
+                                                                line: 4,
+                                                                column: 33,
+                                                            },
+                                                        },
+                                                        value: BinOps {
+                                                            operands: [
+                                                                BinOpOperand {
+                                                                    expr: Located {
+                                                                        region: Region {
+                                                                            start: Position {
+                                                                                line: 4,
+                                                                                column: 16,
+                                                                            },
+                                                                            end: Position {
+                                                                                line: 4,
+                                                                                column: 24,
+                                                                            },
+                                                                        },
+                                                                        value: Access {
+                                                                            record: Located {
+                                                                                region: Region {
+                                                                                    start: Position {
+                                                                                        line: 4,
+                                                                                        column: 16,
+                                                                                    },
+                                                                                    end: Position {
+                                                                                        line: 4,
+                                                                                        column: 19,
+                                                                                    },
+                                                                                },
+                                                                                value: Var(
+                                                                                    "ada",
+                                                                                ),
+                                                                            },
+                                                                            field: Located {
+                                                                                region: Region {
+                                                                                    start: Position {
+                                                                                        line: 4,
+                                                                                        column: 20,
+                                                                                    },
+                                                                                    end: Position {
+                                                                                        line: 4,
+                                                                                        column: 24,
+                                                                                    },
+                                                                                },
+                                                                                value: "name",
+                                                                            },
+                                                                        },
+                                                                    },
+                                                                    op: Located {
+                                                                        region: Region {
+                                                                            start: Position {
+                                                                                line: 4,
+                                                                                column: 25,
+                                                                            },
+                                                                            end: Position {
+                                                                                line: 4,
+                                                                                column: 27,
+                                                                            },
+                                                                        },
+                                                                        value: Eq,
+                                                                    },
+                                                                },
+                                                            ],
+                                                            last: Located {
+                                                                region: Region {
+                                                                    start: Position {
+                                                                        line: 4,
+                                                                        column: 28,
+                                                                    },
+                                                                    end: Position {
+                                                                        line: 4,
+                                                                        column: 33,
+                                                                    },
+                                                                },
+                                                                value: Str(
+                                                                    "Ada",
+                                                                ),
+                                                            },
+                                                        },
+                                                    },
+                                                ),
+                                            },
+                                        ],
+                                        tail: None,
+                                    },
+                                },
+                            },
+                        ),
+                    },
+                },
+            ],
+        ),
+    },
+}
