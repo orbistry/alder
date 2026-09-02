@@ -678,6 +678,12 @@ mod tests {
         assert_statement_snapshot!("x = 1");
     }
 
+    /// The statement ends at the value's `)` (§10.43).
+    #[test]
+    fn assign_parens() {
+        assert_statement_snapshot!("x = (a)");
+    }
+
     #[test]
     fn assign_field() {
         assert_statement_snapshot!("user.name = \"Ada\"");
@@ -772,6 +778,12 @@ mod tests {
     #[test]
     fn return_value() {
         assert_statement_snapshot!("return x + 1");
+    }
+
+    /// The statement ends at the value's `)` (§10.43).
+    #[test]
+    fn return_parens() {
+        assert_statement_snapshot!("return (a)");
     }
 
     #[test]

@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 9,
+            column: 10,
         },
     },
     value: Not(
@@ -18,11 +18,11 @@ Located {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 3,
+                    column: 2,
                 },
                 end: Position {
                     line: 1,
-                    column: 9,
+                    column: 10,
                 },
             },
             value: BinOps {

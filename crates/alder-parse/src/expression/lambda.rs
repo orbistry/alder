@@ -201,4 +201,10 @@ mod tests {
     fn error_assign_bad_target_slash_equals() {
         assert_expression_error_snapshot!("fn() f() /= 2");
     }
+
+    /// The lambda ends where its parenthesized body ends, `)` included (§10.43).
+    #[test]
+    fn lambda_body_parens() {
+        assert_expression_snapshot!("fn() (a)");
+    }
 }

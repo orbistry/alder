@@ -54,7 +54,7 @@ Located {
                             },
                             end: Position {
                                 line: 1,
-                                column: 84,
+                                column: 85,
                             },
                         },
                         value: BinOps {
@@ -125,7 +125,7 @@ Located {
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 84,
+                                        column: 85,
                                     },
                                 },
                                 value: Pin(
@@ -133,11 +133,11 @@ Located {
                                         region: Region {
                                             start: Position {
                                                 line: 1,
-                                                column: 49,
+                                                column: 48,
                                             },
                                             end: Position {
                                                 line: 1,
-                                                column: 84,
+                                                column: 85,
                                             },
                                         },
                                         value: Query(

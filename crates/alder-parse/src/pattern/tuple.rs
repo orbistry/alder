@@ -1,12 +1,11 @@
 //! Unit, parenthesized and tuple patterns.
 //!
 //! `()` is `Pattern::Unit` (§10.17), `(p)` is `p` itself (the parentheses
-//! leave no node, exactly as Elm's `tupleHelp` returns `firstPattern`), so
-//! the node's region excludes the parentheses while the cursor is past `)`:
-//! `(x)` is `Var("x")` at 1:2-1:3 with the cursor at 1:4. `Pattern` is not
-//! `Copy`, so re-wrapping the inner value with the paren region would need
-//! an AST change. `(p, q, …)` is `Pattern::Tuple`. A trailing comma is
-//! accepted (§10.8), so `(p,)` is also just `p`.
+//! leave no node of their own, exactly as Elm's `tupleHelp` returns
+//! `firstPattern`) re-spanned over the parentheses: `(x)` is `Var("x")` at
+//! 1:1-1:4, so `region.end` is the last consumed byte (§10.43). `(p, q, …)`
+//! is `Pattern::Tuple`. A trailing comma is accepted (§10.8), so `(p,)` is
+//! also just `p`.
 //!
 //! See docs/parser-internals.md §5.14.
 // OWNER: pattern/tuple.rs (Wave 1)
@@ -54,7 +53,8 @@ impl<'a> Parser<'a> {
             }
         }
         if rest.is_empty() {
-            return Ok(first);
+            // `(p)`: the inner node, re-spanned to include the parentheses.
+            return Ok(self.add_end(start, first.value));
         }
         let second = rest.remove(0);
         Ok(self.add_end(

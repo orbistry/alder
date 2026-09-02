@@ -392,7 +392,7 @@ pub struct NumberLit<'a> {
     pub text: &'a str,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Expr<'a> {
     // ---- literals
     Number(NumberLit<'a>),
@@ -820,7 +820,7 @@ pub enum ChildItem<'a> {
 // Patterns
 // ============================================================================
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Pattern<'a> {
     Anything,
     Var(&'a str),
@@ -886,7 +886,7 @@ pub struct FieldPattern<'a> {
 // Types
 // ============================================================================
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Type<'a> {
     /// `a`, and applied higher-kinded variables `f[a]`, `t[f[a]]`.
     Var {

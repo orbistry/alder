@@ -3,14 +3,11 @@
 //!
 //! Conventions: `expression()`, `unary()` and `postfix()` chomp trailing
 //! whitespace and compute their region before the chomp; `primary()` and the
-//! individual postfix-op parsers do not chomp. The postfix loop tracks the
-//! true end of the node it is extending (`end`) separately from
-//! `node.region.end`, because a parenthesized expression is its inner
-//! expression (§tuple.rs: `(e)` leaves no node of its own) and so its region
-//! stops before the `)`; the newline rules of §2.1 must see the `)`, or
-//! `(\n a\n)?` would refuse the `?`. The binop chain uses `last.region.end`,
-//! so only `(a\n) -b` / `(a\n) <b` on the `)` line still read the operand
-//! as ending on the earlier line (they break the chain; §2.1 rule 2).
+//! individual postfix-op parsers do not chomp. Every node's `region.end` is
+//! the last byte it consumed — a parenthesized expression is its inner
+//! expression re-spanned over the parentheses (§tuple.rs, §10.43) — so the
+//! newline rules of §2.1 and every wrapper (`Negate`, `BinOps`, statements)
+//! can use a child's `region.end` as the true end.
 //!
 //! Two points where this file goes beyond the §6.0 pseudo-code, both for
 //! the design owner to ratify: an Elm-habit token (`^`, `|`, `..`, `->`,
@@ -125,16 +122,10 @@ impl<'a> Parser<'a> {
 
     /// `primary` then the postfix loop (§6.0). Chomps trailing whitespace.
     pub(crate) fn postfix(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
-        let start = self.get_position();
-        // A parenthesized expression is its inner expression, whose region
-        // stops before the `)`; the loop needs the true end (past the `)`).
-        let (mut node, mut end) = if self.peek() == Some(b'(') {
-            let node = self.tuple(start)?;
-            (node, self.get_position())
-        } else {
-            let node = self.primary()?;
-            (node, node.region.end)
-        };
+        let mut node = self.primary()?;
+        // The true end of the node being extended: `primary` does not chomp,
+        // but a block-ending primary (and the postfix ops below) may have.
+        let mut end = node.region.end;
         loop {
             // 1. Tagged template: the backtick must be adjacent (nothing
             //    chomped yet, but a block-ending primary has already chomped
@@ -549,6 +540,13 @@ mod tests {
     #[test]
     fn negate_call() {
         assert_expression_snapshot!("-f(x)");
+    }
+
+    /// The operand's region includes its parentheses, so the wrapper's end
+    /// is the `)` (§10.43).
+    #[test]
+    fn negate_parens() {
+        assert_expression_snapshot!("-(a)");
     }
 
     #[test]

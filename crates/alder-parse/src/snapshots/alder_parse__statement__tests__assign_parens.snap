@@ -1,0 +1,74 @@
+---
+source: crates/alder-parse/src/statement.rs
+description: x = (a)
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 8,
+        },
+    },
+    value: Assign {
+        place: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 2,
+                },
+            },
+            value: Place {
+                root: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                    },
+                    value: "x",
+                },
+                steps: [],
+            },
+        },
+        op: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 3,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+            value: Set,
+        },
+        value: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 5,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Var(
+                "a",
+            ),
+        },
+    },
+}

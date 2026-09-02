@@ -20,11 +20,11 @@ Located {
                     region: Region {
                         start: Position {
                             line: 1,
-                            column: 5,
+                            column: 4,
                         },
                         end: Position {
                             line: 1,
-                            column: 34,
+                            column: 35,
                         },
                     },
                     value: BinOps {

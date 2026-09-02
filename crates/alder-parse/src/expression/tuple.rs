@@ -1,12 +1,13 @@
 //! Unit, parenthesized and tuple expressions.
 //!
-//! `()` is `Expr::Unit`, `(e)` is `e` itself (the parentheses leave no node,
-//! exactly as Elm's `tupleHelp` returns `firstExpr` and as `pattern/tuple.rs`
-//! does), so the node's region excludes the parentheses while the cursor is
-//! past `)`; the postfix loop in `expression/mod.rs` tracks that true end
-//! itself. `Expr` is not `Copy`, so re-wrapping the inner value with the
-//! paren region would need an AST change. `(e, f, …)` is `Expr::Tuple`. A
-//! trailing comma is accepted (§10.8), so `(e,)` is also just `e`.
+//! `()` is `Expr::Unit`, `(e)` is `e` itself (the parentheses leave no node
+//! of their own, exactly as Elm's `tupleHelp` returns `firstExpr` and as
+//! `pattern/tuple.rs` does) but re-spanned over the parentheses: `(x)` is
+//! `Var("x")` at 1:1-1:4, so `region.end` is the last consumed byte and every
+//! wrapper built from a child's end (`Negate`, `BinOps`, `Pin`, statements)
+//! includes the `)` (§10.43). `Expr` is `Copy`, so the re-span is one arena
+//! allocation. `(e, f, …)` is `Expr::Tuple`. A trailing comma is accepted
+//! (§10.8), so `(e,)` is also just `e`.
 //!
 //! Entries are parsed with record constructors re-enabled (§2.3).
 //!
@@ -63,7 +64,8 @@ impl<'a> Parser<'a> {
             }
         }
         if rest.is_empty() {
-            return Ok(first);
+            // `(e)`: the inner node, re-spanned to include the parentheses.
+            return Ok(self.add_end(start, first.value));
         }
         let second = rest.remove(0);
         Ok(self.add_end(

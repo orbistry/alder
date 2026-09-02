@@ -346,7 +346,8 @@ impl<'a> Parser<'a> {
         )))
     }
 
-    /// At `(`: `()`, `(T)` (returned as `T`), or `(T, U, …)`.
+    /// At `(`: `()`, `(T)` (returned as `T` re-spanned over the parentheses,
+    /// §10.43), or `(T, U, …)`.
     fn type_tuple(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TTuple<'a>> {
         self.advance(); // `(`
         self.chomp();
@@ -378,7 +379,8 @@ impl<'a> Parser<'a> {
             }
         }
         match rest.into_bump_slice().split_first() {
-            None => Ok(first),
+            // `(T)`: the inner node, re-spanned to include the parentheses.
+            None => Ok(self.add_end(start, first.value)),
             Some((second, rest)) => Ok(self.add_end(
                 start,
                 Type::Tuple {

@@ -88,4 +88,10 @@ mod tests {
     fn let_style() {
         assert_item_snapshot!("let card = style { padding: 16px }");
     }
+
+    /// The item ends at the `)` (§10.43), as the statement form does.
+    #[test]
+    fn let_top_parens() {
+        assert_item_snapshot!("let x = (a)");
+    }
 }
