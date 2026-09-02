@@ -1,378 +1,797 @@
-pub mod dups;
-pub mod foreign;
-pub mod local;
-
 use std::collections::BTreeMap;
 
-use alder_ast::{Associativity, CtorOpts, ModuleName, Precedence, Type as CanType};
+use alder_ast::{
+    Annotation, ConstructorRef, Interface, InterfaceEnum, LocalId, LocalName, ModuleId, Namespace,
+    PackageId, QualifiedName, Type, ValueRef, Variant, VariantPayload,
+};
 use alder_region::{Located, Region};
 use bumpalo::Bump;
 
-use crate::Error;
+use crate::{Error, ErrorKind, NameError};
 
-/// A resolved name: either uniquely identified or ambiguous across modules.
 #[derive(Clone, Debug)]
-pub enum Info<'a, T> {
-    Specific(ModuleName<'a>, T),
-    Ambiguous(ModuleName<'a>, Vec<ModuleName<'a>>),
+pub enum Candidate<'a, T> {
+    Unique(T),
+    Ambiguous(Vec<QualifiedName<'a>>),
+    Private { owner: ModuleId<'a> },
 }
 
-/// Unqualified name -> resolution.
-pub type Exposed<'a, T> = BTreeMap<&'a str, Info<'a, T>>;
+#[derive(Clone, Copy, Debug)]
+pub struct ValueBinding<'a> {
+    pub reference: ValueRef<'a>,
+    pub region: Region,
+    pub mutable: bool,
+    pub annotation: Option<&'a Annotation<'a>>,
+}
 
-/// Module prefix -> name -> resolution (for `Module.name` lookups).
-pub type Qualified<'a, T> = BTreeMap<&'a str, BTreeMap<&'a str, Info<'a, T>>>;
+#[derive(Clone, Copy, Debug)]
+pub struct TypeBinding<'a> {
+    pub reference: QualifiedName<'a>,
+    pub arity: usize,
+    pub region: Region,
+}
 
-/// A value variable in scope.
+#[derive(Clone, Copy, Debug)]
+pub struct EnumBinding<'a> {
+    pub reference: QualifiedName<'a>,
+    pub variants: &'a [ConstructorRef<'a>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TraitBinding<'a> {
+    pub reference: QualifiedName<'a>,
+    pub arity: usize,
+    pub region: Region,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ModuleBinding<'a> {
+    pub module: ModuleId<'a>,
+    pub interface: Option<&'a Interface<'a>>,
+    pub region: Region,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Scope<'a> {
+    pub values: BTreeMap<&'a str, ValueBinding<'a>>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ControlContext {
+    pub function_depth: u16,
+    pub loop_depth: u16,
+    pub match_depth: u16,
+    pub query_depth: u16,
+    pub opaque_names_depth: u16,
+    pub task_return: bool,
+}
+
 #[derive(Clone, Debug)]
-pub enum Var<'a> {
-    Local(Region),
-    TopLevel(Region),
-    /// Imported from another module, like Elm's `Foreign home annotation`.
-    /// The annotation comes from the defining module's (post-solve)
-    /// interface.
-    Foreign(ModuleName<'a>, &'a alder_ast::Annotation<'a>),
-    /// Ambiguous import: same name imported from multiple modules.
-    Foreigns(ModuleName<'a>, Vec<ModuleName<'a>>),
-}
-
-/// A type in scope (alias or union).
-#[derive(Clone, Copy, Debug)]
-pub enum Type<'a> {
-    Alias {
-        arity: usize,
-        home: ModuleName<'a>,
-        parameters: &'a [&'a str],
-        typ: &'a Located<CanType<'a>>,
-    },
-    Union {
-        arity: usize,
-        home: ModuleName<'a>,
-    },
-}
-
-/// A data constructor in scope.
-#[derive(Clone, Copy, Debug)]
-pub enum Ctor<'a> {
-    /// Union constructor (e.g., `Just` from `type Maybe a = Just a | Nothing`).
-    Union {
-        home: ModuleName<'a>,
-        type_name: &'a str,
-        type_vars: &'a [&'a str],
-        union: &'a alder_ast::Union<'a>,
-        index: u16,
-        arity: u16,
-        arguments: &'a [&'a Located<CanType<'a>>],
-        options: CtorOpts,
-        alternatives: u16,
-    },
-    /// Built-in Bool constructor (True or False from Basics).
-    /// Separated from `Union` so pattern/expression canonicalization can
-    /// emit `CanPattern::Bool` / synthesize the annotation without string checks.
-    Bool {
-        home: ModuleName<'a>,
-        union: &'a alder_ast::Union<'a>,
-        index: u16,
-    },
-    /// Record alias ctor (e.g., `Point` from `type alias Point = { x : Int, y : Int }`).
-    /// Elm creates these automatically for non-extensible record aliases.
-    /// Like Elm's `Env.RecordCtor home vars tipe`, the complete curried
-    /// function type is built up front.
-    RecordCtor {
-        home: ModuleName<'a>,
-        alias_name: &'a str,
-        type_vars: &'a [&'a str],
-        typ: &'a Located<CanType<'a>>,
-    },
-}
-
-/// Build the curried constructor type for a record alias, mirroring Elm's
-/// `toRecordCtor`: `field1 -> field2 -> ... -> Alias args (Filled record)`,
-/// with fields in source order (`fieldsToList` sorts by index).
-pub fn make_record_ctor<'a>(
-    bump: &'a Bump,
-    home: ModuleName<'a>,
-    alias_name: &'a str,
-    parameters: &'a [&'a str],
-    record_type: &'a Located<CanType<'a>>,
-    fields: &'a [alder_ast::FieldType<'a>],
-) -> Ctor<'a> {
-    let arguments =
-        bump.alloc_slice_fill_iter(parameters.iter().map(|var| alder_ast::AliasArgument {
-            name: var,
-            typ: bump.alloc(Located::at(Region::zero(), CanType::Var(var))),
-        }));
-    let result: &'a Located<CanType<'a>> = bump.alloc(Located::at(
-        Region::zero(),
-        CanType::Alias {
-            reference: alder_ast::QualifiedName {
-                home,
-                name: alias_name,
-            },
-            arguments,
-            target: alder_ast::AliasType::Filled(record_type),
-        },
-    ));
-
-    let mut fields_in_source_order: Vec<&alder_ast::FieldType<'a>> = fields.iter().collect();
-    fields_in_source_order.sort_by_key(|f| f.index);
-
-    let mut typ = result;
-    for field in fields_in_source_order.into_iter().rev() {
-        typ = bump.alloc(Located::at(
-            Region::zero(),
-            CanType::Lambda {
-                from: field.typ,
-                to: typ,
-            },
-        ));
-    }
-
-    Ctor::RecordCtor {
-        home,
-        alias_name,
-        type_vars: parameters,
-        typ,
-    }
-}
-
-/// A binary operator in scope. Mirrors Elm's
-/// `Env.Binop op home name annotation associativity precedence`.
-///
-/// Like Elm, only IMPORTED operators are in scope: the defining module's
-/// own `infix` declarations do not enter its env (their annotations only
-/// exist once that module has been solved), so a module calls the
-/// operator's underlying function directly, as Elm core modules do.
-#[derive(Clone, Copy, Debug)]
-pub struct Binop<'a> {
-    pub symbol: &'a str,
-    pub home: ModuleName<'a>,
-    pub function: &'a str,
-    pub annotation: &'a alder_ast::Annotation<'a>,
-    pub associativity: Associativity,
-    pub precedence: Precedence,
-}
-
-/// The canonicalization environment.
-///
-/// Built from imports (foreign) then augmented with local definitions.
-/// Consumed by type, pattern, and expression canonicalization.
-#[derive(Clone)]
 pub struct Env<'a> {
-    pub home: ModuleName<'a>,
-    pub vars: BTreeMap<&'a str, Var<'a>>,
-    pub types: Exposed<'a, Type<'a>>,
-    pub ctors: Exposed<'a, Ctor<'a>>,
-    pub binops: Exposed<'a, Binop<'a>>,
-    /// Qualified value lookups carry the imported value's annotation,
-    /// like Elm's `_q_vars :: Qualified Can.Annotation`.
-    pub q_vars: Qualified<'a, &'a alder_ast::Annotation<'a>>,
-    pub q_types: Qualified<'a, Type<'a>>,
-    pub q_ctors: Qualified<'a, Ctor<'a>>,
+    pub home: ModuleId<'a>,
+    pub scopes: Vec<Scope<'a>>,
+    pub types: BTreeMap<&'a str, Candidate<'a, TypeBinding<'a>>>,
+    pub enums: BTreeMap<&'a str, Candidate<'a, EnumBinding<'a>>>,
+    pub traits: BTreeMap<&'a str, Candidate<'a, TraitBinding<'a>>>,
+    pub modules: BTreeMap<&'a str, Candidate<'a, ModuleBinding<'a>>>,
+    pub providers: Vec<BTreeMap<&'a str, QualifiedName<'a>>>,
+    pub control: ControlContext,
+    next_local: u32,
 }
 
 impl<'a> Env<'a> {
-    /// Insert into both the unqualified and self-qualified tables.
-    /// Used by local.rs — local definitions overwrite imported ones.
-    pub fn insert_local_type(&mut self, name: &'a str, typ: Type<'a>) {
-        self.types.insert(name, Info::Specific(self.home, typ));
-        self.q_types
-            .entry(self.home.name)
-            .or_default()
-            .insert(name, Info::Specific(self.home, typ));
+    pub fn new(home: ModuleId<'a>) -> Self {
+        let mut env = Self {
+            home,
+            scopes: vec![Scope::default()],
+            types: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            traits: BTreeMap::new(),
+            modules: BTreeMap::new(),
+            providers: Vec::new(),
+            control: ControlContext::default(),
+            next_local: 0,
+        };
+        env.add_builtin_types();
+        env.add_builtin_modules();
+        env
     }
 
-    /// Insert into both the unqualified and self-qualified ctor tables.
-    pub fn insert_local_ctor(&mut self, name: &'a str, ctor: Ctor<'a>) {
-        self.ctors.insert(name, Info::Specific(self.home, ctor));
-        self.q_ctors
-            .entry(self.home.name)
-            .or_default()
-            .insert(name, Info::Specific(self.home, ctor));
-    }
-
-    /// Look up an unqualified constructor. Mirrors Elm's `Env.findCtor`.
-    pub fn find_ctor(
-        &self,
-        bump: &'a Bump,
-        region: Region,
-        name: &'a str,
-    ) -> Result<Ctor<'a>, Vec<Error<'a>>> {
-        match self.ctors.get(name) {
-            Some(Info::Specific(_, ctor)) => Ok(*ctor),
-            Some(Info::Ambiguous(first, others)) => Err(vec![Error::AmbiguousCtor {
-                region,
-                prefix: None,
+    fn add_builtin_types(&mut self) {
+        for (name, arity) in [
+            ("Number", 0),
+            ("BigInt", 0),
+            ("String", 0),
+            ("Bool", 0),
+            ("Array", 1),
+            ("Map", 2),
+            ("Set", 1),
+            ("Task", 1),
+            ("Option", 1),
+            ("Result", 2),
+            ("Html", 0),
+            ("Style", 0),
+            ("Query", 1),
+        ] {
+            self.types.insert(
                 name,
-                first_module: *first,
-                other_modules: bump.alloc_slice_fill_iter(others.iter().copied()),
-            }]),
-            None => Err(vec![Error::NotFoundCtor {
-                region,
-                prefix: None,
-                name,
-                suggestions: self.possible_ctor_names(bump),
-            }]),
-        }
-    }
-
-    /// Look up a qualified constructor. Mirrors Elm's `Env.findCtorQual`.
-    pub fn find_ctor_qual(
-        &self,
-        bump: &'a Bump,
-        region: Region,
-        prefix: &'a str,
-        name: &'a str,
-    ) -> Result<Ctor<'a>, Vec<Error<'a>>> {
-        let info = self
-            .q_ctors
-            .get(prefix)
-            .and_then(|m| m.get(name))
-            .ok_or_else(|| {
-                vec![Error::NotFoundCtor {
-                    region,
-                    prefix: Some(prefix),
-                    name,
-                    suggestions: self.possible_ctor_names(bump),
-                }]
-            })?;
-        match info {
-            Info::Specific(_, ctor) => Ok(*ctor),
-            Info::Ambiguous(first, others) => Err(vec![Error::AmbiguousCtor {
-                region,
-                prefix: Some(prefix),
-                name,
-                first_module: *first,
-                other_modules: bump.alloc_slice_fill_iter(others.iter().copied()),
-            }]),
-        }
-    }
-
-    /// Extend env with local bindings (clone-on-scope-extension).
-    /// Shadows foreign imports silently.
-    /// Errors on re-shadowing a local/top-level.
-    pub fn add_locals(
-        &self,
-        bindings: &std::collections::BTreeMap<&'a str, Region>,
-    ) -> Result<Env<'a>, Vec<Error<'a>>> {
-        let mut new_env = self.clone();
-        let mut errors = Vec::new();
-
-        for (&name, &region) in bindings {
-            match new_env.vars.get(name) {
-                Some(Var::Local(original)) | Some(Var::TopLevel(original)) => {
-                    errors.push(Error::Shadowing {
+                Candidate::Unique(TypeBinding {
+                    reference: QualifiedName {
+                        module: ModuleId {
+                            package: PackageId::Builtin,
+                            path: &[],
+                        },
                         name,
-                        original: *original,
-                        new: region,
+                    },
+                    arity,
+                    region: Region::zero(),
+                }),
+            );
+        }
+    }
+
+    fn add_builtin_modules(&mut self) {
+        for name in [
+            "Array", "String", "Number", "BigInt", "Map", "Set", "Task", "Fiber", "Http", "Io",
+            "Cli", "Json", "Option", "Result",
+        ] {
+            self.modules.insert(
+                name,
+                Candidate::Unique(ModuleBinding {
+                    module: ModuleId {
+                        package: PackageId::Builtin,
+                        path: builtin_module_path(name),
+                    },
+                    interface: None,
+                    region: Region::zero(),
+                }),
+            );
+        }
+    }
+
+    pub fn push_scope(&mut self) {
+        self.scopes.push(Scope::default());
+    }
+
+    pub fn pop_scope(&mut self) {
+        assert!(self.scopes.len() > 1, "cannot pop the module scope");
+        self.scopes.pop();
+    }
+
+    pub fn fresh_local(&mut self, text: &'a str) -> LocalName<'a> {
+        let local = LocalName {
+            id: LocalId(self.next_local),
+            text,
+        };
+        self.next_local += 1;
+        local
+    }
+
+    pub fn insert_local(
+        &mut self,
+        text: &'a str,
+        region: Region,
+        mutable: bool,
+    ) -> Result<LocalName<'a>, Region> {
+        if let Some(existing) = self.scopes.last().expect("scope exists").values.get(text) {
+            return Err(existing.region);
+        }
+        let local = self.fresh_local(text);
+        self.scopes.last_mut().expect("scope exists").values.insert(
+            text,
+            ValueBinding {
+                reference: ValueRef::Local(local),
+                region,
+                mutable,
+                annotation: None,
+            },
+        );
+        Ok(local)
+    }
+
+    pub fn insert_top_level(
+        &mut self,
+        text: &'a str,
+        region: Region,
+        mutable: bool,
+    ) -> Result<QualifiedName<'a>, Region> {
+        if let Some(existing) = self.scopes[0].values.get(text) {
+            return Err(existing.region);
+        }
+        let reference = QualifiedName {
+            module: self.home,
+            name: text,
+        };
+        self.scopes[0].values.insert(
+            text,
+            ValueBinding {
+                reference: ValueRef::TopLevel(reference),
+                region,
+                mutable,
+                annotation: None,
+            },
+        );
+        Ok(reference)
+    }
+
+    pub fn find_value(&self, text: &str) -> Option<ValueBinding<'a>> {
+        self.scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.values.get(text).copied())
+    }
+
+    pub fn find_module(&self, text: &str) -> Option<ModuleBinding<'a>> {
+        match self.modules.get(text) {
+            Some(Candidate::Unique(module)) => Some(*module),
+            _ => None,
+        }
+    }
+
+    pub fn insert_module(
+        &mut self,
+        text: &'a str,
+        region: Region,
+        module: ModuleId<'a>,
+        interface: Option<&'a Interface<'a>>,
+    ) -> Result<(), Region> {
+        if let Some(Candidate::Unique(existing)) = self.modules.get(text) {
+            return Err(existing.region);
+        }
+        self.modules.insert(
+            text,
+            Candidate::Unique(ModuleBinding {
+                module,
+                interface,
+                region,
+            }),
+        );
+        Ok(())
+    }
+
+    pub fn insert_foreign_value(
+        &mut self,
+        text: &'a str,
+        region: Region,
+        reference: QualifiedName<'a>,
+        annotation: &'a Annotation<'a>,
+    ) -> Result<(), Region> {
+        if let Some(existing) = self.scopes[0].values.get(text) {
+            return Err(existing.region);
+        }
+        self.scopes[0].values.insert(
+            text,
+            ValueBinding {
+                reference: ValueRef::Foreign {
+                    reference,
+                    annotation,
+                },
+                region,
+                mutable: false,
+                annotation: Some(annotation),
+            },
+        );
+        Ok(())
+    }
+
+    pub fn insert_foreign_type(
+        &mut self,
+        text: &'a str,
+        region: Region,
+        reference: QualifiedName<'a>,
+        arity: usize,
+    ) -> Result<(), Region> {
+        if let Some(Candidate::Unique(existing)) = self.types.get(text) {
+            return Err(existing.region);
+        }
+        self.types.insert(
+            text,
+            Candidate::Unique(TypeBinding {
+                reference,
+                arity,
+                region,
+            }),
+        );
+        Ok(())
+    }
+
+    pub fn register_enum_as(
+        &mut self,
+        text: &'a str,
+        reference: QualifiedName<'a>,
+        variants: &'a [ConstructorRef<'a>],
+    ) {
+        self.enums.insert(
+            text,
+            Candidate::Unique(EnumBinding {
+                reference,
+                variants,
+            }),
+        );
+    }
+
+    pub fn insert_foreign_trait(
+        &mut self,
+        text: &'a str,
+        region: Region,
+        reference: QualifiedName<'a>,
+        arity: usize,
+    ) -> Result<(), Region> {
+        if let Some(Candidate::Unique(existing)) = self.traits.get(text) {
+            return Err(existing.region);
+        }
+        self.traits.insert(
+            text,
+            Candidate::Unique(TraitBinding {
+                reference,
+                arity,
+                region,
+            }),
+        );
+        Ok(())
+    }
+
+    pub fn type_binding(&self, text: &str) -> Option<TypeBinding<'a>> {
+        match self.types.get(text) {
+            Some(Candidate::Unique(binding)) => Some(*binding),
+            _ => None,
+        }
+    }
+
+    pub fn find_provider(&self, text: &str) -> Option<QualifiedName<'a>> {
+        self.providers
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(text).copied())
+    }
+
+    pub fn find_constructor(
+        &self,
+        bump: &'a Bump,
+        region: Region,
+        segments: &'a [alder_source::Name<'a>],
+        allow_unqualified: bool,
+    ) -> Result<ConstructorRef<'a>, Error<'a>> {
+        let variant = segments.last().expect("source paths are nonempty");
+        if segments.len() >= 3
+            && let Some(module) = self.find_module(segments[0].value)
+            && let Some(interface) = module.interface
+            && let Some(enum_) = interface
+                .enums
+                .iter()
+                .find(|enum_| enum_.exported_as == segments[segments.len() - 2].value)
+            && let Some(found) = enum_
+                .variants
+                .iter()
+                .find(|candidate| candidate.name.variant == variant.value)
+        {
+            return Ok(ConstructorRef {
+                name: found.name,
+                index: found.index,
+                alternatives: found.alternatives,
+                payload: found.payload,
+                annotation: interface_constructor_annotation(bump, enum_, *found),
+            });
+        }
+        if segments.len() >= 2 {
+            let enum_name = segments[segments.len() - 2].value;
+            if let Some(Candidate::Unique(binding)) = self.enums.get(enum_name)
+                && let Some(constructor) = binding
+                    .variants
+                    .iter()
+                    .find(|constructor| constructor.name.variant == variant.value)
+            {
+                return Ok(*constructor);
+            }
+        } else if allow_unqualified || matches!(variant.value, "Some" | "None" | "Ok" | "Err") {
+            let matches: Vec<_> = self
+                .enums
+                .values()
+                .filter_map(|candidate| match candidate {
+                    Candidate::Unique(binding) => binding
+                        .variants
+                        .iter()
+                        .find(|constructor| constructor.name.variant == variant.value)
+                        .copied(),
+                    _ => None,
+                })
+                .collect();
+            if matches.len() == 1 {
+                return Ok(matches[0]);
+            }
+            if matches.len() > 1 {
+                return Err(Error::new(
+                    region,
+                    ErrorKind::Pattern(crate::PatternError::Name(NameError::Ambiguous {
+                        namespace: Namespace::Constructor,
+                        name: variant.value,
+                        candidates: bump.alloc_slice_fill_iter(matches.into_iter().map(
+                            |constructor| QualifiedName {
+                                module: constructor.name.enum_.module,
+                                name: constructor.name.variant,
+                            },
+                        )),
+                    })),
+                ));
+            }
+        }
+        Err(self.unknown_name(
+            bump,
+            region,
+            Namespace::Constructor,
+            (segments.len() >= 2).then(|| segments[segments.len() - 2].value),
+            variant.value,
+            self.enums.values().flat_map(|candidate| match candidate {
+                Candidate::Unique(binding) => binding
+                    .variants
+                    .iter()
+                    .map(|constructor| constructor.name.variant)
+                    .collect::<Vec<_>>(),
+                _ => Vec::new(),
+            }),
+        ))
+    }
+
+    pub fn insert_type(
+        &mut self,
+        text: &'a str,
+        region: Region,
+        arity: usize,
+    ) -> Result<QualifiedName<'a>, Region> {
+        if let Some(Candidate::Unique(existing)) = self.types.get(text) {
+            return Err(existing.region);
+        }
+        if self.enums.contains_key(text) || self.traits.contains_key(text) {
+            return Err(region);
+        }
+        let reference = QualifiedName {
+            module: self.home,
+            name: text,
+        };
+        self.types.insert(
+            text,
+            Candidate::Unique(TypeBinding {
+                reference,
+                arity,
+                region,
+            }),
+        );
+        Ok(reference)
+    }
+
+    pub fn register_enum(
+        &mut self,
+        reference: QualifiedName<'a>,
+        variants: &'a [ConstructorRef<'a>],
+    ) {
+        self.enums.insert(
+            reference.name,
+            Candidate::Unique(EnumBinding {
+                reference,
+                variants,
+            }),
+        );
+    }
+
+    pub fn insert_trait(
+        &mut self,
+        text: &'a str,
+        region: Region,
+        arity: usize,
+    ) -> Result<QualifiedName<'a>, Region> {
+        if let Some(Candidate::Unique(existing)) = self.traits.get(text) {
+            return Err(existing.region);
+        }
+        if let Some(Candidate::Unique(existing)) = self.types.get(text) {
+            return Err(existing.region);
+        }
+        let reference = QualifiedName {
+            module: self.home,
+            name: text,
+        };
+        self.traits.insert(
+            text,
+            Candidate::Unique(TraitBinding {
+                reference,
+                arity,
+                region,
+            }),
+        );
+        Ok(reference)
+    }
+
+    pub fn find_trait(
+        &self,
+        bump: &'a Bump,
+        region: Region,
+        qualifier: Option<&'a str>,
+        name: &'a str,
+    ) -> Result<TraitBinding<'a>, Error<'a>> {
+        if let Some(qualifier) = qualifier {
+            if let Some(module) = self.find_module(qualifier)
+                && let Some(interface) = module.interface
+                && let Some(trait_) = interface
+                    .traits
+                    .iter()
+                    .find(|trait_| trait_.exported_as == name)
+            {
+                return Ok(TraitBinding {
+                    reference: trait_.reference,
+                    arity: trait_.params.len(),
+                    region,
+                });
+            }
+            return Err(self.unknown_name(
+                bump,
+                region,
+                Namespace::Trait,
+                Some(qualifier),
+                name,
+                self.traits.keys().copied(),
+            ));
+        }
+        match self.traits.get(name) {
+            Some(Candidate::Unique(binding)) => Ok(*binding),
+            Some(Candidate::Ambiguous(candidates)) => Err(Error::new(
+                region,
+                ErrorKind::Type(crate::TypeError::Name(NameError::Ambiguous {
+                    namespace: Namespace::Trait,
+                    name,
+                    candidates: bump.alloc_slice_copy(candidates),
+                })),
+            )),
+            Some(Candidate::Private { owner }) => Err(Error::new(
+                region,
+                ErrorKind::Type(crate::TypeError::Name(NameError::Private {
+                    owner: *owner,
+                    namespace: Namespace::Trait,
+                    name,
+                })),
+            )),
+            None => Err(self.unknown_name(
+                bump,
+                region,
+                Namespace::Trait,
+                None,
+                name,
+                self.traits.keys().copied(),
+            )),
+        }
+    }
+
+    pub fn find_type(
+        &self,
+        bump: &'a Bump,
+        region: Region,
+        qualifier: Option<&'a str>,
+        name: &'a str,
+    ) -> Result<TypeBinding<'a>, Error<'a>> {
+        if let Some(qualifier) = qualifier {
+            if let Some(module) = self.find_module(qualifier)
+                && let Some(interface) = module.interface
+            {
+                if let Some(typ) = interface.types.iter().find(|typ| typ.exported_as == name) {
+                    return Ok(TypeBinding {
+                        reference: typ.reference,
+                        arity: typ.params.len(),
+                        region,
                     });
                 }
-                _ => {
-                    new_env.vars.insert(name, Var::Local(region));
+                if let Some(enum_) = interface
+                    .enums
+                    .iter()
+                    .find(|enum_| enum_.exported_as == name)
+                {
+                    return Ok(TypeBinding {
+                        reference: enum_.reference,
+                        arity: enum_.params.len(),
+                        region,
+                    });
                 }
             }
+            return Err(self.unknown_name(
+                bump,
+                region,
+                Namespace::Type,
+                Some(qualifier),
+                name,
+                self.types.keys().copied(),
+            ));
         }
-
-        if errors.is_empty() {
-            Ok(new_env)
-        } else {
-            Err(errors)
+        match self.types.get(name) {
+            Some(Candidate::Unique(binding)) => Ok(*binding),
+            Some(Candidate::Ambiguous(candidates)) => Err(Error::new(
+                region,
+                ErrorKind::Type(crate::TypeError::Name(NameError::Ambiguous {
+                    namespace: Namespace::Type,
+                    name,
+                    candidates: bump.alloc_slice_copy(candidates),
+                })),
+            )),
+            Some(Candidate::Private { owner }) => Err(Error::new(
+                region,
+                ErrorKind::Type(crate::TypeError::Name(NameError::Private {
+                    owner: *owner,
+                    namespace: Namespace::Type,
+                    name,
+                })),
+            )),
+            None => Err(self.unknown_name(
+                bump,
+                region,
+                Namespace::Type,
+                None,
+                name,
+                self.types.keys().copied(),
+            )),
         }
     }
 
-    /// Look up a binop by symbol. Mirrors Elm's `Env.findBinop`.
-    pub fn find_binop(
+    fn unknown_name(
         &self,
         bump: &'a Bump,
         region: Region,
-        symbol: &'a str,
-    ) -> Result<Binop<'a>, Vec<Error<'a>>> {
-        match self.binops.get(symbol) {
-            Some(Info::Specific(_, binop)) => Ok(*binop),
-            Some(Info::Ambiguous(first, others)) => Err(vec![Error::AmbiguousBinop {
-                region,
-                name: symbol,
-                first_module: *first,
-                other_modules: bump.alloc_slice_fill_iter(others.iter().copied()),
-            }]),
-            None => Err(vec![Error::NotFoundBinop {
-                region,
-                name: symbol,
-                available: self.available_binops(bump),
-            }]),
-        }
-    }
-
-    fn available_binops(&self, bump: &'a Bump) -> &'a [&'a str] {
-        bump.alloc_slice_fill_iter(self.binops.keys().copied())
-    }
-
-    pub fn possible_var_names(&self, bump: &'a Bump) -> crate::error::PossibleNames<'a> {
-        let locals = bump.alloc_slice_fill_iter(self.vars.keys().copied());
-        let qualified = bump.alloc_slice_fill_iter(self.q_vars.iter().map(|(prefix, inner)| {
-            let names = bump.alloc_slice_fill_iter(inner.keys().copied());
-            (*prefix, names as &[&str])
-        }));
-        crate::error::PossibleNames { locals, qualified }
-    }
-
-    pub fn possible_type_names(&self, bump: &'a Bump) -> crate::error::PossibleNames<'a> {
-        let locals = bump.alloc_slice_fill_iter(self.types.keys().copied());
-        let qualified = bump.alloc_slice_fill_iter(self.q_types.iter().map(|(prefix, inner)| {
-            let names = bump.alloc_slice_fill_iter(inner.keys().copied());
-            (*prefix, names as &[&str])
-        }));
-        crate::error::PossibleNames { locals, qualified }
-    }
-
-    pub fn possible_ctor_names(&self, bump: &'a Bump) -> crate::error::PossibleNames<'a> {
-        let locals = bump.alloc_slice_fill_iter(self.ctors.keys().copied());
-        let qualified = bump.alloc_slice_fill_iter(self.q_ctors.iter().map(|(prefix, inner)| {
-            let names = bump.alloc_slice_fill_iter(inner.keys().copied());
-            (*prefix, names as &[&str])
-        }));
-        crate::error::PossibleNames { locals, qualified }
+        namespace: Namespace,
+        qualifier: Option<&'a str>,
+        name: &'a str,
+        available: impl Iterator<Item = &'a str>,
+    ) -> Error<'a> {
+        let suggestions = suggestions(bump, name, available);
+        let name_error = NameError::Unknown {
+            namespace,
+            qualifier,
+            name,
+            suggestions,
+        };
+        let kind = match namespace {
+            Namespace::Type | Namespace::Enum | Namespace::Trait => {
+                ErrorKind::Type(crate::TypeError::Name(name_error))
+            }
+            Namespace::Value | Namespace::Module | Namespace::Provider => {
+                ErrorKind::Expr(crate::ExprError::Name(name_error))
+            }
+            Namespace::Constructor => ErrorKind::Pattern(crate::PatternError::Name(name_error)),
+            Namespace::AssociatedItem => ErrorKind::Expr(crate::ExprError::Name(name_error)),
+        };
+        Error::new(region, kind)
     }
 }
 
-// --- Merge helpers (Elm's mergeInfo) ---
-
-pub fn merge_exposed<'a, T: Clone>(
-    table: &mut Exposed<'a, T>,
-    name: &'a str,
-    home: ModuleName<'a>,
-    value: T,
-) {
-    use std::collections::btree_map::Entry;
-    match table.entry(name) {
-        Entry::Vacant(e) => {
-            e.insert(Info::Specific(home, value));
-        }
-        Entry::Occupied(mut e) => match e.get() {
-            // Elm's `mergeInfo` compares the full canonical name (package
-            // and module) and keeps the FIRST value when they are equal.
-            Info::Specific(existing, _) if *existing != home => {
-                let first = *existing;
-                e.insert(Info::Ambiguous(first, vec![home]));
-            }
-            // Like `OneOrMore.more`, appends are unconditional.
-            Info::Ambiguous(..) => {
-                if let Info::Ambiguous(_, others) = e.get_mut() {
-                    others.push(home);
-                }
-            }
-            _ => {}
+fn interface_constructor_annotation<'a>(
+    bump: &'a Bump,
+    enum_: &'a InterfaceEnum<'a>,
+    variant: Variant<'a>,
+) -> &'a Annotation<'a> {
+    let args = bump.alloc_slice_fill_iter(enum_.params.iter().map(|param| {
+        bump.alloc(Located::at(
+            Region::zero(),
+            Type::Var {
+                name: param,
+                args: &[],
+            },
+        )) as &Located<Type<'a>>
+    }));
+    let result = bump.alloc(Located::at(
+        Region::zero(),
+        Type::Named {
+            reference: enum_.reference,
+            args,
         },
+    ));
+    let params = match variant.payload {
+        VariantPayload::Unit => &[] as &[&Located<Type<'a>>],
+        VariantPayload::Tuple(types) => types,
+        VariantPayload::Record(fields) => {
+            bump.alloc_slice_fill_iter(fields.iter().map(|field| field.typ))
+        }
+    };
+    let typ = if params.is_empty() {
+        result
+    } else {
+        bump.alloc(Located::at(
+            Region::zero(),
+            Type::Fn {
+                params,
+                ret: result,
+            },
+        ))
+    };
+    bump.alloc(Annotation {
+        free_vars: enum_.params,
+        typ,
+    })
+}
+
+fn builtin_module_path(name: &str) -> &'static [&'static str] {
+    match name {
+        "Array" => &["Array"],
+        "String" => &["String"],
+        "Number" => &["Number"],
+        "BigInt" => &["BigInt"],
+        "Map" => &["Map"],
+        "Set" => &["Set"],
+        "Task" => &["Task"],
+        "Fiber" => &["Fiber"],
+        "Http" => &["Http"],
+        "Io" => &["Io"],
+        "Cli" => &["Cli"],
+        "Json" => &["Json"],
+        "Option" => &["Option"],
+        "Result" => &["Result"],
+        _ => unreachable!("all builtin module names are listed"),
     }
 }
 
-pub fn merge_qualified<'a, T: Clone>(
-    table: &mut Qualified<'a, T>,
-    prefix: &'a str,
-    name: &'a str,
-    home: ModuleName<'a>,
-    value: T,
-) {
-    let inner = table.entry(prefix).or_default();
-    merge_exposed(inner, name, home, value);
+fn suggestions<'a>(
+    bump: &'a Bump,
+    needle: &str,
+    available: impl Iterator<Item = &'a str>,
+) -> &'a [&'a str] {
+    let mut ranked: Vec<(&'a str, usize)> = available
+        .map(|candidate| (candidate, edit_distance(needle, candidate)))
+        .filter(|(candidate, distance)| {
+            candidate.starts_with(needle)
+                || needle.starts_with(*candidate)
+                || *distance <= suggestion_limit(needle.len())
+        })
+        .collect();
+    ranked.sort_by(|(left_name, left_distance), (right_name, right_distance)| {
+        left_distance
+            .cmp(right_distance)
+            .then_with(|| left_name.cmp(right_name))
+    });
+    bump.alloc_slice_fill_iter(ranked.into_iter().take(4).map(|(name, _)| name))
+}
+
+fn suggestion_limit(length: usize) -> usize {
+    match length {
+        0..=3 => 1,
+        4..=7 => 2,
+        _ => 3,
+    }
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let mut previous: Vec<usize> = (0..=right.chars().count()).collect();
+    for (left_index, left_char) in left.chars().enumerate() {
+        let mut current = Vec::with_capacity(previous.len());
+        current.push(left_index + 1);
+        for (right_index, right_char) in right.chars().enumerate() {
+            let insert = current[right_index] + 1;
+            let delete = previous[right_index + 1] + 1;
+            let replace = previous[right_index] + usize::from(left_char != right_char);
+            current.push(insert.min(delete).min(replace));
+        }
+        previous = current;
+    }
+    previous[right.chars().count()]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn suggestions_are_ranked_and_capped() {
+        let bump = Bump::new();
+        let result = suggestions(
+            &bump,
+            "Nubmer",
+            ["String", "Numeric", "Number", "Name", "Never"].into_iter(),
+        );
+        assert_eq!(result, &["Number"]);
+    }
+
+    #[test]
+    fn local_ids_are_stable_and_unique() {
+        let mut env = Env::new(ModuleId {
+            package: PackageId::Application,
+            path: &[],
+        });
+        let x = env.insert_local("x", Region::one(), false).unwrap();
+        env.push_scope();
+        let inner_x = env.insert_local("x", Region::zero(), true).unwrap();
+        assert_ne!(x.id, inner_x.id);
+        assert!(env.find_value("x").unwrap().mutable);
+    }
 }

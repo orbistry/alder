@@ -1,583 +1,240 @@
-//! End-to-end type inference tests: parse → canonicalize → constrain →
-//! solve, snapshotting the inferred annotation per top-level value (or the
-//! type errors).
+//! End-to-end Alder inference tests: parse → canonicalize → constrain → solve.
 
-use alder_ast::{Annotation, Type as CanType};
+use alder_ast::{Annotation, FieldPresence, ModuleId, PackageId, RowExtension, Type};
 use alder_can::{Annotations, Context};
-use alder_constrain::UnionFind;
-use alder_constrain::error::Error;
+use alder_constrain::{Error, UnionFind};
 use alder_region::Located;
 use bumpalo::Bump;
 use indoc::indoc;
 
-fn infer<'a>(bump: &'a Bump, input: &str) -> Result<Annotations<'a>, Vec<Error<'a>>> {
+fn infer<'a>(bump: &'a Bump, input: &str) -> Result<Annotations<'a>, Vec<Error>> {
     let src = bump.alloc_str(input);
-    let mut parser = alder_parse::Parser::new(bump, src.as_bytes());
-    let module = parser.module().expect("expected successful parse");
-    let can_result = alder_can::canonicalize(bump, Context::default(), &module)
-        .expect("expected successful canonicalization");
-
+    let module = alder_parse::parse_module(bump, src).expect("source parses");
+    let can_result = alder_can::canonicalize(
+        bump,
+        Context {
+            home: ModuleId {
+                package: PackageId::Application,
+                path: &["Main"],
+            },
+            imports: &[],
+            interfaces: &[],
+        },
+        &module,
+    )
+    .expect("source canonicalizes");
     let mut uf = UnionFind::new();
-    let constraint = alder_constrain::constrain(bump, &mut uf, &can_result.module);
-    alder_solve::run(bump, &mut uf, &constraint)
-}
-
-// RENDER INFERRED TYPES (Elm-style, for readable snapshots)
-
-#[derive(Clone, Copy, PartialEq)]
-enum Ctx {
-    None,
-    Func,
-    App,
+    let constraints = alder_constrain::constrain(bump, &mut uf, can_result.module);
+    alder_solve::run(bump, &mut uf, &constraints)
 }
 
 fn render_annotations(annotations: &Annotations<'_>) -> String {
     annotations
         .iter()
-        .map(|(name, annotation)| format!("{name} : {}", render_annotation(annotation)))
+        .map(|(name, annotation)| format!("{}: {}", name.name, render_annotation(annotation)))
         .collect::<Vec<_>>()
         .join("\n")
 }
 
 fn render_annotation(annotation: &Annotation<'_>) -> String {
-    let tipe = render_type(annotation.typ, Ctx::None);
+    let typ = render_type(annotation.typ);
     if annotation.free_vars.is_empty() {
-        tipe
+        typ
     } else {
-        format!("forall {}. {}", annotation.free_vars.join(" "), tipe)
+        format!("forall {}. {typ}", annotation.free_vars.join(", "))
     }
 }
 
-fn render_type(typ: &Located<CanType<'_>>, ctx: Ctx) -> String {
+fn render_type(typ: &Located<Type<'_>>) -> String {
     match &typ.value {
-        CanType::Lambda { from, to } => {
-            let rendered = format!(
-                "{} -> {}",
-                render_type(from, Ctx::Func),
-                render_type(to, Ctx::None)
-            );
-            match ctx {
-                Ctx::None => rendered,
-                Ctx::Func | Ctx::App => format!("({rendered})"),
-            }
-        }
-
-        CanType::Var(name) => (*name).to_string(),
-
-        CanType::Named { reference, args } => render_apply(reference.name, args, ctx),
-
-        CanType::Record { fields, ext } => {
-            let rendered_fields = fields
+        Type::Var { name, args: [] } => (*name).to_owned(),
+        Type::Var { name, args } => format!(
+            "{}[{}]",
+            name,
+            args.iter()
+                .map(|arg| render_type(arg))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Named {
+            reference,
+            args: [],
+        } => reference.name.to_owned(),
+        Type::Named { reference, args } => format!(
+            "{}[{}]",
+            reference.name,
+            args.iter()
+                .map(|arg| render_type(arg))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Fn { params, ret } => format!(
+            "fn({}) -> {}",
+            params
                 .iter()
-                .map(|field| format!("{} : {}", field.field, render_type(field.typ, Ctx::None)))
+                .map(|param| render_type(param))
+                .collect::<Vec<_>>()
+                .join(", "),
+            render_type(ret)
+        ),
+        Type::Unit => "()".to_owned(),
+        Type::Tuple(items) => format!(
+            "({})",
+            items
+                .iter()
+                .map(|item| render_type(item))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Record { fields, ext } => {
+            let fields = fields
+                .iter()
+                .map(|field| {
+                    format!(
+                        "{}{}: {}",
+                        field.name,
+                        if field.presence == FieldPresence::Optional {
+                            "?"
+                        } else {
+                            ""
+                        },
+                        render_type(field.typ)
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(", ");
             match ext {
-                None if fields.is_empty() => "{}".to_string(),
-                None => format!("{{ {rendered_fields} }}"),
-                Some(ext_name) => format!("{{ {ext_name} | {rendered_fields} }}"),
+                RowExtension::Closed => format!("{{ {fields} }}"),
+                RowExtension::Open(row) => format!("{{ {fields} | {row} }}"),
             }
         }
-
-        CanType::Unit => "()".to_string(),
-
-        CanType::Tuple {
-            first,
-            second,
-            rest,
-        } => {
-            let mut parts = vec![
-                render_type(first, Ctx::None),
-                render_type(second, Ctx::None),
-            ];
-            parts.extend(rest.iter().map(|third| render_type(third, Ctx::None)));
-            format!("( {} )", parts.join(", "))
-        }
-
-        CanType::Alias {
-            reference,
-            arguments,
-            target: _,
-        } => {
-            let args: Vec<&Located<CanType<'_>>> =
-                arguments.iter().map(|argument| argument.typ).collect();
-            render_apply(reference.name, &args, ctx)
-        }
+        Type::ErrorRow { .. } => "[:_ | e]".to_owned(),
+        Type::Alias { reference, .. } => reference.name.to_owned(),
     }
 }
-
-fn render_apply(name: &str, args: &[&Located<CanType<'_>>], ctx: Ctx) -> String {
-    if args.is_empty() {
-        name.to_string()
-    } else {
-        let rendered = format!(
-            "{name} {}",
-            args.iter()
-                .map(|arg| render_type(arg, Ctx::App))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-        match ctx {
-            Ctx::App => format!("({rendered})"),
-            Ctx::None | Ctx::Func => rendered,
-        }
-    }
-}
-
-// SNAPSHOT MACROS
 
 macro_rules! assert_inference_snapshot {
-    ($input:expr) => {{
-        let input = indoc!($input);
+    ($source:expr) => {{
+        let source = indoc!($source);
         let bump = Bump::new();
-        let annotations = infer(&bump, input).expect("expected successful type inference");
-
-        insta::with_settings!({
-            description => format!("Code:\n\n{}", input),
-            omit_expression => true,
-        }, {
+        let annotations = infer(&bump, source).expect("inference succeeds");
+        insta::with_settings!({ description => source, omit_expression => true }, {
             insta::assert_snapshot!(render_annotations(&annotations));
         });
     }};
 }
 
 macro_rules! assert_inference_error_snapshot {
-    ($input:expr) => {{
-        let input = indoc!($input);
+    ($source:expr) => {{
+        let source = indoc!($source);
         let bump = Bump::new();
-        let errors = infer(&bump, input).expect_err("expected type errors");
-
-        insta::with_settings!({
-            description => format!("Code:\n\n{}", input),
-            omit_expression => true,
-        }, {
+        let errors = infer(&bump, source).expect_err("inference fails");
+        insta::with_settings!({ description => source, omit_expression => true }, {
             insta::assert_debug_snapshot!(errors);
         });
     }};
 }
 
-// LITERALS AND SIMPLE VALUES
+#[test]
+fn polymorphic_identity() {
+    assert_inference_snapshot!("fn identity(value) { value }");
+}
 
 #[test]
-fn int_literal() {
+fn arbitrary_tuple_and_array() {
+    assert_inference_snapshot!("let values = [(1, true, \"three\")]");
+}
+
+#[test]
+fn block_and_sequential_let() {
     assert_inference_snapshot!(
         r#"
-        module Main exposing (main)
-
-        main = 42
+        fn answer() {
+            let value = 40
+            value + 2
+        }
     "#
     );
 }
 
 #[test]
-fn string_literal() {
+fn placeholder_lambda() {
+    assert_inference_snapshot!("fn add(x, y) { x + y }\nlet increment = add(1, _)");
+}
+
+#[test]
+fn optional_record_field_annotation() {
+    assert_inference_snapshot!("fn name(user: { name?: String }) { user.name }");
+}
+
+#[test]
+fn mismatch_reports_new_type_syntax() {
+    assert_inference_error_snapshot!("fn bad() -> Number { \"nope\" }");
+}
+
+#[test]
+fn mutable_loop_and_assignment() {
     assert_inference_snapshot!(
         r#"
-        module Main exposing (greeting)
-
-        greeting = "hello"
+        fn sum(values: Array[Number]) -> Number {
+            let mut total = 0
+            for value in values {
+                total += value
+            }
+            total
+        }
     "#
     );
 }
 
 #[test]
-fn unit_value() {
+fn explicit_return_unifies_with_declared_result() {
     assert_inference_snapshot!(
         r#"
-        module Main exposing (nothing)
-
-        nothing = ()
+        fn choose(flag: Bool) -> Number {
+            if flag { return 1 }
+            return 2
+        }
     "#
     );
 }
 
 #[test]
-fn tuple_value() {
+fn nested_optional_record_rows() {
     assert_inference_snapshot!(
         r#"
-        module Main exposing (pair)
-
-        pair = ( 1, "two" )
+        fn display(user: { id: Number, name?: String, profile: { bio?: String, active: Bool, score?: Number } }) {
+            (user.name, user.profile.bio, user.profile.active)
+        }
     "#
     );
 }
 
 #[test]
-fn list_of_numbers() {
+fn try_unwraps_result_value() {
     assert_inference_snapshot!(
         r#"
-        module Main exposing (numbers)
-
-        numbers = [ 1, 2, 3 ]
+        fn unwrap(value: Result[Number, String]) -> Result[Number, String] {
+            Result.ok(value? + 1)
+        }
     "#
     );
 }
 
 #[test]
-fn record_literal() {
+fn await_unwraps_task_inside_task_function() {
     assert_inference_snapshot!(
         r#"
-        module Main exposing (point)
-
-        point = { x = 1, y = 2 }
-    "#
-    );
-}
-
-// FUNCTIONS
-
-#[test]
-fn identity_function() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (id)
-
-        id x = x
+        fn wait() -> Task[()] {
+            Task.sleep(1).await
+        }
     "#
     );
 }
 
 #[test]
-fn const_function() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (always)
-
-        always x y = x
-    "#
-    );
-}
-
-#[test]
-fn apply_function() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (apply)
-
-        apply f x = f x
-    "#
-    );
-}
-
-#[test]
-fn compose_lambdas() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (compose)
-
-        compose f g = \x -> g (f x)
-    "#
-    );
-}
-
-#[test]
-fn function_application_pins_types() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (id, main)
-
-        id x = x
-
-        main = id 42
-    "#
-    );
-}
-
-// LET
-
-#[test]
-fn let_bound_function() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (main)
-
-        main =
-            let
-                f x = x
-            in
-            f 42
-    "#
-    );
-}
-
-#[test]
-fn let_polymorphism() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (main)
-
-        main =
-            let
-                id x = x
-            in
-            ( id 1, id "one" )
-    "#
-    );
-}
-
-#[test]
-fn let_destructure() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (main)
-
-        main =
-            let
-                ( a, b ) = ( 1, "two" )
-            in
-            b
-    "#
-    );
-}
-
-// IF
-
-#[test]
-fn if_picks_branch_type() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (pick)
-
-        pick b x y = if b then x else y
-    "#
-    );
-}
-
-// UNIONS, CASE, AND PATTERNS
-
-#[test]
-fn union_constructors() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (Maybe(..), just, nothing)
-
-        type Maybe a
-            = Just a
-            | Nothing
-
-        just = Just
-
-        nothing = Nothing
-    "#
-    );
-}
-
-#[test]
-fn case_with_default() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (Maybe(..), withDefault)
-
-        type Maybe a
-            = Just a
-            | Nothing
-
-        withDefault default maybe =
-            case maybe of
-                Just value ->
-                    value
-
-                Nothing ->
-                    default
-    "#
-    );
-}
-
-#[test]
-fn tuple_pattern_arg() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (swap)
-
-        swap ( a, b ) = ( b, a )
-    "#
-    );
-}
-
-#[test]
-fn cons_pattern() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (head)
-
-        head fallback list =
-            case list of
-                first :: rest ->
-                    first
-
-                [] ->
-                    fallback
-    "#
-    );
-}
-
-// RECORD ACCESS AND UPDATE
-
-#[test]
-fn record_access() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (getX)
-
-        getX r = r.x
-    "#
-    );
-}
-
-#[test]
-fn record_accessor_function() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (getName)
-
-        getName = .name
-    "#
-    );
-}
-
-#[test]
-fn record_update() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (bump)
-
-        bump r = { r | x = 1 }
-    "#
-    );
-}
-
-// TYPE ANNOTATIONS
-
-#[test]
-fn typed_identity() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (id)
-
-        id : a -> a
-        id x = x
-    "#
-    );
-}
-
-#[test]
-fn typed_union_function() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (Shape(..), rotate)
-
-        type Shape
-            = Circle
-            | Square
-
-        rotate : Shape -> Shape
-        rotate shape = shape
-    "#
-    );
-}
-
-#[test]
-fn typed_alias_function() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (Point, getX)
-
-        type alias Point =
-            { x : Int }
-
-        type Int
-            = Int
-
-        getX : Point -> Int
-        getX point = point.x
-    "#
-    );
-}
-
-// RECURSION
-
-#[test]
-fn recursive_function() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (forever)
-
-        forever x = forever x
-    "#
-    );
-}
-
-#[test]
-fn mutual_recursion() {
-    assert_inference_snapshot!(
-        r#"
-        module Main exposing (ping, pong)
-
-        ping x = pong x
-
-        pong x = ping x
-    "#
-    );
-}
-
-// ERRORS
-
-#[test]
-fn if_condition_must_be_bool() {
+fn constructor_call_arity_is_checked() {
     assert_inference_error_snapshot!(
-        r#"
-        module Main exposing (main)
-
-        main = if 1 then 2 else 3
-    "#
-    );
-}
-
-#[test]
-fn branch_mismatch() {
-    assert_inference_error_snapshot!(
-        r#"
-        module Main exposing (pick)
-
-        pick b = if b then 1 else "two"
-    "#
-    );
-}
-
-#[test]
-fn rigid_vars_do_not_unify() {
-    assert_inference_error_snapshot!(
-        r#"
-        module Main exposing (cast)
-
-        cast : a -> b
-        cast x = x
-    "#
-    );
-}
-
-#[test]
-fn infinite_type() {
-    assert_inference_error_snapshot!(
-        r#"
-        module Main exposing (selfApply)
-
-        selfApply f = f f
-    "#
-    );
-}
-
-#[test]
-fn number_cannot_be_string() {
-    assert_inference_error_snapshot!(
-        r#"
-        module Main exposing (Msg(..), broken)
-
-        type Msg
-            = Ping
-
-        broken : Msg
-        broken = "not a msg"
-    "#
+        "enum Maybe[a] { Just(a) }\nfn invalid() { Maybe::Just(1, 2) }"
     );
 }

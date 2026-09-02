@@ -21,6 +21,7 @@ url.workspace = true
 alder-config = { path = "../alder-config", version = "0.1.0" }
 alder-ast = { path = "../alder-ast", version = "0.1.0" }
 alder-can = { path = "../alder-can", version = "0.1.0" }
+alder-codegen = { path = "../alder-codegen", version = "0.1.0" }
 alder-constrain = { path = "../alder-constrain", version = "0.1.0" }
 alder-parse = { path = "../alder-parse", version = "0.1.0" }
 alder-region = { path = "../alder-region", version = "0.1.0" }

@@ -13,6 +13,24 @@ pub type Name<'a> = Located<&'a str>;
 #[derive(Debug)]
 pub struct Module<'a> {
     pub items: &'a [&'a Located<Item<'a>>],
+    /// Every source comment, in lexical order. The formatter attaches these
+    /// to syntax nodes without making comments part of the grammar AST.
+    pub comments: &'a [Comment<'a>],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Comment<'a> {
+    pub region: Region,
+    /// Exact source spelling, including the leading slashes but not the newline.
+    pub text: &'a str,
+    pub kind: CommentKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommentKind {
+    Line,
+    OuterDoc,
+    InnerDoc,
 }
 
 impl<'a> Module<'a> {
@@ -301,13 +319,6 @@ pub struct Block<'a> {
 pub enum Stmt<'a> {
     Let(&'a LetDecl<'a>),
     Use(Path<'a>),
-    /// A statement in M1, so a trailing `provide … { … }` leaves the enclosing block
-    /// without a `tail` (web.md's `handle` relies on it having one — §10.40, M2 decides).
-    Provide {
-        name: Path<'a>,
-        value: &'a Located<Expr<'a>>,
-        body: &'a Located<Block<'a>>,
-    },
     Assign {
         place: &'a Located<Place<'a>>,
         op: Located<AssignOp>,
@@ -478,6 +489,12 @@ pub enum Expr<'a> {
         arms: &'a [MatchArm<'a>],
     },
     Loop(&'a Located<Block<'a>>),
+    /// `provide Path = value { body }`; its value is the body's tail value.
+    Provide {
+        name: Path<'a>,
+        value: &'a Located<Expr<'a>>,
+        body: &'a Located<Block<'a>>,
+    },
     // ---- framework
     State(&'a Located<Expr<'a>>),
     Style(&'a Style<'a>),

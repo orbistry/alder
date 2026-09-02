@@ -58,8 +58,11 @@ users.find(id)
 - `~/` is the root of the current package. There is no `@/` alias and no
   special `~name.ald` index files. A directory's index is `dir/mod.ald` or
   a sibling `dir.ald`, Rust-style. Relative paths (`./`) do not exist.
-- Modules are values bound to lowercase names; members are reached with
-  `.`. `::` is only for enum constructors and trait paths.
+- User modules are namespaces bound to lowercase names; members are reached
+  with `.`. They are not first-class record values. Prelude modules are the
+  exception to the spelling convention: built-ins such as `Array`, `Http`,
+  and `Fiber` are bound with capitalized names (`Array.map`, `Http.get`,
+  `Fiber.all`). `::` is only for enum constructors and trait paths.
 - Re-exports are public imports:
 
 ```alder

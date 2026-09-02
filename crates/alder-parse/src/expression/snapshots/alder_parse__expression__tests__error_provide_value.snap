@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: "provide Db = ) { }"
+---
+Provide(
+    Value(
+        Start(
+            1,
+            14,
+        ),
+        1,
+        14,
+    ),
+    1,
+    1,
+)

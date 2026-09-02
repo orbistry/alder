@@ -681,4 +681,34 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 4,
+                    column: 31,
+                },
+                end: Position {
+                    line: 4,
+                    column: 56,
+                },
+            },
+            text: "// read as Option[String]",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 11,
+                    column: 44,
+                },
+                end: Position {
+                    line: 11,
+                    column: 63,
+                },
+            },
+            text: "// nickname omitted",
+            kind: Line,
+        },
+    ],
 }

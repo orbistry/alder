@@ -71,4 +71,48 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 35,
+                },
+            },
+            text: "//! Module docs are skipped in M1.",
+            kind: InnerDoc,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 2,
+                    column: 1,
+                },
+                end: Position {
+                    line: 2,
+                    column: 20,
+                },
+            },
+            text: "// A plain comment.",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 4,
+                    column: 1,
+                },
+                end: Position {
+                    line: 4,
+                    column: 19,
+                },
+            },
+            text: "/// Item docs too.",
+            kind: OuterDoc,
+        },
+    ],
 }

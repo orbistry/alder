@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn unwrap(value: Result[Number, String]) -> Result[Number, String] {\n    Result.ok(value? + 1)\n}\n"
+---
+unwrap: fn(Result[Number, String]) -> Result[Number, String]

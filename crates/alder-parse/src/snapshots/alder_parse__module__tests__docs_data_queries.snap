@@ -1847,4 +1847,20 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 11,
+                    column: 43,
+                },
+                end: Position {
+                    line: 11,
+                    column: 104,
+                },
+            },
+            text: "// Array[{ name: String, title: String, created: Timestamp }]",
+            kind: Line,
+        },
+    ],
 }

@@ -4,8 +4,9 @@
 //! Elm compiler's `Parse/Primitives.hs`. See docs/parser-internals.md.
 
 use alder_region::{Located, Position, Region};
-use alder_source::Module;
+use alder_source::{Comment, Module};
 use bumpalo::Bump;
+use bumpalo::collections::Vec as BumpVec;
 
 pub mod error;
 mod expression;
@@ -47,6 +48,7 @@ pub(crate) struct ParserState {
     pos: usize,
     row: Row,
     col: Col,
+    comments_len: usize,
 }
 
 /// Parser for Alder source code.
@@ -73,6 +75,9 @@ pub struct Parser<'a> {
     no_record_ctor: bool,
     /// Current nesting of the recursive parsers (`nest`), capped at `MAX_NESTING`.
     depth: u32,
+    /// Transactional comment side table. Backtracking truncates it alongside
+    /// restoring the byte cursor so speculative parses cannot duplicate comments.
+    comments: BumpVec<'a, Comment<'a>>,
 }
 
 /// Entry point used by the driver and by tests.
@@ -97,6 +102,7 @@ impl<'a> Parser<'a> {
             in_query: false,
             no_record_ctor: false,
             depth: 0,
+            comments: BumpVec::new_in(bump),
         }
     }
 
@@ -148,6 +154,7 @@ impl<'a> Parser<'a> {
             pos: self.pos,
             row: self.row,
             col: self.col,
+            comments_len: self.comments.len(),
         }
     }
 
@@ -157,6 +164,7 @@ impl<'a> Parser<'a> {
         self.pos = state.pos;
         self.row = state.row;
         self.col = state.col;
+        self.comments.truncate(state.comments_len);
     }
 
     /// Inline `Located` spanning `start`..current (for names and other Copy leaves).
@@ -602,6 +610,19 @@ mod tests {
         });
         assert_eq!(seen, Some(b'c'));
         assert_eq!(parser.position(), (1, 1));
+    }
+
+    #[test]
+    fn lookahead_rolls_back_captured_comments() {
+        let bump = Bump::new();
+        let src = bump.alloc_str("// once\nvalue");
+        let mut parser = Parser::new(&bump, src.as_bytes());
+
+        parser.lookahead(Parser::chomp);
+        assert!(parser.comments.is_empty());
+        parser.chomp();
+        assert_eq!(parser.comments.len(), 1);
+        assert_eq!(parser.comments[0].text, "// once");
     }
 
     /// Parse `src` as a module and report whether it hit the nesting limit.

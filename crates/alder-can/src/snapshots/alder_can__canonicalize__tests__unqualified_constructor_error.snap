@@ -1,0 +1,24 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"enum Maybe { Nothing }\\nfn none() { Nothing }\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 13,
+            },
+            end: Position {
+                line: 2,
+                column: 20,
+            },
+        },
+        kind: Expr(
+            UnqualifiedConstructor {
+                enum_name: "Maybe",
+                variant: "Nothing",
+            },
+        ),
+    },
+]

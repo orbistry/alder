@@ -273,4 +273,62 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 31,
+                },
+                end: Position {
+                    line: 1,
+                    column: 72,
+                },
+            },
+            text: "// build-time render (SSG); default false",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 2,
+                    column: 31,
+                },
+                end: Position {
+                    line: 2,
+                    column: 83,
+                },
+            },
+            text: "// skip server render for this subtree; default true",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 31,
+                },
+                end: Position {
+                    line: 3,
+                    column: 75,
+                },
+            },
+            text: "// ship no JS for this subtree; default true",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 4,
+                    column: 31,
+                },
+                end: Position {
+                    line: 4,
+                    column: 57,
+                },
+            },
+            text: "// Never | Always | Ignore",
+            kind: Line,
+        },
+    ],
 }

@@ -1,5 +1,0 @@
----
-source: crates/alder-solve/tests/inference.rs
-description: "Code:\n\nmodule Main exposing (point)\n\npoint = { x = 1, y = 2 }\n"
----
-point : forall number number1. { x : number, y : number1 }

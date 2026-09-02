@@ -1,0 +1,8 @@
+#[extern("alder:kernel", "$mapNew")]
+pub fn new() -> Map[k, v]
+
+#[extern("alder:kernel", "$mapGet")]
+pub fn get(values: Map[k, v], key: k) -> Option[v]
+
+#[extern("alder:kernel", "$mapSet")]
+pub fn set(values: Map[k, v], key: k, value: v) -> ()

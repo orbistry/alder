@@ -1,5 +1,0 @@
----
-source: crates/alder-solve/tests/inference.rs
-description: "Code:\n\nmodule Main exposing (id)\n\nid : a -> a\nid x = x\n"
----
-id : forall a. a -> a

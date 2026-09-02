@@ -1216,4 +1216,76 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 24,
+                },
+            },
+            text: "// lib/users.remote.ald",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 2,
+                    column: 68,
+                },
+                end: Position {
+                    line: 2,
+                    column: 76,
+                },
+            },
+            text: "// query",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 69,
+                },
+                end: Position {
+                    line: 3,
+                    column: 79,
+                },
+            },
+            text: "// command",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 4,
+                    column: 69,
+                },
+                end: Position {
+                    line: 4,
+                    column: 100,
+                },
+            },
+            text: "// form action, typed by schema",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 6,
+                    column: 1,
+                },
+                end: Position {
+                    line: 6,
+                    column: 17,
+                },
+            },
+            text: "// any component",
+            kind: Line,
+        },
+    ],
 }

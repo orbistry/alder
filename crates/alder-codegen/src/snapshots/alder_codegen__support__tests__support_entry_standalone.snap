@@ -1,0 +1,13 @@
+---
+source: crates/alder-codegen/src/support.rs
+expression: "entry_module(\"alder://app/main.mjs\", EntryKind::Standalone, &modules).code()"
+---
+import { main } from "alder://app/main.mjs";
+const $result = await main();
+if ($result && $result["$"] === "Err") {
+	console["error"]($result["_0"]);
+	globalThis["__alderHost"]["exit"](1);
+} else {
+	globalThis["__alderHost"]["exit"](0);
+}
+export default $result;

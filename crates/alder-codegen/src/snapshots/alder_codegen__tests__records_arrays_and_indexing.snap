@@ -1,0 +1,15 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit(\"pub fn first(name) { let value = { name: name, scores: [10, 20] }\\n value.scores[0] }\")"
+---
+function $v_first($a0) {
+	let $l0_name = $a0;
+	const $t0 = {
+		"name": $l0_name,
+		"scores": [10, 20]
+	};
+	let $l1_value = $t0;
+	const $t1 = $l1_value["scores"];
+	return $t1[0];
+}
+export { $v_first as first };

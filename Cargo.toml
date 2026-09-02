@@ -14,7 +14,7 @@ license = "Apache-2.0"
 [workspace.dependencies]
 async-trait = "0.1"
 bincode = "1"
-bumpalo = { version = "3.19.1", features = ["collections"] }
+bumpalo = { version = "3.19.0", features = ["collections"] }
 clap = { version = "4.5.60", features = ["derive"] }
 color-print = "0.3.7"
 dirs = "6.0.0"

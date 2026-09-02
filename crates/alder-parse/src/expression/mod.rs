@@ -257,6 +257,13 @@ impl<'a> Parser<'a> {
                 self.advance_by(word.len());
                 self.loop_(start)
             }
+            "provide" => self.specialize(
+                |bump, e, row, col| error::Expr::Provide(bump.alloc(e), row, col),
+                |p| {
+                    p.advance_by(7);
+                    p.provide(start)
+                },
+            ),
             "state" => {
                 self.advance_by(word.len());
                 self.state(start)
@@ -293,6 +300,28 @@ impl<'a> Parser<'a> {
         value: Expr<'a>,
     ) -> &'a Located<Expr<'a>> {
         self.alloc(Located::at(Region::new(start, end), value))
+    }
+
+    /// After `provide`: `path '=' expression block`.
+    fn provide(&mut self, start: Position) -> Result<&'a Located<Expr<'a>>, error::Provide<'a>> {
+        self.chomp();
+        let name = self.path(error::Provide::Name, error::Provide::Name)?;
+        self.chomp();
+        let (row, col) = self.position();
+        if self.peek() != Some(b'=') || matches!(self.peek_at(1), Some(b'=' | b'>')) {
+            return Err(error::Provide::Equals(row, col));
+        }
+        self.advance();
+        self.chomp();
+        let value = self.specialize(
+            |bump, e, row, col| error::Provide::Value(bump.alloc(e), row, col),
+            |p| p.with_record_ctor(false, |p| p.expression()),
+        )?;
+        let body = self.specialize(
+            |bump, e, row, col| error::Provide::Body(bump.alloc(e), row, col),
+            |p| p.block(),
+        )?;
+        Ok(self.expr_at(start, body.region.end, Expr::Provide { name, value, body }))
     }
 }
 
@@ -359,6 +388,44 @@ pub(crate) use assert_expression_snapshot;
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn provide_simple() {
+        assert_expression_snapshot!("provide Db = fakeDb() { run() }");
+    }
+
+    #[test]
+    fn provide_nested() {
+        assert_expression_snapshot!(
+            r#"
+            provide Db = Sqlite.open("app.db") {
+                provide Session = session {
+                    saveUser(u).await
+                }
+            }
+            "#
+        );
+    }
+
+    #[test]
+    fn error_provide_name() {
+        assert_expression_error_snapshot!("provide db = x { }");
+    }
+
+    #[test]
+    fn error_provide_equals() {
+        assert_expression_error_snapshot!("provide Db { }");
+    }
+
+    #[test]
+    fn error_provide_value() {
+        assert_expression_error_snapshot!("provide Db = ) { }");
+    }
+
+    #[test]
+    fn error_provide_body() {
+        assert_expression_error_snapshot!("provide Db = db");
+    }
 
     #[test]
     fn binop_add() {

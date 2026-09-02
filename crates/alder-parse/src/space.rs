@@ -5,6 +5,9 @@
 //! M1). Nothing here can fail, so `chomp` is infallible.
 //! See docs/parser-internals.md §2 and §5.2.
 
+use alder_region::Region;
+use alder_source::{Comment, CommentKind};
+
 use crate::Parser;
 
 impl<'a> Parser<'a> {
@@ -26,6 +29,13 @@ impl<'a> Parser<'a> {
 
     /// Eat a line comment (from `//` to end of line, consuming the newline).
     fn eat_line_comment(&mut self) {
+        let start_pos = self.get_position();
+        let start_byte = self.pos;
+        let kind = match self.peek_at(2) {
+            Some(b'/') => CommentKind::OuterDoc,
+            Some(b'!') => CommentKind::InnerDoc,
+            _ => CommentKind::Line,
+        };
         // Skip the `//`
         self.advance();
         self.advance();
@@ -33,13 +43,32 @@ impl<'a> Parser<'a> {
         loop {
             match self.peek() {
                 Some(b'\n') => {
+                    self.record_comment(start_pos, start_byte, kind);
                     self.advance();
                     return;
                 }
                 Some(_) => self.advance(),
-                None => return,
+                None => {
+                    self.record_comment(start_pos, start_byte, kind);
+                    return;
+                }
             }
         }
+    }
+
+    fn record_comment(
+        &mut self,
+        start: alder_region::Position,
+        start_byte: usize,
+        kind: CommentKind,
+    ) {
+        let text = std::str::from_utf8(&self.src[start_byte..self.pos])
+            .expect("the parser source is valid UTF-8");
+        self.comments.push(Comment {
+            region: Region::new(start, self.get_position()),
+            text,
+            kind,
+        });
     }
 }
 

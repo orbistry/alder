@@ -46,6 +46,7 @@ impl<'a> Parser<'a> {
         }
         Ok(Module {
             items: items.into_bump_slice(),
+            comments: self.bump.alloc_slice_copy(self.comments.as_slice()),
         })
     }
 }
@@ -634,8 +635,8 @@ mod tests {
     }
 
     // web.md "Server hooks" with `handleError`'s parameter renamed (`error`
-    // is reserved, §10.35). `handle` ends in `provide … { }`, which is a
-    // statement in M1, so its block has no tail (§10.40).
+    // is reserved, §10.35). `handle` ends in a `provide` expression, so that
+    // expression is the block tail (§10.40).
     #[test]
     fn docs_web_hooks() {
         assert_module_snapshot!(

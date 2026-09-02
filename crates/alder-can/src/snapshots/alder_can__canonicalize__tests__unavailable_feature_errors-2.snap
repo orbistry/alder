@@ -1,0 +1,23 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"fn expand() { generated!() }\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 15,
+            },
+            end: Position {
+                line: 1,
+                column: 27,
+            },
+        },
+        kind: Expr(
+            MacroUnavailable {
+                name: "generated",
+            },
+        ),
+    },
+]

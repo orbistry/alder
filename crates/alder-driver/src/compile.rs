@@ -7,10 +7,13 @@
 //! canonicalize their imports against it — interfaces only ever exist for
 //! type-solved modules.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use alder_can::Interface;
+use alder_ast::{
+    Interface, ModuleId, PackageId, PackageName, ResolvedImport, ResolvedImportKind,
+    ResolvedImportName, Visibility,
+};
 use bumpalo::Bump;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -52,6 +55,17 @@ pub struct BuildResult {
 
     /// Warnings collected during canonicalization.
     pub warnings: Vec<String>,
+
+    /// ESM modules produced in build or test mode, keyed by source URI.
+    pub artifacts: HashMap<Url, alder_codegen::EmittedModule>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BuildMode {
+    #[default]
+    Check,
+    Build,
+    Test,
 }
 
 impl BuildResult {
@@ -66,6 +80,7 @@ struct CompileOutput {
     uri: Url,
     result: ModuleResult,
     warnings: Vec<String>,
+    artifact: Option<alder_codegen::EmittedModule>,
 }
 
 /// Compile all modules through the full pipeline, in dependency order.
@@ -74,10 +89,18 @@ struct CompileOutput {
 /// tokio's blocking pool (`spawn_blocking`) so no executor worker is ever
 /// stalled.
 pub async fn build(db: Arc<Mutex<Database>>, graph: &DepGraph) -> BuildResult {
+    build_with_mode(db, graph, BuildMode::Check).await
+}
+
+pub async fn build_with_mode(
+    db: Arc<Mutex<Database>>,
+    graph: &DepGraph,
+    mode: BuildMode,
+) -> BuildResult {
     let modules: Vec<&Url> = graph.levels().into_iter().flatten().collect();
     let sources = fetch_sources(&db, &modules).await;
 
-    tokio::task::spawn_blocking(move || build_sync(sources))
+    tokio::task::spawn_blocking(move || build_sync(sources, mode))
         .await
         .expect("compile task panicked")
 }
@@ -87,19 +110,23 @@ pub async fn build(db: Arc<Mutex<Database>>, graph: &DepGraph) -> BuildResult {
 ///
 /// Type checking is inherently dependency-ordered, so within-build
 /// parallelism is limited to source fetching for now.
-fn build_sync(sources: Vec<(Url, Result<String, String>)>) -> BuildResult {
+fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> BuildResult {
     let store = Bump::new();
-    let mut interfaces: BTreeMap<&str, Interface<'_>> = BTreeMap::new();
+    let mut interfaces: Vec<Interface<'_>> = Vec::new();
 
     let mut results: HashMap<Url, ModuleResult> = HashMap::new();
     let mut all_warnings: Vec<String> = Vec::new();
+    let mut artifacts = HashMap::new();
 
     for (uri, source) in &sources {
-        let (output, interface) = compile_module(uri, source, &store, &interfaces);
+        let (output, interface) = compile_module(uri, source, &store, &interfaces, mode);
         if let Some(interface) = interface {
-            interfaces.insert(interface.home.name, interface);
+            interfaces.push(interface);
         }
         all_warnings.extend(output.warnings);
+        if let Some(artifact) = output.artifact {
+            artifacts.insert(output.uri.clone(), artifact);
+        }
         results.insert(output.uri, output.result);
     }
 
@@ -115,6 +142,7 @@ fn build_sync(sources: Vec<(Url, Result<String, String>)>) -> BuildResult {
         success,
         failed: total - success,
         warnings: all_warnings,
+        artifacts,
     }
 }
 
@@ -137,13 +165,21 @@ async fn fetch_sources(
         });
     }
 
-    let mut results = Vec::with_capacity(uris.len());
+    let mut fetched = HashMap::with_capacity(uris.len());
     while let Some(res) = set.join_next().await {
-        if let Ok(r) = res {
-            results.push(r);
+        if let Ok((uri, source)) = res {
+            fetched.insert(uri, source);
         }
     }
-    results
+    uris.iter()
+        .map(|uri| {
+            let uri = (*uri).clone();
+            let source = fetched
+                .remove(&uri)
+                .unwrap_or_else(|| Err("source fetch task failed".to_owned()));
+            (uri, source)
+        })
+        .collect()
 }
 
 /// Run one module through the full pipeline in its own arena:
@@ -155,7 +191,8 @@ fn compile_module<'s>(
     uri: &Url,
     source: &Result<String, String>,
     store: &'s Bump,
-    interfaces: &BTreeMap<&'s str, Interface<'s>>,
+    interfaces: &[Interface<'s>],
+    mode: BuildMode,
 ) -> (CompileOutput, Option<Interface<'s>>) {
     let failed = |message: String| {
         (
@@ -163,6 +200,7 @@ fn compile_module<'s>(
                 uri: uri.clone(),
                 result: ModuleResult::Failed { message },
                 warnings: vec![],
+                artifact: None,
             },
             None,
         )
@@ -173,20 +211,23 @@ fn compile_module<'s>(
         Err(e) => return failed(e.clone()),
     };
 
-    let bump = Bump::new();
-    let src: &str = bump.alloc_str(source);
-    let mut parser = alder_parse::Parser::new(&bump, src.as_bytes());
+    let src: &'s str = store.alloc_str(source);
+    let mut parser = alder_parse::Parser::new(store, src.as_bytes());
 
     let module = match parser.module() {
         Ok(module) => module,
         Err(e) => return failed(format!("{:?}", e)),
     };
 
+    let home = module_id_from_uri(store, uri);
+    let imports = resolve_imports(store, &module);
+    let interfaces = store.alloc_slice_copy(interfaces);
     let context = alder_can::Context {
-        package: None,
-        interfaces: Some(interfaces),
+        home,
+        imports,
+        interfaces,
     };
-    let can_result = match alder_can::canonicalize(&bump, context, &module) {
+    let can_result = match alder_can::canonicalize(store, context, &module) {
         Ok(can_result) => can_result,
         Err(errors) => return failed(format!("{:?}", errors)),
     };
@@ -197,35 +238,132 @@ fn compile_module<'s>(
         .collect();
 
     let mut uf = alder_constrain::UnionFind::new();
-    let constraint = alder_constrain::constrain(&bump, &mut uf, &can_result.module);
-    let annotations = match alder_solve::run(&bump, &mut uf, &constraint) {
+    let constraint = alder_constrain::constrain(store, &mut uf, can_result.module);
+    let annotations = match alder_solve::run(store, &mut uf, &constraint) {
         Ok(annotations) => annotations,
         Err(errors) => return failed(format!("{:?}", errors)),
     };
 
-    let interface = alder_can::from_module(&bump, &can_result.module, &annotations);
-    let stored = alder_can::deep_copy_interface(store, &interface);
+    let interface = alder_can::from_module(store, can_result.module, &annotations);
+    let artifact = match mode {
+        BuildMode::Check => None,
+        BuildMode::Build | BuildMode::Test => {
+            let options = alder_codegen::EmitOptions {
+                mode: if mode == BuildMode::Test {
+                    alder_codegen::EmitMode::Test
+                } else {
+                    alder_codegen::EmitMode::Build
+                },
+            };
+            match alder_codegen::emit_module(can_result.module, options) {
+                Ok(artifact) => Some(artifact),
+                Err(error) => {
+                    return failed(format!(
+                        "code generation failed at {:?}: {}",
+                        error.region, error.message
+                    ));
+                }
+            }
+        }
+    };
 
     (
         CompileOutput {
             uri: uri.clone(),
             result: ModuleResult::Success {
-                decl_count: count_decls(can_result.module.decls),
+                decl_count: can_result.module.items.len(),
             },
             warnings,
+            artifact,
         },
-        Some(stored),
+        Some(interface),
     )
 }
 
-fn count_decls(decls: &alder_ast::Decls<'_>) -> usize {
-    match decls {
-        alder_ast::Decls::Declare { next, .. } => 1 + count_decls(next),
-        alder_ast::Decls::DeclareRec {
-            following, next, ..
-        } => 1 + following.len() + count_decls(next),
-        alder_ast::Decls::Empty => 0,
+fn module_id_from_uri<'a>(bump: &'a Bump, uri: &Url) -> ModuleId<'a> {
+    let path = uri.path();
+    let relative = path
+        .split("/src/")
+        .nth(1)
+        .unwrap_or_else(|| path.rsplit('/').next().unwrap_or(path));
+    let without_extension = relative.strip_suffix(".ald").unwrap_or(relative);
+    let mut segments: Vec<_> = without_extension.split('/').collect();
+    if segments.last() == Some(&"mod") {
+        segments.pop();
     }
+    ModuleId {
+        package: PackageId::Application,
+        path: bump.alloc_slice_fill_iter(
+            segments
+                .into_iter()
+                .map(|part| bump.alloc_str(part) as &str),
+        ),
+    }
+}
+
+fn resolve_imports<'a>(
+    bump: &'a Bump,
+    module: &alder_source::Module<'a>,
+) -> &'a [ResolvedImport<'a>] {
+    let imports: Vec<_> = module
+        .items
+        .iter()
+        .filter_map(|item| {
+            let alder_source::ItemKind::Import(import) = item.value.kind else {
+                return None;
+            };
+            let path = import.path.value;
+            let (package, root_name) = match path.root {
+                alder_source::ModuleRoot::Local(_) => (PackageId::Application, None),
+                alder_source::ModuleRoot::Package { author, package } => (
+                    PackageId::Named(PackageName {
+                        author: author.value,
+                        project: package.value,
+                    }),
+                    Some(package),
+                ),
+            };
+            let mut parts: Vec<_> = path.segments.iter().map(|segment| segment.value).collect();
+            if parts.is_empty()
+                && let Some(root_name) = root_name
+            {
+                parts.push(root_name.value);
+            }
+            let module_id = ModuleId {
+                package,
+                path: bump.alloc_slice_copy(&parts),
+            };
+            let kind = match import.tail {
+                alder_source::ImportTail::Module => {
+                    let binding = path
+                        .segments
+                        .last()
+                        .copied()
+                        .or(root_name)
+                        .expect("the parser rejects imports with no bindable segment");
+                    ResolvedImportKind::Module { binding }
+                }
+                alder_source::ImportTail::Alias(binding) => ResolvedImportKind::Module { binding },
+                alder_source::ImportTail::Names(names) => ResolvedImportKind::Names(
+                    bump.alloc_slice_fill_iter(names.iter().map(|name| ResolvedImportName {
+                        source: name.name,
+                        binding: name.alias.unwrap_or(name.name),
+                    })),
+                ),
+                alder_source::ImportTail::All(_) => ResolvedImportKind::All,
+            };
+            Some(ResolvedImport {
+                module: module_id,
+                region: item.region,
+                visibility: match item.value.visibility {
+                    alder_source::Visibility::Private => Visibility::Private,
+                    alder_source::Visibility::Pub(region) => Visibility::Public(region),
+                },
+                kind,
+            })
+        })
+        .collect();
+    bump.alloc_slice_copy(&imports)
 }
 
 /// Build a dependency graph from parsed modules.
@@ -265,11 +403,8 @@ fn extract_imports(source: &str, current: &Url, known_modules: &[Url]) -> Vec<Ur
     let mut parser = alder_parse::Parser::new(&bump, src.as_bytes());
 
     if let Ok(module) = parser.module() {
-        for import in module.imports {
-            let import_name = import.import.value;
-
-            // Try to resolve import to a known module
-            if let Some(uri) = resolve_import(import_name, current, known_modules) {
+        for import in module.imports() {
+            if let Some(uri) = resolve_source_import(import, current, known_modules) {
                 imports.push(uri);
             }
         }
@@ -284,15 +419,27 @@ fn extract_imports(source: &str, current: &Url, known_modules: &[Url]) -> Vec<Ur
 /// - Package dependencies
 /// - Source directory structure
 /// - Module naming conventions
-fn resolve_import(name: &str, _current: &Url, known_modules: &[Url]) -> Option<Url> {
-    // Convert module name to file path pattern
-    // e.g., "Json.Decode" -> "Json/Decode.ald"
-    let path_pattern = format!("{}.ald", name.replace('.', "/"));
-
-    // Find matching module
+fn resolve_source_import(
+    import: &alder_source::Import<'_>,
+    _current: &Url,
+    known_modules: &[Url],
+) -> Option<Url> {
+    if !matches!(import.path.value.root, alder_source::ModuleRoot::Local(_)) {
+        return None;
+    }
+    let path = import
+        .path
+        .value
+        .segments
+        .iter()
+        .map(|segment| segment.value)
+        .collect::<Vec<_>>()
+        .join("/");
+    let file = format!("/src/{path}.ald");
+    let index = format!("/src/{path}/mod.ald");
     known_modules
         .iter()
-        .find(|uri| uri.path().ends_with(&path_pattern))
+        .find(|uri| uri.path().ends_with(&file) || uri.path().ends_with(&index))
         .cloned()
 }
 
@@ -308,16 +455,8 @@ mod tests {
     #[tokio::test]
     async fn test_compile_single_module() {
         let mem = InMemorySource::new();
-        let uri = url("Main.ald");
-        mem.insert(
-            uri.clone(),
-            r#"
-module Main exposing (..)
-
-main = 42
-"#
-            .to_string(),
-        );
+        let uri = url("project/src/main.ald");
+        mem.insert(uri.clone(), "pub fn main() { 42 }".to_string());
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![uri];
@@ -330,9 +469,25 @@ main = 42
     }
 
     #[tokio::test]
+    async fn build_mode_emits_an_artifact_for_each_successful_module() {
+        let mem = InMemorySource::new();
+        let uri = url("project/src/main.ald");
+        mem.insert(uri.clone(), "pub fn main() { 42 }".to_string());
+
+        let db = Arc::new(Mutex::new(Database::new(mem)));
+        let modules = vec![uri.clone()];
+        let graph = build_graph(db.clone(), &modules).await.unwrap();
+        let result = build_with_mode(db, &graph, BuildMode::Build).await;
+
+        assert!(result.is_success());
+        assert_eq!(result.artifacts.len(), 1);
+        assert_eq!(result.artifacts[&uri].module_id, "alder://app/main.mjs");
+    }
+
+    #[tokio::test]
     async fn test_compile_invalid_module() {
         let mem = InMemorySource::new();
-        let uri = url("Bad.ald");
+        let uri = url("project/src/bad.ald");
         mem.insert(
             uri.clone(),
             "this is not valid alder syntax {{{{".to_string(),
@@ -352,29 +507,17 @@ main = 42
         let mem = InMemorySource::new();
 
         mem.insert(
-            url("Utils.ald"),
-            r#"
-module Utils exposing (..)
-
-helper = 1
-"#
-            .to_string(),
+            url("project/src/utils.ald"),
+            "pub let helper = 1".to_string(),
         );
 
         mem.insert(
-            url("Main.ald"),
-            r#"
-module Main exposing (..)
-
-import Utils
-
-main = Utils.helper
-"#
-            .to_string(),
+            url("project/src/main.ald"),
+            "import ~/utils\npub fn main() { utils.helper }".to_string(),
         );
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let modules = vec![url("Utils.ald"), url("Main.ald")];
+        let modules = vec![url("project/src/utils.ald"), url("project/src/main.ald")];
 
         let graph = build_graph(db.clone(), &modules).await.unwrap();
         let result = build(db, &graph).await;
@@ -391,29 +534,18 @@ main = Utils.helper
         let mem = InMemorySource::new();
 
         mem.insert(
-            url("Utils.ald"),
-            r#"
-module Utils exposing (..)
-
-helper = 1
-"#
-            .to_string(),
+            url("project/src/utils.ald"),
+            "pub let helper = 1".to_string(),
         );
 
         mem.insert(
-            url("Main.ald"),
-            r#"
-module Main exposing (..)
-
-import Utils
-
-main = Utils.helper "not a function argument"
-"#
-            .to_string(),
+            url("project/src/main.ald"),
+            "import ~/utils\npub fn main() { utils.helper(\"not a function argument\") }"
+                .to_string(),
         );
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let modules = vec![url("Utils.ald"), url("Main.ald")];
+        let modules = vec![url("project/src/utils.ald"), url("project/src/main.ald")];
 
         let graph = build_graph(db.clone(), &modules).await.unwrap();
         let result = build(db, &graph).await;
@@ -424,7 +556,7 @@ main = Utils.helper "not a function argument"
         assert_eq!(result.success, 1);
         assert_eq!(result.failed, 1);
         assert!(matches!(
-            result.modules[&url("Main.ald")],
+            result.modules[&url("project/src/main.ald")],
             ModuleResult::Failed { .. }
         ));
     }
@@ -439,31 +571,25 @@ main = Utils.helper "not a function argument"
         let mem = InMemorySource::new();
 
         mem.insert(
-            url("Utils.ald"),
+            url("project/src/utils.ald"),
             r#"
-module Utils exposing (..)
-
-ping x = pong x
-
-pong x = ping x
+pub fn ping(x) { pong(x) }
+pub fn pong(x) { ping(x) }
 "#
             .to_string(),
         );
 
         mem.insert(
-            url("Main.ald"),
+            url("project/src/main.ald"),
             r#"
-module Main exposing (..)
-
-import Utils
-
-main = Utils.pong 1
+import ~/utils
+pub fn main() { utils.pong(1) }
 "#
             .to_string(),
         );
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let modules = vec![url("Utils.ald"), url("Main.ald")];
+        let modules = vec![url("project/src/utils.ald"), url("project/src/main.ald")];
 
         let graph = build_graph(db.clone(), &modules).await.unwrap();
         let result = build(db, &graph).await;

@@ -1,0 +1,33 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"fn same((left, left)) { left }\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 16,
+            },
+            end: Position {
+                line: 1,
+                column: 20,
+            },
+        },
+        kind: Pattern(
+            DuplicateBinding {
+                name: "left",
+                first: Region {
+                    start: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                },
+            },
+        ),
+    },
+]

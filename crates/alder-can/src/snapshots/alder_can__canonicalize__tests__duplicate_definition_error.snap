@@ -1,0 +1,34 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"let value = 1\\nlet value = 2\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 5,
+            },
+            end: Position {
+                line: 2,
+                column: 10,
+            },
+        },
+        kind: Item(
+            DuplicateDefinition {
+                namespace: Value,
+                name: "value",
+                first: Region {
+                    start: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                },
+            },
+        ),
+    },
+]

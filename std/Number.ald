@@ -1,0 +1,2 @@
+#[extern("alder:kernel", "$numberParse")]
+pub fn parse(value: String) -> Option[Number]

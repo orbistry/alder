@@ -717,4 +717,20 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 9,
+                    column: 33,
+                },
+                end: Position {
+                    line: 9,
+                    column: 90,
+                },
+            },
+            text: "// bound to the worker's KV namespace via wrangler config",
+            kind: Line,
+        },
+    ],
 }

@@ -873,4 +873,5 @@ Module {
             },
         },
     ],
+    comments: [],
 }

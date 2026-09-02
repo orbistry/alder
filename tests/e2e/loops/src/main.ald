@@ -1,0 +1,7 @@
+pub fn main() {
+    let mut total = 0
+    for number in [1, 2, 3] {
+        total += number
+    }
+    Io.print(total)
+}

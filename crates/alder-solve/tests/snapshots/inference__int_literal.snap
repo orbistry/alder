@@ -1,5 +1,0 @@
----
-source: crates/alder-solve/tests/inference.rs
-description: "Code:\n\nmodule Main exposing (main)\n\nmain = 42\n"
----
-main : forall number. number

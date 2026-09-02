@@ -1,5 +1,0 @@
----
-source: crates/alder-solve/tests/inference.rs
-description: "Code:\n\nmodule Main exposing (main)\n\nmain =\n    let\n        id x = x\n    in\n    ( id 1, id \"one\" )\n"
----
-main : forall number. ( number, String )

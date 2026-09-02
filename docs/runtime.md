@@ -44,17 +44,19 @@ a library or a framework switch, not a target.
   inside the compiler) for a Vite-like experience with no separate tool.
 - `Option[a]` is `a | null`. Nested options box the inner value.
 - `Number` is a JS number, `BigInt` a JS bigint, `Array` a JS array,
-  records are plain objects, enums are tagged objects.
-  **Open:** the exact enum representation (`{ $: "Some", 0: x }` vs
-  arrays vs classes) and whether records use prototypes for trait dispatch.
+  records are plain objects, and enums are tagged objects. Unit variants are
+  frozen `{ $: "Name" }` singletons, tuple variants use `_0`, `_1`, … fields,
+  and record variants retain their field names.
 - Trait dispatch is dictionary passing resolved at compile time where
   the type is known. **Open:** representation for HKT dictionaries.
 
 ## Kernel
 
-The runtime is a hand-written JS/TS kernel shipped by the compiler,
+The runtime is a hand-written TypeScript kernel shipped by the compiler,
 exposed to the Alder stdlib through `extern` (Elm's kernel model). It
-contains:
+currently contains the M2 value ABI, structural equality, Option and Result
+helpers, collection primitives, context-stack scaffolding, and the minimal
+test registry. Later milestones add:
 
 - The fiber scheduler: generator-based (`yield*`), structured concurrency,
   interruption, scopes, and the `Task` runner.
@@ -66,11 +68,26 @@ Everything above the kernel is written in Alder.
 
 ## Embedded runtime
 
-The `alder` binary embeds V8 through `deno_core` plus the Deno extension
-crates that implement web standards: `deno_web`, `deno_url`,
-`deno_console`, `deno_fetch`, `deno_crypto`, `deno_net`, `deno_http`, and
-`deno_fs`. Not `deno_node`: Node compatibility is a non-goal, and whatever
-Deno's web-standard surface provides is what Alder targets.
+The `alder` binary embeds V8 through one exact Deno 2.8.1-compatible crate
+family. The versions are intentionally pinned in lockstep:
+
+| crate | version |
+| --- | --- |
+| `deno_core` | 0.402.0 |
+| `deno_webidl` | 0.249.0 |
+| `deno_web` | 0.280.0 |
+| `deno_crypto` | 0.263.0 |
+| `deno_fetch` | 0.273.0 |
+| `deno_fs` | 0.159.0 |
+| `deno_net` | 0.241.0 |
+| `deno_http` | 0.247.0 |
+| `deno_websocket` | 0.254.0 |
+
+In this Deno family URL and console implementations live in `deno_web`, so
+there are no separate `deno_url` or `deno_console` crates. Alder installs its
+web globals in its own extension bootstrap and explicitly selects AWS-LC as
+Rustls's process provider, avoiding feature-unification-dependent TLS startup.
+`deno_node` is not embedded: Node compatibility is a non-goal.
 
 - That surface is, by design, the same one Cloudflare Workers expose
   (`fetch`, `Request`/`Response`, `URL`, streams, `crypto.subtle`, timers,
@@ -90,6 +107,11 @@ Deno's web-standard surface provides is what Alder targets.
 - Binary size (~100MB) is accepted.
 - npm packages that need Node built-ins are out of scope for `extern`
   until wrapped by a first-party package.
+
+The only direct generated-entry/host boundary is the frozen, non-enumerable
+`globalThis.__alderHost` object (`args` and `exit` in M2). Alder modules use
+stdlib/kernel functions rather than Deno ops. Standalone execution loads the
+bundled ESM as the main module and drives V8's event loop to completion.
 
 ## Cloudflare
 

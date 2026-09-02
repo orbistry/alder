@@ -1,0 +1,33 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"fn change() { let value = 1\\n value = 2 }\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 2,
+            },
+            end: Position {
+                line: 2,
+                column: 7,
+            },
+        },
+        kind: Stmt(
+            ImmutableAssignment {
+                name: "value",
+                binding: Region {
+                    start: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 24,
+                    },
+                },
+            },
+        ),
+    },
+]

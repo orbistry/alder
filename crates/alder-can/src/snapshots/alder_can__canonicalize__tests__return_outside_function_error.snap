@@ -1,0 +1,21 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"test \\\"invalid return\\\" { return 1 }\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 25,
+            },
+            end: Position {
+                line: 1,
+                column: 33,
+            },
+        },
+        kind: Stmt(
+            ReturnOutsideFunction,
+        ),
+    },
+]

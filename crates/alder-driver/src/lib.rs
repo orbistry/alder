@@ -50,7 +50,7 @@ pub mod project;
 pub mod source;
 
 // Re-export main types
-pub use compile::{BuildResult, ModuleResult, build, build_graph};
+pub use compile::{BuildMode, BuildResult, ModuleResult, build, build_graph, build_with_mode};
 pub use database::Database;
 pub use error::DriverError;
 pub use graph::DepGraph;

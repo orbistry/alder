@@ -1,0 +1,9 @@
+---
+source: crates/alder-codegen/src/support.rs
+expression: "entry_module(\"alder://app/main.mjs\", EntryKind::Test, &modules).code()"
+---
+import { $runTests } from "alder:kernel";
+import "alder://app/main.mjs";
+const $failed = await $runTests();
+globalThis["__alderHost"]["exit"]($failed === 0 ? 0 : 1);
+export default $failed;

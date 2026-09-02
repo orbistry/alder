@@ -1,6 +1,0 @@
----
-source: crates/alder-solve/tests/inference.rs
-description: "Code:\n\nmodule Main exposing (id, main)\n\nid x = x\n\nmain = id 42\n"
----
-id : forall a. a -> a
-main : forall number. number

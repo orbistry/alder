@@ -1,0 +1,35 @@
+[package]
+name = "alder-bundle"
+version = "0.1.0"
+edition.workspace = true
+description = "Isolated Rolldown integration for Alder ESM artifacts"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+alder-codegen = { path = "../alder-codegen", version = "0.1.0" }
+alder-kernel = { path = "../alder-kernel", version = "0.1.0" }
+rolldown = { version = "=0.1.0", default-features = false }
+# Keep Rolldown's pre-1.0 family coherent. Its internal dependencies use
+# caret requirements, while 0.1.1 moved to an Oxc release requiring Rust 1.93.
+rolldown_common = "=0.1.0"
+rolldown_ecmascript = "=0.1.0"
+rolldown_ecmascript_utils = "=0.1.0"
+rolldown_error = "=0.1.0"
+rolldown_fs = "=0.1.0"
+rolldown_plugin = "=0.1.0"
+rolldown_plugin_chunk_import_map = "=0.1.0"
+rolldown_plugin_hmr = "=0.1.0"
+rolldown_plugin_oxc_runtime = "=0.1.0"
+rolldown_resolver = "=0.1.0"
+rolldown_sourcemap = "=0.1.0"
+rolldown_std_utils = "=0.1.0"
+rolldown_tracing = "=0.1.0"
+rolldown_utils = "=0.1.0"
+oxc_resolver = "=11.10.0"
+oxc_ast = "=0.95.0"
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

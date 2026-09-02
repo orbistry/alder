@@ -1,0 +1,11 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit(\"pub fn answer() { let x = 40\\n x + 2 }\")"
+---
+function $v_answer() {
+	const $t0 = 40;
+	let $l0_x = $t0;
+	const $t1 = $l0_x;
+	return $t1 + 2;
+}
+export { $v_answer as answer };

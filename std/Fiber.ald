@@ -1,0 +1,5 @@
+#[extern("alder:kernel", "$fiberAll")]
+pub fn all(tasks: Array[Task[a]]) -> Task[Array[a]]
+
+#[extern("alder:kernel", "$fiberRace")]
+pub fn race(tasks: Array[Task[a]]) -> Task[a]

@@ -1,0 +1,31 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit(\"enum Maybe[a] { Nothing, Just(a) }\\npub fn unwrap(value) { match value { Maybe::Just(x) => x, Maybe::Nothing => 0 } }\")"
+---
+import { $matchFailure } from "alder:kernel";
+const $c_Maybe_Nothing = Object["freeze"]({ "$": "Nothing" });
+function $c_Maybe_Just($a0) {
+	return {
+		"$": "Just",
+		"_0": $a0
+	};
+}
+function $v_unwrap($a0) {
+	let $l0_value = $a0;
+	const $t0 = $l0_value;
+	let $t1;
+	$match2: {
+		if ($t0 != null && $t0["$"] === "Just" && true) {
+			let $l1_x = $t0["_0"];
+			$t1 = $l1_x;
+			break $match2;
+		}
+		if ($t0 != null && $t0["$"] === "Nothing") {
+			$t1 = 0;
+			break $match2;
+		}
+		$matchFailure("alder://app/main.mjs", "2:24", $t0);
+	}
+	return $t1;
+}
+export { $v_unwrap as unwrap };

@@ -1,0 +1,5 @@
+#[extern("alder:kernel", "$jsonEncode")]
+pub fn encode(value: a) -> String
+
+#[extern("alder:kernel", "$jsonDecode")]
+pub fn decode(value: String) -> Result[a, String]

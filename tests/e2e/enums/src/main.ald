@@ -1,0 +1,15 @@
+enum Maybe[a] {
+    Nothing,
+    Just(a),
+}
+
+fn unwrap(value) {
+    match value {
+        Maybe::Just(number) => number,
+        Maybe::Nothing => 0,
+    }
+}
+
+pub fn main() {
+    Io.print(unwrap(Maybe::Just(42)))
+}

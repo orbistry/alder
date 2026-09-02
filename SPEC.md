@@ -252,16 +252,16 @@ then, by design.
 
 ### M2: Core language to JavaScript
 
-- [ ] Adapt `alder-can` to namespaced constructors, `pub` visibility, statements, `mut`
-- [ ] `alder-codegen`: JS emission for the core language; decide enum/record representation
-- [ ] Prelude and stdlib skeleton: `Option`, `Result`, `Array`, `String`, `Number`, `BigInt`, `Map`
-- [ ] JS kernel skeleton and `extern` binding
-- [ ] Embed `deno_core` plus the web-standard extension crates in `alder-cli`; `alder run` for the `standalone` target
-- [ ] `Cli` module (raw `args()`; the `Args`/`Subcommand` derives land with M5)
-- [ ] rolldown integration for `alder build`
-- [ ] `alder fmt` (comment side table in the parser)
-- [ ] Minimal `alder test` (pass/fail; power-assert and property tests are M9)
-- [ ] `provide ... { }` becomes an expression
+- [x] Adapt `alder-can` to namespaced constructors, `pub` visibility, statements, `mut`
+- [x] `alder-codegen`: JS emission for the core language; decide enum/record representation
+- [x] Prelude and stdlib skeleton: `Option`, `Result`, `Array`, `String`, `Number`, `BigInt`, `Map`
+- [x] JS kernel skeleton and `extern` binding
+- [x] Embed `deno_core` plus the web-standard extension crates in `alder-cli`; `alder run` for the `standalone` target
+- [x] `Cli` module (raw `args()`; the `Args`/`Subcommand` derives land with M5)
+- [x] rolldown integration for `alder build`
+- [x] `alder fmt` (comment side table in the parser)
+- [x] Minimal `alder test` (pass/fail; power-assert and property tests are M9)
+- [x] `provide ... { }` becomes an expression
 
 ### M3: Traits
 
@@ -471,7 +471,6 @@ tests_block   = 'tests' '{' { item } '}' ;                            (* line-br
 block         = '{' { statement } [ expression ] '}' ;   (* statements line-break separated; a trailing expression is the value *)
 statement     = let_decl
               | 'use' path
-              | 'provide' path '=' expression block      (* a statement in M1; see the Open item in docs/language.md (§10.40) *)
               | assign
               | 'for' pattern 'in' expression block
               | 'while' expression block
@@ -501,6 +500,7 @@ primary       = number | bigint | string | template | 'true' | 'false'
               | '(' ')' | '(' expression [ ',' ] ')' | '(' expression ',' expression { ',' expression } [ ',' ] ')'   (* '(' e ',' ')' is e (§10.8) *)
               | '[' [ expression { ',' expression } [ ',' ] ] ']'
               | record | block | lambda | if_expr | match_expr | loop_expr
+              | provide_expr
               | 'state' '(' expression ')'
               | 'style' style_block
               | 'query' '{' query_expr '}' | markup
@@ -511,6 +511,7 @@ match_expr    = 'match' expression '{' { match_arm } '}' ;
 match_arm     = pattern { '|' pattern } [ 'if' expression ] '=>' ( block | expression ) [ ',' ] ;
                                                          (* a '{' after '=>' is always a block; arms separated by ',' or a line break *)
 loop_expr     = 'loop' block ;
+provide_expr  = 'provide' path '=' expression block ;
 record        = '{' [ record_field { ',' record_field } [ ',' ] ] '}' ;
 record_field  = lower_ident [ ':' expression ] | '..' expression ;
 macro_call    = lower_ident '!' '(' raw_tokens ')' ;     (* '!(' adjacent; balanced raw text (§10.29) *)

@@ -854,4 +854,5 @@ Module {
             },
         },
     ],
+    comments: [],
 }

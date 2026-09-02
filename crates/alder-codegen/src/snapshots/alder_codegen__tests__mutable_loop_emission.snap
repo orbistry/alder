@@ -1,0 +1,14 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit(\"pub fn sum() { let mut total = 0\\n for value in [1, 2] { total += value }\\n total }\")"
+---
+function $v_sum() {
+	const $t0 = 0;
+	let $l0_total = $t0;
+	for (const $t1 of [1, 2]) {
+		let $l1_value = $t1;
+		$l0_total += $l1_value;
+	}
+	return $l0_total;
+}
+export { $v_sum as sum };

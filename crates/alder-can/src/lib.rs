@@ -1,18 +1,24 @@
-mod accumulate;
+//! Name resolution and canonicalization for Alder source modules.
+//!
+//! The implementation follows the contract in `docs/canonical-internals.md`.
+
+mod canonicalize;
 pub mod environment;
 mod error;
 pub mod expression;
 mod interface;
-mod module;
 pub mod pattern;
-mod scc;
 pub mod types;
-pub mod warning;
+mod warning;
 
-pub use crate::error::{BadArityContext, DuplicatePatternContext, Error, PossibleNames, VarKind};
-pub use crate::interface::{
-    AliasVisibility, Annotations, Interface, InterfaceAlias, InterfaceBinop, InterfaceUnion,
-    InterfaceValue, UnionVisibility, deep_copy as deep_copy_interface, from_module,
+pub use canonicalize::{CanResult, Context, canonicalize};
+pub use error::{
+    AttributeError, Error, ErrorKind, ExprError, ImportError, ItemError, NameError, PatternError,
+    StmtError, TypeError,
 };
-pub use crate::module::{CanResult, Context, canonicalize};
-pub use crate::warning::{Warning, WarningContext};
+pub use interface::from_module;
+pub use warning::{Warning, WarningKind};
+
+/// Type annotations produced for top-level values by the solver.
+pub type Annotations<'a> =
+    std::collections::BTreeMap<alder_ast::QualifiedName<'a>, &'a alder_ast::Annotation<'a>>;

@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: "provide db = x { }"
+---
+Provide(
+    Name(
+        1,
+        9,
+    ),
+    1,
+    1,
+)

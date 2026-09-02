@@ -1,5 +1,7 @@
 # M2: Core language to JavaScript
 
+Status: implemented and validated on 2026-09-02.
+
 Two gated halves. **M2a** makes the front end (canonical AST,
 canonicalization, type inference, driver, `alder check`) work on the new
 source AST and turns the workspace green again. **M2b** adds JavaScript
@@ -73,6 +75,10 @@ These are already in the docs; do not reopen them.
 - Kernel is TypeScript, built by rolldown/oxc inside the compiler, shipped
   as JS. No Node compatibility (`deno_node` is not embedded).
 - Test runner in M2b is minimal: pass/fail, no power-assert (M9).
+- Alder application modules and generated target entrypoints are constructed as
+  Oxc ASTs in Rolldown-owned `EcmaAst` arenas. They are passed to Rolldown in
+  memory and are never serialized and reparsed. Handwritten kernel and stdlib
+  bridge JS/TS remain auditable source inputs.
 
 ## Open decisions (recommendation in bold)
 
@@ -85,9 +91,10 @@ These are already in the docs; do not reopen them.
 2. Blocks in expression position (`let x = if c { ... } else { ... }`).
    **Lift to statements with a temporary**, never IIFEs; the codegen keeps
    a statement context and hoists. Only closures capture blocks.
-3. Pattern-match compilation. **Port Elm's decision-tree compiler**
-   (`Optimize/DecisionTree.hs`) so `match` compiles to nested `if`/`switch`
-   without allocation.
+3. Pattern-match compilation. **M2 uses an allocation-free ordered decision
+   chain**, preserving source order, alternative-arm continuation, bindings,
+   guards, and evaluate-once pins. Elm's pattern-matrix branch optimizer is a
+   later performance optimization and does not change match semantics.
 4. Where the stdlib lives. **`std/` at the repo root as Alder source,
    embedded into the `alder` binary at build time** (include_dir-style),
    so `alder run` needs no install step. Alternative: a published

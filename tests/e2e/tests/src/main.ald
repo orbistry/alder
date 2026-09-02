@@ -1,0 +1,12 @@
+pub fn main() {}
+
+test "arithmetic works" {
+    assert 1 + 1 == 2
+}
+
+tests {
+    test "arrays are mutable values" {
+        let values = [1]
+        assert values[0] == 1
+    }
+}

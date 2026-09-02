@@ -285,4 +285,20 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 23,
+                },
+            },
+            text: "// src/stores/cart.ald",
+            kind: Line,
+        },
+    ],
 }

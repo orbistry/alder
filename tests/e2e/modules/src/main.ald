@@ -1,0 +1,10 @@
+import ~/math
+
+pub fn main() {
+    let result = math.answer({
+        value: 40,
+        note: "from an indexed module",
+        meta: { increment: 2, enabled: true },
+    })
+    Io.print(result)
+}

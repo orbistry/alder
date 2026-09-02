@@ -43,7 +43,8 @@ Located {
                         },
                     },
                     value: Block {
-                        stmts: [
+                        stmts: [],
+                        tail: Some(
                             Located {
                                 region: Region {
                                     start: Position {
@@ -292,8 +293,7 @@ Located {
                                     },
                                 },
                             },
-                        ],
-                        tail: None,
+                        ),
                     },
                 },
             },

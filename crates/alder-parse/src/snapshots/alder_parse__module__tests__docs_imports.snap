@@ -666,4 +666,90 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 39,
+                },
+                end: Position {
+                    line: 1,
+                    column: 80,
+                },
+            },
+            text: "// binds `http` (last segment, lowercase)",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 2,
+                    column: 39,
+                },
+                end: Position {
+                    line: 2,
+                    column: 51,
+                },
+            },
+            text: "// binds `h`",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 39,
+                },
+                end: Position {
+                    line: 3,
+                    column: 58,
+                },
+            },
+            text: "// names into scope",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 4,
+                    column: 39,
+                },
+                end: Position {
+                    line: 4,
+                    column: 67,
+                },
+            },
+            text: "// every pub name into scope",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 5,
+                    column: 39,
+                },
+                end: Position {
+                    line: 5,
+                    column: 69,
+                },
+            },
+            text: "// this package: binds `users`",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 9,
+                    column: 39,
+                },
+                end: Position {
+                    line: 9,
+                    column: 61,
+                },
+            },
+            text: "// typical for mod.ald",
+            kind: Line,
+        },
+    ],
 }

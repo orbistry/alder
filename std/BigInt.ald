@@ -1,0 +1,2 @@
+#[extern("alder:kernel", "$bigIntParse")]
+pub fn parse(value: String) -> Option[BigInt]

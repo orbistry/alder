@@ -475,4 +475,34 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 48,
+                },
+                end: Position {
+                    line: 1,
+                    column: 92,
+                },
+            },
+            text: "// inferred: [:not_found(Id) | :timeout | r]",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 2,
+                    column: 35,
+                },
+                end: Position {
+                    line: 2,
+                    column: 58,
+                },
+            },
+            text: "// rows merge through ?",
+            kind: Line,
+        },
+    ],
 }

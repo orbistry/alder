@@ -1,0 +1,21 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"#[derive(Eq)]\\ntype Id = Number\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        kind: Attribute(
+            DeriveUnavailable,
+        ),
+    },
+]

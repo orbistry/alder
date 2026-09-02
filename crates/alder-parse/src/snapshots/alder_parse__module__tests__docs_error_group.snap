@@ -606,4 +606,20 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 2,
+                    column: 36,
+                },
+                end: Position {
+                    line: 2,
+                    column: 59,
+                },
+            },
+            text: "// explicit, closed row",
+            kind: Line,
+        },
+    ],
 }

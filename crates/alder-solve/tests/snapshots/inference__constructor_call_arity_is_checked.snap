@@ -1,0 +1,22 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "enum Maybe[a] { Just(a) }\nfn invalid() { Maybe::Just(1, 2) }"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 16,
+            },
+            end: Position {
+                line: 2,
+                column: 33,
+            },
+        },
+        kind: Mismatch {
+            actual: "fn(a) -> Maybe[a]",
+            expected: "fn(Number, Number) -> a",
+        },
+    },
+]

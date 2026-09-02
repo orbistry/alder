@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn wait() -> Task[()] {\n    Task.sleep(1).await\n}\n"
+---
+wait: fn() -> Task[()]

@@ -1,5 +1,0 @@
----
-source: crates/alder-solve/tests/inference.rs
-description: "Code:\n\nmodule Main exposing (apply)\n\napply f x = f x\n"
----
-apply : forall a b. (a -> b) -> a -> b

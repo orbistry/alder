@@ -476,6 +476,8 @@ Module {
                                                 },
                                             ),
                                         },
+                                    ],
+                                    tail: Some(
                                         Located {
                                             region: Region {
                                                 start: Position {
@@ -599,8 +601,7 @@ Module {
                                                 },
                                             },
                                         },
-                                    ],
-                                    tail: None,
+                                    ),
                                 },
                             },
                         ),
@@ -1192,6 +1193,22 @@ Module {
                     },
                 ),
             },
+        },
+    ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 24,
+                },
+            },
+            text: "// src/hooks.server.ald",
+            kind: Line,
         },
     ],
 }

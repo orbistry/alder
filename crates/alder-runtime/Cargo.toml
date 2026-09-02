@@ -1,0 +1,24 @@
+[package]
+name = "alder-runtime"
+version = "0.1.0"
+edition.workspace = true
+description = "Embedded V8 runtime for standalone Alder programs"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+deno_core = "=0.402.0"
+deno_crypto = "=0.263.0"
+deno_fetch = "=0.273.0"
+deno_fs = "=0.159.0"
+deno_http = { version = "=0.247.0", features = ["default_property_extractor"] }
+deno_net = "=0.241.0"
+deno_permissions = "=0.108.0"
+deno_web = "=0.280.0"
+deno_webidl = "=0.249.0"
+deno_websocket = "=0.254.0"
+deno_features = "=0.46.0"
+sys_traits = { version = "=0.1.28", features = ["libc", "real", "winapi"] }
+rustls = { version = "=0.23.40", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+tokio = { workspace = true, features = ["time"] }

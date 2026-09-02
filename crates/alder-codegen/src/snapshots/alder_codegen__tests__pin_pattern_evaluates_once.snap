@@ -1,0 +1,28 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit(\"fn expected() { 1 }\\npub fn same(value) { match value { ^expected() => true, _ => false } }\")"
+---
+import { $equal, $matchFailure } from "alder:kernel";
+function $v_expected() {
+	return 1;
+}
+function $v_same($a0) {
+	let $l0_value = $a0;
+	const $t0 = $l0_value;
+	let $t1;
+	$match2: {
+		const $t3 = $v_expected;
+		const $t4 = $t3();
+		if ($equal($t0, $t4)) {
+			$t1 = true;
+			break $match2;
+		}
+		if (true) {
+			$t1 = false;
+			break $match2;
+		}
+		$matchFailure("alder://app/main.mjs", "2:22", $t0);
+	}
+	return $t1;
+}
+export { $v_same as same };

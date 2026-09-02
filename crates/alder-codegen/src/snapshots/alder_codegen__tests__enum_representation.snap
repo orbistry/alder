@@ -1,0 +1,19 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit(\"pub enum Shape { Point, Circle(Number), Rect { width: Number, height: Number } }\")"
+---
+const $c_Shape_Point = Object["freeze"]({ "$": "Point" });
+function $c_Shape_Circle($a0) {
+	return {
+		"$": "Circle",
+		"_0": $a0
+	};
+}
+function $c_Shape_Rect(width, height) {
+	return {
+		"$": "Rect",
+		"width": width,
+		"height": height
+	};
+}
+export { $c_Shape_Circle, $c_Shape_Point, $c_Shape_Rect };

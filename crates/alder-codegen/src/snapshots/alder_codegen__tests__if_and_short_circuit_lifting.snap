@@ -1,0 +1,27 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit(\"pub fn choose(flag, fallback) { if flag && fallback() { 1 } else { 2 } }\")"
+---
+function $v_choose($a0, $a1) {
+	let $l0_flag = $a0;
+	let $l1_fallback = $a1;
+	let $t0;
+	let $t1 = false;
+	if (!$t1) {
+		const $t2 = $l0_flag;
+		let $t3 = $t2;
+		if ($t3) {
+			const $t4 = $l1_fallback;
+			$t3 = $t4();
+		}
+		if ($t3) {
+			$t0 = 1;
+			$t1 = true;
+		}
+	}
+	if (!$t1) {
+		$t0 = 2;
+	}
+	return $t0;
+}
+export { $v_choose as choose };

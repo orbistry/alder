@@ -354,7 +354,8 @@ Module {
                                     },
                                 },
                                 value: Block {
-                                    stmts: [
+                                    stmts: [],
+                                    tail: Some(
                                         Located {
                                             region: Region {
                                                 start: Position {
@@ -552,8 +553,7 @@ Module {
                                                 },
                                             },
                                         },
-                                    ],
-                                    tail: None,
+                                    ),
                                 },
                             },
                         ),
@@ -562,4 +562,5 @@ Module {
             },
         },
     ],
+    comments: [],
 }

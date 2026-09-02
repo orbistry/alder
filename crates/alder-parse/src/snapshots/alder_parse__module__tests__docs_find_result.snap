@@ -511,4 +511,20 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 48,
+                },
+                end: Position {
+                    line: 1,
+                    column: 87,
+                },
+            },
+            text: "// error inferred: [:not_found(Id) | r]",
+            kind: Line,
+        },
+    ],
 }

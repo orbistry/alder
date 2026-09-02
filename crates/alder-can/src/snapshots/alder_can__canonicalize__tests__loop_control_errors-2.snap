@@ -1,0 +1,21 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"fn skip() { continue }\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 13,
+            },
+            end: Position {
+                line: 1,
+                column: 21,
+            },
+        },
+        kind: Stmt(
+            ContinueOutsideLoop,
+        ),
+    },
+]

@@ -1,241 +1,184 @@
-use alder_ast::ModuleName;
-use alder_region::{Located, Region};
-use alder_source::Type as SourceType;
+use alder_ast::{ModuleId, Namespace, QualifiedName};
+use alder_region::Region;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BadArityContext {
-    TypeArity,
-    PatternArity,
+#[derive(Clone, Debug)]
+pub struct Error<'a> {
+    pub region: Region,
+    pub kind: ErrorKind<'a>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DuplicatePatternContext<'a> {
-    LambdaArgs,
-    FuncArgs(&'a str),
-    CaseBranch,
-    LetBinding,
-    Destruct,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum VarKind {
-    BadOp,
-    BadVar,
-    BadPattern,
-    BadType,
-}
-
-/// Mirrors Elm's `Error.PossibleNames`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PossibleNames<'a> {
-    pub locals: &'a [&'a str],
-    pub qualified: &'a [(&'a str, &'a [&'a str])],
+impl<'a> Error<'a> {
+    pub const fn new(region: Region, kind: ErrorKind<'a>) -> Self {
+        Self { region, kind }
+    }
 }
 
 #[derive(Clone, Debug)]
-pub enum Error<'a> {
-    MissingModuleHeader,
-    NotFoundType {
-        region: Region,
-        prefix: Option<&'a str>,
+pub enum ErrorKind<'a> {
+    Import(ImportError<'a>),
+    Item(ItemError<'a>),
+    Type(TypeError<'a>),
+    Pattern(PatternError<'a>),
+    Expr(ExprError<'a>),
+    Stmt(StmtError<'a>),
+    Attribute(AttributeError<'a>),
+}
+
+#[derive(Clone, Debug)]
+pub enum NameError<'a> {
+    Unknown {
+        namespace: Namespace,
+        qualifier: Option<&'a str>,
         name: &'a str,
-        suggestions: PossibleNames<'a>,
+        suggestions: &'a [&'a str],
     },
-    ImportNotFound {
-        region: Region,
-        module: &'a str,
-    },
-    AmbiguousType {
-        region: Region,
-        prefix: Option<&'a str>,
+    Ambiguous {
+        namespace: Namespace,
         name: &'a str,
-        first_module: ModuleName<'a>,
-        other_modules: &'a [ModuleName<'a>],
+        candidates: &'a [QualifiedName<'a>],
     },
+    Private {
+        owner: ModuleId<'a>,
+        namespace: Namespace,
+        name: &'a str,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum ImportError<'a> {
+    Name(NameError<'a>),
+    NameNotFound {
+        module: ModuleId<'a>,
+        name: &'a str,
+        available: &'a [&'a str],
+    },
+    AliasCollision {
+        name: &'a str,
+        first: Region,
+    },
+    ReexportPrivate {
+        module: ModuleId<'a>,
+        name: &'a str,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum ItemError<'a> {
+    DuplicateDefinition {
+        namespace: Namespace,
+        name: &'a str,
+        first: Region,
+    },
+    RecursiveValue {
+        name: &'a str,
+        cycle: &'a [&'a str],
+    },
+    RecursiveAlias {
+        name: &'a str,
+        cycle: &'a [&'a str],
+    },
+    AnnotationTooShort {
+        name: &'a str,
+        annotated: usize,
+        parameters: usize,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum TypeError<'a> {
+    Name(NameError<'a>),
     BadArity {
-        region: Region,
-        context: BadArityContext,
         name: &'a str,
         expected: usize,
         actual: usize,
     },
-    ExportNotFound {
-        region: Region,
-        kind: VarKind,
-        name: &'a str,
-        /// Names that could have been meant, like Elm's suggestion lists.
-        suggestions: &'a [&'a str],
-    },
-    ExportOpenAlias {
-        region: Region,
-        name: &'a str,
-    },
-    DuplicateDecl {
+    DuplicateParameter {
         name: &'a str,
         first: Region,
-        second: Region,
-    },
-    DuplicateType {
-        name: &'a str,
-        first: Region,
-        second: Region,
-    },
-    DuplicateCtor {
-        name: &'a str,
-        first: Region,
-        second: Region,
-    },
-    DuplicateBinop {
-        name: &'a str,
-        first: Region,
-        second: Region,
-    },
-    /// An `infix` declaration's function is not a top-level value of the
-    /// module. Elm never validates this (infix is kernel-only there, and
-    /// its interface extraction crashes on the missing annotation); Alder
-    /// allows user-defined operators, so it must be a real error.
-    BinopFunctionNotFound {
-        region: Region,
-        op: &'a str,
-        function: &'a str,
-    },
-    DuplicateUnionArg {
-        type_name: &'a str,
-        arg_name: &'a str,
-        first: Region,
-        second: Region,
-    },
-    DuplicateAliasArg {
-        type_name: &'a str,
-        arg_name: &'a str,
-        first: Region,
-        second: Region,
-    },
-    RecursiveAlias {
-        region: Region,
-        name: &'a str,
-        args: &'a [&'a str],
-        /// The alias's source type, used to suggest a `type` replacement.
-        typ: &'a Located<SourceType<'a>>,
-        others: &'a [&'a str],
-    },
-    TypeVarsUnboundInUnion {
-        region: Region,
-        name: &'a str,
-        args: &'a [&'a str],
-        unbound: (&'a str, Region),
-        more_unbound: &'a [(&'a str, Region)],
-    },
-    TypeVarsMessedUpInAlias {
-        region: Region,
-        name: &'a str,
-        args: &'a [&'a str],
-        unused: &'a [(&'a str, Region)],
-        unbound: &'a [(&'a str, Region)],
     },
     DuplicateField {
         name: &'a str,
         first: Region,
-        second: Region,
     },
-    ExportDuplicate {
+    DuplicateTag {
         name: &'a str,
         first: Region,
-        second: Region,
     },
-    NotFoundCtor {
-        region: Region,
-        prefix: Option<&'a str>,
-        name: &'a str,
-        suggestions: PossibleNames<'a>,
-    },
-    AmbiguousCtor {
-        region: Region,
-        prefix: Option<&'a str>,
-        name: &'a str,
-        first_module: ModuleName<'a>,
-        other_modules: &'a [ModuleName<'a>],
-    },
-    PatternHasRecordCtor {
-        region: Region,
+    UnboundVariable {
         name: &'a str,
     },
-    DuplicatePattern {
-        context: DuplicatePatternContext<'a>,
+    UnusedParameter {
+        name: &'a str,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum PatternError<'a> {
+    Name(NameError<'a>),
+    DuplicateBinding {
         name: &'a str,
         first: Region,
-        second: Region,
     },
-    TupleLargerThanThree {
-        region: Region,
+    ConstructorArity {
+        name: ConstructorDisplay<'a>,
+        expected: usize,
+        actual: usize,
     },
+    ConstructorPayload {
+        name: ConstructorDisplay<'a>,
+        expected: &'static str,
+        actual: &'static str,
+    },
+    DuplicateField {
+        name: &'a str,
+        first: Region,
+    },
+    PinOutsideMatch,
+}
 
-    // --- Expression canonicalization errors ---
-    NotFoundVar {
-        region: Region,
-        prefix: Option<&'a str>,
-        name: &'a str,
-        suggestions: PossibleNames<'a>,
-    },
-    AmbiguousVar {
-        region: Region,
-        prefix: Option<&'a str>,
-        name: &'a str,
-        first_module: ModuleName<'a>,
-        other_modules: &'a [ModuleName<'a>],
-    },
-    NotFoundBinop {
-        region: Region,
-        name: &'a str,
-        available: &'a [&'a str],
-    },
-    AmbiguousBinop {
-        region: Region,
-        name: &'a str,
-        first_module: ModuleName<'a>,
-        other_modules: &'a [ModuleName<'a>],
-    },
-    BinopConflict {
-        region: Region,
-        op1: &'a str,
-        op2: &'a str,
-    },
-    Shadowing {
-        name: &'a str,
-        original: Region,
-        new: Region,
-    },
-    RecursiveLet {
-        name: &'a Located<&'a str>,
-        others: &'a [&'a str],
-    },
-    RecursiveDecl {
-        name: &'a Located<&'a str>,
-        others: &'a [&'a str],
-    },
-    AnnotationTooShort {
-        region: Region,
-        name: &'a str,
-        /// How many arguments the annotation accounts for.
-        index: usize,
-        /// How many definition arguments have no corresponding type.
-        leftovers: usize,
-    },
+#[derive(Clone, Copy, Debug)]
+pub struct ConstructorDisplay<'a> {
+    pub enum_name: &'a str,
+    pub variant: &'a str,
+}
 
-    // --- Import validation errors ---
-    ImportExposingNotFound {
-        region: Region,
-        module: ModuleName<'a>,
-        name: &'a str,
-        available: &'a [&'a str],
+#[derive(Clone, Debug)]
+pub enum ExprError<'a> {
+    Name(NameError<'a>),
+    UnqualifiedConstructor {
+        enum_name: &'a str,
+        variant: &'a str,
     },
-    ImportCtorByName {
-        region: Region,
-        name: &'a str,
-        type_name: &'a str,
-    },
-    ImportOpenAlias {
-        region: Region,
+    PlaceholderOutsideCall,
+    PinOutsideQuery,
+    AwaitRequiresTaskReturn,
+    MacroUnavailable {
         name: &'a str,
     },
+    DuplicateField {
+        name: &'a str,
+        first: Region,
+    },
+    NonAssociativeOperators {
+        left: &'a str,
+        right: &'a str,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum StmtError<'a> {
+    Name(NameError<'a>),
+    ImmutableAssignment { name: &'a str, binding: Region },
+    InvalidAssignmentTarget,
+    BreakOutsideLoop,
+    ContinueOutsideLoop,
+    ReturnOutsideFunction,
+}
+
+#[derive(Clone, Debug)]
+pub enum AttributeError<'a> {
+    InvalidExtern { reason: &'a str },
+    DeriveUnavailable,
+    Unknown { name: &'a str },
+    MacroUnavailable,
 }

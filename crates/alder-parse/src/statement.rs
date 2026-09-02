@@ -7,7 +7,6 @@
 //! block     = '{' { statement } [ expression ] '}' ;
 //! statement = let_decl
 //!           | 'use' path
-//!           | 'provide' path '=' expression block
 //!           | assign
 //!           | 'for' pattern 'in' expression block
 //!           | 'while' expression block
@@ -153,7 +152,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// One statement; dispatch on let/use/provide/for/while/return/break/continue/assert/`;`,
+    /// One statement; dispatch on let/use/for/while/return/break/continue/assert/`;`,
     /// else `expr_or_assign`. Chomps trailing whitespace.
     pub fn statement(&mut self) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>> {
         let start = self.get_position();
@@ -170,13 +169,6 @@ impl<'a> Parser<'a> {
                 self.advance_by(3);
                 self.use_stmt(start)?
             }
-            "provide" => self.specialize(
-                |bump, e, row, col| error::Stmt::Provide(bump.alloc(e), row, col),
-                |p| {
-                    p.advance_by(7);
-                    p.provide_stmt(start)
-                },
-            )?,
             "for" => self.specialize(
                 |bump, e, row, col| error::Stmt::For(bump.alloc(e), row, col),
                 |p| {
@@ -326,31 +318,6 @@ impl<'a> Parser<'a> {
             |p| p.block(),
         )?;
         Ok(self.stmt_at(start, body.region.end, Stmt::While { condition, body }))
-    }
-
-    /// After `provide`: `path '=' expression block`.
-    fn provide_stmt(
-        &mut self,
-        start: Position,
-    ) -> Result<&'a Located<Stmt<'a>>, error::Provide<'a>> {
-        self.chomp();
-        let name = self.path(error::Provide::Name, error::Provide::Name)?;
-        self.chomp();
-        let (row, col) = self.position();
-        if self.peek() != Some(b'=') || matches!(self.peek_at(1), Some(b'=' | b'>')) {
-            return Err(error::Provide::Equals(row, col));
-        }
-        self.advance();
-        self.chomp();
-        let value = self.specialize(
-            |bump, e, row, col| error::Provide::Value(bump.alloc(e), row, col),
-            |p| p.with_record_ctor(false, |p| p.expression()),
-        )?;
-        let body = self.specialize(
-            |bump, e, row, col| error::Provide::Body(bump.alloc(e), row, col),
-            |p| p.block(),
-        )?;
-        Ok(self.stmt_at(start, body.region.end, Stmt::Provide { name, value, body }))
     }
 
     /// After `use`. `pub(crate)` (not private as §5.12 shows) because
@@ -822,7 +789,7 @@ mod tests {
         assert_statement_snapshot!("continue");
     }
 
-    // ---- use / provide
+    // ---- use
 
     #[test]
     fn use_simple() {
@@ -852,24 +819,6 @@ mod tests {
     #[test]
     fn error_use_path_member() {
         assert_statement_error_snapshot!("use App::Db::x");
-    }
-
-    #[test]
-    fn provide_simple() {
-        assert_statement_snapshot!("provide Db = fakeDb() { run() }");
-    }
-
-    #[test]
-    fn provide_nested() {
-        assert_statement_snapshot!(
-            r#"
-            provide Db = Sqlite.open("app.db") {
-                provide Session = session {
-                    saveUser(u).await
-                }
-            }
-            "#
-        );
     }
 
     // ---- assert
@@ -1054,26 +1003,6 @@ mod tests {
     #[test]
     fn error_while_body() {
         assert_statement_error_snapshot!("while ready x");
-    }
-
-    #[test]
-    fn error_provide_name() {
-        assert_statement_error_snapshot!("provide db = x { }");
-    }
-
-    #[test]
-    fn error_provide_equals() {
-        assert_statement_error_snapshot!("provide Db { }");
-    }
-
-    #[test]
-    fn error_provide_value() {
-        assert_statement_error_snapshot!("provide Db = ) { }");
-    }
-
-    #[test]
-    fn error_provide_body() {
-        assert_statement_error_snapshot!("provide Db = db");
     }
 
     #[test]

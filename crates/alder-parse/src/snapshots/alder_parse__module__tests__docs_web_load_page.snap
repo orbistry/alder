@@ -1188,4 +1188,34 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 31,
+                },
+            },
+            text: "// users/[id]/+page.server.ald",
+            kind: Line,
+        },
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 9,
+                    column: 1,
+                },
+                end: Position {
+                    line: 9,
+                    column: 24,
+                },
+            },
+            text: "// users/[id]/+page.ald",
+            kind: Line,
+        },
+    ],
 }

@@ -1,0 +1,28 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"fn invalid(value: Missing) { value }\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 19,
+            },
+            end: Position {
+                line: 1,
+                column: 26,
+            },
+        },
+        kind: Type(
+            Name(
+                Unknown {
+                    namespace: Type,
+                    qualifier: None,
+                    name: "Missing",
+                    suggestions: [],
+                },
+            ),
+        ),
+    },
+]

@@ -1,25 +1,49 @@
-//! Constraint generation for alder type inference: a port of Elm's
-//! `Type.Constrain.*` plus the shared vocabulary from `Type.Type`,
-//! `Type.UnionFind`, `Type.Error`, and `Reporting.Error.Type`.
+//! Alder-native input contract for type inference.
 //!
-//! Where Elm creates unification variables in ambient `IO`, alder threads an
-//! explicit [`UnionFind`] store: `constrain` fills it with fresh variables
-//! and `alder-solve` mutates it while solving the returned [`Constraint`].
+//! Canonicalization has already resolved every name, so constraint generation
+//! preserves the canonical module and lets `alder-solve` walk it with the type
+//! environment. Keeping this as a separate crate retains the compiler phase
+//! boundary without carrying Elm's binary-function and fixed-tuple constraint
+//! vocabulary into Alder.
 
-pub mod error;
-pub mod error_type;
-pub mod instantiate;
-pub mod pattern;
-pub mod type_;
+use alder_ast::Module;
+use alder_region::Region;
 
-mod expression;
-mod module;
-mod union_find;
+#[derive(Debug)]
+pub struct Constraints<'a> {
+    pub module: &'a Module<'a>,
+}
 
-pub use crate::error::{
-    Category, Context, Error, Expected, MaybeName, PCategory, PContext, PExpected, SubContext,
-};
-pub use crate::error_type::{ErrorType, Extension, Super};
-pub use crate::module::constrain;
-pub use crate::type_::{Constraint, Content, Descriptor, FlatType, Mark, SuperType, Type};
-pub use crate::union_find::{UnionFind, Variable};
+#[derive(Debug, Default)]
+pub struct UnionFind;
+
+impl UnionFind {
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Error {
+    pub region: Region,
+    pub kind: ErrorKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ErrorKind {
+    Mismatch { actual: String, expected: String },
+    Arity { expected: usize, actual: usize },
+    MissingField { field: String },
+    InfiniteType,
+    InvalidAwait,
+    InvalidTry,
+    ReturnMismatch,
+}
+
+pub fn constrain<'a>(
+    _bump: &'a bumpalo::Bump,
+    _uf: &mut UnionFind,
+    module: &'a Module<'a>,
+) -> Constraints<'a> {
+    Constraints { module }
+}

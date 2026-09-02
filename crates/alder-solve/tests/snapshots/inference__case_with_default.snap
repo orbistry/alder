@@ -1,5 +1,0 @@
----
-source: crates/alder-solve/tests/inference.rs
-description: "Code:\n\nmodule Main exposing (Maybe(..), withDefault)\n\ntype Maybe a\n    = Just a\n    | Nothing\n\nwithDefault default maybe =\n    case maybe of\n        Just value ->\n            value\n\n        Nothing ->\n            default\n"
----
-withDefault : forall a. a -> Maybe a -> a

@@ -1,0 +1,12 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit(\"#[extern(\\\"library\\\", \\\"parse\\\")]\\npub fn parse(value: String) -> Result[Number, String]\")"
+---
+import { $tryCatch } from "alder:kernel";
+import { parse as $x_library_parse } from "library";
+function $v_parse($a0) {
+	return $tryCatch(() => {
+		return $x_library_parse($a0);
+	});
+}
+export { $v_parse as parse };

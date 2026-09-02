@@ -1,5 +1,0 @@
----
-source: crates/alder-solve/tests/inference.rs
-description: "Code:\n\nmodule Main exposing (pair)\n\npair = ( 1, \"two\" )\n"
----
-pair : forall number. ( number, String )

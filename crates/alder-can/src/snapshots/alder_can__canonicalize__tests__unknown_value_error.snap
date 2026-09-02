@@ -1,0 +1,28 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"fn read() { missing }\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 13,
+            },
+            end: Position {
+                line: 1,
+                column: 20,
+            },
+        },
+        kind: Expr(
+            Name(
+                Unknown {
+                    namespace: Value,
+                    qualifier: None,
+                    name: "missing",
+                    suggestions: [],
+                },
+            ),
+        ),
+    },
+]

@@ -1,5 +1,0 @@
----
-source: crates/alder-solve/tests/inference.rs
-description: "Code:\n\nmodule Main exposing (head)\n\nhead fallback list =\n    case list of\n        first :: rest ->\n            first\n\n        [] ->\n            fallback\n"
----
-head : forall a. a -> List a -> a

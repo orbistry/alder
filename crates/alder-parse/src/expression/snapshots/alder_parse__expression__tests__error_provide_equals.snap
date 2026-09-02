@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: "provide Db { }"
+---
+Provide(
+    Equals(
+        1,
+        12,
+    ),
+    1,
+    1,
+)

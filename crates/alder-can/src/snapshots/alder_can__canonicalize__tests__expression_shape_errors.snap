@@ -1,0 +1,24 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(\"fn compare() { 1 < 2 < 3 }\")"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 22,
+            },
+            end: Position {
+                line: 1,
+                column: 23,
+            },
+        },
+        kind: Expr(
+            NonAssociativeOperators {
+                left: "<",
+                right: "<",
+            },
+        ),
+    },
+]

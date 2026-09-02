@@ -797,4 +797,20 @@ Module {
             },
         },
     ],
+    comments: [
+        Comment {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 48,
+                },
+                end: Position {
+                    line: 3,
+                    column: 73,
+                },
+            },
+            text: "// memoized automatically",
+            kind: Line,
+        },
+    ],
 }

@@ -330,7 +330,6 @@ pub enum Stmt<'a> {
     /// A `::` or `.` member after the provider path (`use Db::x`,
     /// `use Db.insert(u)`): `use` names a provider, not a member.
     UseMember(Row, Col),
-    Provide(&'a Provide<'a>, Row, Col),
     For(&'a For<'a>, Row, Col),
     While(&'a While<'a>, Row, Col),
     Return(&'a Expr<'a>, Row, Col),
@@ -391,6 +390,7 @@ pub enum Expr<'a> {
     If(&'a If<'a>, Row, Col),
     Match(&'a Match<'a>, Row, Col),
     Loop(&'a Block<'a>, Row, Col),
+    Provide(&'a Provide<'a>, Row, Col),
     Call(&'a Call<'a>, Row, Col),
     Index(&'a Index<'a>, Row, Col),
     Tag(&'a Tag<'a>, Row, Col),

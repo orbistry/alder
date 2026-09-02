@@ -297,4 +297,5 @@ Module {
             },
         },
     ],
+    comments: [],
 }

@@ -46,7 +46,11 @@ impl Project {
         let path = path.as_ref();
 
         // Find project root (directory containing alder.jsonc)
-        let root = find_project_root(path)?;
+        let root = find_project_root(path)?.canonicalize().map_err(|_| {
+            DriverError::InvalidModulePath {
+                path: path.to_path_buf(),
+            }
+        })?;
         let config_path = root.join("alder.jsonc");
 
         // Parse the config

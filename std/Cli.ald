@@ -1,0 +1,2 @@
+#[extern("alder:kernel", "$cliArgs")]
+pub fn args() -> Array[String]
