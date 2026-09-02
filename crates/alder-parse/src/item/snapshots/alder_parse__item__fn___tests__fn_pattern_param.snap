@@ -1,0 +1,136 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn swap((a, b)) { (b, a) }"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: "swap",
+    },
+    params: [
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 15,
+                    },
+                },
+                value: Tuple {
+                    first: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                        },
+                        value: Var(
+                            "a",
+                        ),
+                    },
+                    second: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                        },
+                        value: Var(
+                            "b",
+                        ),
+                    },
+                    rest: [],
+                },
+            },
+            annotation: None,
+        },
+    ],
+    ret: None,
+    where_clause: [],
+    body: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 17,
+                },
+                end: Position {
+                    line: 1,
+                    column: 27,
+                },
+            },
+            value: Block {
+                stmts: [],
+                tail: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 19,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 25,
+                            },
+                        },
+                        value: Tuple {
+                            first: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 20,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 21,
+                                    },
+                                },
+                                value: Var(
+                                    "b",
+                                ),
+                            },
+                            second: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 23,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 24,
+                                    },
+                                },
+                                value: Var(
+                                    "a",
+                                ),
+                            },
+                            rest: [],
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

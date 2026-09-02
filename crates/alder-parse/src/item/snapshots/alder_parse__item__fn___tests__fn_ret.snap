@@ -1,0 +1,89 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn name() -> String { \"x\" }"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 8,
+            },
+        },
+        value: "name",
+    },
+    params: [],
+    ret: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 14,
+                },
+                end: Position {
+                    line: 1,
+                    column: 20,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 14,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 20,
+                                },
+                            },
+                            value: "String",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    ),
+    where_clause: [],
+    body: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 21,
+                },
+                end: Position {
+                    line: 1,
+                    column: 28,
+                },
+            },
+            value: Block {
+                stmts: [],
+                tail: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 26,
+                            },
+                        },
+                        value: Str(
+                            "x",
+                        ),
+                    },
+                ),
+            },
+        },
+    ),
+}

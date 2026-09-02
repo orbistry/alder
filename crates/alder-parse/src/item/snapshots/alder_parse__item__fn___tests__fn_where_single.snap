@@ -1,0 +1,418 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn describe(xs: Array[a]) -> String where a: Show {\n    xs |> Array.map(show) |> String.join(\", \")\n}\n"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: "describe",
+    },
+    params: [
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 15,
+                    },
+                },
+                value: Var(
+                    "xs",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 25,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 17,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 22,
+                                        },
+                                    },
+                                    value: "Array",
+                                },
+                            ],
+                        },
+                        args: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 23,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 24,
+                                    },
+                                },
+                                value: Var {
+                                    name: "a",
+                                    args: [],
+                                },
+                            },
+                        ],
+                    },
+                },
+            ),
+        },
+    ],
+    ret: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 30,
+                },
+                end: Position {
+                    line: 1,
+                    column: 36,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 30,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 36,
+                                },
+                            },
+                            value: "String",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    ),
+    where_clause: [
+        Bound {
+            var: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 43,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 44,
+                    },
+                },
+                value: "a",
+            },
+            bounds: [
+                Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 46,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 50,
+                                },
+                            },
+                            value: "Show",
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+    body: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 51,
+                },
+                end: Position {
+                    line: 3,
+                    column: 2,
+                },
+            },
+            value: Block {
+                stmts: [],
+                tail: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 47,
+                            },
+                        },
+                        value: BinOps {
+                            operands: [
+                                BinOpOperand {
+                                    expr: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 5,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 7,
+                                            },
+                                        },
+                                        value: Var(
+                                            "xs",
+                                        ),
+                                    },
+                                    op: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 8,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 10,
+                                            },
+                                        },
+                                        value: Pipe,
+                                    },
+                                },
+                                BinOpOperand {
+                                    expr: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 11,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 26,
+                                            },
+                                        },
+                                        value: Call {
+                                            function: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 2,
+                                                        column: 11,
+                                                    },
+                                                    end: Position {
+                                                        line: 2,
+                                                        column: 20,
+                                                    },
+                                                },
+                                                value: Access {
+                                                    record: Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 2,
+                                                                column: 11,
+                                                            },
+                                                            end: Position {
+                                                                line: 2,
+                                                                column: 16,
+                                                            },
+                                                        },
+                                                        value: Path(
+                                                            Path {
+                                                                segments: [
+                                                                    Located {
+                                                                        region: Region {
+                                                                            start: Position {
+                                                                                line: 2,
+                                                                                column: 11,
+                                                                            },
+                                                                            end: Position {
+                                                                                line: 2,
+                                                                                column: 16,
+                                                                            },
+                                                                        },
+                                                                        value: "Array",
+                                                                    },
+                                                                ],
+                                                            },
+                                                        ),
+                                                    },
+                                                    field: Located {
+                                                        region: Region {
+                                                            start: Position {
+                                                                line: 2,
+                                                                column: 17,
+                                                            },
+                                                            end: Position {
+                                                                line: 2,
+                                                                column: 20,
+                                                            },
+                                                        },
+                                                        value: "map",
+                                                    },
+                                                },
+                                            },
+                                            arguments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 2,
+                                                            column: 21,
+                                                        },
+                                                        end: Position {
+                                                            line: 2,
+                                                            column: 25,
+                                                        },
+                                                    },
+                                                    value: Var(
+                                                        "show",
+                                                    ),
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    op: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 27,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 29,
+                                            },
+                                        },
+                                        value: Pipe,
+                                    },
+                                },
+                            ],
+                            last: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 30,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 47,
+                                    },
+                                },
+                                value: Call {
+                                    function: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 30,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 41,
+                                            },
+                                        },
+                                        value: Access {
+                                            record: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 2,
+                                                        column: 30,
+                                                    },
+                                                    end: Position {
+                                                        line: 2,
+                                                        column: 36,
+                                                    },
+                                                },
+                                                value: Path(
+                                                    Path {
+                                                        segments: [
+                                                            Located {
+                                                                region: Region {
+                                                                    start: Position {
+                                                                        line: 2,
+                                                                        column: 30,
+                                                                    },
+                                                                    end: Position {
+                                                                        line: 2,
+                                                                        column: 36,
+                                                                    },
+                                                                },
+                                                                value: "String",
+                                                            },
+                                                        ],
+                                                    },
+                                                ),
+                                            },
+                                            field: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 2,
+                                                        column: 37,
+                                                    },
+                                                    end: Position {
+                                                        line: 2,
+                                                        column: 41,
+                                                    },
+                                                },
+                                                value: "join",
+                                            },
+                                        },
+                                    },
+                                    arguments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 2,
+                                                    column: 42,
+                                                },
+                                                end: Position {
+                                                    line: 2,
+                                                    column: 46,
+                                                },
+                                            },
+                                            value: Str(
+                                                ", ",
+                                            ),
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

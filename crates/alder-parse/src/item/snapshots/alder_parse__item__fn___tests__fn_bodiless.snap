@@ -1,0 +1,56 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: fn randomUUID() -> String
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "randomUUID",
+    },
+    params: [],
+    ret: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 20,
+                },
+                end: Position {
+                    line: 1,
+                    column: 26,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 20,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 26,
+                                },
+                            },
+                            value: "String",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    ),
+    where_clause: [],
+    body: None,
+}

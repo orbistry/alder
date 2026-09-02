@@ -1,0 +1,225 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "fn describe(xs: Array[a]) -> String\n    where a: Show\n{\n    show(xs)\n}\n"
+---
+FnDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 4,
+            },
+            end: Position {
+                line: 1,
+                column: 12,
+            },
+        },
+        value: "describe",
+    },
+    params: [
+        Param {
+            mutable: None,
+            pattern: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 13,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 15,
+                    },
+                },
+                value: Var(
+                    "xs",
+                ),
+            },
+            annotation: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 25,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 17,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 22,
+                                        },
+                                    },
+                                    value: "Array",
+                                },
+                            ],
+                        },
+                        args: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 23,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 24,
+                                    },
+                                },
+                                value: Var {
+                                    name: "a",
+                                    args: [],
+                                },
+                            },
+                        ],
+                    },
+                },
+            ),
+        },
+    ],
+    ret: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 30,
+                },
+                end: Position {
+                    line: 1,
+                    column: 36,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 30,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 36,
+                                },
+                            },
+                            value: "String",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    ),
+    where_clause: [
+        Bound {
+            var: Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 11,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 12,
+                    },
+                },
+                value: "a",
+            },
+            bounds: [
+                Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 14,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 18,
+                                },
+                            },
+                            value: "Show",
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+    body: Some(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 5,
+                    column: 2,
+                },
+            },
+            value: Block {
+                stmts: [],
+                tail: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 4,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 4,
+                                column: 13,
+                            },
+                        },
+                        value: Call {
+                            function: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 4,
+                                        column: 5,
+                                    },
+                                    end: Position {
+                                        line: 4,
+                                        column: 9,
+                                    },
+                                },
+                                value: Var(
+                                    "show",
+                                ),
+                            },
+                            arguments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 4,
+                                            column: 10,
+                                        },
+                                        end: Position {
+                                            line: 4,
+                                            column: 12,
+                                        },
+                                    },
+                                    value: Var(
+                                        "xs",
+                                    ),
+                                },
+                            ],
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}
