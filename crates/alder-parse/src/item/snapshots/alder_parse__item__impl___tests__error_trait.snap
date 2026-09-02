@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl show[User] {}"
+---
+Trait(
+    1,
+    6,
+)

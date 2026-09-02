@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Iterator[Foo] { type Item = 1 }"
+---
+AssocBody(
+    Start(
+        1,
+        34,
+    ),
+    1,
+    34,
+)

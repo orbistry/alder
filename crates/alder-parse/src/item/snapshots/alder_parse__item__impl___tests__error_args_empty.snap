@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/impl_.rs
+description: "impl Show[] {}"
+---
+Arg(
+    Start(
+        1,
+        11,
+    ),
+    1,
+    11,
+)
