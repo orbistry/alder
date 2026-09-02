@@ -1,6 +1,15 @@
 [workspace]
 resolver = "3"
 members = ["crates/*", "tasks/*"]
+# M1 parser rewrite: only the crates that compile against the new
+# alder-source AST are built by default. Revert in M2
+# (docs/parser-internals.md §9 step 0.6, §10.33).
+default-members = [
+  "crates/alder-region",
+  "crates/alder-source",
+  "crates/alder-parse",
+  "crates/alder-config",
+]
 
 [workspace.package]
 edition = "2024"
