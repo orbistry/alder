@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`a ${ x `"
+---
+Template(
+    HoleEnd(
+        1,
+        9,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,23 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`a\r\nb`"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 2,
+            column: 3,
+        },
+    },
+    value: Template(
+        [
+            Text(
+                "a\nb",
+            ),
+        ],
+    ),
+}

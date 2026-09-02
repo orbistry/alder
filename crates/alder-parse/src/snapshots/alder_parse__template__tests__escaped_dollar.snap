@@ -1,0 +1,23 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`cost: \\${x}`"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 14,
+        },
+    },
+    value: Template(
+        [
+            Text(
+                "cost: ${x}",
+            ),
+        ],
+    ),
+}

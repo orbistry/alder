@@ -1,0 +1,23 @@
+---
+source: crates/alder-parse/src/template.rs
+description: "`line one\nline two`\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 2,
+            column: 10,
+        },
+    },
+    value: Template(
+        [
+            Text(
+                "line one\nline two",
+            ),
+        ],
+    ),
+}
