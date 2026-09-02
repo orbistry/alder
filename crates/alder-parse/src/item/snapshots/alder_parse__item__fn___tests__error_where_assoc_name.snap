@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: " i.item == Number"
+---
+AssocName(
+    1,
+    4,
+)

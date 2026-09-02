@@ -1,0 +1,209 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match u.nickname {\n    Some(n) => n,\n    None => u.name,\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Match {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 17,
+                },
+            },
+            value: Access {
+                record: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                    },
+                    value: Var(
+                        "u",
+                    ),
+                },
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                    },
+                    value: "nickname",
+                },
+            },
+        },
+        arms: [
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 12,
+                            },
+                        },
+                        value: Ctor {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 5,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 9,
+                                            },
+                                        },
+                                        value: "Some",
+                                    },
+                                ],
+                            },
+                            args: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 10,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 11,
+                                        },
+                                    },
+                                    value: Var(
+                                        "n",
+                                    ),
+                                },
+                            ],
+                        },
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 17,
+                        },
+                    },
+                    value: Var(
+                        "n",
+                    ),
+                },
+            },
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 9,
+                            },
+                        },
+                        value: Ctor {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 5,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 9,
+                                            },
+                                        },
+                                        value: "None",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 13,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 19,
+                        },
+                    },
+                    value: Access {
+                        record: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 13,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 14,
+                                },
+                            },
+                            value: Var(
+                                "u",
+                            ),
+                        },
+                        field: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 15,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 19,
+                                },
+                            },
+                            value: "name",
+                        },
+                    },
+                },
+            },
+        ],
+    },
+}

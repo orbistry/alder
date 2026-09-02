@@ -1,0 +1,170 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: "fn(x) -> Number { x * 2 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 26,
+        },
+    },
+    value: Lambda(
+        Lambda {
+            params: [
+                Param {
+                    mutable: None,
+                    pattern: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                        },
+                        value: Var(
+                            "x",
+                        ),
+                    },
+                    annotation: None,
+                },
+            ],
+            ret: Some(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                    },
+                    value: Named {
+                        path: Path {
+                            segments: [
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 10,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 16,
+                                        },
+                                    },
+                                    value: "Number",
+                                },
+                            ],
+                        },
+                        args: [],
+                    },
+                },
+            ),
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 26,
+                    },
+                },
+                value: Block(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 26,
+                            },
+                        },
+                        value: Block {
+                            stmts: [],
+                            tail: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 19,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 24,
+                                        },
+                                    },
+                                    value: BinOps {
+                                        operands: [
+                                            BinOpOperand {
+                                                expr: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 19,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 20,
+                                                        },
+                                                    },
+                                                    value: Var(
+                                                        "x",
+                                                    ),
+                                                },
+                                                op: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 21,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 22,
+                                                        },
+                                                    },
+                                                    value: Mul,
+                                                },
+                                            },
+                                        ],
+                                        last: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 23,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 24,
+                                                },
+                                            },
+                                            value: Number(
+                                                NumberLit {
+                                                    value: 2.0,
+                                                    text: "2",
+                                                },
+                                            ),
+                                        },
+                                    },
+                                },
+                            ),
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

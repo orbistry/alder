@@ -1,0 +1,185 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "if (s == Shape::Rect { width: 1 }) { 2 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 41,
+        },
+    },
+    value: If {
+        branches: [
+            IfBranch {
+                condition: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 34,
+                        },
+                    },
+                    value: BinOps {
+                        operands: [
+                            BinOpOperand {
+                                expr: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 6,
+                                        },
+                                    },
+                                    value: Var(
+                                        "s",
+                                    ),
+                                },
+                                op: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 7,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 9,
+                                        },
+                                    },
+                                    value: Eq,
+                                },
+                            },
+                        ],
+                        last: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 34,
+                                },
+                            },
+                            value: RecordCtor {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 10,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 15,
+                                                },
+                                            },
+                                            value: "Shape",
+                                        },
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 17,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 21,
+                                                },
+                                            },
+                                            value: "Rect",
+                                        },
+                                    ],
+                                },
+                                fields: [
+                                    Field {
+                                        name: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 24,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 29,
+                                                },
+                                            },
+                                            value: "width",
+                                        },
+                                        value: Some(
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 31,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 32,
+                                                    },
+                                                },
+                                                value: Number(
+                                                    NumberLit {
+                                                        value: 1.0,
+                                                        text: "1",
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 36,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 41,
+                        },
+                    },
+                    value: Block {
+                        stmts: [],
+                        tail: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 38,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 39,
+                                    },
+                                },
+                                value: Number(
+                                    NumberLit {
+                                        value: 2.0,
+                                        text: "2",
+                                    },
+                                ),
+                            },
+                        ),
+                    },
+                },
+            },
+        ],
+        final_else: None,
+    },
+}

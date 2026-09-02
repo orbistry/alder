@@ -1,0 +1,40 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: fn() 1
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 7,
+        },
+    },
+    value: Lambda(
+        Lambda {
+            params: [],
+            ret: None,
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 7,
+                    },
+                },
+                value: Number(
+                    NumberLit {
+                        value: 1.0,
+                        text: "1",
+                    },
+                ),
+            },
+        },
+    ),
+}

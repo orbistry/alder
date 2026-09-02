@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "if x { 1 } else"
+---
+If(
+    ElseBranchStart(
+        1,
+        16,
+    ),
+    1,
+    1,
+)

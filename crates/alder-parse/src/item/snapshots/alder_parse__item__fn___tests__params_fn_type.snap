@@ -1,0 +1,143 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "(xs: Array[a], g: fn(a) -> b)"
+---
+[
+    Param {
+        mutable: None,
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+            value: Var(
+                "xs",
+            ),
+        },
+        annotation: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 6,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 6,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 11,
+                                    },
+                                },
+                                value: "Array",
+                            },
+                        ],
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 12,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 13,
+                                },
+                            },
+                            value: Var {
+                                name: "a",
+                                args: [],
+                            },
+                        },
+                    ],
+                },
+            },
+        ),
+    },
+    Param {
+        mutable: None,
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 16,
+                },
+                end: Position {
+                    line: 1,
+                    column: 17,
+                },
+            },
+            value: Var(
+                "g",
+            ),
+        },
+        annotation: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 19,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 29,
+                    },
+                },
+                value: Fn {
+                    params: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 22,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 23,
+                                },
+                            },
+                            value: Var {
+                                name: "a",
+                                args: [],
+                            },
+                        },
+                    ],
+                    ret: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 28,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 29,
+                            },
+                        },
+                        value: Var {
+                            name: "b",
+                            args: [],
+                        },
+                    },
+                },
+            },
+        ),
+    },
+]

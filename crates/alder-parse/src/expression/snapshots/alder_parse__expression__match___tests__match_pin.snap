@@ -1,0 +1,140 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match input {\n    ^expected => \"matched the existing value\",\n    other => `got ${other}`,\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Match {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 12,
+                },
+            },
+            value: Var(
+                "input",
+            ),
+        },
+        arms: [
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 14,
+                            },
+                        },
+                        value: Pin(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 6,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 14,
+                                    },
+                                },
+                                value: Var(
+                                    "expected",
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 46,
+                        },
+                    },
+                    value: Str(
+                        "matched the existing value",
+                    ),
+                },
+            },
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 10,
+                            },
+                        },
+                        value: Var(
+                            "other",
+                        ),
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 14,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 28,
+                        },
+                    },
+                    value: Template(
+                        [
+                            Text(
+                                "got ",
+                            ),
+                            Expr(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 21,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 26,
+                                        },
+                                    },
+                                    value: Var(
+                                        "other",
+                                    ),
+                                },
+                            ),
+                        ],
+                    ),
+                },
+            },
+        ],
+    },
+}

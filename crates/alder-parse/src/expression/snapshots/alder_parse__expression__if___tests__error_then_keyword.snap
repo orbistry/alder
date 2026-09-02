@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: if x then y else z
+---
+If(
+    ThenKeyword(
+        1,
+        6,
+    ),
+    1,
+    1,
+)

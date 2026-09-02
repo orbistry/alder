@@ -1,0 +1,34 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match x {}"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 11,
+        },
+    },
+    value: Match {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Var(
+                "x",
+            ),
+        },
+        arms: [],
+    },
+}

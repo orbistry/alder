@@ -1,0 +1,116 @@
+---
+source: crates/alder-parse/src/expression/if_.rs
+description: "if isReady(x) { go() }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: If {
+        branches: [
+            IfBranch {
+                condition: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 14,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 4,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 11,
+                                },
+                            },
+                            value: Var(
+                                "isReady",
+                            ),
+                        },
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 12,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                },
+                                value: Var(
+                                    "x",
+                                ),
+                            },
+                        ],
+                    },
+                },
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 23,
+                        },
+                    },
+                    value: Block {
+                        stmts: [],
+                        tail: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 17,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 21,
+                                    },
+                                },
+                                value: Call {
+                                    function: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 17,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 19,
+                                            },
+                                        },
+                                        value: Var(
+                                            "go",
+                                        ),
+                                    },
+                                    arguments: [],
+                                },
+                            },
+                        ),
+                    },
+                },
+            },
+        ],
+        final_else: None,
+    },
+}

@@ -1,0 +1,111 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match x {\n    1 => \"one\"\n    2 => \"two\"\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Match {
+        scrutinee: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Var(
+                "x",
+            ),
+        },
+        arms: [
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 6,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 1.0,
+                                text: "1",
+                            },
+                        ),
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 15,
+                        },
+                    },
+                    value: Str(
+                        "one",
+                    ),
+                },
+            },
+            MatchArm {
+                patterns: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 6,
+                            },
+                        },
+                        value: Number(
+                            NumberLit {
+                                value: 2.0,
+                                text: "2",
+                            },
+                        ),
+                    },
+                ],
+                guard: None,
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 15,
+                        },
+                    },
+                    value: Str(
+                        "two",
+                    ),
+                },
+            },
+        ],
+    },
+}

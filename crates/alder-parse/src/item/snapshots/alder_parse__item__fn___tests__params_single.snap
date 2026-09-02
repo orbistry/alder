@@ -1,0 +1,25 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: (x)
+---
+[
+    Param {
+        mutable: None,
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 3,
+                },
+            },
+            value: Var(
+                "x",
+            ),
+        },
+        annotation: None,
+    },
+]

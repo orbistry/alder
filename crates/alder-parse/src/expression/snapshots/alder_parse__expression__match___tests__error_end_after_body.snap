@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match x { 1 => a ) }"
+---
+Match(
+    End(
+        1,
+        18,
+    ),
+    1,
+    1,
+)

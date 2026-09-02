@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: (+)
+---
+Pattern(
+    Start(
+        1,
+        2,
+    ),
+    1,
+    2,
+)

@@ -1,0 +1,53 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: " a: Std::Show"
+---
+[
+    Bound {
+        var: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 3,
+                },
+            },
+            value: "a",
+        },
+        bounds: [
+            Path {
+                segments: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 8,
+                            },
+                        },
+                        value: "Std",
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                        },
+                        value: "Show",
+                    },
+                ],
+            },
+        ],
+    },
+]

@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/expression/match_.rs
+description: "match x { n if => a }"
+---
+Match(
+    Arm(
+        Guard(
+            Start(
+                1,
+                16,
+            ),
+            1,
+            16,
+        ),
+        1,
+        11,
+    ),
+    1,
+    1,
+)
