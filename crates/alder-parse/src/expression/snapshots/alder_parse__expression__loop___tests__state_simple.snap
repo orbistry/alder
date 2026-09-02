@@ -1,0 +1,36 @@
+---
+source: crates/alder-parse/src/expression/loop_.rs
+description: state(0)
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 9,
+        },
+    },
+    value: State(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 7,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Number(
+                NumberLit {
+                    value: 0.0,
+                    text: "0",
+                },
+            ),
+        },
+    ),
+}

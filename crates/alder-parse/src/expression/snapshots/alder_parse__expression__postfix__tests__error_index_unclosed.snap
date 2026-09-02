@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: "xs[0"
+---
+Index(
+    End(
+        1,
+        5,
+    ),
+    1,
+    3,
+)

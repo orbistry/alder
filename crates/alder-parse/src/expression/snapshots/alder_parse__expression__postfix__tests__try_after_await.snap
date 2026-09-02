@@ -1,0 +1,78 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: find(id)?.await
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 16,
+        },
+    },
+    value: Await(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 10,
+                },
+            },
+            value: Try(
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                    },
+                    value: Call {
+                        function: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 1,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 5,
+                                },
+                            },
+                            value: Var(
+                                "find",
+                            ),
+                        },
+                        arguments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 6,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 8,
+                                    },
+                                },
+                                value: Var(
+                                    "id",
+                                ),
+                            },
+                        ],
+                    },
+                },
+            ),
+        },
+    ),
+}
