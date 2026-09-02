@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select * from users where users.id == ^ }"
+---
+Query(
+    Select(
+        Where(
+            Unary(
+                1,
+                48,
+            ),
+            1,
+            35,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

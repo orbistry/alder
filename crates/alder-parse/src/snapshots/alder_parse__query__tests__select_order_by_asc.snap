@@ -1,0 +1,116 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select * from users orderBy users.name asc }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 53,
+        },
+    },
+    value: Query(
+        Select(
+            Select {
+                projection: Star(
+                    Region {
+                        start: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 17,
+                        },
+                    },
+                ),
+                from: TableRef {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 28,
+                            },
+                        },
+                        value: "users",
+                    },
+                    alias: None,
+                },
+                joins: [],
+                where_: None,
+                group_by: [],
+                order_by: [
+                    Order {
+                        expr: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 37,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 47,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 37,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 42,
+                                        },
+                                    },
+                                    value: Var(
+                                        "users",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 43,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 47,
+                                        },
+                                    },
+                                    value: "name",
+                                },
+                            },
+                        },
+                        direction: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 48,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 51,
+                                    },
+                                },
+                                value: Asc,
+                            },
+                        ),
+                    },
+                ],
+                limit: None,
+                offset: None,
+            },
+        ),
+    ),
+}

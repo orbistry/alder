@@ -1,0 +1,20 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select * from users as }"
+---
+Query(
+    Select(
+        Table(
+            Alias(
+                1,
+                32,
+            ),
+            1,
+            23,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

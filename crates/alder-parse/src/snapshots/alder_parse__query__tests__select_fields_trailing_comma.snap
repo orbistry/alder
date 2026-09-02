@@ -1,0 +1,63 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select { name, } from users }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 38,
+        },
+    },
+    value: Query(
+        Select(
+            Select {
+                projection: Fields(
+                    [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 18,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 22,
+                                },
+                            },
+                            value: Var(
+                                "name",
+                            ),
+                        },
+                    ],
+                ),
+                from: TableRef {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 31,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 36,
+                            },
+                        },
+                        value: "users",
+                    },
+                    alias: None,
+                },
+                joins: [],
+                where_: None,
+                group_by: [],
+                order_by: [],
+                limit: None,
+                offset: None,
+            },
+        ),
+    ),
+}

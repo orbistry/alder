@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select { a b } from users }"
+---
+Query(
+    Select(
+        ProjectionEnd(
+            1,
+            20,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

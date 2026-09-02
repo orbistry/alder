@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select * from users where users.active join posts on x }"
+---
+Query(
+    ClauseOrder(
+        Join,
+        1,
+        48,
+    ),
+    1,
+    1,
+)

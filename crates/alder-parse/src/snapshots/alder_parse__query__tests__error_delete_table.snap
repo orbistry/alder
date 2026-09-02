@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { delete from }"
+---
+Query(
+    Delete(
+        Table(
+            1,
+            21,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)
