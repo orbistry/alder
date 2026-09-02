@@ -65,7 +65,7 @@ pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) -> Task[Response]) 
     }
 }
 
-pub fn handleError(error: Error, event: RequestEvent) -> ErrorResponse { ... }
+pub fn handleError(err: Error, event: RequestEvent) -> ErrorResponse { ... }
 pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) -> Task[Response] { ... }
 ```
 
@@ -81,6 +81,10 @@ pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) -> Task[
   `init`).
 - **Open:** a `sequence` helper for composing several `handle` hooks, and
   per-subtree hooks (SvelteKit does not have them either).
+- **Open (M2):** `provide … { }` is a statement in the M1 parser, so the
+  `handle` body above has no value. M2 either promotes `provide` to an
+  expression whose value is its body's value, or this example writes an
+  explicit `return` / tail (see `language.md`, Context).
 
 ## Page options
 
@@ -107,7 +111,7 @@ pub let trailingSlash = Never // Never | Always | Ignore
 // users/[id]/+page.server.ald
 pub fn load(event: LoadEvent) -> Result[{ user: User, posts: Array[Post] }] {
     use Db
-    let user = db.run(query { select * from users where users.id == event.params.id }).await?
+    let user = db.run(query { select * from users where users.id == ^event.params.id }).await?
     let posts = loadPosts(user.id).await?
     Ok({ user, posts })
 }

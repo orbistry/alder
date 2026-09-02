@@ -14,7 +14,7 @@ module, so the schema respects the target database exactly as Drizzle
 does.
 
 ```alder
-import { text, integer, timestamp, primaryKey } from @alder/sqlite
+import @alder/sqlite.{ text, integer, timestamp, primaryKey }
 
 pub table users {
     id: integer() primaryKey autoIncrement
@@ -67,7 +67,8 @@ db.run(query { update users set { name: ^newName } where users.id == ^user.id })
 db.run(query { delete from posts where posts.author == ^user.id }).await?
 ```
 
-- `^` binds tighter than `.` and calls: `^user.id` pins `user.id`;
+- `^` binds looser than `.`, calls and indexing but tighter than every
+  binary operator: `^user.id` pins `user.id`, `^f(x)` pins the call, and
   `^(a + b)` pins an arbitrary expression. A pinned value is always a
   bound parameter, never SQL text, so injection is impossible by
   construction. Arrays pin as parameter lists for `in`.
