@@ -2038,6 +2038,10 @@ mod style;
 mod symbol;
 mod template;
 mod type_;
+
+/// `Keyword` / `SqlWord` are payloads of public error variants; re-exported
+/// so an M2 error renderer in another crate can name them.
+pub use keyword::{Keyword, SqlWord};
 ```
 
 **Return convention.** Every parser of a `Located` node returns
@@ -2077,12 +2081,16 @@ pub enum Keyword { … }      // §4.1
 pub enum SqlWord { … }      // §4.1
 pub fn is_reserved(name: &str) -> bool;
 pub fn is_sql_word(name: &str) -> bool;
+/// `[A-Za-z0-9_]` — the identifier continuation byte. Shared by keyword / name /
+/// symbol scanning and by the `@directive` and markup-text rules; do not re-derive it.
+pub(crate) fn is_ident_byte(b: u8) -> bool;
 
 impl<'a> Parser<'a> {
     /// Exact bytes followed by a non-identifier byte; fails without consuming.
     pub(crate) fn keyword<E>(&mut self, kw: &[u8], to_error: impl FnOnce(Row, Col) -> E) -> Result<(), E>;
     pub(crate) fn peek_keyword(&self, kw: &[u8]) -> bool;
     /// The identifier-shaped word at the cursor (no consume), for dispatch tables.
+    /// `""` when the cursor is not on an identifier byte.
     pub(crate) fn peek_word(&self) -> &'a str;
 }
 ```
@@ -2157,25 +2165,34 @@ impl<'a> Parser<'a> {
     pub(crate) fn upper_name<E>(&mut self, to_error: impl FnOnce(Row, Col) -> E) -> Result<&'a str, E>;
     pub(crate) fn located_lower<E>(&mut self, to_error: impl FnOnce(Row, Col) -> E) -> Result<Name<'a>, E>;
     pub(crate) fn located_upper<E>(&mut self, to_error: impl FnOnce(Row, Col) -> E) -> Result<Name<'a>, E>;
-    /// `Upper { '::' Upper }`; stops before `::lower`.
+    /// `Upper { '::' Upper }`; stops before `::lower`. A dangling `::` (`Foo::`, `Foo::(`)
+    /// is a COMMITTED failure: the `::` stays consumed and `to_member_error` fires at the
+    /// position after it (`Foo::(` → col 6), so inside `one_of` it propagates rather than
+    /// falling through. `to_expectation` fails without consuming.
     pub(crate) fn path<E>(&mut self, to_expectation: impl FnOnce(Row, Col) -> E, to_member_error: impl FnOnce(Row, Col) -> E) -> Result<Path<'a>, E>;
-    /// `:lower` — the returned name excludes the colon; region includes it.
+    /// `:lower` — the returned name excludes the colon; region includes it. Tags are names,
+    /// not bindings: reserved shapes (`:type`) are accepted. Neither error consumes.
     pub(crate) fn tag_name<E>(&mut self, to_expectation: impl FnOnce(Row, Col) -> E, to_bad_name: impl FnOnce(Row, Col) -> E) -> Result<Name<'a>, E>;
     /// `[a-z][A-Za-z0-9_]*` with NO reserved-word / SQL-word check (§2.4): module-path
     /// segments. Fails without consuming when the first byte is not a lowercase letter.
     pub(crate) fn raw_lower<E>(&mut self, to_error: impl FnOnce(Row, Col) -> E) -> Result<Name<'a>, E>;
     /// `raw_lower { '-' raw_lower }` for element, attribute and close-tag names.
     /// Keyword-insensitive: `type`, `for`, `style`, `table`, `select` are names here.
+    /// A `-` not followed by a lowercase letter ends the name unconsumed (`a-1` → `a`).
     pub(crate) fn dashed_name<E>(&mut self, to_error: impl FnOnce(Row, Col) -> E) -> Result<Name<'a>, E>;
     pub(crate) fn peek_lower(&self) -> bool;
     pub(crate) fn peek_upper(&self) -> bool;
     pub(crate) fn chomp_inner_chars(&mut self);
+    /// Source text from byte offset `start_pos` to the cursor. Safe `from_utf8`; panics if a
+    /// scanner left either end mid-character (string / template / raw / markup-text owners
+    /// must advance by whole characters).
     pub(crate) fn slice_from(&self, start_pos: usize) -> &'a str;
 }
 ```
 
-`lower_name` refuses reserved words and, while `in_query()`, SQL words —
-both without consuming. `raw_lower` and `dashed_name` never refuse a word
+`lower_name` refuses reserved words, `_x` (§2: `WildcardNotVar` is the
+pattern owner's job to detect before calling it) and, while `in_query()`,
+SQL words — all without consuming. `raw_lower` and `dashed_name` never refuse a word
 (§2.4); `dashed_name` is built on `raw_lower`, not on `lower_name`.
 Deleted: `variable`, `foreign_alpha`, `is_dot_upper`, `is_dot_lower`,
 `parse_qualified_lower`, `chomp_qualified_upper`.
@@ -2274,7 +2291,8 @@ impl<'a> Parser<'a> {
     fn for_stmt(&mut self, start: Position) -> Result<&'a Located<Stmt<'a>>, error::For<'a>>;
     fn while_stmt(&mut self, start: Position) -> Result<&'a Located<Stmt<'a>>, error::While<'a>>;
     fn provide_stmt(&mut self, start: Position) -> Result<&'a Located<Stmt<'a>>, error::Provide<'a>>;
-    fn use_stmt(&mut self, start: Position) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>>;
+    /// `pub(crate)`: `markup::directive` dispatches child-block `use` through it (§6.2).
+    pub(crate) fn use_stmt(&mut self, start: Position) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>>;
     fn return_stmt(&mut self, start: Position) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>>;
     fn break_stmt(&mut self, start: Position) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>>;
     fn assert_stmt(&mut self, start: Position) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>>;
@@ -2347,10 +2365,11 @@ impl<'a> Parser<'a> {
     /// Dispatch on first byte: `_`, lower, upper (ctor), `:`, `^`, `-`/digit, `"`, `(`, `[`, `{`, true/false.
     pub(crate) fn pattern_atom(&mut self) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>>;
 }
-// pattern/ctor.rs: fn pattern_ctor(start), fn pattern_tag(start)      -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>>
-// pattern/tuple.rs: fn pattern_tuple(start)                            -> Result<&'a Located<Pattern<'a>>, error::PTuple<'a>>
-// pattern/array.rs: fn pattern_array(start)                            -> Result<&'a Located<Pattern<'a>>, error::PArray<'a>>
-// pattern/record.rs: fn pattern_record_fields() -> Result<(&'a [FieldPattern<'a>], Option<Region>), error::PRecord<'a>>   // after `{`; shared with CtorRecord
+// All `pub(super)`: a private inherent method in a child module is invisible to `pattern/mod.rs`.
+// pattern/ctor.rs: pub(super) fn pattern_ctor(start), pub(super) fn pattern_tag(start)  -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>>
+// pattern/tuple.rs: pub(super) fn pattern_tuple(start)                                  -> Result<&'a Located<Pattern<'a>>, error::PTuple<'a>>
+// pattern/array.rs: pub(super) fn pattern_array(start)                                  -> Result<&'a Located<Pattern<'a>>, error::PArray<'a>>
+// pattern/record.rs: pub(super) fn pattern_record_fields() -> Result<(&'a [FieldPattern<'a>], Option<Region>), error::PRecord<'a>>   // after `{`; shared with CtorRecord
 ```
 
 ### 5.15 `type_.rs`
@@ -2929,6 +2948,7 @@ Each item is a proposed SPEC.md / docs change unless marked _(internal)_.
 39. **Enum record variants take no extension.** `enum_decl` reuses `field_types()`; a `Some(ext)` result (`Rect { r | width: Number }`) is `Enum::VariantRecordExt` at the extension name. SPEC: `variant_record = '{' field_type { ',' field_type } [','] '}'` with no `ext`.
 40. **`provide` is a statement in M1, and web.md's `handle` needs it to be an expression.** `handle` ends its body with `provide Session = session { resolve(event).await }` and expects that to be the function's `Task[Response]`, but `Stmt::Provide` gives the block no `tail`. The parser is not blocked (the body parses with `tail: None`); the SPEC/docs disagreement is recorded here for M2, which either promotes `provide … { }` to an expression whose value is its body's value (a rename `Stmt::Provide` → `Expr::Provide`, parsed by `primary` at the `provide` keyword; no other parser change) or makes web.md write `return`/a tail. The `no_record_ctor` rule for `provide … =` heads (§2.3) holds either way.
 41. **Test-macro placement** _(internal)_: the `assert_<thing>_snapshot!` pair is defined at module level under `#[cfg(test)]` and re-exported with `pub(crate) use`, not inside `mod tests` as CLAUDE.md says, because child modules must import the parent's pair (§7.1). Wave 4 rewords the CLAUDE.md sentence to "macros are defined at module level under `#[cfg(test)]` and re-exported with `pub(crate) use` so submodules can import them".
+42. **Wave 0 scanner details** _(internal)_, fixed by the landed code and its unit tests so later waves' error-position snapshots agree: `path()` commits on a dangling `::` (the `::` stays consumed and `PathMember` is reported at the position after it — `Foo::(` → col 6; §5.8); `tag_name` accepts reserved shapes (`:type`); `dashed_name` stops before a `-` not followed by a lowercase letter (`a-1` → `a`, `-1` left); `lower_name` refuses `_x` as well as reserved / SQL words, all without consuming (`WildcardNotVar` is detected by the pattern owner before calling it); `peek_word()` returns `""` off an identifier byte; `binop()` returns `Ok(None)` on `//` (a comment, not `/`); `is_ident_byte` lives in `keyword.rs` (§5.3) and is the one definition of the identifier byte class; `slice_from` uses safe `from_utf8` and panics on a mid-character cursor (§5.8); `path()` collects segments in a `bumpalo::collections::Vec` — the reference pattern for every list parser, no `std::vec::Vec` round-trip. `use_stmt` is `pub(crate)` (§5.12), the `pattern/*` helpers are `pub(super)` (§5.14), and `Keyword` / `SqlWord` are re-exported from `lib.rs` (§5.1). The `#[allow(clippy::type_complexity)]` on `arm_head` is required by the §5.13 signature and survives step 4.2, which strips `#[allow(unused)]` only.
 
 ---
 
