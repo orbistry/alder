@@ -874,6 +874,9 @@ pub enum RawTokens {
     /// EOF before the matching closer.
     Endless,
     String(StringError),
+    /// Not at the expected opener (`(` for `name!(`, `{` for a macro body);
+    /// nothing consumed. The wrapping variant carries the position.
+    Open,
 }
 
 /// The `select` clauses in their required order (the derived `Ord` is that

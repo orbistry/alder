@@ -51,8 +51,7 @@ impl<'a> Parser<'a> {
     /// byte before `close`); the delimiters are consumed but not part of the
     /// value. Nothing is chomped afterwards. Error positions:
     ///
-    /// - not at `open` → `Endless` at the cursor, nothing consumed (the body
-    ///   never opened, so it certainly never closed);
+    /// - not at `open` → `Open` at the cursor, nothing consumed;
     /// - EOF anywhere inside (including inside a `${ … }` hole) → `Endless`
     ///   at `open`;
     /// - a closer that is not the one expected for the innermost open bracket
@@ -70,13 +69,7 @@ impl<'a> Parser<'a> {
     ) -> Result<Located<&'a str>, E> {
         let (open_row, open_col) = self.position();
         if self.peek() != Some(open) {
-            // TODO(wave0): `Macro::Body(RawTokens, Row, Col)` ("`{` expected,
-            // or raw body problem") has no expected-opener variant, so a
-            // missing `open` is reported as `Endless` at the cursor. Either
-            // `error::RawTokens` gains an `Open` variant or the callers
-            // (`item/macro_.rs`, `expression/postfix.rs`) peek for the opener
-            // first and report their own expectation.
-            return Err(to_error(RawTokens::Endless, open_row, open_col));
+            return Err(to_error(RawTokens::Open, open_row, open_col));
         }
         self.advance();
 
@@ -291,6 +284,7 @@ mod tests {
         match err {
             RawTokens::Unbalanced(b) => format!("unbalanced {:?}", *b as char),
             RawTokens::Endless => "endless".to_owned(),
+            RawTokens::Open => "open".to_owned(),
             RawTokens::String(StringError::Endless) => "string endless".to_owned(),
             RawTokens::String(StringError::Newline) => "string newline".to_owned(),
             RawTokens::String(StringError::Escape(escape)) => format!("string escape {escape:?}"),
@@ -503,8 +497,10 @@ mod tests {
 
     #[test]
     fn error_not_at_open() {
-        assert_eq!(parens("x"), (err("endless", 1, 1), at(1, 1)));
-        assert_eq!(parens(""), (err("endless", 1, 1), at(1, 1)));
+        assert_eq!(parens("x"), (err("open", 1, 1), at(1, 1)));
+        assert_eq!(parens(""), (err("open", 1, 1), at(1, 1)));
+        // The opener kind matters: `{` is not `(`.
+        assert_eq!(parens("{}"), (err("open", 1, 1), at(1, 1)));
     }
 
     #[test]
