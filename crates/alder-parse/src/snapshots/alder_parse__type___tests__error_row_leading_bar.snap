@@ -3,11 +3,7 @@ source: crates/alder-parse/src/type_.rs
 description: "[|]"
 ---
 ErrorRow(
-    Tag(
-        Name(
-            1,
-            2,
-        ),
+    Start(
         1,
         2,
     ),

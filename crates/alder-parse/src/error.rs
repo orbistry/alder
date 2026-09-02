@@ -821,6 +821,8 @@ pub enum TRecord<'a> {
 
 #[derive(Debug)]
 pub enum TErrorRow<'a> {
+    /// `[` followed by neither `:tag`, a row variable, nor `]` (`[1]`, `[|]`, `[` at EOF).
+    Start(Row, Col),
     Tag(&'a TagVariant<'a>, Row, Col),
     /// `|` not followed by a tag or a variable.
     Ext(Row, Col),

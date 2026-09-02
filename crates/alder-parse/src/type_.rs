@@ -415,14 +415,16 @@ impl<'a> Parser<'a> {
                     self.word1(b']', TErrorRow::End)?;
                     break;
                 }
-                if after_bar && self.peek() != Some(b':') {
+                if self.peek() != Some(b':') {
+                    // After `|` the choices are a tag or a variable (`Ext`);
+                    // right after `[` they also include `]` (`Start`).
                     let (row, col) = self.position();
-                    return Err(TErrorRow::Ext(row, col));
+                    return Err(if after_bar {
+                        TErrorRow::Ext(row, col)
+                    } else {
+                        TErrorRow::Start(row, col)
+                    });
                 }
-                // TODO(wave0): a `[` followed by neither `:tag`, a row
-                // variable nor `]` (`[1]`, `[|]`, `[` at EOF) needs a
-                // `TErrorRow::Start` variant; until then it reports the
-                // tag's `TagVariant::Name`, whose message assumes a `:`.
                 let tag = self.specialize(
                     |bump, e, row, col| TErrorRow::Tag(bump.alloc(e), row, col),
                     |p| p.tag_variant(),
