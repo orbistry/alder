@@ -1,10 +1,12 @@
 //! `:tag` / `:tag(args)` expressions.
 //!
 //! The argument list may be separated from the name by whitespace but must
-//! start on the same line, exactly as `pattern/ctor.rs` reads `:tag(p)`,
-//! and takes at least one argument (`:tag()` is `Tag::Arg(Start)` at the
-//! `)`). A `(` on a later line is a new statement (§2.1 rule 1). Arguments
-//! are parsed with record constructors re-enabled (§2.3).
+//! start on the same line, exactly as `pattern/ctor.rs` reads `:tag(p)`;
+//! a `(` on a later line is a new statement (§2.1 rule 1). Per SPEC.md
+//! (`tag [ call ]`, `call = '(' [ … ] ')'`) the list may be empty:
+//! `:tag()` is the same `Expr::Tag { args: &[] }` as `:tag` (the pattern
+//! grammar, by contrast, requires at least one sub-pattern). Arguments are
+//! parsed with record constructors re-enabled (§2.3).
 //!
 //! Errors are `Expr::Tag` at the tag's `:`, including `Tag::Name` for a `:`
 //! not followed by a lowercase letter (raised by `primary`).
@@ -41,12 +43,16 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// At `(`: `( expression { ',' expression } [','] )`, at least one
-    /// argument. Consumes the closing `)` and nothing after it.
+    /// At `(`: `( [ expression { ',' expression } [','] ] )`. Consumes the
+    /// closing `)` and nothing after it.
     fn tag_args(&mut self) -> Result<&'a [&'a Located<Expr<'a>>], error::Tag<'a>> {
         self.advance();
         self.chomp();
         let mut args = BumpVec::new_in(self.bump);
+        if self.peek() == Some(b')') {
+            self.advance();
+            return Ok(args.into_bump_slice());
+        }
         loop {
             let arg = self.specialize(
                 |bump, e, row, col| error::Tag::Arg(bump.alloc(e), row, col),
@@ -83,6 +89,11 @@ mod tests {
     #[test]
     fn tag_bare() {
         assert_expression_snapshot!(":timeout");
+    }
+
+    #[test]
+    fn tag_empty_parens() {
+        assert_expression_snapshot!(":timeout()");
     }
 
     #[test]
