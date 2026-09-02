@@ -525,7 +525,7 @@ pub struct NumberLit<'a> {
     pub text: &'a str,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Expr<'a> {
     // ---- literals
     Number(NumberLit<'a>),
@@ -887,7 +887,7 @@ pub enum ChildItem<'a> {
 // Patterns
 // ============================================================================
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Pattern<'a> {
     Anything,
     Var(&'a str),
@@ -930,7 +930,7 @@ pub struct FieldPattern<'a> {
 // Types
 // ============================================================================
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Type<'a> {
     /// `a`, and applied higher-kinded variables `f[a]`, `t[f[a]]`.
     Var { name: &'a str, args: &'a [&'a Located<Type<'a>>] },
@@ -2975,6 +2975,7 @@ Each item is a proposed SPEC.md / docs change unless marked _(internal)_.
 41. **Test-macro placement** _(internal)_: the `assert_<thing>_snapshot!` pair is defined at module level under `#[cfg(test)]` and re-exported with `pub(crate) use`, not inside `mod tests` as CLAUDE.md says, because child modules must import the parent's pair (§7.1). Wave 4 rewords the CLAUDE.md sentence to "macros are defined at module level under `#[cfg(test)]` and re-exported with `pub(crate) use` so submodules can import them".
 42. **Wave 0 scanner details** _(internal)_, fixed by the landed code and its unit tests so later waves' error-position snapshots agree: `path()` commits on a dangling `::` (the `::` stays consumed and `PathMember` is reported at the position after it — `Foo::(` → col 6; §5.8); `tag_name` accepts reserved shapes (`:type`); `dashed_name` stops before a `-` not followed by a lowercase letter (`a-1` → `a`, `-1` left); `lower_name` refuses `_x` as well as reserved / SQL words, all without consuming (`WildcardNotVar` is detected by the pattern owner before calling it); `peek_word()` returns `""` off an identifier byte; `binop()` returns `Ok(None)` on `//` (a comment, not `/`); `is_ident_byte` lives in `keyword.rs` (§5.3) and is the one definition of the identifier byte class; `slice_from` uses safe `from_utf8` and panics on a mid-character cursor (§5.8); `path()` collects segments in a `bumpalo::collections::Vec` — the reference pattern for every list parser, no `std::vec::Vec` round-trip. `use_stmt` is `pub(crate)` (§5.12), the `pattern/*` helpers are `pub(super)` (§5.14), and `Keyword` / `SqlWord` are re-exported from `lib.rs` (§5.1). The `#[allow(clippy::type_complexity)]` on `arm_head` is required by the §5.13 signature and survives step 4.2, which strips `#[allow(unused)]` only.
     Additive variants landed after Wave 1 (each requested by a leaf owner and used at exactly one site): `RawTokens::Open` — `raw_balanced` not at its opener reports it at the cursor without consuming (a unit variant like `Endless`: the position travels in the wrapping `Macro::Body` / `Expr::MacroCall`), so `item/macro_.rs` and `expression/postfix.rs` need not peek for the opener themselves; `TErrorRow::Start` — `[` followed by neither `:tag`, a row variable nor `]` (`[1]`, `[|]`, `[` at EOF) at that byte, while after a `|` the same shape stays `TErrorRow::Ext`; `Pattern::PathVar` — `Foo::bar` in pattern position, reported at the path start (where the fixing `^` goes) with the `::` consumed as a committed failure like the dangling-`::` rule above, so `Pattern::PathMember` now means only a `::` with nothing after it; `Pattern::SqlKeyword(SqlWord, …)` — a SQL word as a binding inside `query { }`, detected by `pattern_var` before `lower_name` runs, for parity with `Expr::SqlKeyword` (§6.3); `PArray::RestName` — a lowercase word after `..` that `lower_name` refuses (`[..type]`, or `[..select]` in query mode), replacing the old `PArray::End` at that position; `Stmt::UseMember` — a `::` or `.` on the provider path's line in `use_stmt` (`use Db::x`, `use Db.insert(u)`), reported at the `::` / `.` with nothing consumed past the path, so the renderer can say "`use` names a provider, not a member" instead of the old `Stmt::Use` ("expected a path after `use`"); `Lambda::AssignTarget(AssignOp, …)` — a lambda assignment body whose left side is not a place (`fn() 1 += 2`), mapped one-to-one from `Stmt::AssignTarget` by `lambda_body_error` and reported at the target's start (the body start) like its statement counterpart, replacing the old `Lambda::Body(Expr::Start)` stand-in. Wave 0 additions after Wave 3: `Update::RecordOpen` — `set` not followed by `{` (`update users set name: ^n`), reported at the `{`'s position, replacing the `Update::Set` stand-in whose "expected `set { … }`" rendering pointed at the wrong token; `Macro::ParamsOpen` — no `(` after the macro name (`macro now {}`), reported at that position, replacing the `Macro::Param` stand-in ("expected a parameter" was wrong for a missing parameter list); `Impl::PathMember` — a dangling `::` in the trait path (`impl Show::[User]`), the `Impl` twin of `Expr::PathMember` / `Pattern::PathMember` / `Type::PathMember`, reported after the consumed `::` by the committed-failure rule above, so `Impl::Trait` now means only "no uppercase name after `impl`". `Expr::Unary` also covers a `^` with no operand inside `query { }` (`pinned_value`, query.rs) — the doc comment says so now.
+43. **Parenthesized nodes are re-spanned over their parentheses** _(internal)_. `(e)`, `(p)` and `(T)` still leave no node of their own (Elm's `tupleHelp` rule), but the inner node is re-allocated with the paren-inclusive region, so `(x)` is `Var("x")` at 1:1-1:4 and `region.end` is always the last byte a parser consumed. Without this every wrapper built from a child's end — `Negate`, `Not`, `BinOps`, `Pin`, lambda bodies, every `stmt_at(start, child.region.end, …)` — stopped one byte short of the `)` (`!(a && b)` ended at 1:9, an item and the statement inside it disagreed on where `let x = (a)` ends), because §10.31 dropped Elm's `(node, end)` pair and only the postfix loop tracked the cursor. `Expr`, `Pattern` and `Type` derive `Copy` for the one-allocation re-span (every field is a reference, a slice or a Copy leaf), and `postfix()` no longer special-cases `(`. Positions are `u32` (`alder_region::Position`, `Row` / `Col`): the `u16` counters overflowed on a 65 536-byte line or a 65 536-line file.
 
 ---
 
