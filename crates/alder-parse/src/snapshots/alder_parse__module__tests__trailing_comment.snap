@@ -1,0 +1,74 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "type Id = Number\n// the end\n"
+---
+Module {
+    items: [
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 17,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: TypeAlias(
+                    TypeAlias {
+                        name: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 6,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 8,
+                                },
+                            },
+                            value: "Id",
+                        },
+                        params: [],
+                        typ: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 11,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 17,
+                                },
+                            },
+                            value: Named {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 11,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 17,
+                                                },
+                                            },
+                                            value: "Number",
+                                        },
+                                    ],
+                                },
+                                args: [],
+                            },
+                        },
+                    },
+                ),
+            },
+        },
+    ],
+}

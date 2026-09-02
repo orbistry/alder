@@ -1,0 +1,78 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: "macro assert_eq(left, right) {\n    quote {\n        let l = unquote(left)\n        let r = unquote(right)\n        if l != r { Test.fail(unquote(stringify(left)), l, r) }\n    }\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 7,
+            column: 2,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Macro(
+            MacroDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                    },
+                    value: "assert_eq",
+                },
+                params: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 21,
+                            },
+                        },
+                        value: "left",
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 23,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 28,
+                            },
+                        },
+                        value: "right",
+                    },
+                ],
+                body: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 31,
+                        },
+                        end: Position {
+                            line: 7,
+                            column: 1,
+                        },
+                    },
+                    value: "\n    quote {\n        let l = unquote(left)\n        let r = unquote(right)\n        if l != r { Test.fail(unquote(stringify(left)), l, r) }\n    }\n",
+                },
+            },
+        ),
+    },
+}

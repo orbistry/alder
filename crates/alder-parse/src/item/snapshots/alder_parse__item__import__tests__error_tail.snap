@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: import @alder/http.get
+---
+Import(
+    Tail(
+        1,
+        20,
+    ),
+    1,
+    1,
+)

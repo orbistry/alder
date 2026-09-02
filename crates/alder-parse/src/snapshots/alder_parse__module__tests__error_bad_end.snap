@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "type Id = Number\n}\n"
+---
+BadEnd(
+    2,
+    1,
+)

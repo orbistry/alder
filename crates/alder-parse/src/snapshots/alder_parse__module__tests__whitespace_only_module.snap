@@ -1,0 +1,7 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "\n\n   \n"
+---
+Module {
+    items: [],
+}

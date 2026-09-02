@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: import ~/db/type
+---
+Import(
+    ReservedBinding(
+        Type,
+        1,
+        13,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,192 @@
+---
+source: crates/alder-parse/src/item/attribute.rs
+description: "#[derive(Show)]\n#[durable_object]\ntype Counter = { count: Number }\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 3,
+            column: 33,
+        },
+    },
+    value: Item {
+        attributes: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                },
+                value: Attribute {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 3,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                        },
+                        value: "derive",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 14,
+                                },
+                            },
+                            value: Path(
+                                Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 10,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 14,
+                                                },
+                                            },
+                                            value: "Show",
+                                        },
+                                    ],
+                                },
+                            ),
+                        },
+                    ],
+                },
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 2,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 18,
+                    },
+                },
+                value: Attribute {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 3,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 17,
+                            },
+                        },
+                        value: "durable_object",
+                    },
+                    args: [],
+                },
+            },
+        ],
+        visibility: Private,
+        kind: TypeAlias(
+            TypeAlias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 6,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 13,
+                        },
+                    },
+                    value: "Counter",
+                },
+                params: [],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 16,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 33,
+                        },
+                    },
+                    value: Record {
+                        fields: [
+                            FieldType {
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 18,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 23,
+                                        },
+                                    },
+                                    value: "count",
+                                },
+                                optional: None,
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 25,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 31,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 25,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 31,
+                                                        },
+                                                    },
+                                                    value: "Number",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            },
+                        ],
+                        ext: None,
+                    },
+                },
+            },
+        ),
+    },
+}

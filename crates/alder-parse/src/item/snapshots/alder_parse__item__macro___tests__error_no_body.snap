@@ -1,0 +1,13 @@
+---
+source: crates/alder-parse/src/item/macro_.rs
+description: macro f(a)
+---
+Macro(
+    Body(
+        Open,
+        1,
+        11,
+    ),
+    1,
+    1,
+)

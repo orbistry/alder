@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: pub import @alder/http
+---
+Import(
+    PubNeedsNames(
+        1,
+        23,
+    ),
+    1,
+    5,
+)

@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/module.rs
+description: "type Id = Number\npub\n"
+---
+Item(
+    AfterPub(
+        3,
+        1,
+    ),
+    2,
+    1,
+)

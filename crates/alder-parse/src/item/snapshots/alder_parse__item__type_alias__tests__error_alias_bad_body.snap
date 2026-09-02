@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/item/type_alias.rs
+description: type Id = 42
+---
+TypeAlias(
+    Body(
+        Start(
+            1,
+            11,
+        ),
+        1,
+        11,
+    ),
+    1,
+    1,
+)

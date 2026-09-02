@@ -1,0 +1,254 @@
+---
+source: crates/alder-parse/src/item/mod.rs
+description: "#[derive(Show, Eq)]\npub type Point = { x: Number, y: Number }\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 2,
+            column: 42,
+        },
+    },
+    value: Item {
+        attributes: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 20,
+                    },
+                },
+                value: Attribute {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 3,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 9,
+                            },
+                        },
+                        value: "derive",
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 14,
+                                },
+                            },
+                            value: Path(
+                                Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 10,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 14,
+                                                },
+                                            },
+                                            value: "Show",
+                                        },
+                                    ],
+                                },
+                            ),
+                        },
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 16,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 18,
+                                },
+                            },
+                            value: Path(
+                                Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 16,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 18,
+                                                },
+                                            },
+                                            value: "Eq",
+                                        },
+                                    ],
+                                },
+                            ),
+                        },
+                    ],
+                },
+            },
+        ],
+        visibility: Pub(
+            Region {
+                start: Position {
+                    line: 2,
+                    column: 1,
+                },
+                end: Position {
+                    line: 2,
+                    column: 4,
+                },
+            },
+        ),
+        kind: TypeAlias(
+            TypeAlias {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 15,
+                        },
+                    },
+                    value: "Point",
+                },
+                params: [],
+                typ: Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 42,
+                        },
+                    },
+                    value: Record {
+                        fields: [
+                            FieldType {
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 20,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 21,
+                                        },
+                                    },
+                                    value: "x",
+                                },
+                                optional: None,
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 23,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 29,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 2,
+                                                            column: 23,
+                                                        },
+                                                        end: Position {
+                                                            line: 2,
+                                                            column: 29,
+                                                        },
+                                                    },
+                                                    value: "Number",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            },
+                            FieldType {
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 31,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 32,
+                                        },
+                                    },
+                                    value: "y",
+                                },
+                                optional: None,
+                                typ: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 34,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 40,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 2,
+                                                            column: 34,
+                                                        },
+                                                        end: Position {
+                                                            line: 2,
+                                                            column: 40,
+                                                        },
+                                                    },
+                                                    value: "Number",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            },
+                        ],
+                        ext: None,
+                    },
+                },
+            },
+        ),
+    },
+}

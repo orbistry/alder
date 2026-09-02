@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/test.rs
+description: "tests ["
+---
+Tests(
+    Open(
+        1,
+        7,
+    ),
+    1,
+    1,
+)

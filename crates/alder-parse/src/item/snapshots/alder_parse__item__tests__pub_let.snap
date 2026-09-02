@@ -1,0 +1,70 @@
+---
+source: crates/alder-parse/src/item/mod.rs
+description: pub let answer = 42
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 20,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Pub(
+            Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+        ),
+        kind: Let(
+            LetDecl {
+                mutable: None,
+                pattern: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 9,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 15,
+                        },
+                    },
+                    value: Var(
+                        "answer",
+                    ),
+                },
+                annotation: None,
+                value: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 18,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 20,
+                        },
+                    },
+                    value: Number(
+                        NumberLit {
+                            value: 42.0,
+                            text: "42",
+                        },
+                    ),
+                },
+            },
+        ),
+    },
+}
