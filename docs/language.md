@@ -409,23 +409,40 @@ fn main() {
 ## Typed markup
 
 Markup looks like JSX but is a typed HTML DSL: elements, attributes, and
-children are checked against a schema, not stringly typed. Expressions and
-control-flow blocks both work inside braces.
+children are checked against a schema, not stringly typed. Expressions
+are embedded with `{expr}`. Control flow in child position uses `@`
+directives with no wrapping braces, following Octane's TSRX.
 
 ```alder
 <ul class={styles.list}>
-    {for item in items {
-        <li key={item.id}>{item.name}</li>
-    }}
-    {if items.length == 0 { <li>Nothing here</li> }}
-    {match status {
+    @for item in items; key item.id {
+        <li>{item.name}</li>
+    } @empty {
+        <li>Nothing here</li>
+    }
+    @if status.loading {
+        <Spinner />
+    } @else if status.failed {
+        <p>Something went wrong</p>
+    } @else {
+        <p>{count} items</p>
+    }
+    @match status {
         Loading => <Spinner />,
         Ready(n) => <span>{n}</span>,
-    }}
+    }
 </ul>
 ```
 
-- `if` without `else` in markup renders nothing.
+- `@if` without `@else` renders nothing when false. `@for` takes an
+  optional `; key expr` for keyed reconciliation and an optional `@empty`
+  branch.
+- A directive body is a list of children. Statements (`let x = ...`) are
+  allowed inside for setup and do not render; only markup and `{expr}`
+  holes produce output.
+- `@` is unambiguous in child position because text never starts with
+  `@if`, `@for`, or `@match` followed by a space. Literal `@` in text is
+  written `{"@"}`.
 - Components are used as capitalized elements; props are a record type,
   so optional fields make optional props natural.
 - The element vocabulary is per target: HTML for web, a separate set for

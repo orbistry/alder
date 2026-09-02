@@ -237,7 +237,7 @@ the solver. Snapshot tests per construct as today.
 - [ ] `#[attr]` attributes on items
 - [ ] `tests { }` blocks and `test "name" { }`
 - [ ] `#[extern(...)]` bodiless functions and `#[extern] type`
-- [ ] Typed markup expressions with `{expr}`, `{if}`, `{for}`, `{match}` blocks
+- [ ] Typed markup expressions with `{expr}` holes and `@if`/`@else`/`@for`/`@empty`/`@match` directives in child position
 - [ ] `component`, `table`, `schema`, `style`, `query`, `macro`, `comptime` (grammar reserved; bodies may be parsed later)
 - [ ] Port/rewrite `Reporting/Error/Syntax.hs`-style error hierarchy for the new constructs
 
@@ -455,13 +455,15 @@ attr          = attr_name [ '=' ( string | '{' expression '}' ) ] ;
 attr_name     = lower_ident { '-' lower_ident } ;
 child         = element | fragment | text
               | '{' expression '}'
-              | '{' 'if' expression block { 'else' 'if' expression block } [ 'else' block ] '}'
-              | '{' 'for' pattern 'in' expression block '}'
-              | '{' 'match' expression '{' { match_arm } '}' '}' ;
-text          = (* any run of characters not containing '<', '{', or '}' *) ;
+              | '@if' expression child_block { '@else' 'if' expression child_block } [ '@else' child_block ]
+              | '@for' pattern 'in' expression [ ';' 'key' expression ] child_block [ '@empty' child_block ]
+              | '@match' expression '{' { pattern { '|' pattern } [ 'if' expression ] '=>' ( child | child_block ) [ ',' ] } '}' ;
+child_block   = '{' { statement | child } '}' ;
+text          = (* any run of characters not containing '<', '{', or '}', and not starting with '@if', '@for', or '@match' *) ;
 ```
 
-Inside markup blocks, `block` bodies produce children rather than values.
+Inside a `child_block`, statements are setup and do not render; markup and
+`{expr}` holes become children.
 
 ### Queries
 

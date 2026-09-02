@@ -255,7 +255,9 @@ component App() {
     let mut selected = state(0)
     <box direction="column" border="round">
         <text bold>Tasks</text>
-        {for (task, i) in tasks { <text inverse={i == selected}>{task}</text> }}
+        @for (task, i) in tasks; key task {
+            <text inverse={i == selected}>{task}</text>
+        }
     </box>
 }
 ```
