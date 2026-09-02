@@ -1,0 +1,37 @@
+---
+source: crates/alder-parse/src/item/error_.rs
+description: "error Timeout { :timeout }"
+---
+ErrorDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 7,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        value: "Timeout",
+    },
+    tags: [
+        TagVariant {
+            name: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 17,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 25,
+                    },
+                },
+                value: "timeout",
+            },
+            args: [],
+        },
+    ],
+}
