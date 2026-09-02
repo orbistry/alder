@@ -1683,11 +1683,16 @@ pub enum ChildBlock<'a> {
 pub enum Pattern<'a> {
     Start(Row, Col),
     Reserved(Keyword, Row, Col),
+    /// Inside `query { }`: a SQL word used as a binding (`select`, `limit`).
+    SqlKeyword(SqlWord, Row, Col),
     Number(Number, Row, Col),
     String(StringError, Row, Col),
     Pin(&'a Expr<'a>, Row, Col),
     /// `::` not followed by a name.
     PathMember(Row, Col),
+    /// `Foo::bar` — a value path where a pattern was expected; pin it
+    /// (`^Foo::bar`) to compare against its value. Position of the path start.
+    PathVar(Row, Col),
     Ctor(&'a PCtor<'a>, Row, Col),
     Tag(&'a PCtor<'a>, Row, Col),
     /// `:` not followed by a lowercase name.
@@ -1720,6 +1725,8 @@ pub enum PArray<'a> {
     Pattern(&'a Pattern<'a>, Row, Col),
     /// `..` must be last.
     RestNotLast(Row, Col),
+    /// `..` followed by a reserved word (`[..type]`) or, in `query { }`, a SQL word.
+    RestName(Row, Col),
     End(Row, Col),
 }
 
@@ -1785,6 +1792,8 @@ pub enum TRecord<'a> {
 
 #[derive(Debug)]
 pub enum TErrorRow<'a> {
+    /// `[` followed by neither `:tag`, a row variable, nor `]` (`[1]`, `[|]`, `[` at EOF).
+    Start(Row, Col),
     Tag(&'a TagVariant<'a>, Row, Col),
     /// `|` not followed by a tag or a variable.
     Ext(Row, Col),
@@ -1834,6 +1843,9 @@ pub enum RawTokens {
     /// EOF before the matching closer.
     Endless,
     String(StringError),
+    /// Not at the expected opener (`(` for `name!(`, `{` for a macro body);
+    /// nothing consumed. The wrapping variant carries the position.
+    Open,
 }
 
 /// The `select` clauses in their required order (the derived `Ord` is that
@@ -2949,6 +2961,7 @@ Each item is a proposed SPEC.md / docs change unless marked _(internal)_.
 40. **`provide` is a statement in M1, and web.md's `handle` needs it to be an expression.** `handle` ends its body with `provide Session = session { resolve(event).await }` and expects that to be the function's `Task[Response]`, but `Stmt::Provide` gives the block no `tail`. The parser is not blocked (the body parses with `tail: None`); the SPEC/docs disagreement is recorded here for M2, which either promotes `provide … { }` to an expression whose value is its body's value (a rename `Stmt::Provide` → `Expr::Provide`, parsed by `primary` at the `provide` keyword; no other parser change) or makes web.md write `return`/a tail. The `no_record_ctor` rule for `provide … =` heads (§2.3) holds either way.
 41. **Test-macro placement** _(internal)_: the `assert_<thing>_snapshot!` pair is defined at module level under `#[cfg(test)]` and re-exported with `pub(crate) use`, not inside `mod tests` as CLAUDE.md says, because child modules must import the parent's pair (§7.1). Wave 4 rewords the CLAUDE.md sentence to "macros are defined at module level under `#[cfg(test)]` and re-exported with `pub(crate) use` so submodules can import them".
 42. **Wave 0 scanner details** _(internal)_, fixed by the landed code and its unit tests so later waves' error-position snapshots agree: `path()` commits on a dangling `::` (the `::` stays consumed and `PathMember` is reported at the position after it — `Foo::(` → col 6; §5.8); `tag_name` accepts reserved shapes (`:type`); `dashed_name` stops before a `-` not followed by a lowercase letter (`a-1` → `a`, `-1` left); `lower_name` refuses `_x` as well as reserved / SQL words, all without consuming (`WildcardNotVar` is detected by the pattern owner before calling it); `peek_word()` returns `""` off an identifier byte; `binop()` returns `Ok(None)` on `//` (a comment, not `/`); `is_ident_byte` lives in `keyword.rs` (§5.3) and is the one definition of the identifier byte class; `slice_from` uses safe `from_utf8` and panics on a mid-character cursor (§5.8); `path()` collects segments in a `bumpalo::collections::Vec` — the reference pattern for every list parser, no `std::vec::Vec` round-trip. `use_stmt` is `pub(crate)` (§5.12), the `pattern/*` helpers are `pub(super)` (§5.14), and `Keyword` / `SqlWord` are re-exported from `lib.rs` (§5.1). The `#[allow(clippy::type_complexity)]` on `arm_head` is required by the §5.13 signature and survives step 4.2, which strips `#[allow(unused)]` only.
+    Additive variants landed after Wave 1 (each requested by a leaf owner and used at exactly one site): `RawTokens::Open` — `raw_balanced` not at its opener reports it at the cursor without consuming (a unit variant like `Endless`: the position travels in the wrapping `Macro::Body` / `Expr::MacroCall`), so `item/macro_.rs` and `expression/postfix.rs` need not peek for the opener themselves; `TErrorRow::Start` — `[` followed by neither `:tag`, a row variable nor `]` (`[1]`, `[|]`, `[` at EOF) at that byte, while after a `|` the same shape stays `TErrorRow::Ext`; `Pattern::PathVar` — `Foo::bar` in pattern position, reported at the path start (where the fixing `^` goes) with the `::` consumed as a committed failure like the dangling-`::` rule above, so `Pattern::PathMember` now means only a `::` with nothing after it; `Pattern::SqlKeyword(SqlWord, …)` — a SQL word as a binding inside `query { }`, detected by `pattern_var` before `lower_name` runs, for parity with `Expr::SqlKeyword` (§6.3); `PArray::RestName` — a lowercase word after `..` that `lower_name` refuses (`[..type]`, or `[..select]` in query mode), replacing the old `PArray::End` at that position.
 
 ---
 
