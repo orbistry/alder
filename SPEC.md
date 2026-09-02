@@ -219,7 +219,9 @@ rank-based solving, ported from Elm's `Type/*`.
 ## Roadmap
 
 Ordered. Each milestone is the task list for that phase; check items off
-as they land and update the grammar section alongside.
+as they land and update the grammar section alongside. `plans/` holds a
+detailed plan per remaining milestone (starting state, exit criteria,
+settled and open decisions, waves, tests, risks).
 
 ### M1: Parser rewrite (`alder-parse`)
 
@@ -254,10 +256,12 @@ then, by design.
 - [ ] `alder-codegen`: JS emission for the core language; decide enum/record representation
 - [ ] Prelude and stdlib skeleton: `Option`, `Result`, `Array`, `String`, `Number`, `BigInt`, `Map`
 - [ ] JS kernel skeleton and `extern` binding
-- [ ] Embed `deno_core` plus the web-standard extension crates in `alder-cli`; `alder run` for `server` and `cli` targets
-- [ ] `Cli` module with `Args`/`Subcommand` derives
+- [ ] Embed `deno_core` plus the web-standard extension crates in `alder-cli`; `alder run` for the `standalone` target
+- [ ] `Cli` module (raw `args()`; the `Args`/`Subcommand` derives land with M5)
 - [ ] rolldown integration for `alder build`
-- [ ] `alder fmt`
+- [ ] `alder fmt` (comment side table in the parser)
+- [ ] Minimal `alder test` (pass/fail; power-assert and property tests are M9)
+- [ ] `provide ... { }` becomes an expression
 
 ### M3: Traits
 
@@ -313,7 +317,7 @@ then, by design.
 ### M9: Tooling and ecosystem
 
 - [ ] `test`/`tests` with power-assert, per-target runners
-- [ ] Package registry, `alder publish`, semver enforcement by API diff
+- [ ] Registry protocol, Rust client, fs and GitHub-releases adapters, `alder publish` with semver enforcement by API diff (the hosted registry service is deferred past M9)
 - [ ] Language server features on the new grammar; WASM playground
 - [ ] Documentation generator
 

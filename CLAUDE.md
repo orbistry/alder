@@ -8,7 +8,7 @@ The pipeline (`alder-parse`, `alder-can`, `alder-constrain`, `alder-solve`, `ald
 
 ## Design Documents
 
-`docs/` holds the language, runtime, web, data, and tooling design (all provisional). `SPEC.md` holds the draft grammar and the milestone task list. Update them when a decision changes or a task lands. When the Elm reference and `docs/` disagree, `docs/` wins; Elm is a guide to compiler structure, not to language semantics.
+`docs/` holds the language, runtime, web, data, and tooling design (all provisional). `SPEC.md` holds the draft grammar and the milestone task list. `plans/` holds one detailed plan per remaining milestone; start a milestone by reading its plan and end it by ticking SPEC.md. Update them when a decision changes or a task lands. When the Elm reference and `docs/` disagree, `docs/` wins; Elm is a guide to compiler structure, not to language semantics.
 
 ## Reference Material
 
