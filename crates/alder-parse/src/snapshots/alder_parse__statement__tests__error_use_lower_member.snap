@@ -2,7 +2,7 @@
 source: crates/alder-parse/src/statement.rs
 description: "use Db::x"
 ---
-Use(
+UseMember(
     1,
     7,
 )

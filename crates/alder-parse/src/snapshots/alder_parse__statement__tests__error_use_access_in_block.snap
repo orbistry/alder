@@ -3,7 +3,7 @@ source: crates/alder-parse/src/statement.rs
 description: "{ use Db.insert(u) }"
 ---
 Stmt(
-    Use(
+    UseMember(
         1,
         9,
     ),

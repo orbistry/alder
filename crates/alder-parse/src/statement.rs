@@ -356,10 +356,7 @@ impl<'a> Parser<'a> {
     /// `path()` stops before `::lower` and never reads `.`, so `use Db::x` and
     /// `use Db.insert(u)` would otherwise leave their tail to the block loop
     /// (a misleading `Block::SameLine`); a `::` or `.` on the path's line is
-    /// reported here at its own position.
-    // TODO(wave0): a dedicated `Stmt::UseMember` variant would let the
-    // renderer say "a `use` names a provider (`Db`, `App::Db`), not a member";
-    // `Stmt::Use` ("expected a path after `use`") is the nearest one.
+    /// reported here as `Stmt::UseMember` at its own position.
     pub(crate) fn use_stmt(
         &mut self,
         start: Position,
@@ -378,7 +375,7 @@ impl<'a> Parser<'a> {
             }
         });
         if let Some((row, col)) = member {
-            return Err(error::Stmt::Use(row, col));
+            return Err(error::Stmt::UseMember(row, col));
         }
         Ok(self.stmt_at(start, path_end, Stmt::Use(path)))
     }
@@ -851,6 +848,11 @@ mod tests {
     #[test]
     fn error_use_access_in_block() {
         assert_block_error_snapshot!("{ use Db.insert(u) }");
+    }
+
+    #[test]
+    fn error_use_path_member() {
+        assert_statement_error_snapshot!("use App::Db::x");
     }
 
     #[test]

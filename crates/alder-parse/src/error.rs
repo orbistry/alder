@@ -321,6 +321,9 @@ pub enum Stmt<'a> {
     Let(&'a Let<'a>, Row, Col),
     /// `use` not followed by a path.
     Use(Row, Col),
+    /// A `::` or `.` member after the provider path (`use Db::x`,
+    /// `use Db.insert(u)`): `use` names a provider, not a member.
+    UseMember(Row, Col),
     Provide(&'a Provide<'a>, Row, Col),
     For(&'a For<'a>, Row, Col),
     While(&'a While<'a>, Row, Col),

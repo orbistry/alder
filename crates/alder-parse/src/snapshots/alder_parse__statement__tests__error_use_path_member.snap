@@ -1,8 +1,8 @@
 ---
 source: crates/alder-parse/src/statement.rs
-description: use Db.insert(u)
+description: "use App::Db::x"
 ---
 UseMember(
     1,
-    7,
+    12,
 )
