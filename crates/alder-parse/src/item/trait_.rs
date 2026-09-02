@@ -17,7 +17,10 @@
 //! one-line `trait Iterator[i] { type Item; fn next(it: i) -> Option[Item] }`
 //! hits it first). Anything that is not `type`, `fn` or `}` is
 //! `Trait::Item`, checked before the same-line rule so a stray token is
-//! never reported as a second item. `type Item = …` is
+//! never reported as a second item; EOF inside the body is `Trait::Item`
+//! too, exactly as `Block::End` covers an unclosed block (`Trait` has no
+//! dedicated unclosed-body variant, so the M2 renderer special-cases EOF
+//! for the message). `type Item = …` is
 //! `Trait::AssocTypeHasBody` at the `=`; an `fn` item is `fn_decl` with an
 //! optional body (`None` = required, `Some` = default).
 //!
@@ -122,7 +125,10 @@ mod tests {
     //
     // Every trait goes through `type_params()` (item/type_alias.rs), so all
     // direct tests wait for that file; their snapshots were generated and
-    // checked against a local stand-in with the §5.11 behaviour.
+    // verified against the real `type_params()` from the item/type_alias.rs
+    // branch (applied locally, not committed): `Open` at the cursor after the
+    // caller's chomp, `Empty` at the `[`, `Var` / `End` at the offending
+    // byte, stops after `]`.
 
     /// Snapshot test macro for a successful `trait_decl()` parse (input starts at `trait`).
     macro_rules! assert_trait_snapshot {
@@ -365,6 +371,13 @@ mod tests {
                 fn show(value: a) -> String
         "#
         );
+    }
+
+    /// EOF right after `{` is `Trait::Item`, like `Block::End` for a block.
+    #[test]
+    #[ignore = "waits for item/type_alias.rs"]
+    fn error_unclosed_empty_body() {
+        assert_trait_error_snapshot!("trait Show[a] {");
     }
 
     #[test]
