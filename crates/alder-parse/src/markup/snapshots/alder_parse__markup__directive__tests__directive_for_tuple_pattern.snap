@@ -1,0 +1,296 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<box>\n    @for (task, i) in tasks; key task {\n        <text inverse={i == selected}>{task}</text>\n    }\n</box>\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 5,
+            column: 7,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Tag(
+                        "box",
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 5,
+                            },
+                            end: Position {
+                                line: 4,
+                                column: 6,
+                            },
+                        },
+                        value: For {
+                            pattern: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 10,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 19,
+                                    },
+                                },
+                                value: Tuple {
+                                    first: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 11,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 15,
+                                            },
+                                        },
+                                        value: Var(
+                                            "task",
+                                        ),
+                                    },
+                                    second: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 17,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 18,
+                                            },
+                                        },
+                                        value: Var(
+                                            "i",
+                                        ),
+                                    },
+                                    rest: [],
+                                },
+                            },
+                            iter: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 23,
+                                    },
+                                    end: Position {
+                                        line: 2,
+                                        column: 28,
+                                    },
+                                },
+                                value: Var(
+                                    "tasks",
+                                ),
+                            },
+                            key: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 34,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 38,
+                                        },
+                                    },
+                                    value: Var(
+                                        "task",
+                                    ),
+                                },
+                            ),
+                            body: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 2,
+                                        column: 39,
+                                    },
+                                    end: Position {
+                                        line: 4,
+                                        column: 6,
+                                    },
+                                },
+                                value: ChildBlock {
+                                    items: [
+                                        Child(
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 3,
+                                                        column: 9,
+                                                    },
+                                                    end: Position {
+                                                        line: 3,
+                                                        column: 52,
+                                                    },
+                                                },
+                                                value: Element(
+                                                    Element {
+                                                        name: Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 3,
+                                                                    column: 10,
+                                                                },
+                                                                end: Position {
+                                                                    line: 3,
+                                                                    column: 14,
+                                                                },
+                                                            },
+                                                            value: Tag(
+                                                                "text",
+                                                            ),
+                                                        },
+                                                        attrs: [
+                                                            Attr {
+                                                                name: Located {
+                                                                    region: Region {
+                                                                        start: Position {
+                                                                            line: 3,
+                                                                            column: 15,
+                                                                        },
+                                                                        end: Position {
+                                                                            line: 3,
+                                                                            column: 22,
+                                                                        },
+                                                                    },
+                                                                    value: "inverse",
+                                                                },
+                                                                value: Some(
+                                                                    Expr(
+                                                                        Located {
+                                                                            region: Region {
+                                                                                start: Position {
+                                                                                    line: 3,
+                                                                                    column: 24,
+                                                                                },
+                                                                                end: Position {
+                                                                                    line: 3,
+                                                                                    column: 37,
+                                                                                },
+                                                                            },
+                                                                            value: BinOps {
+                                                                                operands: [
+                                                                                    BinOpOperand {
+                                                                                        expr: Located {
+                                                                                            region: Region {
+                                                                                                start: Position {
+                                                                                                    line: 3,
+                                                                                                    column: 24,
+                                                                                                },
+                                                                                                end: Position {
+                                                                                                    line: 3,
+                                                                                                    column: 25,
+                                                                                                },
+                                                                                            },
+                                                                                            value: Var(
+                                                                                                "i",
+                                                                                            ),
+                                                                                        },
+                                                                                        op: Located {
+                                                                                            region: Region {
+                                                                                                start: Position {
+                                                                                                    line: 3,
+                                                                                                    column: 26,
+                                                                                                },
+                                                                                                end: Position {
+                                                                                                    line: 3,
+                                                                                                    column: 28,
+                                                                                                },
+                                                                                            },
+                                                                                            value: Eq,
+                                                                                        },
+                                                                                    },
+                                                                                ],
+                                                                                last: Located {
+                                                                                    region: Region {
+                                                                                        start: Position {
+                                                                                            line: 3,
+                                                                                            column: 29,
+                                                                                        },
+                                                                                        end: Position {
+                                                                                            line: 3,
+                                                                                            column: 37,
+                                                                                        },
+                                                                                    },
+                                                                                    value: Var(
+                                                                                        "selected",
+                                                                                    ),
+                                                                                },
+                                                                            },
+                                                                        },
+                                                                    ),
+                                                                ),
+                                                            },
+                                                        ],
+                                                        children: [
+                                                            Located {
+                                                                region: Region {
+                                                                    start: Position {
+                                                                        line: 3,
+                                                                        column: 39,
+                                                                    },
+                                                                    end: Position {
+                                                                        line: 3,
+                                                                        column: 45,
+                                                                    },
+                                                                },
+                                                                value: Hole(
+                                                                    Located {
+                                                                        region: Region {
+                                                                            start: Position {
+                                                                                line: 3,
+                                                                                column: 40,
+                                                                            },
+                                                                            end: Position {
+                                                                                line: 3,
+                                                                                column: 44,
+                                                                            },
+                                                                        },
+                                                                        value: Var(
+                                                                            "task",
+                                                                        ),
+                                                                    },
+                                                                ),
+                                                            },
+                                                        ],
+                                                        self_closing: false,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                    ],
+                                },
+                            },
+                            empty: None,
+                        },
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

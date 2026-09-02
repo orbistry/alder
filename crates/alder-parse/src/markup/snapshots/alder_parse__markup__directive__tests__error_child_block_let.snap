@@ -1,0 +1,36 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<p>@if x { let y }</p>"
+---
+Markup(
+    Child(
+        If(
+            Body(
+                Item(
+                    Stmt(
+                        Let(
+                            Equals(
+                                1,
+                                18,
+                            ),
+                            1,
+                            12,
+                        ),
+                        1,
+                        12,
+                    ),
+                    1,
+                    12,
+                ),
+                1,
+                10,
+            ),
+            1,
+            4,
+        ),
+        1,
+        4,
+    ),
+    1,
+    1,
+)

@@ -1,0 +1,25 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<p>@if x <b>x</b></p>"
+---
+Markup(
+    Child(
+        If(
+            Condition(
+                OperatorRight(
+                    Lt,
+                    1,
+                    15,
+                ),
+                1,
+                8,
+            ),
+            1,
+            4,
+        ),
+        1,
+        4,
+    ),
+    1,
+    1,
+)

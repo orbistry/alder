@@ -1,0 +1,71 @@
+---
+source: crates/alder-parse/src/markup/directive.rs
+description: "<div>@match s {}</div>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 23,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 5,
+                        },
+                    },
+                    value: Tag(
+                        "div",
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 6,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                        },
+                        value: Match {
+                            scrutinee: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                },
+                                value: Var(
+                                    "s",
+                                ),
+                            },
+                            arms: [],
+                        },
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

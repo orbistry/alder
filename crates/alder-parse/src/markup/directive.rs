@@ -354,4 +354,428 @@ impl<'a> Parser<'a> {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::super::{assert_markup_error_snapshot, assert_markup_snapshot};
+
+    // ---- @if --------------------------------------------------------------
+
+    #[test]
+    fn directive_if() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @if ready {
+                    <p>ok</p>
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_if_else() {
+        assert_markup_snapshot!("<div>@if a { <p>a</p> } @else { <p>b</p> }</div>");
+    }
+
+    #[test]
+    fn directive_if_else_if() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @if status.loading {
+                    <Spinner />
+                } @else if status.failed {
+                    <p>Something went wrong</p>
+                } @else {
+                    <p>{count} items</p>
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_if_else_next_line() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @if a {
+                    <p>a</p>
+                }
+                @else {
+                    <p>b</p>
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_if_condition_path_no_record_ctor() {
+        assert_markup_snapshot!("<div>@if s == Shape::Empty { <p>e</p> }</div>");
+    }
+
+    #[test]
+    fn directive_if_empty_body() {
+        assert_markup_snapshot!("<div>@if a {}</div>");
+    }
+
+    #[test]
+    fn directive_if_text_body() {
+        assert_markup_snapshot!("<p>@if a { yes } @else { no }</p>");
+    }
+
+    #[test]
+    fn directive_if_mid_text() {
+        assert_markup_snapshot!("<p>count: @if a { <b>1</b> } done</p>");
+    }
+
+    // ---- @for -------------------------------------------------------------
+
+    #[test]
+    fn directive_for() {
+        assert_markup_snapshot!("<ul>@for item in items { <li>{item}</li> }</ul>");
+    }
+
+    #[test]
+    fn directive_for_key() {
+        assert_markup_snapshot!(
+            r#"
+            <ul>
+                @for item in items; key item.id {
+                    <li>{item.name}</li>
+                }
+            </ul>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_for_empty() {
+        assert_markup_snapshot!(
+            r#"
+            <ul>
+                @for item in items {
+                    <li>{item}</li>
+                } @empty {
+                    <li>Nothing here</li>
+                }
+            </ul>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_for_empty_next_line() {
+        assert_markup_snapshot!(
+            r#"
+            <ul>
+                @for item in items {
+                    <li>{item}</li>
+                }
+                @empty {
+                    <li>none</li>
+                }
+            </ul>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_for_tuple_pattern() {
+        assert_markup_snapshot!(
+            r#"
+            <box>
+                @for (task, i) in tasks; key task {
+                    <text inverse={i == selected}>{task}</text>
+                }
+            </box>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_for_iter_call() {
+        assert_markup_snapshot!("<ul>@for x in Array.range(0, n) { <li>{x}</li> }</ul>");
+    }
+
+    // ---- @match -----------------------------------------------------------
+
+    #[test]
+    fn directive_match() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @match status {
+                    Loading => <Spinner />,
+                    Ready(n) => <span>{n}</span>,
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_match_child_body() {
+        assert_markup_snapshot!("<div>@match s { Loading => <Spinner /> }</div>");
+    }
+
+    #[test]
+    fn directive_match_block_body() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @match s {
+                    Ready(n) => {
+                        let double = n * 2
+                        <span>{double}</span>
+                    }
+                    _ => {}
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_match_guard() {
+        assert_markup_snapshot!(
+            "<div>@match n { n if n > 0 => <p>pos</p>, _ => <p>other</p> }</div>"
+        );
+    }
+
+    #[test]
+    fn directive_match_alternatives() {
+        assert_markup_snapshot!("<div>@match n { 1 | 2 => <p>small</p> }</div>");
+    }
+
+    #[test]
+    fn directive_match_directive_body() {
+        assert_markup_snapshot!(
+            "<div>@match s { Some(x) => @if x { <b>x</b> }, None => <></> }</div>"
+        );
+    }
+
+    #[test]
+    fn directive_match_fragment_body() {
+        assert_markup_snapshot!("<div>@match s { _ => <>a</> }</div>");
+    }
+
+    #[test]
+    fn directive_match_newline_separated_arms() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @match s {
+                    A => <p>a</p>
+                    B => <p>b</p>
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_match_empty() {
+        assert_markup_snapshot!("<div>@match s {}</div>");
+    }
+
+    #[test]
+    fn directive_match_scrutinee_path_no_record_ctor() {
+        assert_markup_snapshot!("<div>@match Shape::Empty { Shape::Empty => <p>e</p> }</div>");
+    }
+
+    // ---- child blocks -----------------------------------------------------
+
+    #[test]
+    fn child_block_let() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @if x {
+                    let y = x * 2
+                    <p>{y}</p>
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn child_block_let_mut() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @if x {
+                    let mut n = 0
+                    <p>{n}</p>
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn child_block_use() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @if x {
+                    use Theme
+                    <p>t</p>
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn child_block_let_record_ctor() {
+        assert_markup_snapshot!(
+            r#"
+            <div>
+                @if x {
+                    let r = Shape::Rect { width: 1 }
+                    <p>{r.width}</p>
+                }
+            </div>
+            "#
+        );
+    }
+
+    #[test]
+    fn child_block_text_only() {
+        assert_markup_snapshot!("<p>@if x { just text }</p>");
+    }
+
+    #[test]
+    fn child_block_let_same_line() {
+        assert_markup_snapshot!("<p>@if x { let y = 1\n<b>{y}</b> }</p>");
+    }
+
+    // `let` mid-run is text: only an item start is code.
+    #[test]
+    fn child_block_let_after_text_is_text() {
+        assert_markup_snapshot!("<p>@if x { so let it be }</p>");
+    }
+
+    #[test]
+    fn nested_directives() {
+        assert_markup_snapshot!(
+            r#"
+            <ul>
+                @for item in items {
+                    @if item.visible {
+                        <li>{item.name}</li>
+                    }
+                }
+            </ul>
+            "#
+        );
+    }
+
+    #[test]
+    fn directive_in_fragment() {
+        assert_markup_snapshot!("<>@if a { <p>a</p> }</>");
+    }
+
+    // ---- errors -----------------------------------------------------------
+
+    #[test]
+    fn error_directive_unknown() {
+        assert_markup_error_snapshot!("<p>@foo</p>");
+    }
+
+    #[test]
+    fn error_else_without_if() {
+        assert_markup_error_snapshot!("<p>@else { <b>x</b> }</p>");
+    }
+
+    #[test]
+    fn error_empty_without_for() {
+        assert_markup_error_snapshot!("<p>@empty { <b>x</b> }</p>");
+    }
+
+    #[test]
+    fn error_if_condition() {
+        assert_markup_error_snapshot!("<p>@if ) { <b>x</b> }</p>");
+    }
+
+    #[test]
+    fn error_if_missing_block() {
+        assert_markup_error_snapshot!("<p>@if x }</p>");
+    }
+
+    // `x <b>x</b>` is the comparison chain `x < b > x < /b…` (§11: `<`
+    // after an operand is an operator), so the missing `{` surfaces as a
+    // missing operand inside the condition.
+    #[test]
+    fn error_if_missing_block_before_element() {
+        assert_markup_error_snapshot!("<p>@if x <b>x</b></p>");
+    }
+
+    #[test]
+    fn error_if_else_branch_start() {
+        assert_markup_error_snapshot!("<p>@if x { } @else <b>x</b></p>");
+    }
+
+    #[test]
+    fn error_for_missing_in() {
+        assert_markup_error_snapshot!("<ul>@for x items { <li>{x}</li> }</ul>");
+    }
+
+    #[test]
+    fn error_for_key_keyword() {
+        assert_markup_error_snapshot!("<ul>@for x in xs; foo x { <li>{x}</li> }</ul>");
+    }
+
+    #[test]
+    fn error_for_pattern() {
+        assert_markup_error_snapshot!("<ul>@for +x in xs { }</ul>");
+    }
+
+    #[test]
+    fn error_match_bare_text() {
+        assert_markup_error_snapshot!("<p>@match x { A => hi }</p>");
+    }
+
+    #[test]
+    fn error_match_open() {
+        assert_markup_error_snapshot!("<p>@match x A => <b>a</b> }</p>");
+    }
+
+    #[test]
+    fn error_match_arrow() {
+        assert_markup_error_snapshot!("<p>@match x { A -> <b>a</b> }</p>");
+    }
+
+    #[test]
+    fn error_match_end() {
+        assert_markup_error_snapshot!("<p>@match x { A => <b>a</b> ) }</p>");
+    }
+
+    #[test]
+    fn error_match_unclosed() {
+        assert_markup_error_snapshot!("<p>@match x { A => <b>a</b>");
+    }
+
+    #[test]
+    fn error_child_block_end() {
+        assert_markup_error_snapshot!("<p>@if x { <b>y</b>");
+    }
+
+    #[test]
+    fn error_child_block_close_tag_inside() {
+        assert_markup_error_snapshot!("<p>@if x { </p> }");
+    }
+
+    #[test]
+    fn error_child_block_let() {
+        assert_markup_error_snapshot!("<p>@if x { let y }</p>");
+    }
+
+    #[test]
+    fn error_child_block_use_member() {
+        assert_markup_error_snapshot!("<p>@if x { use Db.run }</p>");
+    }
+}
