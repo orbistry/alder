@@ -227,8 +227,8 @@ New parser for the grammar below (`crates/alder-parse` over
 design and its decisions are in `docs/parser-internals.md`. `alder-ast`,
 `alder-can`, `alder-constrain`, `alder-solve`, `alder-driver`, the CLI
 and the language server still consume the old AST and are red until M2
-adapts them (§10.33); the workspace `default-members` is narrowed to
-region/source/parse/config until then.
+adapts them; the workspace build and CI are red on the branch until
+then, by design.
 
 - [x] Lexer: `//` comments, template literals, `:tag` tokens, `#[`, `::`, `=>`, `->`, `|>`, `??`, `?`, `^`, `@if`/`@for`/`@match`
 - [x] Items: `pub`, path-first `import` with `.{ }`/`.*`/`as`, re-exports (`pub import`)
