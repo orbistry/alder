@@ -224,7 +224,7 @@ as they land and update the grammar section alongside.
 New parser for the grammar below, keeping `alder-ast`, `alder-can`, and
 the solver. Snapshot tests per construct as today.
 
-- [ ] Lexer: `//` comments, template literals, `:tag` tokens, `#[`, `::`, `=>`, `->`, `|>`, `??`, `?`
+- [ ] Lexer: `//` comments, template literals, `:tag` tokens, `#[`, `::`, `=>`, `->`, `|>`, `??`, `?`, `^`, `@if`/`@for`/`@match`
 - [ ] Items: `pub`, path-first `import` with `.{ }`/`.*`/`as`, re-exports (`pub import`)
 - [ ] `fn` declarations and lambdas, optional `-> Type` after params
 - [ ] Statements: `let`/`let mut`, assignment and compound assignment, `for`, `while`, `loop`, `break`/`continue` with values, `return`
@@ -291,7 +291,7 @@ the solver. Snapshot tests per construct as today.
 ### M7: Data layer
 
 - [ ] `table` declarations with dialect modules (`@alder/sqlite`, `@alder/postgres`, `@alder/mysql`)
-- [ ] SQL-shaped query expressions, type-checked projections, desugar to chain API
+- [ ] SQL-shaped query expressions with `^` pinned parameters, type-checked projections, desugar to chain API
 - [ ] `alder db generate`/`migrate`/`push` with diff-generated SQL
 - [ ] D1 and Hyperdrive drivers; embedded SQLite for `server`/`tui`
 - [ ] `schema` declarations with `from table` and validation rules
@@ -469,6 +469,7 @@ Inside a `child_block`, statements are setup and do not render; markup and
 
 ```ebnf
 query_expr    = select_expr | insert_expr | update_expr | delete_expr ;
+query_value   = '^' postfix ;                          (* pinned host value inside query *)
 select_expr   = 'select' ( '{' expression { ',' expression } '}' | '*' )
                 'from' table_ref { join } [ 'where' expression ]
                 [ 'groupBy' expression { ',' expression } ] [ 'orderBy' order { ',' order } ]
@@ -476,7 +477,7 @@ select_expr   = 'select' ( '{' expression { ',' expression } '}' | '*' )
 table_ref     = lower_ident [ 'as' lower_ident ] ;
 join          = [ 'left' | 'inner' ] 'join' table_ref 'on' expression ;
 order         = expression [ 'asc' | 'desc' ] ;
-insert_expr   = 'insert' 'into' lower_ident 'values' ( record | expression ) ;
+insert_expr   = 'insert' 'into' lower_ident 'values' query_value ;
 update_expr   = 'update' lower_ident 'set' record [ 'where' expression ] ;
 delete_expr   = 'delete' 'from' lower_ident [ 'where' expression ] ;
 ```
@@ -485,7 +486,7 @@ delete_expr   = 'delete' 'from' lower_ident [ 'where' expression ] ;
 
 ```ebnf
 pattern       = pattern_atom [ 'as' lower_ident ] ;
-pattern_atom  = '_' | lower_ident | number | bigint | string
+pattern_atom  = '_' | lower_ident | '^' postfix | number | bigint | string
               | path [ '(' pattern { ',' pattern } ')' | pattern_record ]
               | tag [ '(' pattern { ',' pattern } ')' ]
               | '(' pattern { ',' pattern } ')'

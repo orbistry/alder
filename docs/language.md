@@ -156,6 +156,20 @@ let found = loop {
 }
 ```
 
+### Pinning
+
+`^` means "use the existing value here" wherever a position would
+otherwise bind or resolve a name. In `match` patterns it compares against
+a binding instead of introducing one (Elixir's pin); in `query { }` blocks
+it injects a host value as a bound parameter (see `data.md`).
+
+```alder
+match input {
+    ^expected => "matched the existing value",
+    other => `got ${other}`,
+}
+```
+
 ## Types
 
 ### Type application and variables

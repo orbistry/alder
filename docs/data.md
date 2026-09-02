@@ -47,22 +47,36 @@ type-checked against table declarations. The result type is inferred from
 the projection. SQL words are contextual keywords only inside `query`, so
 `update`, `select`, and `from` remain ordinary identifiers elsewhere.
 
+Inside the block, bare identifiers are columns and table aliases. Runtime
+values from the surrounding code are pinned with `^`, as in Ecto:
+
 ```alder
 let recent = query {
     select { u.name, p.title, p.created }
     from users as u
     join posts as p on p.author == u.id
-    where u.active && p.created > since
+    where u.active && p.created > ^since && u.id in ^ids
     orderBy p.created desc
-    limit 20
+    limit ^pageSize
 }
 
-let rows = db.run(recent).await?      // Array<{ name: String, title: String, created: Timestamp }>
+let rows = db.run(recent).await?      // Array[{ name: String, title: String, created: Timestamp }]
 
-db.run(query { insert into users values { email, name } }).await?
-db.run(query { update users set { name } where users.id == id }).await?
+db.run(query { insert into users values ^{ email, name } }).await?
+db.run(query { update users set { name: ^newName } where users.id == ^user.id }).await?
+db.run(query { delete from posts where posts.author == ^user.id }).await?
 ```
 
+- `^` binds tighter than `.` and calls: `^user.id` pins `user.id`;
+  `^(a + b)` pins an arbitrary expression. A pinned value is always a
+  bound parameter, never SQL text, so injection is impossible by
+  construction. Arrays pin as parameter lists for `in`.
+- Bare identifiers resolve against the tables and aliases in scope;
+  ambiguity between two tables is a compile error and `unknown column
+since` suggests `^since`.
+- `values` takes a pinned record or array of records
+  (`values ^rows`); `set` takes a record whose fields are columns and
+  whose values are query expressions.
 - A `query` block produces a `Query[row]` value; `db.run` executes it
   against the provided `Db` context.
 - The block desugars to a chain API (`Query.select(...).from(...)`) so
