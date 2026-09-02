@@ -1,0 +1,33 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: "! ready"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 8,
+        },
+    },
+    value: Not(
+        Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 3,
+                },
+                end: Position {
+                    line: 1,
+                    column: 8,
+                },
+            },
+            value: Var(
+                "ready",
+            ),
+        },
+    ),
+}

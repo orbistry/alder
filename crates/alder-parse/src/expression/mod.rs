@@ -12,6 +12,13 @@
 //! so only `(a\n) -b` / `(a\n) <b` on the `)` line still read the operand
 //! as ending on the earlier line (they break the chain; §2.1 rule 2).
 //!
+//! Two points where this file goes beyond the §6.0 pseudo-code, both for
+//! the design owner to ratify: an Elm-habit token (`^`, `|`, `..`, `->`,
+//! `::`, …) on a later line ends the chain instead of raising
+//! `OperatorReserved`, so `other => 1\n^x => 2` reaches the match parser
+//! (7.2 `match_newline_separated_arms` + `match_pin`); and whitespace is
+//! allowed between a unary prefix and its operand (`- x`, `! x`).
+//!
 //! See docs/parser-internals.md §5.13.
 // OWNER: expression/mod.rs (Wave 2)
 
@@ -41,10 +48,18 @@ impl<'a> Parser<'a> {
         let mut operands = BumpVec::new_in(self.bump);
         loop {
             let saved = self.save_state();
-            let Some(op) = self.binop(error::Expr::OperatorReserved)? else {
-                break;
+            let newline = self.newline_since(last.region.end);
+            let op = match self.binop(error::Expr::OperatorReserved) {
+                Ok(Some(op)) => op,
+                Ok(None) => break,
+                // An Elm-habit token at the start of a later line (`^x`,
+                // `| p`, `..rest`, `-> t`) begins the next statement or
+                // match arm rather than continuing this chain; nothing was
+                // consumed, and whoever parses that line reports it.
+                Err(_) if newline => break,
+                Err(e) => return Err(e),
             };
-            if self.newline_since(last.region.end) && !continues_line(op.value, self.peek()) {
+            if newline && !continues_line(op.value, self.peek()) {
                 self.restore_state(saved);
                 break;
             }
@@ -75,19 +90,22 @@ impl<'a> Parser<'a> {
     /// `-` / `!` / (query mode) `^` prefix, then `postfix`. A `Start` failure of the
     /// operand becomes `Expr::Unary`; every other operand error propagates (§6.0).
     ///
-    /// The operand must follow the prefix immediately (`- x` is `Unary`), the
-    /// same adjacency the newline rule relies on to tell `a\n-b` (a new
-    /// statement) from `a\n- b` (a continued subtraction).
+    /// Whitespace may separate the prefix from its operand (`- x`, `! ready`,
+    /// `- -x`), as in JS and Rust. This does not disturb §2.1 rule 2: at the
+    /// start of a continuation line `- b` is still the subtraction and `-b`
+    /// the new statement, because the chain decides before `unary` runs.
     pub(crate) fn unary(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
         let start = self.get_position();
         match self.peek() {
             Some(b'-') => {
                 self.advance();
+                self.chomp();
                 let operand = self.unary_operand()?;
                 Ok(self.expr_at(start, operand.region.end, Expr::Negate(operand)))
             }
             Some(b'!') => {
                 self.advance();
+                self.chomp();
                 let operand = self.unary_operand()?;
                 Ok(self.expr_at(start, operand.region.end, Expr::Not(operand)))
             }
@@ -467,9 +485,60 @@ mod tests {
         );
     }
 
+    /// An Elm-habit token on a later line ends the chain (the next line is
+    /// a new statement or match arm); the token is left unconsumed at `$at`.
+    macro_rules! assert_expression_ends_at {
+        ($code:expr, $at:expr) => {{
+            let bump = bumpalo::Bump::new();
+            let code = $code;
+            let src = bump.alloc_str(code);
+            let mut parser = crate::Parser::new(&bump, src.as_bytes());
+            let result = parser
+                .expression()
+                .unwrap_or_else(|e| panic!("expected Ok, got Err: {e:#?}\n\nSource:\n{code}"));
+            assert_eq!(parser.position(), $at, "unexpected end\n\nSource:\n{code}");
+            insta::with_settings!({
+                description => code,
+                omit_expression => true,
+            }, {
+                insta::assert_debug_snapshot!(result);
+            });
+        }};
+    }
+
+    #[test]
+    fn binop_newline_caret_ends_expression() {
+        assert_expression_ends_at!("a\n^b", (2, 1));
+    }
+
+    #[test]
+    fn binop_newline_bar_ends_expression() {
+        assert_expression_ends_at!("a\n| b", (2, 1));
+    }
+
+    #[test]
+    fn binop_newline_arrow_ends_expression() {
+        assert_expression_ends_at!("a\n-> b", (2, 1));
+    }
+
+    #[test]
+    fn binop_sub_negate() {
+        assert_expression_snapshot!("a - -b");
+    }
+
     #[test]
     fn negate_var() {
         assert_expression_snapshot!("-x");
+    }
+
+    #[test]
+    fn negate_with_space() {
+        assert_expression_snapshot!("- x");
+    }
+
+    #[test]
+    fn negate_negate_with_space() {
+        assert_expression_snapshot!("- -x");
     }
 
     #[test]
@@ -490,6 +559,11 @@ mod tests {
     #[test]
     fn not_parens() {
         assert_expression_snapshot!("!(a && b)");
+    }
+
+    #[test]
+    fn not_with_space() {
+        assert_expression_snapshot!("! ready");
     }
 
     #[test]
