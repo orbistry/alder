@@ -12,14 +12,21 @@
 //!
 //! A module path is one token: no whitespace between its parts, and every
 //! part is a `raw_lower` (§2.4), so `@alder/test` and `~/db/users` parse.
-//! The tail is looked ahead past whitespace with `save_state` /
-//! `restore_state`, so a bare import leaves the cursor at the end of its
-//! path. What a bare import binds is validated here (§10.37): `import ~`
+//! The tail is a separate token: it is looked ahead past whitespace —
+//! newlines included — with `save_state` / `restore_state`, so a bare
+//! import leaves the cursor at the end of its path. Crossing a newline here
+//! is deliberate: §2.1 names the only newline-sensitive positions, and the
+//! item-separation rule (rule 3) only concerns tokens that can start an
+//! item, which neither `.` nor `as` can; a leading `.` continuing on the
+//! next line also mirrors the postfix rule (rule 1), so
+//! `import @alder/http\n    .{ get, Request }` is one import.
+//! What a bare import binds is validated here (§10.37): `import ~`
 //! has no segment (`Import::RootOnly`, at the `~`) and `import @alder/test`
 //! would bind a reserved word (`Import::ReservedBinding(Test)`, at the
 //! segment). `pub import` needs `.{ … }` or `.*` (§10.25,
-//! `Import::PubNeedsNames` at the position where the tail was expected).
-//! `ImportTail::All` carries the region of `.*`.
+//! `Import::PubNeedsNames` at the end of the path when there is no tail, or
+//! at the `as` of an alias tail). `ImportTail::All` carries the region of
+//! `.*`.
 //!
 //! See docs/parser-internals.md §5.11.
 // OWNER: item/import.rs (Wave 3)
@@ -43,14 +50,17 @@ impl<'a> Parser<'a> {
         )?;
 
         // Look ahead past whitespace for a tail; a bare import consumes nothing
-        // more so the cursor stays at the path's end.
+        // more so the cursor stays at the path's end. `PubNeedsNames` points
+        // where the `.{ … }` / `.*` belongs: the end of the path, or the `as`
+        // that stands in its place — never the token after the whitespace.
+        let mut tail_start = path.region.end;
         let saved = self.save_state();
         self.chomp();
-        let tail_start = self.position();
         let tail = if self.peek() == Some(b'.') {
             self.advance();
             self.import_tail()?
         } else if self.peek_keyword(b"as") {
+            tail_start = self.get_position();
             self.advance_by(2);
             self.chomp();
             ImportTail::Alias(self.located_lower(error::Import::Alias)?)
@@ -60,8 +70,10 @@ impl<'a> Parser<'a> {
         };
 
         if is_pub && !matches!(tail, ImportTail::Names(_) | ImportTail::All(_)) {
-            let (row, col) = tail_start;
-            return Err(error::Import::PubNeedsNames(row, col));
+            return Err(error::Import::PubNeedsNames(
+                tail_start.line,
+                tail_start.column,
+            ));
         }
         if let ImportTail::Module = tail {
             let bound = match (path.value.root, path.value.segments.last()) {
@@ -294,6 +306,31 @@ mod tests {
     }
 
     #[test]
+    fn names_tail_next_line() {
+        assert_item_snapshot!(
+            r#"
+            import @alder/http
+                .{ get, Request }
+            "#
+        );
+    }
+
+    #[test]
+    fn names_tail_after_space() {
+        assert_item_snapshot!("import ~/db/users .{ find }");
+    }
+
+    #[test]
+    fn alias_next_line() {
+        assert_item_snapshot!(
+            r#"
+            import @alder/http
+                as h
+            "#
+        );
+    }
+
+    #[test]
     fn error_bad_root() {
         assert_item_error_snapshot!("import http");
     }
@@ -356,6 +393,26 @@ mod tests {
     #[test]
     fn error_pub_needs_names_alias() {
         assert_item_error_snapshot!("pub import @alder/http as h");
+    }
+
+    #[test]
+    fn error_pub_needs_names_before_next_item() {
+        assert_item_error_snapshot!(
+            r#"
+            pub import @alder/http
+            let x = 1
+            "#
+        );
+    }
+
+    #[test]
+    fn error_pub_needs_names_alias_next_line() {
+        assert_item_error_snapshot!(
+            r#"
+            pub import @alder/http
+                as h
+            "#
+        );
     }
 
     #[test]
