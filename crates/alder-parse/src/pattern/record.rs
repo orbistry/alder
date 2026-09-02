@@ -11,7 +11,7 @@ use crate::{Parser, error};
 #[allow(unused)]
 impl<'a> Parser<'a> {
     /// After `{`.
-    pub(crate) fn pattern_record_fields(
+    pub(super) fn pattern_record_fields(
         &mut self,
     ) -> Result<(&'a [FieldPattern<'a>], Option<Region>), error::PRecord<'a>> {
         todo!()

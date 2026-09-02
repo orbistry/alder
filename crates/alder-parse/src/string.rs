@@ -2,6 +2,11 @@
 //! `\n \r \t \0 \" \' \\ \u{…}`. Templates reuse the escape scanners.
 //!
 //! See docs/parser-internals.md §2 and §5.6.
+//!
+//! Hand-off: the pre-rewrite escape scanners are largely reusable — recover
+//! them with `git show 95c298e:crates/alder-parse/src/string.rs` (the old
+//! name helpers live at `…:crates/alder-parse/src/expression/variable.rs`).
+//! `EscapeResult` is not `Copy`: `error::Escape` (§4, verbatim) is not `Clone`.
 // OWNER: string.rs (Wave 1)
 
 use crate::error::{Escape, StringError};

@@ -2,6 +2,9 @@
 //! fraction, exponent, `n` BigInt suffix).
 //!
 //! See docs/parser-internals.md §2 and §5.5.
+//!
+//! Hand-off: the pre-rewrite scanner is largely reusable — recover it with
+//! `git show 95c298e:crates/alder-parse/src/number.rs`.
 // OWNER: number.rs (Wave 1)
 
 use alder_region::Located;

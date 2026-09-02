@@ -19,6 +19,9 @@ impl<'a> Parser<'a> {
     }
 
     /// `p | q [if guard] =>` — shared with @match (errors mapped by the caller).
+    // Required, not a stub allow: the §5.13 return type trips clippy's
+    // `type_complexity` under `-D warnings`. Step 4.2 strips `allow(unused)`
+    // only; this one stays.
     #[allow(clippy::type_complexity)]
     pub(crate) fn arm_head<E>(
         &mut self,

@@ -11,7 +11,7 @@ use crate::{Parser, error};
 #[allow(unused)]
 impl<'a> Parser<'a> {
     /// At `(`.
-    pub(crate) fn pattern_tuple(
+    pub(super) fn pattern_tuple(
         &mut self,
         start: Position,
     ) -> Result<&'a Located<Pattern<'a>>, error::PTuple<'a>> {

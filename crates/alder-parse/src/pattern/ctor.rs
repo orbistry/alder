@@ -11,7 +11,7 @@ use crate::{Parser, error};
 #[allow(unused)]
 impl<'a> Parser<'a> {
     /// At an uppercase letter: `None`, `Some(x)`, `Option::Some(x)`, `Rect { .. }`.
-    pub(crate) fn pattern_ctor(
+    pub(super) fn pattern_ctor(
         &mut self,
         start: Position,
     ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {
@@ -19,7 +19,7 @@ impl<'a> Parser<'a> {
     }
 
     /// At `:`: `:tag` / `:tag(p, …)`.
-    pub(crate) fn pattern_tag(
+    pub(super) fn pattern_tag(
         &mut self,
         start: Position,
     ) -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>> {

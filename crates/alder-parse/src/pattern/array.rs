@@ -11,7 +11,7 @@ use crate::{Parser, error};
 #[allow(unused)]
 impl<'a> Parser<'a> {
     /// At `[`.
-    pub(crate) fn pattern_array(
+    pub(super) fn pattern_array(
         &mut self,
         start: Position,
     ) -> Result<&'a Located<Pattern<'a>>, error::PArray<'a>> {

@@ -51,7 +51,12 @@ impl<'a> Parser<'a> {
         todo!()
     }
 
-    fn use_stmt(&mut self, start: Position) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>> {
+    /// After `use`. `pub(crate)` (not private as §5.12 shows) because
+    /// `markup::directive` dispatches child-block `use` through it (§6.2).
+    pub(crate) fn use_stmt(
+        &mut self,
+        start: Position,
+    ) -> Result<&'a Located<Stmt<'a>>, error::Stmt<'a>> {
         todo!()
     }
 
