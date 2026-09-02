@@ -1,0 +1,700 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query {\n    select { u.name, p.title, p.created }\n    from users as u\n    join posts as p on p.author == u.id\n    where u.active && p.created > ^since && u.id in ^ids\n    orderBy p.created desc\n    limit ^pageSize\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 8,
+            column: 2,
+        },
+    },
+    value: Query(
+        Select(
+            Select {
+                projection: Fields(
+                    [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 14,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 20,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 14,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 15,
+                                        },
+                                    },
+                                    value: Var(
+                                        "u",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 16,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 20,
+                                        },
+                                    },
+                                    value: "name",
+                                },
+                            },
+                        },
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 22,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 29,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 22,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 23,
+                                        },
+                                    },
+                                    value: Var(
+                                        "p",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 24,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 29,
+                                        },
+                                    },
+                                    value: "title",
+                                },
+                            },
+                        },
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 31,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 40,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 31,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 32,
+                                        },
+                                    },
+                                    value: Var(
+                                        "p",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 2,
+                                            column: 33,
+                                        },
+                                        end: Position {
+                                            line: 2,
+                                            column: 40,
+                                        },
+                                    },
+                                    value: "created",
+                                },
+                            },
+                        },
+                    ],
+                ),
+                from: TableRef {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 3,
+                                column: 10,
+                            },
+                            end: Position {
+                                line: 3,
+                                column: 15,
+                            },
+                        },
+                        value: "users",
+                    },
+                    alias: Some(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 19,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 20,
+                                },
+                            },
+                            value: "u",
+                        },
+                    ),
+                },
+                joins: [
+                    Join {
+                        kind: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 9,
+                                },
+                            },
+                            value: Plain,
+                        },
+                        table: TableRef {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 4,
+                                        column: 10,
+                                    },
+                                    end: Position {
+                                        line: 4,
+                                        column: 15,
+                                    },
+                                },
+                                value: "posts",
+                            },
+                            alias: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 4,
+                                            column: 19,
+                                        },
+                                        end: Position {
+                                            line: 4,
+                                            column: 20,
+                                        },
+                                    },
+                                    value: "p",
+                                },
+                            ),
+                        },
+                        on: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 24,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 40,
+                                },
+                            },
+                            value: BinOps {
+                                operands: [
+                                    BinOpOperand {
+                                        expr: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 4,
+                                                    column: 24,
+                                                },
+                                                end: Position {
+                                                    line: 4,
+                                                    column: 32,
+                                                },
+                                            },
+                                            value: Access {
+                                                record: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 4,
+                                                            column: 24,
+                                                        },
+                                                        end: Position {
+                                                            line: 4,
+                                                            column: 25,
+                                                        },
+                                                    },
+                                                    value: Var(
+                                                        "p",
+                                                    ),
+                                                },
+                                                field: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 4,
+                                                            column: 26,
+                                                        },
+                                                        end: Position {
+                                                            line: 4,
+                                                            column: 32,
+                                                        },
+                                                    },
+                                                    value: "author",
+                                                },
+                                            },
+                                        },
+                                        op: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 4,
+                                                    column: 33,
+                                                },
+                                                end: Position {
+                                                    line: 4,
+                                                    column: 35,
+                                                },
+                                            },
+                                            value: Eq,
+                                        },
+                                    },
+                                ],
+                                last: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 4,
+                                            column: 36,
+                                        },
+                                        end: Position {
+                                            line: 4,
+                                            column: 40,
+                                        },
+                                    },
+                                    value: Access {
+                                        record: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 4,
+                                                    column: 36,
+                                                },
+                                                end: Position {
+                                                    line: 4,
+                                                    column: 37,
+                                                },
+                                            },
+                                            value: Var(
+                                                "u",
+                                            ),
+                                        },
+                                        field: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 4,
+                                                    column: 38,
+                                                },
+                                                end: Position {
+                                                    line: 4,
+                                                    column: 40,
+                                                },
+                                            },
+                                            value: "id",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                ],
+                where_: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 5,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 5,
+                                column: 57,
+                            },
+                        },
+                        value: BinOps {
+                            operands: [
+                                BinOpOperand {
+                                    expr: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 11,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 19,
+                                            },
+                                        },
+                                        value: Access {
+                                            record: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 5,
+                                                        column: 11,
+                                                    },
+                                                    end: Position {
+                                                        line: 5,
+                                                        column: 12,
+                                                    },
+                                                },
+                                                value: Var(
+                                                    "u",
+                                                ),
+                                            },
+                                            field: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 5,
+                                                        column: 13,
+                                                    },
+                                                    end: Position {
+                                                        line: 5,
+                                                        column: 19,
+                                                    },
+                                                },
+                                                value: "active",
+                                            },
+                                        },
+                                    },
+                                    op: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 20,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 22,
+                                            },
+                                        },
+                                        value: And,
+                                    },
+                                },
+                                BinOpOperand {
+                                    expr: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 23,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 32,
+                                            },
+                                        },
+                                        value: Access {
+                                            record: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 5,
+                                                        column: 23,
+                                                    },
+                                                    end: Position {
+                                                        line: 5,
+                                                        column: 24,
+                                                    },
+                                                },
+                                                value: Var(
+                                                    "p",
+                                                ),
+                                            },
+                                            field: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 5,
+                                                        column: 25,
+                                                    },
+                                                    end: Position {
+                                                        line: 5,
+                                                        column: 32,
+                                                    },
+                                                },
+                                                value: "created",
+                                            },
+                                        },
+                                    },
+                                    op: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 33,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 34,
+                                            },
+                                        },
+                                        value: Gt,
+                                    },
+                                },
+                                BinOpOperand {
+                                    expr: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 35,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 41,
+                                            },
+                                        },
+                                        value: Pin(
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 5,
+                                                        column: 36,
+                                                    },
+                                                    end: Position {
+                                                        line: 5,
+                                                        column: 41,
+                                                    },
+                                                },
+                                                value: Var(
+                                                    "since",
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                    op: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 42,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 44,
+                                            },
+                                        },
+                                        value: And,
+                                    },
+                                },
+                                BinOpOperand {
+                                    expr: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 45,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 49,
+                                            },
+                                        },
+                                        value: Access {
+                                            record: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 5,
+                                                        column: 45,
+                                                    },
+                                                    end: Position {
+                                                        line: 5,
+                                                        column: 46,
+                                                    },
+                                                },
+                                                value: Var(
+                                                    "u",
+                                                ),
+                                            },
+                                            field: Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 5,
+                                                        column: 47,
+                                                    },
+                                                    end: Position {
+                                                        line: 5,
+                                                        column: 49,
+                                                    },
+                                                },
+                                                value: "id",
+                                            },
+                                        },
+                                    },
+                                    op: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 50,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 52,
+                                            },
+                                        },
+                                        value: In,
+                                    },
+                                },
+                            ],
+                            last: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 5,
+                                        column: 53,
+                                    },
+                                    end: Position {
+                                        line: 5,
+                                        column: 57,
+                                    },
+                                },
+                                value: Pin(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 5,
+                                                column: 54,
+                                            },
+                                            end: Position {
+                                                line: 5,
+                                                column: 57,
+                                            },
+                                        },
+                                        value: Var(
+                                            "ids",
+                                        ),
+                                    },
+                                ),
+                            },
+                        },
+                    },
+                ),
+                group_by: [],
+                order_by: [
+                    Order {
+                        expr: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 6,
+                                    column: 13,
+                                },
+                                end: Position {
+                                    line: 6,
+                                    column: 22,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 6,
+                                            column: 13,
+                                        },
+                                        end: Position {
+                                            line: 6,
+                                            column: 14,
+                                        },
+                                    },
+                                    value: Var(
+                                        "p",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 6,
+                                            column: 15,
+                                        },
+                                        end: Position {
+                                            line: 6,
+                                            column: 22,
+                                        },
+                                    },
+                                    value: "created",
+                                },
+                            },
+                        },
+                        direction: Some(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 6,
+                                        column: 23,
+                                    },
+                                    end: Position {
+                                        line: 6,
+                                        column: 27,
+                                    },
+                                },
+                                value: Desc,
+                            },
+                        ),
+                    },
+                ],
+                limit: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 7,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 7,
+                                column: 20,
+                            },
+                        },
+                        value: Pin(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 7,
+                                        column: 12,
+                                    },
+                                    end: Position {
+                                        line: 7,
+                                        column: 20,
+                                    },
+                                },
+                                value: Var(
+                                    "pageSize",
+                                ),
+                            },
+                        ),
+                    },
+                ),
+                offset: None,
+            },
+        ),
+    ),
+}

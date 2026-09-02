@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { insert into users values ^rows where x }"
+---
+Query(
+    End(
+        1,
+        40,
+    ),
+    1,
+    1,
+)

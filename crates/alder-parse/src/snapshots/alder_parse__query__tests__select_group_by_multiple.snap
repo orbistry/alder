@@ -1,0 +1,231 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select { p.author, p.year } from posts as p groupBy p.author, p.year }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 79,
+        },
+    },
+    value: Query(
+        Select(
+            Select {
+                projection: Fields(
+                    [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 18,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 26,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 18,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 19,
+                                        },
+                                    },
+                                    value: Var(
+                                        "p",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 20,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 26,
+                                        },
+                                    },
+                                    value: "author",
+                                },
+                            },
+                        },
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 28,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 34,
+                                },
+                            },
+                            value: Access {
+                                record: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 28,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 29,
+                                        },
+                                    },
+                                    value: Var(
+                                        "p",
+                                    ),
+                                },
+                                field: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 30,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 34,
+                                        },
+                                    },
+                                    value: "year",
+                                },
+                            },
+                        },
+                    ],
+                ),
+                from: TableRef {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 42,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 47,
+                            },
+                        },
+                        value: "posts",
+                    },
+                    alias: Some(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 51,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 52,
+                                },
+                            },
+                            value: "p",
+                        },
+                    ),
+                },
+                joins: [],
+                where_: None,
+                group_by: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 61,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 69,
+                            },
+                        },
+                        value: Access {
+                            record: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 61,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 62,
+                                    },
+                                },
+                                value: Var(
+                                    "p",
+                                ),
+                            },
+                            field: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 63,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 69,
+                                    },
+                                },
+                                value: "author",
+                            },
+                        },
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 71,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 77,
+                            },
+                        },
+                        value: Access {
+                            record: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 71,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 72,
+                                    },
+                                },
+                                value: Var(
+                                    "p",
+                                ),
+                            },
+                            field: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 73,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 77,
+                                    },
+                                },
+                                value: "year",
+                            },
+                        },
+                    },
+                ],
+                order_by: [],
+                limit: None,
+                offset: None,
+            },
+        ),
+    ),
+}

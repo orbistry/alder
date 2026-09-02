@@ -1,0 +1,24 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { select * from users join posts on }"
+---
+Query(
+    Select(
+        Join(
+            Condition(
+                Start(
+                    1,
+                    43,
+                ),
+                1,
+                43,
+            ),
+            1,
+            29,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

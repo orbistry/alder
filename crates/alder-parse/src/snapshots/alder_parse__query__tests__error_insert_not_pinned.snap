@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query { insert into users values { email, name } }"
+---
+Query(
+    Insert(
+        Pin(
+            1,
+            34,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

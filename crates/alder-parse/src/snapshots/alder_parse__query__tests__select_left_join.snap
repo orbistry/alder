@@ -1,0 +1,231 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "query {\n    select * from users as u\n    left join posts as p on p.author == u.id\n}\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 4,
+            column: 2,
+        },
+    },
+    value: Query(
+        Select(
+            Select {
+                projection: Star(
+                    Region {
+                        start: Position {
+                            line: 2,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 13,
+                        },
+                    },
+                ),
+                from: TableRef {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 19,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 24,
+                            },
+                        },
+                        value: "users",
+                    },
+                    alias: Some(
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 28,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 29,
+                                },
+                            },
+                            value: "u",
+                        },
+                    ),
+                },
+                joins: [
+                    Join {
+                        kind: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 14,
+                                },
+                            },
+                            value: Left,
+                        },
+                        table: TableRef {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 3,
+                                        column: 15,
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        column: 20,
+                                    },
+                                },
+                                value: "posts",
+                            },
+                            alias: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 24,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 25,
+                                        },
+                                    },
+                                    value: "p",
+                                },
+                            ),
+                        },
+                        on: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 29,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 45,
+                                },
+                            },
+                            value: BinOps {
+                                operands: [
+                                    BinOpOperand {
+                                        expr: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 3,
+                                                    column: 29,
+                                                },
+                                                end: Position {
+                                                    line: 3,
+                                                    column: 37,
+                                                },
+                                            },
+                                            value: Access {
+                                                record: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 29,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 30,
+                                                        },
+                                                    },
+                                                    value: Var(
+                                                        "p",
+                                                    ),
+                                                },
+                                                field: Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 3,
+                                                            column: 31,
+                                                        },
+                                                        end: Position {
+                                                            line: 3,
+                                                            column: 37,
+                                                        },
+                                                    },
+                                                    value: "author",
+                                                },
+                                            },
+                                        },
+                                        op: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 3,
+                                                    column: 38,
+                                                },
+                                                end: Position {
+                                                    line: 3,
+                                                    column: 40,
+                                                },
+                                            },
+                                            value: Eq,
+                                        },
+                                    },
+                                ],
+                                last: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 41,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 45,
+                                        },
+                                    },
+                                    value: Access {
+                                        record: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 3,
+                                                    column: 41,
+                                                },
+                                                end: Position {
+                                                    line: 3,
+                                                    column: 42,
+                                                },
+                                            },
+                                            value: Var(
+                                                "u",
+                                            ),
+                                        },
+                                        field: Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 3,
+                                                    column: 43,
+                                                },
+                                                end: Position {
+                                                    line: 3,
+                                                    column: 45,
+                                                },
+                                            },
+                                            value: "id",
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                ],
+                where_: None,
+                group_by: [],
+                order_by: [],
+                limit: None,
+                offset: None,
+            },
+        ),
+    ),
+}

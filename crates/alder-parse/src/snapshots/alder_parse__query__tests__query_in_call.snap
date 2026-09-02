@@ -1,0 +1,114 @@
+---
+source: crates/alder-parse/src/query.rs
+description: "db.run(query { select * from users })"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 38,
+        },
+    },
+    value: Call {
+        function: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 7,
+                },
+            },
+            value: Access {
+                record: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                    },
+                    value: Var(
+                        "db",
+                    ),
+                },
+                field: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 4,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: "run",
+                },
+            },
+        },
+        arguments: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 37,
+                    },
+                },
+                value: Query(
+                    Select(
+                        Select {
+                            projection: Star(
+                                Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 23,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 24,
+                                    },
+                                },
+                            ),
+                            from: TableRef {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 30,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 35,
+                                        },
+                                    },
+                                    value: "users",
+                                },
+                                alias: None,
+                            },
+                            joins: [],
+                            where_: None,
+                            group_by: [],
+                            order_by: [],
+                            limit: None,
+                            offset: None,
+                        },
+                    ),
+                ),
+            },
+        ],
+    },
+}
