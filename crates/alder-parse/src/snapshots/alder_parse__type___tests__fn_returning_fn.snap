@@ -1,0 +1,84 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: fn(a) -> fn(b) -> c
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 20,
+        },
+    },
+    value: Fn {
+        params: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 4,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 5,
+                    },
+                },
+                value: Var {
+                    name: "a",
+                    args: [],
+                },
+            },
+        ],
+        ret: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 10,
+                },
+                end: Position {
+                    line: 1,
+                    column: 20,
+                },
+            },
+            value: Fn {
+                params: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                        },
+                        value: Var {
+                            name: "b",
+                            args: [],
+                        },
+                    },
+                ],
+                ret: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 20,
+                        },
+                    },
+                    value: Var {
+                        name: "c",
+                        args: [],
+                    },
+                },
+            },
+        },
+    },
+}

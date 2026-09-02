@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: fn(a) ->
+---
+Fn(
+    Ret(
+        Start(
+            1,
+            9,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

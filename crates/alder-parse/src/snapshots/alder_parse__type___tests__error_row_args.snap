@@ -1,0 +1,102 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "[:invalid(String, Number)]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 27,
+        },
+    },
+    value: ErrorRow {
+        tags: [
+            TagVariant {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: "invalid",
+                },
+                args: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 11,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 17,
+                                            },
+                                        },
+                                        value: "String",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 19,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 25,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 19,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 25,
+                                            },
+                                        },
+                                        value: "Number",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ],
+            },
+        ],
+        ext: None,
+    },
+}

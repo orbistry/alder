@@ -1,0 +1,51 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: fn() -> Number
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 15,
+        },
+    },
+    value: Fn {
+        params: [],
+        ret: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 9,
+                },
+                end: Position {
+                    line: 1,
+                    column: 15,
+                },
+            },
+            value: Named {
+                path: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 9,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 15,
+                                },
+                            },
+                            value: "Number",
+                        },
+                    ],
+                },
+                args: [],
+            },
+        },
+    },
+}

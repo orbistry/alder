@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "[|]"
+---
+ErrorRow(
+    Tag(
+        Name(
+            1,
+            2,
+        ),
+        1,
+        2,
+    ),
+    1,
+    1,
+)

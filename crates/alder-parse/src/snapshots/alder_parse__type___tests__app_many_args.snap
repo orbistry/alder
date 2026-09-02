@@ -1,0 +1,101 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "Result[User, AuthError]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 24,
+        },
+    },
+    value: Named {
+        path: Path {
+            segments: [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 1,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                    },
+                    value: "Result",
+                },
+            ],
+        },
+        args: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 12,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 8,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 12,
+                                    },
+                                },
+                                value: "User",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 23,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 23,
+                                    },
+                                },
+                                value: "AuthError",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+        ],
+    },
+}

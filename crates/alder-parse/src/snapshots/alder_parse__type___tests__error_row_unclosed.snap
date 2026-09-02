@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "[:timeout"
+---
+ErrorRow(
+    End(
+        1,
+        10,
+    ),
+    1,
+    1,
+)

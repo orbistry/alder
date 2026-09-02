@@ -1,0 +1,51 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "(a, b)"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 7,
+        },
+    },
+    value: Tuple {
+        first: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 3,
+                },
+            },
+            value: Var {
+                name: "a",
+                args: [],
+            },
+        },
+        second: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 5,
+                },
+                end: Position {
+                    line: 1,
+                    column: 6,
+                },
+            },
+            value: Var {
+                name: "b",
+                args: [],
+            },
+        },
+        rest: [],
+    },
+}

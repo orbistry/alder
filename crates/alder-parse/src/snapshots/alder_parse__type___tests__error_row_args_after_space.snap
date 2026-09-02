@@ -1,0 +1,70 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "[:invalid (String)]"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 20,
+        },
+    },
+    value: ErrorRow {
+        tags: [
+            TagVariant {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                    },
+                    value: "invalid",
+                },
+                args: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 18,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 12,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 18,
+                                            },
+                                        },
+                                        value: "String",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ],
+            },
+        ],
+        ext: None,
+    },
+}

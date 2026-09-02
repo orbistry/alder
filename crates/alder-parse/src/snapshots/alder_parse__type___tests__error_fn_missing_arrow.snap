@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: fn(a) b
+---
+Fn(
+    Arrow(
+        1,
+        7,
+    ),
+    1,
+    1,
+)
