@@ -1391,7 +1391,10 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
                     .collect::<Vec<_>>()
                     .join(" -> ")
             ),
-            Region::one(),
+            traits
+                .last()
+                .and_then(|trait_| local_trait_region(module, *trait_))
+                .unwrap_or_else(Region::one),
             "this superclass closes the cycle",
             None,
             Some("remove one of the superclass constraints in this cycle".to_owned()),
@@ -1884,6 +1887,14 @@ fn point(row: u32, column: u32) -> Region {
 
 fn impl_region(module: &Module<'_>, implementation: ImplId<'_>) -> Region {
     local_impl_region(module, implementation).unwrap_or_else(Region::one)
+}
+
+fn local_trait_region(module: &Module<'_>, trait_: alder_ast::TraitId<'_>) -> Option<Region> {
+    (trait_.0.module == module.id).then_some(())?;
+    module.items.iter().find_map(|item| match item.value.kind {
+        ItemKind::Trait(declaration) if declaration.id == trait_ => Some(item.region),
+        _ => None,
+    })
 }
 
 fn local_impl_region(module: &Module<'_>, implementation: ImplId<'_>) -> Option<Region> {

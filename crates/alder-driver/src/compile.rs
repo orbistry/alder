@@ -896,6 +896,56 @@ mod tests {
         )
     }
 
+    fn instance_cycle_failure(source: &str) -> Diagnostic {
+        let bump = Bump::new();
+        let source = bump.alloc_str(source);
+        let parsed = alder_parse::parse_module(&bump, source).expect("source parses");
+        let canonical = alder_can::canonicalize(
+            &bump,
+            alder_can::Context {
+                home: ModuleId {
+                    package: PackageId::Application,
+                    path: &["main"],
+                },
+                imports: &[],
+                interfaces: &[],
+            },
+            &parsed,
+        )
+        .expect("source canonicalizes");
+        let trait_ = canonical
+            .module
+            .items
+            .iter()
+            .find_map(|item| match item.value.kind {
+                alder_ast::ItemKind::Trait(trait_) => Some(trait_.id),
+                _ => None,
+            })
+            .expect("fixture has a trait");
+        let origin = canonical
+            .module
+            .items
+            .last()
+            .expect("fixture has a use site")
+            .region;
+        let frame = alder_solve::ObligationFrame {
+            trait_,
+            subject: "Number",
+            required_by: None,
+        };
+        let error = alder_solve::SolveError::Trait(alder_solve::SolveTraitError::InstanceCycle {
+            trait_,
+            subject: "Number",
+            origin,
+            chain: bump.alloc_slice_copy(&[frame, frame]),
+        });
+        crate::report::solve(
+            Source::new("/project/src/main.ald", source.to_owned()),
+            canonical.module,
+            &error,
+        )
+    }
+
     #[tokio::test]
     async fn renders_trait_parser_error_with_source() {
         assert_diagnostic_snapshot! {r#"
@@ -1027,6 +1077,41 @@ mod tests {
                 type Right = Left
             }
         "#};
+    }
+
+    #[tokio::test]
+    async fn renders_superclass_cycle_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait First[a] where a: Second {
+                fn first(value: a) -> a
+            }
+            trait Second[a] where a: First {
+                fn second(value: a) -> a
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_invalid_instance_termination_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] {
+                fn display(value: a) -> String
+            }
+            impl Display[a] where a: Display {
+                fn display(value: a) -> String { "recursive" }
+            }
+        "#};
+    }
+
+    #[test]
+    fn renders_instance_search_cycle_with_source() {
+        let source = indoc::indoc! {r#"
+            trait Display[a] {
+                fn display(value: a) -> String
+            }
+            fn main() { 42 }
+        "#};
+        assert_rendered_diagnostic_snapshot!(source, instance_cycle_failure(source));
     }
 
     #[test]
