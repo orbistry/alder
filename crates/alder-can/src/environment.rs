@@ -186,7 +186,7 @@ impl<'a> Env<'a> {
     fn add_builtin_modules(&mut self) {
         for name in [
             "Array", "String", "Number", "BigInt", "Map", "Set", "Task", "Fiber", "Http", "Io",
-            "Cli", "Json", "Option", "Result",
+            "Cli", "Json", "Option", "Ref", "Result",
         ] {
             self.modules.insert(
                 name,
@@ -1394,6 +1394,7 @@ fn builtin_module_path(name: &str) -> &'static [&'static str] {
         "Cli" => &["Cli"],
         "Json" => &["Json"],
         "Option" => &["Option"],
+        "Ref" => &["Ref"],
         "Result" => &["Result"],
         _ => unreachable!("all builtin module names are listed"),
     }

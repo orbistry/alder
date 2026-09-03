@@ -149,6 +149,11 @@ fn verify_error_group_derives() -> Result[(), String] {
 }
 
 pub fn main() {
+    let identity = { value: 1 }
+    let equal_but_distinct = { value: 1 }
+    assert(Ref.same(identity, identity))
+    assert(!Ref.same(identity, equal_but_distinct))
+
     assert(describe_generic(1) == "number")
     assert(describe_generic("text") == "text")
     assert(describe_generic([1, 2]) == "array")

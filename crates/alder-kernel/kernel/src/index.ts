@@ -563,6 +563,7 @@ function prefixJsonPath(prefix, message) {
     return `${prefix}: ${message}`;
 }
 export function $ioPrint(value) { console.log(value); }
+export function $refSame(left, right) { return left === right; }
 export function $cliArgs() { return globalThis.__alderHost?.args ?? []; }
 export function $taskSleep(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));

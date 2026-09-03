@@ -32,6 +32,7 @@ mod tests {
             "$hash",
             "$hashDerived",
             "$hashContainer",
+            "$refSame",
             "$matchFailure",
             "$optionBox",
             "$providerPush",
