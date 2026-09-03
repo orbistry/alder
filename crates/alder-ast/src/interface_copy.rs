@@ -77,6 +77,8 @@ pub fn copy_interface<'a>(bump: &'a Bump, interface: &Interface<'_>) -> Interfac
                     module: copy_module_id(bump, implementation.id.module),
                     origin: implementation.id.origin,
                 },
+                source_uri: implementation.source_uri.map(|uri| copy_str(bump, uri)),
+                region: implementation.region,
                 params: copy_type_params(bump, implementation.params),
                 trait_ref: copy_trait_ref(bump, implementation.trait_ref),
                 trait_predicates: copy_trait_refs(bump, implementation.trait_predicates),

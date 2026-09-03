@@ -1099,6 +1099,8 @@ pub enum MethodImplementation<'a> {
 #[derive(Clone, Copy, Debug)]
 pub struct InterfaceImpl<'a> {
     pub id: ImplId<'a>,
+    pub source_uri: Option<&'a str>,
+    pub region: Option<Region>,
     pub params: &'a [TypeParam<'a>],
     pub trait_ref: TraitRef<'a>,
     pub trait_predicates: &'a [TraitRef<'a>],

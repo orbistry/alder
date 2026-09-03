@@ -446,8 +446,8 @@ fn own_impl(implementation: &ast::InterfaceImpl<'_>) -> OwnedImplHeader {
             module: own_module_id(implementation.id.module),
             origin: own_impl_origin(implementation.id.origin),
         },
-        source_uri: None,
-        region: None,
+        source_uri: implementation.source_uri.map(str::to_owned),
+        region: implementation.region,
         params: implementation.params.iter().map(own_type_param).collect(),
         trait_ref: own_trait_ref(&implementation.trait_ref),
         trait_predicates: implementation
@@ -856,57 +856,12 @@ pub(crate) fn hydrate_interface<'a>(
                 })),
             }
         })),
-        instances: bump.alloc_slice_fill_iter(interface.instances.iter().map(|implementation| {
-            ast::InterfaceImpl {
-                id: ast::ImplId {
-                    module: hydrate_module_id(bump, &implementation.id.module),
-                    origin: hydrate_impl_origin(implementation.id.origin),
-                },
-                params: hydrate_type_params(bump, &implementation.params),
-                trait_ref: hydrate_trait_ref(bump, &implementation.trait_ref),
-                trait_predicates: hydrate_trait_refs(bump, &implementation.trait_predicates),
-                projection_equalities: bump.alloc_slice_fill_iter(
-                    implementation
-                        .projection_equalities
-                        .iter()
-                        .map(|equality| hydrate_projection_equality(bump, equality)),
-                ),
-                assoc_bindings: bump.alloc_slice_fill_iter(
-                    implementation
-                        .assoc_bindings
-                        .iter()
-                        .map(|binding| ast::AssocBinding {
-                            assoc: hydrate_assoc_id(bump, &binding.assoc),
-                            typ: hydrate_type_node(bump, &binding.typ),
-                            region: binding.region,
-                        }),
-                ),
-                dictionary_symbol: bump.alloc_str(&implementation.dictionary_symbol),
-                dictionary_kind: match implementation.dictionary_kind {
-                    OwnedDictionaryKind::Singleton => ast::DictionaryKind::Singleton,
-                    OwnedDictionaryKind::Factory => ast::DictionaryKind::Factory,
-                },
-                methods: bump.alloc_slice_fill_iter(implementation.methods.iter().map(
-                    |(method, implementation)| {
-                        (
-                            hydrate_method_id(bump, method),
-                            match implementation {
-                                OwnedMethodImplementation::Provided { symbol } => {
-                                    ast::MethodImplementation::Provided {
-                                        symbol: bump.alloc_str(symbol),
-                                    }
-                                }
-                                OwnedMethodImplementation::Default { symbol } => {
-                                    ast::MethodImplementation::Default {
-                                        symbol: bump.alloc_str(symbol),
-                                    }
-                                }
-                            },
-                        )
-                    },
-                )),
-            }
-        })),
+        instances: bump.alloc_slice_fill_iter(
+            interface
+                .instances
+                .iter()
+                .map(|implementation| hydrate_impl(bump, implementation)),
+        ),
         modules: bump.alloc_slice_fill_iter(interface.modules.iter().map(|module| {
             ast::InterfaceModule {
                 exported_as: bump.alloc_str(&module.exported_as),
@@ -919,6 +874,63 @@ pub(crate) fn hydrate_interface<'a>(
                 namespace: hydrate_namespace(name.namespace),
             }
         })),
+    }
+}
+
+pub(crate) fn hydrate_impl<'a>(
+    bump: &'a Bump,
+    implementation: &OwnedImplHeader,
+) -> ast::InterfaceImpl<'a> {
+    ast::InterfaceImpl {
+        id: ast::ImplId {
+            module: hydrate_module_id(bump, &implementation.id.module),
+            origin: hydrate_impl_origin(implementation.id.origin),
+        },
+        source_uri: implementation
+            .source_uri
+            .as_ref()
+            .map(|uri| bump.alloc_str(uri) as &str),
+        region: implementation.region,
+        params: hydrate_type_params(bump, &implementation.params),
+        trait_ref: hydrate_trait_ref(bump, &implementation.trait_ref),
+        trait_predicates: hydrate_trait_refs(bump, &implementation.trait_predicates),
+        projection_equalities: bump.alloc_slice_fill_iter(
+            implementation
+                .projection_equalities
+                .iter()
+                .map(|equality| hydrate_projection_equality(bump, equality)),
+        ),
+        assoc_bindings: bump.alloc_slice_fill_iter(implementation.assoc_bindings.iter().map(
+            |binding| ast::AssocBinding {
+                assoc: hydrate_assoc_id(bump, &binding.assoc),
+                typ: hydrate_type_node(bump, &binding.typ),
+                region: binding.region,
+            },
+        )),
+        dictionary_symbol: bump.alloc_str(&implementation.dictionary_symbol),
+        dictionary_kind: match implementation.dictionary_kind {
+            OwnedDictionaryKind::Singleton => ast::DictionaryKind::Singleton,
+            OwnedDictionaryKind::Factory => ast::DictionaryKind::Factory,
+        },
+        methods: bump.alloc_slice_fill_iter(implementation.methods.iter().map(
+            |(method, implementation)| {
+                (
+                    hydrate_method_id(bump, method),
+                    match implementation {
+                        OwnedMethodImplementation::Provided { symbol } => {
+                            ast::MethodImplementation::Provided {
+                                symbol: bump.alloc_str(symbol),
+                            }
+                        }
+                        OwnedMethodImplementation::Default { symbol } => {
+                            ast::MethodImplementation::Default {
+                                symbol: bump.alloc_str(symbol),
+                            }
+                        }
+                    },
+                )
+            },
+        )),
     }
 }
 

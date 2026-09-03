@@ -484,6 +484,9 @@ URIs for diagnostics. `dehydrate(&Interface) ->
 InterfaceFile` and `InterfaceFile::hydrate(&Bump) -> Interface` perform the only
 conversion. This list is closed: a new canonical public type variant must add
 its owned equivalent in the same change.
+Canonical interface impls retain their source region, and the driver attaches
+the source URI while dehydrating a module. Hydration restores both fields, so a
+package index does not lose diagnostic provenance at an arena boundary.
 Serialization sorts all maps/sets into semantic source order and hashes the
 canonical encoded bytes with SHA-256; it never uses `DefaultHasher` as a file
 contract. M3 increments `format_version`. Loading rejects incompatible format

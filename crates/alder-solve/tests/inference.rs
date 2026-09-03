@@ -705,6 +705,8 @@ fn foreign_trait_for_foreign_subject_is_an_orphan() {
                 module: implementation_module,
                 origin: alder_ast::ImplOrigin::Source { item_ordinal: 0 },
             },
+            source_uri: Some("file:///dependency/Foreign.ald"),
+            region: Some(alder_region::Region::one()),
             params: &[],
             trait_ref,
             trait_predicates: &[],

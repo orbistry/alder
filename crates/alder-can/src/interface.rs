@@ -251,6 +251,8 @@ fn interface_from_module<'a>(
                 }
                 instances.push(InterfaceImpl {
                     id: implementation.id,
+                    source_uri: None,
+                    region: Some(implementation.region),
                     params: implementation.params,
                     trait_ref: implementation.trait_ref,
                     trait_predicates: implementation.trait_predicates,

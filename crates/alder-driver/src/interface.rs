@@ -35,6 +35,18 @@ impl InterfaceFile {
         Ok(owned)
     }
 
+    pub fn dehydrate_with_source(
+        interface: &alder_ast::Interface<'_>,
+        source_uri: &str,
+    ) -> Result<Self, DriverError> {
+        let mut owned = owned::own_interface(interface);
+        for implementation in &mut owned.instances {
+            implementation.source_uri = Some(source_uri.to_owned());
+        }
+        owned.fingerprint = owned.compute_fingerprint()?;
+        Ok(owned)
+    }
+
     pub fn hydrate<'a>(&self, bump: &'a Bump) -> alder_ast::Interface<'a> {
         owned::hydrate_interface(bump, self)
     }
@@ -176,6 +188,39 @@ impl PackageInstanceIndexFile {
         Ok(())
     }
 
+    pub fn load(path: &Path) -> Result<Self, DriverError> {
+        let bytes = std::fs::read(path).map_err(|source| DriverError::ReadError {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        let index: Self = bincode::deserialize(&bytes)?;
+        index.validate()?;
+        Ok(index)
+    }
+
+    pub fn save(&self, path: &Path) -> Result<(), DriverError> {
+        self.validate()?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|source| DriverError::WriteError {
+                path: parent.to_path_buf(),
+                source,
+            })?;
+        }
+        let bytes = bincode::serialize(self)?;
+        std::fs::write(path, bytes).map_err(|source| DriverError::WriteError {
+            path: path.to_path_buf(),
+            source,
+        })
+    }
+
+    pub fn hydrate_instances<'a>(&self, bump: &'a Bump) -> &'a [alder_ast::InterfaceImpl<'a>] {
+        bump.alloc_slice_fill_iter(
+            self.instances
+                .iter()
+                .map(|implementation| owned::hydrate_impl(bump, implementation)),
+        )
+    }
+
     fn compute_fingerprint(&self) -> Result<[u8; 32], DriverError> {
         let mut canonical = self.clone();
         canonical.fingerprint = [0; 32];
@@ -234,12 +279,34 @@ impl InterfaceCache {
             .join(format!("{}.aldi", module_name.replace('.', "/")))
     }
 
+    pub fn package_index_path(&self, package: &OwnedPackageId) -> PathBuf {
+        let name = match package {
+            OwnedPackageId::Named { author, project } => format!("{author}/{project}"),
+            OwnedPackageId::Application => "application".to_owned(),
+            OwnedPackageId::ApplicationMember(member) => format!("members/{member}"),
+            OwnedPackageId::Builtin => "builtin".to_owned(),
+        };
+        self.cache_dir
+            .parent()
+            .expect("interface cache always has an .alder parent")
+            .join("instances")
+            .join(format!("{name}.aldi"))
+    }
+
     pub fn load(&self, module_name: &str) -> Option<InterfaceFile> {
         InterfaceFile::load(&self.cache_path(module_name)).ok()
     }
 
     pub fn save(&self, interface: &InterfaceFile) -> Result<(), DriverError> {
         interface.save(&self.cache_path(&interface.module.path.join(".")))
+    }
+
+    pub fn load_package_index(&self, package: &OwnedPackageId) -> Option<PackageInstanceIndexFile> {
+        PackageInstanceIndexFile::load(&self.package_index_path(package)).ok()
+    }
+
+    pub fn save_package_index(&self, index: &PackageInstanceIndexFile) -> Result<(), DriverError> {
+        index.save(&self.package_index_path(&index.package))
     }
 
     pub fn needs_rebuild(
@@ -391,6 +458,48 @@ mod tests {
     }
 
     #[test]
+    fn package_instance_index_round_trips_source_locations_and_hydrates() {
+        let source = Bump::new();
+        let interface = compile_interface(
+            &source,
+            indoc::indoc! {r#"
+                pub trait Inspect[a] {}
+                impl Inspect[Number] {}
+            "#},
+        );
+        let interface =
+            InterfaceFile::dehydrate_with_source(&interface, "file:///project/src/Main.ald")
+                .unwrap();
+        assert_eq!(
+            interface.instances[0].source_uri.as_deref(),
+            Some("file:///project/src/Main.ald")
+        );
+        assert!(interface.instances[0].region.is_some());
+
+        let index = PackageInstanceIndexFile::new(
+            OwnedPackageId::Application,
+            vec![interface.module.clone()],
+            interface.instances.clone(),
+        )
+        .unwrap();
+        let directory = std::env::temp_dir().join(format!(
+            "alder-instance-index-test-{}-{}",
+            std::process::id(),
+            index.fingerprint[0]
+        ));
+        let path = directory.join("application.aldi");
+        index.save(&path).unwrap();
+        let loaded = PackageInstanceIndexFile::load(&path).unwrap();
+        assert_eq!(index, loaded);
+
+        let hydrated_arena = Bump::new();
+        let hydrated = loaded.hydrate_instances(&hydrated_arena);
+        assert_eq!(hydrated[0].source_uri, Some("file:///project/src/Main.ald"));
+        assert_eq!(hydrated[0].region, interface.instances[0].region);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn package_index_rejects_foreign_modules() {
         let result = PackageInstanceIndexFile::new(
             OwnedPackageId::Application,
@@ -415,6 +524,13 @@ mod tests {
         assert_eq!(
             cache.cache_path("Json.Decode"),
             PathBuf::from("/project/.alder/interfaces/Json/Decode.aldi")
+        );
+        assert_eq!(
+            cache.package_index_path(&OwnedPackageId::Named {
+                author: "alice".to_owned(),
+                project: "json".to_owned(),
+            }),
+            PathBuf::from("/project/.alder/instances/alice/json.aldi")
         );
     }
 }
