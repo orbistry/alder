@@ -160,6 +160,13 @@ test "higher-kinded trait dictionaries dispatch" {
     let option: Option[Number] = Option.some(41)
     let mapped_option: Option[Number] = map(option, fn(value) { value + 1 })
     assert mapped_option == Option.some(42)
+    let pure_option: Option[Number] = pure(42)
+    assert pure_option == Option.some(42)
+    let option_function: Option[fn(Number) -> Number] = Option.some(fn(value) { value + 1 })
+    let applied_option: Option[Number] = apply(option_function, option)
+    assert applied_option == Option.some(42)
+    let bound_option: Option[Number] = flat_map(option, fn(value) { Option.some(value + 1) })
+    assert bound_option == Option.some(42)
     let result = mapped_result()?
     assert result == 42
 }

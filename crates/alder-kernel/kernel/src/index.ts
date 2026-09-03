@@ -44,6 +44,44 @@ export function $compareEnum(left, right, variants) {
     return $compare(left, right);
 }
 
+export function $arrayPure(value) {
+    return [value];
+}
+
+export function $arrayApply(functions, values) {
+    return functions.flatMap((function_) => values.map(function_));
+}
+
+export function $arrayFlatMap(values, transform) {
+    return values.flatMap(transform);
+}
+
+export function $optionPure(value) {
+    return $optionSome(value);
+}
+
+export function $optionApply(function_, value) {
+    return function_ === null || value === null ? null : function_(value);
+}
+
+export function $optionFlatMap(value, transform) {
+    return value === null ? null : transform(value);
+}
+
+export function $resultPure(value) {
+    return $resultOk(value);
+}
+
+export function $resultApply(function_, value) {
+    if (function_.$ !== "Ok") return function_;
+    if (value.$ !== "Ok") return value;
+    return $resultOk(function_._0(value._0));
+}
+
+export function $resultFlatMap(value, transform) {
+    return value.$ === "Ok" ? transform(value._0) : value;
+}
+
 export function $hash(value) {
     const bytes = new TextEncoder().encode(stableText(value));
     let hash = 14695981039346656037n;

@@ -106,6 +106,12 @@ pub enum Intrinsic {
     ShowKernel,
     HashKernel,
     JsonKernel,
+    ApplicativeArray,
+    ApplicativeOption,
+    ApplicativeResult,
+    MonadArray,
+    MonadOption,
+    MonadResult,
 }
 
 #[derive(Clone, Debug)]

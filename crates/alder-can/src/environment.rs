@@ -284,6 +284,8 @@ impl<'a> Env<'a> {
             }
         }
         self.add_builtin_functor(bump);
+        self.add_builtin_applicative(bump);
+        self.add_builtin_monad(bump);
     }
 
     fn add_builtin_functor(&mut self, bump: &'a Bump) {
@@ -369,6 +371,154 @@ impl<'a> Env<'a> {
                 annotation: Some(annotation),
             },
         );
+    }
+
+    fn add_builtin_applicative(&mut self, bump: &'a Bump) {
+        let trait_id = builtin_trait_id("Applicative");
+        let constructor_kind = unary_constructor_kind(bump);
+        let variable = |name: &'a str| type_variable(bump, name);
+        let applied = |name: &'a str, argument| applied_variable(bump, name, argument);
+        let a = variable("a");
+        let b = variable("b");
+        let function = bump.alloc(Located::at_zero(Type::Fn {
+            params: bump.alloc_slice_copy(&[a]),
+            ret: b,
+        }));
+        let type_param = |name, kind| alder_ast::TypeParam {
+            name: Located::at_zero(name),
+            kind,
+        };
+        let pure = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                type_param("f", constructor_kind),
+                type_param("a", alder_ast::Kind::Type),
+            ]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[a]),
+                ret: applied("f", a),
+            })),
+        });
+        let apply = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                type_param("f", constructor_kind),
+                type_param("a", alder_ast::Kind::Type),
+                type_param("b", alder_ast::Kind::Type),
+            ]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[applied("f", function), applied("f", a)]),
+                ret: applied("f", b),
+            })),
+        });
+        self.install_builtin_trait(
+            "Applicative",
+            trait_id,
+            bump.alloc_slice_copy(&[
+                MethodBinding {
+                    id: MethodId {
+                        trait_: trait_id,
+                        index: 0,
+                        name: "pure",
+                    },
+                    annotation: pure,
+                    region: Region::zero(),
+                    has_default: false,
+                },
+                MethodBinding {
+                    id: MethodId {
+                        trait_: trait_id,
+                        index: 1,
+                        name: "apply",
+                    },
+                    annotation: apply,
+                    region: Region::zero(),
+                    has_default: false,
+                },
+            ]),
+        );
+    }
+
+    fn add_builtin_monad(&mut self, bump: &'a Bump) {
+        let trait_id = builtin_trait_id("Monad");
+        let constructor_kind = unary_constructor_kind(bump);
+        let a = type_variable(bump, "a");
+        let b = type_variable(bump, "b");
+        let result = applied_variable(bump, "f", b);
+        let transform = bump.alloc(Located::at_zero(Type::Fn {
+            params: bump.alloc_slice_copy(&[a]),
+            ret: result,
+        }));
+        let annotation = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                alder_ast::TypeParam {
+                    name: Located::at_zero("f"),
+                    kind: constructor_kind,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("a"),
+                    kind: alder_ast::Kind::Type,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("b"),
+                    kind: alder_ast::Kind::Type,
+                },
+            ]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[applied_variable(bump, "f", a), transform]),
+                ret: result,
+            })),
+        });
+        self.install_builtin_trait(
+            "Monad",
+            trait_id,
+            bump.alloc_slice_copy(&[MethodBinding {
+                id: MethodId {
+                    trait_: trait_id,
+                    index: 0,
+                    name: "flat_map",
+                },
+                annotation,
+                region: Region::zero(),
+                has_default: false,
+            }]),
+        );
+    }
+
+    fn install_builtin_trait(
+        &mut self,
+        name: &'a str,
+        trait_id: alder_ast::TraitId<'a>,
+        methods: &'a [MethodBinding<'a>],
+    ) {
+        self.traits.insert(
+            name,
+            Candidate::Unique(TraitBinding {
+                reference: trait_id.0,
+                arity: 1,
+                region: Region::zero(),
+                associated_types: &[],
+                methods,
+            }),
+        );
+        for method in methods {
+            self.scopes[0].values.insert(
+                method.id.name,
+                ValueBinding {
+                    reference: ValueRef::TraitMethod {
+                        method: method.id,
+                        annotation: method.annotation,
+                    },
+                    region: Region::zero(),
+                    mutable: false,
+                    annotation: Some(method.annotation),
+                },
+            );
+        }
     }
 
     pub fn push_scope(&mut self) {
@@ -1073,6 +1223,39 @@ fn builtin_module_path(name: &str) -> &'static [&'static str] {
         "Result" => &["Result"],
         _ => unreachable!("all builtin module names are listed"),
     }
+}
+
+fn builtin_trait_id(name: &'static str) -> alder_ast::TraitId<'static> {
+    alder_ast::TraitId(QualifiedName {
+        module: ModuleId {
+            package: PackageId::Builtin,
+            path: &[],
+        },
+        name,
+    })
+}
+
+fn unary_constructor_kind<'a>(bump: &'a Bump) -> alder_ast::Kind<'a> {
+    let typ = bump.alloc(alder_ast::Kind::Type);
+    alder_ast::Kind::Arrow {
+        param: typ,
+        result: typ,
+    }
+}
+
+fn type_variable<'a>(bump: &'a Bump, name: &'a str) -> &'a Located<Type<'a>> {
+    bump.alloc(Located::at_zero(Type::Var { name, args: &[] }))
+}
+
+fn applied_variable<'a>(
+    bump: &'a Bump,
+    name: &'a str,
+    argument: &'a Located<Type<'a>>,
+) -> &'a Located<Type<'a>> {
+    bump.alloc(Located::at_zero(Type::Var {
+        name,
+        args: bump.alloc_slice_copy(&[argument]),
+    }))
 }
 
 fn suggestions<'a>(

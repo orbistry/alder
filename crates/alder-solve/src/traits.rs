@@ -337,9 +337,20 @@ impl<'a> TraitDatabase<'a> {
     }
 
     fn insert_builtins(&mut self, bump: &'a Bump) {
-        for name in ["Show", "Eq", "Ord", "Hash", "Json", "Num", "Functor"] {
+        for name in [
+            "Show",
+            "Eq",
+            "Ord",
+            "Hash",
+            "Json",
+            "Num",
+            "Functor",
+            "Applicative",
+            "Monad",
+        ] {
             let id = builtin_trait_id(name);
-            let parameter_kind = if name == "Functor" {
+            let higher_kinded = matches!(name, "Functor" | "Applicative" | "Monad");
+            let parameter_kind = if higher_kinded {
                 Kind::Arrow {
                     param: bump.alloc(Kind::Type),
                     result: bump.alloc(Kind::Type),
@@ -348,15 +359,17 @@ impl<'a> TraitDatabase<'a> {
                 Kind::Type
             };
             let params = bump.alloc_slice_copy(&[TypeParam {
-                name: builtin_name(if name == "Functor" { "f" } else { "a" }),
+                name: builtin_name(if higher_kinded { "f" } else { "a" }),
                 kind: parameter_kind,
             }]);
             let superclasses: &'a [TraitRef<'a>] = match name {
-                "Ord" | "Hash" => bump.alloc_slice_copy(&[builtin_superclass(bump, "Eq")]),
+                "Ord" | "Hash" => bump.alloc_slice_copy(&[builtin_superclass(bump, "Eq", "a")]),
                 "Num" => bump.alloc_slice_copy(&[
-                    builtin_superclass(bump, "Eq"),
-                    builtin_superclass(bump, "Ord"),
+                    builtin_superclass(bump, "Eq", "a"),
+                    builtin_superclass(bump, "Ord", "a"),
                 ]),
+                "Applicative" => bump.alloc_slice_copy(&[builtin_superclass(bump, "Functor", "f")]),
+                "Monad" => bump.alloc_slice_copy(&[builtin_superclass(bump, "Applicative", "f")]),
                 _ => &[],
             };
             self.traits.insert(
@@ -373,9 +386,13 @@ impl<'a> TraitDatabase<'a> {
     }
 }
 
-fn builtin_superclass<'a>(bump: &'a Bump, name: &'static str) -> TraitRef<'a> {
+fn builtin_superclass<'a>(
+    bump: &'a Bump,
+    name: &'static str,
+    variable: &'static str,
+) -> TraitRef<'a> {
     let argument = bump.alloc(Located::at_zero(Type::Var {
-        name: "a",
+        name: variable,
         args: &[],
     }));
     TraitRef {

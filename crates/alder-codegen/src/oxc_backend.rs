@@ -2382,6 +2382,40 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.kernel.insert(symbol);
                 properties.push(self.js.property("map", self.js.identifier(symbol)));
             }
+            Intrinsic::ApplicativeArray
+            | Intrinsic::ApplicativeOption
+            | Intrinsic::ApplicativeResult => {
+                let (functor, pure, apply) = match intrinsic {
+                    Intrinsic::ApplicativeArray => {
+                        (Intrinsic::FunctorArray, "$arrayPure", "$arrayApply")
+                    }
+                    Intrinsic::ApplicativeOption => {
+                        (Intrinsic::FunctorOption, "$optionPure", "$optionApply")
+                    }
+                    Intrinsic::ApplicativeResult => {
+                        (Intrinsic::FunctorResult, "$resultPure", "$resultApply")
+                    }
+                    _ => unreachable!(),
+                };
+                let functor = self.intrinsic_dictionary(functor);
+                properties.push(self.js.property("$super0", functor));
+                self.kernel.insert(pure);
+                self.kernel.insert(apply);
+                properties.push(self.js.property("pure", self.js.identifier(pure)));
+                properties.push(self.js.property("apply", self.js.identifier(apply)));
+            }
+            Intrinsic::MonadArray | Intrinsic::MonadOption | Intrinsic::MonadResult => {
+                let (applicative, flat_map) = match intrinsic {
+                    Intrinsic::MonadArray => (Intrinsic::ApplicativeArray, "$arrayFlatMap"),
+                    Intrinsic::MonadOption => (Intrinsic::ApplicativeOption, "$optionFlatMap"),
+                    Intrinsic::MonadResult => (Intrinsic::ApplicativeResult, "$resultFlatMap"),
+                    _ => unreachable!(),
+                };
+                let applicative = self.intrinsic_dictionary(applicative);
+                properties.push(self.js.property("$super0", applicative));
+                self.kernel.insert(flat_map);
+                properties.push(self.js.property("flat_map", self.js.identifier(flat_map)));
+            }
             Intrinsic::ShowKernel => {
                 self.kernel.insert("$show");
                 properties.push(self.js.property("show", self.js.identifier("$show")));

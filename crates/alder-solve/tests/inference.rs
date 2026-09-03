@@ -991,6 +991,58 @@ fn builtin_functor_instances_cover_array_option_and_partial_result() {
 }
 
 #[test]
+fn builtin_applicative_and_monad_instances_preserve_the_hkt_hierarchy() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn option_pure(value: Number) -> Option[Number] { pure(value) }
+            fn array_apply(
+                functions: Array[fn(Number) -> String],
+                values: Array[Number],
+            ) -> Array[String] { apply(functions, values) }
+            fn result_bind(value: Result[Number, String]) -> Result[String, String] {
+                flat_map(value, fn(item) { Result.ok("done") })
+            }
+            fn monad_map(value: f[Number]) -> f[Number] where f: Monad {
+                map(value, fn(item) { item + 1 })
+            }
+        "#},
+    )
+    .expect("Applicative and Monad instances resolve with transitive Functor evidence");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, .. }
+            if matches!(
+                dictionaries.first(),
+                Some(alder_solve::Evidence::Intrinsic(
+                    alder_solve::Intrinsic::ApplicativeOption
+                ))
+            )
+    )));
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, .. }
+            if matches!(
+                dictionaries.first(),
+                Some(alder_solve::Evidence::Intrinsic(
+                    alder_solve::Intrinsic::MonadResult
+                ))
+            )
+    )));
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, method: Some(method) }
+            if method.name == "map"
+                && matches!(
+                    dictionaries.as_slice(),
+                    [alder_solve::Evidence::ParamSuperPath { path, .. }]
+                        if path == &[0, 0]
+                )
+    )));
+}
+
+#[test]
 fn repeated_higher_kinded_pattern_argument_is_rejected() {
     let bump = Bump::new();
     let errors = infer(

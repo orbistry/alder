@@ -278,7 +278,7 @@ fn resolve_intrinsic<'a>(
         ("Ord", Some("BigInt")) => Some(Intrinsic::OrdBigInt),
         ("Num", Some("Number")) => Some(Intrinsic::NumNumber),
         ("Num", Some("BigInt")) => Some(Intrinsic::NumBigInt),
-        ("Functor", _) => match subject {
+        ("Functor" | "Applicative" | "Monad", _) => match subject {
             Ty::Partial(reference, slots)
                 if reference.module.package == PackageId::Builtin
                     && slots
@@ -287,10 +287,16 @@ fn resolve_intrinsic<'a>(
                         .count()
                         == 1 =>
             {
-                match reference.name {
-                    "Array" => Some(Intrinsic::FunctorArray),
-                    "Option" => Some(Intrinsic::FunctorOption),
-                    "Result" => Some(Intrinsic::FunctorResult),
+                match (name, reference.name) {
+                    ("Functor", "Array") => Some(Intrinsic::FunctorArray),
+                    ("Functor", "Option") => Some(Intrinsic::FunctorOption),
+                    ("Functor", "Result") => Some(Intrinsic::FunctorResult),
+                    ("Applicative", "Array") => Some(Intrinsic::ApplicativeArray),
+                    ("Applicative", "Option") => Some(Intrinsic::ApplicativeOption),
+                    ("Applicative", "Result") => Some(Intrinsic::ApplicativeResult),
+                    ("Monad", "Array") => Some(Intrinsic::MonadArray),
+                    ("Monad", "Option") => Some(Intrinsic::MonadOption),
+                    ("Monad", "Result") => Some(Intrinsic::MonadResult),
                     _ => None,
                 }
             }
@@ -2728,6 +2734,29 @@ impl<'a, 'db> Infer<'a, 'db> {
         };
         if pattern_args.is_empty() || rigid_args.len() < pattern_args.len() {
             return None;
+        }
+
+        let concrete_arguments = pattern_args
+            .iter()
+            .all(|argument| !matches!(self.prune(argument.clone()), Ty::Var(_)));
+        if concrete_arguments {
+            for (pattern_arg, rigid_arg) in pattern_args.iter().zip(&rigid_args) {
+                if let Err(error) = self.unify(pattern_arg.clone(), rigid_arg.clone(), region) {
+                    return Some(Err(error));
+                }
+            }
+            let slots = rigid_args
+                .into_iter()
+                .enumerate()
+                .map(|(index, typ)| {
+                    if index < pattern_args.len() {
+                        TySlot::Hole(index as u16)
+                    } else {
+                        TySlot::Fixed(typ)
+                    }
+                })
+                .collect();
+            return Some(self.bind(head_var, Ty::Partial(constructor, slots), region));
         }
 
         let mut variables = Vec::with_capacity(pattern_args.len());
