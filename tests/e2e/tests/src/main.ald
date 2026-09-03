@@ -167,6 +167,10 @@ test "higher-kinded trait dictionaries dispatch" {
     assert applied_option == Option.some(42)
     let bound_option: Option[Number] = flat_map(option, fn(value) { Option.some(value + 1) })
     assert bound_option == Option.some(42)
+    let traversed: Option[Array[Number]] = traverse([40, 41], fn(value) {
+        Option.some(value + 1)
+    })
+    assert traversed == Option.some([41, 42])
     let result = mapped_result()?
     assert result == 42
 }

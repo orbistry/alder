@@ -112,6 +112,9 @@ pub enum Intrinsic {
     MonadArray,
     MonadOption,
     MonadResult,
+    TraversableArray,
+    TraversableOption,
+    TraversableResult,
 }
 
 #[derive(Clone, Debug)]

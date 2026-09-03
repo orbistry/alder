@@ -286,6 +286,7 @@ impl<'a> Env<'a> {
         self.add_builtin_functor(bump);
         self.add_builtin_applicative(bump);
         self.add_builtin_monad(bump);
+        self.add_builtin_traversable(bump);
     }
 
     fn add_builtin_functor(&mut self, bump: &'a Bump) {
@@ -481,6 +482,63 @@ impl<'a> Env<'a> {
                     trait_: trait_id,
                     index: 0,
                     name: "flat_map",
+                },
+                annotation,
+                region: Region::zero(),
+                has_default: false,
+            }]),
+        );
+    }
+
+    fn add_builtin_traversable(&mut self, bump: &'a Bump) {
+        let trait_id = builtin_trait_id("Traversable");
+        let applicative = builtin_trait_id("Applicative");
+        let constructor_kind = unary_constructor_kind(bump);
+        let a = type_variable(bump, "a");
+        let b = type_variable(bump, "b");
+        let f_of_b = applied_variable(bump, "f", b);
+        let transform = bump.alloc(Located::at_zero(Type::Fn {
+            params: bump.alloc_slice_copy(&[a]),
+            ret: f_of_b,
+        }));
+        let t_of_b = applied_variable(bump, "t", b);
+        let annotation = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                alder_ast::TypeParam {
+                    name: Located::at_zero("t"),
+                    kind: constructor_kind,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("a"),
+                    kind: alder_ast::Kind::Type,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("f"),
+                    kind: constructor_kind,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("b"),
+                    kind: alder_ast::Kind::Type,
+                },
+            ]),
+            trait_predicates: bump.alloc_slice_copy(&[alder_ast::TraitRef {
+                trait_: applicative,
+                args: bump.alloc_slice_copy(&[type_variable(bump, "f")]),
+            }]),
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[applied_variable(bump, "t", a), transform]),
+                ret: applied_variable(bump, "f", t_of_b),
+            })),
+        });
+        self.install_builtin_trait(
+            "Traversable",
+            trait_id,
+            bump.alloc_slice_copy(&[MethodBinding {
+                id: MethodId {
+                    trait_: trait_id,
+                    index: 0,
+                    name: "traverse",
                 },
                 annotation,
                 region: Region::zero(),

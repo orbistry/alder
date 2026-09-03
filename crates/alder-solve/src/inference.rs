@@ -278,7 +278,7 @@ fn resolve_intrinsic<'a>(
         ("Ord", Some("BigInt")) => Some(Intrinsic::OrdBigInt),
         ("Num", Some("Number")) => Some(Intrinsic::NumNumber),
         ("Num", Some("BigInt")) => Some(Intrinsic::NumBigInt),
-        ("Functor" | "Applicative" | "Monad", _) => match subject {
+        ("Functor" | "Applicative" | "Monad" | "Traversable", _) => match subject {
             Ty::Partial(reference, slots)
                 if reference.module.package == PackageId::Builtin
                     && slots
@@ -297,6 +297,9 @@ fn resolve_intrinsic<'a>(
                     ("Monad", "Array") => Some(Intrinsic::MonadArray),
                     ("Monad", "Option") => Some(Intrinsic::MonadOption),
                     ("Monad", "Result") => Some(Intrinsic::MonadResult),
+                    ("Traversable", "Array") => Some(Intrinsic::TraversableArray),
+                    ("Traversable", "Option") => Some(Intrinsic::TraversableOption),
+                    ("Traversable", "Result") => Some(Intrinsic::TraversableResult),
                     _ => None,
                 }
             }

@@ -347,9 +347,10 @@ impl<'a> TraitDatabase<'a> {
             "Functor",
             "Applicative",
             "Monad",
+            "Traversable",
         ] {
             let id = builtin_trait_id(name);
-            let higher_kinded = matches!(name, "Functor" | "Applicative" | "Monad");
+            let higher_kinded = matches!(name, "Functor" | "Applicative" | "Monad" | "Traversable");
             let parameter_kind = if higher_kinded {
                 Kind::Arrow {
                     param: bump.alloc(Kind::Type),
@@ -359,7 +360,13 @@ impl<'a> TraitDatabase<'a> {
                 Kind::Type
             };
             let params = bump.alloc_slice_copy(&[TypeParam {
-                name: builtin_name(if higher_kinded { "f" } else { "a" }),
+                name: builtin_name(if name == "Traversable" {
+                    "t"
+                } else if higher_kinded {
+                    "f"
+                } else {
+                    "a"
+                }),
                 kind: parameter_kind,
             }]);
             let superclasses: &'a [TraitRef<'a>] = match name {

@@ -82,6 +82,25 @@ export function $resultFlatMap(value, transform) {
     return value.$ === "Ok" ? transform(value._0) : value;
 }
 
+export function $arrayTraverse(applicative, values, transform) {
+    let result = applicative.pure([]);
+    for (const value of values) {
+        const append = applicative.$super0.map(result, (items) => (item) => [...items, item]);
+        result = applicative.apply(append, transform(value));
+    }
+    return result;
+}
+
+export function $optionTraverse(applicative, value, transform) {
+    if (value === null) return applicative.pure(null);
+    return applicative.$super0.map(transform(value), $optionSome);
+}
+
+export function $resultTraverse(applicative, value, transform) {
+    if (value.$ !== "Ok") return applicative.pure(value);
+    return applicative.$super0.map(transform(value._0), $resultOk);
+}
+
 export function $hash(value) {
     const bytes = new TextEncoder().encode(stableText(value));
     let hash = 14695981039346656037n;

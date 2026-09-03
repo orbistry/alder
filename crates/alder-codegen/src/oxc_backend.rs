@@ -2441,6 +2441,18 @@ impl<'src, 'js> Emitter<'src, 'js> {
                         .property("decode", self.js.identifier("$jsonDecode")),
                 );
             }
+            Intrinsic::TraversableArray
+            | Intrinsic::TraversableOption
+            | Intrinsic::TraversableResult => {
+                let traverse = match intrinsic {
+                    Intrinsic::TraversableArray => "$arrayTraverse",
+                    Intrinsic::TraversableOption => "$optionTraverse",
+                    Intrinsic::TraversableResult => "$resultTraverse",
+                    _ => unreachable!(),
+                };
+                self.kernel.insert(traverse);
+                properties.push(self.js.property("traverse", self.js.identifier(traverse)));
+            }
         }
         self.js.object(properties)
     }

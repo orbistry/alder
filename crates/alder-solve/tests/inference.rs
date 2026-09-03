@@ -1043,6 +1043,40 @@ fn builtin_applicative_and_monad_instances_preserve_the_hkt_hierarchy() {
 }
 
 #[test]
+fn builtin_traversable_passes_method_level_applicative_evidence() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn traverse_array(value: Array[Number]) -> Option[Array[String]] {
+                traverse(value, fn(item) { Option.some("item") })
+            }
+            fn traverse_option(value: Option[Number]) -> Array[Option[String]] {
+                traverse(value, fn(item) { ["item"] })
+            }
+            fn traverse_result(value: Result[Number, String]) -> Option[Result[String, String]] {
+                traverse(value, fn(item) { Option.some("item") })
+            }
+        "#},
+    )
+    .expect("Traversable resolves both its subject and method-level Applicative instance");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, method: Some(method) }
+            if method.name == "traverse"
+                && dictionaries.len() == 2
+                && matches!(
+                    dictionaries[0],
+                    alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::TraversableArray)
+                )
+                && matches!(
+                    dictionaries[1],
+                    alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::ApplicativeOption)
+                )
+    )));
+}
+
+#[test]
 fn repeated_higher_kinded_pattern_argument_is_rejected() {
     let bump = Bump::new();
     let errors = infer(
