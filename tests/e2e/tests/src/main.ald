@@ -198,6 +198,15 @@ test "derived dictionaries execute" {
     }
 }
 
+test "hash uses stable typed byte streams" {
+    assert hash(0) == 925820630484784613n
+    assert hash(-0) == hash(0)
+    assert hash(1n) == 10135776685960610562n
+    assert hash(-1n) == 9113591822692154507n
+    assert hash("") == 10978417736201556339n
+    assert hash("A") == 8346277732176037193n
+}
+
 tests {
     test "arrays are mutable values" {
         let values = [1]

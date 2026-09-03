@@ -106,13 +106,105 @@ export function $resultTraverse(applicative, value, transform) {
 }
 
 export function $hash(value) {
-    const bytes = new TextEncoder().encode(stableText(value));
+    return hashBytes(hashStream(value));
+}
+
+function hashBytes(bytes) {
     let hash = 14695981039346656037n;
     for (const byte of bytes) {
         hash ^= BigInt(byte);
         hash = (hash * 1099511628211n) & 0xffffffffffffffffn;
     }
     return hash;
+}
+
+function pushU64(bytes, value) {
+    let remaining = BigInt.asUintN(64, value);
+    for (let index = 0; index < 8; index += 1) {
+        bytes.push(Number(remaining & 0xffn));
+        remaining >>= 8n;
+    }
+}
+
+function pushText(bytes, value) {
+    const encoded = new TextEncoder().encode(value);
+    pushU64(bytes, BigInt(encoded.length));
+    bytes.push(...encoded);
+}
+
+function pushChildHash(bytes, index, value) {
+    pushU64(bytes, BigInt(index));
+    pushU64(bytes, $hash(value));
+}
+
+function hashStream(value) {
+    const bytes = [];
+    if (value === undefined) {
+        bytes.push(0x00);
+        return bytes;
+    }
+    if (typeof value === "boolean") {
+        bytes.push(0x01, value ? 1 : 0);
+        return bytes;
+    }
+    if (typeof value === "number") {
+        bytes.push(0x02);
+        const storage = new ArrayBuffer(8);
+        const view = new DataView(storage);
+        if (Number.isNaN(value)) {
+            view.setBigUint64(0, 0x7ff8000000000000n, true);
+        } else {
+            view.setFloat64(0, Object.is(value, -0) ? 0 : value, true);
+        }
+        bytes.push(...new Uint8Array(storage));
+        return bytes;
+    }
+    if (typeof value === "bigint") {
+        bytes.push(0x03, value < 0n ? 1 : 0);
+        let magnitude = value < 0n ? -value : value;
+        const encoded = [];
+        while (magnitude !== 0n) {
+            encoded.push(Number(magnitude & 0xffn));
+            magnitude >>= 8n;
+        }
+        encoded.reverse();
+        pushU64(bytes, BigInt(encoded.length));
+        bytes.push(...encoded);
+        return bytes;
+    }
+    if (typeof value === "string") {
+        bytes.push(0x04);
+        pushText(bytes, value);
+        return bytes;
+    }
+    if (Array.isArray(value)) {
+        bytes.push(0x10);
+        pushU64(bytes, BigInt(value.length));
+        value.forEach((item, index) => pushChildHash(bytes, index, item));
+        return bytes;
+    }
+    if (value !== null && typeof value.$ === "string") {
+        bytes.push(0x12);
+        pushText(bytes, value.$);
+        const fields = Object.keys(value)
+            .filter((key) => /^_\d+$/.test(key))
+            .sort((left, right) => Number(left.slice(1)) - Number(right.slice(1)));
+        pushU64(bytes, BigInt(fields.length));
+        fields.forEach((field, index) => pushChildHash(bytes, index, value[field]));
+        return bytes;
+    }
+    if (value !== null && typeof value === "object") {
+        bytes.push(0x11);
+        const fields = Object.keys(value);
+        pushU64(bytes, BigInt(fields.length));
+        fields.forEach((field, index) => {
+            pushU64(bytes, BigInt(index));
+            pushText(bytes, field);
+            pushU64(bytes, $hash(value[field]));
+        });
+        return bytes;
+    }
+    throw new TypeError(`Value is not hashable: ${String(value)}`);
 }
 
 function stableText(value) {
