@@ -1,6 +1,6 @@
 ---
 source: crates/alder-can/src/canonicalize.rs
-expression: "can_error(indoc::indoc!\n{r#\"\n            trait Convert[a, b] { fn convert(value: a) -> b }\n            impl Convert[Number] { fn convert(value: Number) -> Number { value } }\n        \"#})"
+description: "trait Convert[a, b] { fn convert(value: a) -> b }\nimpl Convert[Number] { fn convert(value: Number) -> Number { value } }\n"
 ---
 [
     Error {

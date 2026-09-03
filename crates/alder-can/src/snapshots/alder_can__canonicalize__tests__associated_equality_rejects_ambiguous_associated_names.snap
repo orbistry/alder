@@ -1,6 +1,6 @@
 ---
 source: crates/alder-can/src/canonicalize.rs
-expression: "can_error(indoc::indoc!\n{r#\"\n            trait First[a] { type Item }\n            trait Second[a] { type Item }\n            fn bad(value: a) where a: First + Second, a.Item == Number { value }\n        \"#})"
+description: "trait First[a] { type Item }\ntrait Second[a] { type Item }\nfn bad(value: a) where a: First + Second, a.Item == Number { value }\n"
 ---
 [
     Error {

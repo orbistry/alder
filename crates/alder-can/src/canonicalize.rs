@@ -3382,46 +3382,46 @@ mod tests {
 
     #[test]
     fn associated_equality_requires_a_matching_bound() {
-        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+        assert_can_error_snapshot! {r#"
             trait Iterator[i] { type Item }
             trait Show[a] { fn show(value: a) -> String }
             fn bad(value: i) where i: Show, i.Item == Number { value }
-        "#}));
+        "#};
     }
 
     #[test]
     fn associated_equality_rejects_ambiguous_associated_names() {
-        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+        assert_can_error_snapshot! {r#"
             trait First[a] { type Item }
             trait Second[a] { type Item }
             fn bad(value: a) where a: First + Second, a.Item == Number { value }
-        "#}));
+        "#};
     }
 
     #[test]
     fn function_where_bound_variable_must_occur_in_signature() {
-        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+        assert_can_error_snapshot! {r#"
             trait Show[a] { fn show(value: a) -> String }
             fn bad(value: Number) where a: Show { value }
-        "#}));
+        "#};
     }
 
     #[test]
     fn colon_bound_requires_a_unary_trait() {
-        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+        assert_can_error_snapshot! {r#"
             trait Convert[a, b] { fn convert(value: a) -> b }
             fn bad(value: a) where a: Convert { value }
-        "#}));
+        "#};
     }
 
     #[test]
     fn impl_where_variable_must_occur_in_the_impl_head() {
-        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+        assert_can_error_snapshot! {r#"
             trait Show[a] { fn show(value: a) -> String }
             impl Show[Array[a]] where b: Show {
                 fn show(value: Array[a]) -> String { "array" }
             }
-        "#}));
+        "#};
     }
 
     #[test]
@@ -3468,10 +3468,10 @@ mod tests {
 
     #[test]
     fn impl_trait_head_arity_is_checked() {
-        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+        assert_can_error_snapshot! {r#"
             trait Convert[a, b] { fn convert(value: a) -> b }
             impl Convert[Number] { fn convert(value: Number) -> Number { value } }
-        "#}));
+        "#};
     }
 
     #[test]
@@ -3508,25 +3508,25 @@ mod tests {
 
     #[test]
     fn impl_unknown_method_is_rejected() {
-        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+        assert_can_error_snapshot! {r#"
             trait Show[a] { fn show(value: a) -> String }
             impl Show[Number] {
                 fn display(value: Number) -> String { "number" }
             }
-        "#}));
+        "#};
     }
 
     #[test]
     fn impl_missing_required_method_is_rejected() {
-        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+        assert_can_error_snapshot! {r#"
             trait Show[a] { fn show(value: a) -> String }
             impl Show[Number] {}
-        "#}));
+        "#};
     }
 
     #[test]
     fn impl_missing_associated_type_is_rejected() {
-        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+        assert_can_error_snapshot! {r#"
             trait Iterator[i] {
                 type Item
                 fn next(value: i) -> Item
@@ -3534,7 +3534,7 @@ mod tests {
             impl Iterator[Number] {
                 fn next(value: Number) -> Number { value }
             }
-        "#}));
+        "#};
     }
 
     #[test]

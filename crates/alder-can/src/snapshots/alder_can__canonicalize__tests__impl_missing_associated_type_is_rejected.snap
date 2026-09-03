@@ -1,6 +1,6 @@
 ---
 source: crates/alder-can/src/canonicalize.rs
-expression: "can_error(indoc::indoc!\n{r#\"\n            trait Iterator[i] {\n                type Item\n                fn next(value: i) -> Item\n            }\n            impl Iterator[Number] {\n                fn next(value: Number) -> Number { value }\n            }\n        \"#})"
+description: "trait Iterator[i] {\n    type Item\n    fn next(value: i) -> Item\n}\nimpl Iterator[Number] {\n    fn next(value: Number) -> Number { value }\n}\n"
 ---
 [
     Error {

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-can/src/canonicalize.rs
-expression: "can_error(indoc::indoc!\n{r#\"\n            trait Show[a] { fn show(value: a) -> String }\n            impl Show[Number] {\n                fn display(value: Number) -> String { \"number\" }\n            }\n        \"#})"
+description: "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] {\n    fn display(value: Number) -> String { \"number\" }\n}\n"
 ---
 [
     Error {
