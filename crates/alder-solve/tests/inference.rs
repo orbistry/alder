@@ -563,6 +563,33 @@ fn impl_method_must_match_the_substituted_associated_type() {
 }
 
 #[test]
+fn cyclic_associated_binding_is_rejected() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            enum Counter { Counter }
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) -> Item
+            }
+            impl Iterator[Counter] {
+                type Item = Item
+                fn next(value: Counter) -> Item { next(value) }
+            }
+        "#},
+    )
+    .expect_err("an associated type cannot contain its own projection");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::ProjectionCycle {
+            assoc,
+            ..
+        }) if assoc.name == "Item"
+    )));
+}
+
+#[test]
 fn trait_method_projection_equalities_are_instantiated_at_use_sites() {
     let bump = Bump::new();
     solve_input(

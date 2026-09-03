@@ -285,6 +285,10 @@ fn format_error(error: &SolveError<'_>) -> String {
                 "trait argument {} has kind arity {actual_arity}, but arity {expected_arity} is required",
                 parameter + 1
             ),
+            CoherenceError::ProjectionCycle { assoc, .. } => format!(
+                "associated type `{}` is defined in terms of itself",
+                assoc.name
+            ),
         },
     }
 }

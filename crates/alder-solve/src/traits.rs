@@ -117,6 +117,10 @@ pub enum CoherenceError<'a> {
         expected_arity: u16,
         actual_arity: u16,
     },
+    ProjectionCycle {
+        implementation: ImplId<'a>,
+        assoc: alder_ast::AssocTypeId<'a>,
+    },
 }
 
 impl<'a> TraitDatabase<'a> {
@@ -205,6 +209,14 @@ impl<'a> TraitDatabase<'a> {
                                 actual_arity: actual as u16,
                             });
                         }
+                    }
+                }
+                for binding in implementation.assoc_bindings() {
+                    if contains_associated_projection(&binding.typ.value, binding.assoc) {
+                        errors.push(CoherenceError::ProjectionCycle {
+                            implementation: implementation.id(),
+                            assoc: binding.assoc,
+                        });
                     }
                 }
                 let subject = trait_ref.args.first().copied();
@@ -461,6 +473,49 @@ impl<'a> TraitDatabase<'a> {
             .entry(iterator)
             .or_default()
             .push(InstanceHeader::Foreign(implementation));
+    }
+}
+
+fn contains_associated_projection(typ: &Type<'_>, assoc: alder_ast::AssocTypeId<'_>) -> bool {
+    match typ {
+        Type::Projection(projection) => {
+            projection.assoc == assoc
+                || projection
+                    .trait_ref
+                    .args
+                    .iter()
+                    .any(|argument| contains_associated_projection(&argument.value, assoc))
+        }
+        Type::Var { args, .. } | Type::Named { args, .. } => args
+            .iter()
+            .any(|argument| contains_associated_projection(&argument.value, assoc)),
+        Type::Partial { slots, .. } => slots.iter().any(|slot| match slot {
+            TypeSlot::Hole(_) => false,
+            TypeSlot::Fixed(typ) => contains_associated_projection(&typ.value, assoc),
+        }),
+        Type::Fn { params, ret } => {
+            params
+                .iter()
+                .any(|param| contains_associated_projection(&param.value, assoc))
+                || contains_associated_projection(&ret.value, assoc)
+        }
+        Type::Tuple(items) => items
+            .iter()
+            .any(|item| contains_associated_projection(&item.value, assoc)),
+        Type::Record { fields, .. } => fields
+            .iter()
+            .any(|field| contains_associated_projection(&field.typ.value, assoc)),
+        Type::ErrorRow { tags, .. } => tags.iter().any(|tag| {
+            tag.args
+                .iter()
+                .any(|argument| contains_associated_projection(&argument.value, assoc))
+        }),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(typ) | alder_ast::AliasType::Filled(typ) => {
+                contains_associated_projection(&typ.value, assoc)
+            }
+        },
+        Type::Unit => false,
     }
 }
 
