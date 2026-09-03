@@ -455,6 +455,39 @@ mod tests {
     }
 
     #[test]
+    fn method_local_dictionaries_follow_predicate_order() {
+        assert_solved_emit_snapshot! {r#"
+            trait Render[a] {
+                fn render(value: a, first: b, second: c) -> String
+                    where b: Show, c: Eq + Show
+            }
+            impl Render[Number] {
+                fn render(value: Number, first: b, second: c) -> String
+                    where b: Show, c: Eq + Show
+                {
+                    show(first)
+                }
+            }
+            pub fn main() -> String { render(0, "first", true) }
+        "#};
+    }
+
+    #[test]
+    fn projection_equalities_do_not_add_dictionary_arguments() {
+        assert_solved_emit_snapshot! {r#"
+            trait Source[a] {
+                type Item
+                fn next(value: a) -> Option[Item]
+            }
+            fn take(value: a) -> Option[Number]
+                where a: Source, a.Item == Number
+            {
+                next(value)
+            }
+        "#};
+    }
+
+    #[test]
     fn built_in_derive_dictionaries() {
         assert_emit_snapshot! {r#"
             #[derive(Show, Ord, Hash, Json)]

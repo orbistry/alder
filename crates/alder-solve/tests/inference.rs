@@ -1075,6 +1075,18 @@ macro_rules! assert_solve_error_snapshot {
 }
 
 #[test]
+fn cross_trait_non_decreasing_instance_prerequisite_is_rejected() {
+    assert_solve_error_snapshot! {r#"
+        trait Display[a] { fn display(value: a) -> String }
+        trait Render[a] { fn render(value: a) -> String }
+
+        impl Display[a] where a: Render {
+            fn display(value: a) -> String { "display" }
+        }
+    "#};
+}
+
+#[test]
 fn polymorphic_identity() {
     assert_inference_snapshot!("fn identity(value) { value }");
 }

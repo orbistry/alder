@@ -1,0 +1,9 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "trait Source[a] {\n    type Item\n    fn next(value: a) -> Option[Item]\n}\nfn take(value: a) -> Option[Number]\n    where a: Source, a.Item == Number\n{\n    next(value)\n}\n"
+---
+function $v_take($dict0, $a0) {
+	let $l1_value = $a0;
+	const $t0 = $dict0["next"];
+	return $t0($l1_value);
+}

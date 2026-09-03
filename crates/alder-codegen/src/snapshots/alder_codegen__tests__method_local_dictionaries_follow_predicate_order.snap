@@ -1,0 +1,24 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "trait Render[a] {\n    fn render(value: a, first: b, second: c) -> String\n        where b: Show, c: Eq + Show\n}\nimpl Render[Number] {\n    fn render(value: Number, first: b, second: c) -> String\n        where b: Show, c: Eq + Show\n    {\n        show(first)\n    }\n}\npub fn main() -> String { render(0, \"first\", true) }\n"
+---
+import { $show } from "alder:kernel";
+function $impl$1$render($self, $dict0, $dict1, $dict2, $a0, $a1, $a2) {
+	let $l3_value = $a0;
+	let $l4_first = $a1;
+	let $l5_second = $a2;
+	const $t0 = $dict0["show"];
+	return $t0($l4_first);
+}
+const $dict$Render$1 = {};
+$dict$Render$1["render"] = ($methodDict0, $methodDict1, $methodDict2, $a0, $a1, $a2) => {
+	return $impl$1$render($dict$Render$1, $methodDict0, $methodDict1, $methodDict2, $a0, $a1, $a2);
+};
+Object["freeze"]($dict$Render$1);
+function $v_main() {
+	const $t1 = $dict$Render$1["render"];
+	return $t1({ "show": $show }, { "eq": ($a, $b) => {
+		return $a === $b;
+	} }, { "show": $show }, 0, "first", true);
+}
+export { $dict$Render$1, $v_main as main };
