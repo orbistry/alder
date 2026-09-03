@@ -1,0 +1,13 @@
+---
+source: crates/alder-report/src/lib.rs
+expression: rendered
+---
+alder::trait::missing_instance
+
+  × missing trait implementation
+   ╭─[src/main.ald:1:13]
+ 1 │ fn main() { missing(1) }
+   ·             ─────┬────
+   ·                  ╰── required here
+   ╰────
+  help: add a matching impl

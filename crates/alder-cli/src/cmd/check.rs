@@ -46,7 +46,7 @@ impl Args {
         eprintln!();
         if !result.warnings.is_empty() {
             for warning in &result.warnings {
-                eprintln!("Warning: {}", warning);
+                eprintln!("{:?}", miette::Report::new(warning.clone()));
             }
             eprintln!();
         }
@@ -70,12 +70,24 @@ impl Args {
             eprintln!("  {} succeeded", result.success);
             eprintln!("  {} failed", result.failed);
 
-            for (uri, module_result) in &result.modules {
-                if let alder_driver::ModuleResult::Failed { message } = module_result {
-                    eprintln!();
-                    eprintln!("Error in {}:", uri.path());
-                    eprintln!("  {}", message);
-                }
+            let mut diagnostics = result
+                .modules
+                .values()
+                .filter_map(|module_result| match module_result {
+                    alder_driver::ModuleResult::Failed { diagnostics } => Some(diagnostics.iter()),
+                    alder_driver::ModuleResult::Success { .. } => None,
+                })
+                .flatten()
+                .collect::<Vec<_>>();
+            diagnostics.sort_by(|left, right| {
+                left.source()
+                    .name()
+                    .cmp(right.source().name())
+                    .then_with(|| left.message().cmp(right.message()))
+            });
+            for diagnostic in diagnostics {
+                eprintln!();
+                eprintln!("{:?}", miette::Report::new(diagnostic.clone()));
             }
 
             std::process::exit(1);

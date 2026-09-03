@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit(\"#[extern(\\\"library\\\", \\\"parse\\\")]\\npub fn parse(value: String) -> Result[Number, String]\")"
+description: "#[extern(\"library\", \"parse\")]\npub fn parse(value: String) -> Result[Number, String]\n"
 ---
 import { $tryCatch } from "alder:kernel";
 import { parse as $x_library_parse } from "library";

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit_solved(\"trait Show[a] { fn show(value: a) -> String }\\nimpl Show[Number] { fn show(value: Number) -> String { \\\"number\\\" } }\\nfn describe(value: a) -> String where a: Show { show(value) }\\npub fn main() -> String { describe(1) }\")"
+description: "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\nfn describe(value: a) -> String where a: Show { show(value) }\npub fn main() -> String { describe(1) }\n"
 ---
 function $impl$1$show($self, $a0) {
 	let $l1_value = $a0;

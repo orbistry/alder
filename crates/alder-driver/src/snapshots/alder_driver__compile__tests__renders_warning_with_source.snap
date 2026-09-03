@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn main() {\n    let unused = 1\n    2\n}\n"
+---
+alder::warning::unused_binding
+
+  ⚠ unused binding `unused`
+   ╭─[/project/src/main.ald:2:9]
+ 1 │ fn main() {
+ 2 │     let unused = 1
+   ·         ───┬──
+   ·            ╰── not used
+ 3 │     2
+   ╰────

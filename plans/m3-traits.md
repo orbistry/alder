@@ -49,6 +49,18 @@ static resolution wherever the type is known.
   type is `Type::Var { name, args }` in the source AST already.
 - No explicit type arguments at call sites; ambiguity is resolved by
   annotation or is an error.
+- Compiler phases keep structured, typed errors and use `thiserror` where an
+  error owns its display text. Presentation is centralized in an
+  `alder-report` crate: its owned diagnostic type implements
+  `miette::Diagnostic`, retains the named source, translates Alder `Region`s
+  to byte spans, and carries codes, severity, primary and secondary labels,
+  help, and related diagnostics. The driver performs phase-to-report
+  conversion while the module source and arena-backed errors are both alive;
+  the CLI delegates snippet rendering for errors and warnings to miette.
+- Snapshot helpers for compiler pipeline tests follow the parser convention:
+  source is passed through `indoc!`, installed as insta's `description`, and
+  `omit_expression` is enabled. Multiline Alder programs must not be hidden in
+  escaped Rust expressions in snapshots.
 
 ## Open decisions (recommendation in bold)
 
@@ -120,7 +132,8 @@ collection and adds the narrowly scoped `_` type hole required to represent
   superclass expansion.
 - `alder-solve`: deferred constraints, instance search, kind inference,
   generalization with bounds, elaboration.
-- Error rendering for the new error types.
+- Error rendering for the new error types through `alder-report` and miette;
+  no phase-local terminal or source-snippet formatter.
 - Tests: inference tests for every rule; snapshot tests for every error.
 
 ### Wave 2: back end (parallel)

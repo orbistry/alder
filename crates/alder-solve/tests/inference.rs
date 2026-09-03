@@ -508,9 +508,6 @@ fn conflicting_associated_equalities_are_structured() {
             ..
         }) if assoc == "Item" && expected == "Number" && actual == "String"
     ));
-    assert!(alder_solve::format_errors(&errors).contains(
-        "associated type `Item` has conflicting equalities: expected `Number`, found `String`"
-    ));
 }
 
 #[test]
@@ -843,7 +840,7 @@ fn functions_have_no_structural_eq_instance() {
 }
 
 #[test]
-fn trait_errors_have_user_facing_messages_and_bound_help() {
+fn trait_errors_preserve_structured_missing_evidence() {
     let bump = Bump::new();
     let errors = solve_input(
         &bump,
@@ -854,12 +851,21 @@ fn trait_errors_have_user_facing_messages_and_bound_help() {
         "#},
     )
     .expect_err("both calls require unavailable Display evidence");
-    let rendered = alder_solve::format_errors(&errors);
-    assert!(rendered.contains("no implementation of `Display[Number]` was found"));
-    assert!(rendered.contains("requires `Display`"));
-    assert!(rendered.contains("help: add a matching `where` bound"));
-    assert!(!rendered.contains("MissingInstance"));
-    assert!(!rendered.contains("UnsatisfiedBound"));
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+            trait_,
+            subject: "Number",
+            ..
+        }) if trait_.0.name == "Display"
+    )));
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::UnsatisfiedBound {
+            trait_,
+            ..
+        }) if trait_.0.name == "Display"
+    )));
 }
 
 #[test]

@@ -240,6 +240,34 @@ fn escaped(value: &str) -> String {
 }
 
 #[cfg(test)]
+macro_rules! assert_emit_snapshot {
+    ($source:literal) => {{
+        let source = indoc::indoc!($source);
+        let generated = emit(source);
+        insta::with_settings!({
+            description => source,
+            omit_expression => true,
+        }, {
+            insta::assert_snapshot!(generated);
+        });
+    }};
+}
+
+#[cfg(test)]
+macro_rules! assert_solved_emit_snapshot {
+    ($source:literal) => {{
+        let source = indoc::indoc!($source);
+        let generated = emit_solved(source);
+        insta::with_settings!({
+            description => source,
+            omit_expression => true,
+        }, {
+            insta::assert_snapshot!(generated);
+        });
+    }};
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use alder_ast::{PackageId, ResolvedImport};
@@ -294,114 +322,145 @@ mod tests {
 
     #[test]
     fn function_and_block_lifting() {
-        insta::assert_snapshot!(emit("pub fn answer() { let x = 40\n x + 2 }"));
+        assert_emit_snapshot! {r#"
+            pub fn answer() {
+                let x = 40
+                x + 2
+            }
+        "#};
     }
     #[test]
     fn enum_representation() {
-        insta::assert_snapshot!(emit(
+        assert_emit_snapshot!(
             "pub enum Shape { Point, Circle(Number), Rect { width: Number, height: Number } }"
-        ));
+        );
     }
     #[test]
     fn match_emission() {
-        insta::assert_snapshot!(emit(
-            "enum Maybe[a] { Nothing, Just(a) }\npub fn unwrap(value) { match value { Maybe::Just(x) => x, Maybe::Nothing => 0 } }"
-        ));
+        assert_emit_snapshot! {r#"
+            enum Maybe[a] { Nothing, Just(a) }
+            pub fn unwrap(value) { match value { Maybe::Just(x) => x, Maybe::Nothing => 0 } }
+        "#};
     }
     #[test]
     fn pin_pattern_evaluates_once() {
-        insta::assert_snapshot!(emit(
-            "fn expected() { 1 }\npub fn same(value) { match value { ^expected() => true, _ => false } }"
-        ));
+        assert_emit_snapshot! {r#"
+            fn expected() { 1 }
+            pub fn same(value) { match value { ^expected() => true, _ => false } }
+        "#};
     }
     #[test]
     fn if_and_short_circuit_lifting() {
-        insta::assert_snapshot!(emit(
+        assert_emit_snapshot!(
             "pub fn choose(flag, fallback) { if flag && fallback() { 1 } else { 2 } }"
-        ));
+        );
     }
     #[test]
     fn records_arrays_and_indexing() {
-        insta::assert_snapshot!(emit(
-            "pub fn first(name) { let value = { name: name, scores: [10, 20] }\n value.scores[0] }"
-        ));
+        assert_emit_snapshot! {r#"
+            pub fn first(name) {
+                let value = { name: name, scores: [10, 20] }
+                value.scores[0]
+            }
+        "#};
     }
     #[test]
     fn mutable_loop_emission() {
-        insta::assert_snapshot!(emit(
-            "pub fn sum() { let mut total = 0\n for value in [1, 2] { total += value }\n total }"
-        ));
+        assert_emit_snapshot! {r#"
+            pub fn sum() {
+                let mut total = 0
+                for value in [1, 2] { total += value }
+                total
+            }
+        "#};
     }
     #[test]
     fn result_extern_is_guarded() {
-        insta::assert_snapshot!(emit(
-            "#[extern(\"library\", \"parse\")]\npub fn parse(value: String) -> Result[Number, String]"
-        ));
+        assert_emit_snapshot! {r#"
+            #[extern("library", "parse")]
+            pub fn parse(value: String) -> Result[Number, String]
+        "#};
     }
 
     #[test]
     fn trait_dictionary_passing() {
-        insta::assert_snapshot!(emit_solved(
-            "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\nfn describe(value: a) -> String where a: Show { show(value) }\npub fn main() -> String { describe(1) }"
-        ));
+        assert_solved_emit_snapshot! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            impl Show[Number] { fn show(value: Number) -> String { "number" } }
+            fn describe(value: a) -> String where a: Show { show(value) }
+            pub fn main() -> String { describe(1) }
+        "#};
     }
 
     #[test]
     fn solved_primitive_equality_is_strict() {
-        insta::assert_snapshot!(emit_solved("pub fn same() -> Bool { 1 == 2 }"));
+        assert_solved_emit_snapshot!("pub fn same() -> Bool { 1 == 2 }");
     }
 
     #[test]
     fn prerequisite_dictionary_factory() {
-        insta::assert_snapshot!(emit_solved(
-            "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\nimpl Show[Array[a]] where a: Show { fn show(value: Array[a]) -> String { \"array\" } }\npub fn main() -> String { show([1]) }"
-        ));
+        assert_solved_emit_snapshot! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            impl Show[Number] { fn show(value: Number) -> String { "number" } }
+            impl Show[Array[a]] where a: Show {
+                fn show(value: Array[a]) -> String { "array" }
+            }
+            pub fn main() -> String { show([1]) }
+        "#};
     }
 
     #[test]
     fn default_method_dictionary_entry() {
-        insta::assert_snapshot!(emit_solved(
-            "trait Show[a] { fn show(value: a) -> String\nfn render(value: a) -> String { show(value) } }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\npub fn main() -> String { render(1) }"
-        ));
+        assert_solved_emit_snapshot! {r#"
+            trait Show[a] {
+                fn show(value: a) -> String
+                fn render(value: a) -> String { show(value) }
+            }
+            impl Show[Number] { fn show(value: Number) -> String { "number" } }
+            pub fn main() -> String { render(1) }
+        "#};
     }
 
     #[test]
     fn built_in_derive_dictionaries() {
-        insta::assert_snapshot!(emit(
-            "#[derive(Show, Ord, Hash, Json)]\npub enum Status { Ready, Failed(String) }"
-        ));
+        assert_emit_snapshot! {r#"
+            #[derive(Show, Ord, Hash, Json)]
+            pub enum Status { Ready, Failed(String) }
+        "#};
     }
 
     #[test]
     fn error_group_ord_preserves_declaration_order() {
-        let generated = emit("#[derive(Ord)]\npub error Failure { :later, :first(Number) }");
+        let generated = emit(indoc::indoc! {r#"
+            #[derive(Ord)]
+            pub error Failure { :later, :first(Number) }
+        "#});
         assert!(generated.contains("$compareEnum($a0, $a1, [\"later\", \"first\"])"));
     }
 
     #[test]
     fn compound_assignment_uses_the_selected_num_dictionary() {
-        insta::assert_snapshot!(emit_solved(
-            r#"enum Token { Token }
-impl Ord[Token] {
-    fn lt(left: Token, right: Token) -> Bool { false }
-    fn lte(left: Token, right: Token) -> Bool { true }
-    fn gt(left: Token, right: Token) -> Bool { false }
-    fn gte(left: Token, right: Token) -> Bool { true }
-}
-impl Num[Token] {
-    fn add(left: Token, right: Token) -> Token { right }
-    fn sub(left: Token, right: Token) -> Token { right }
-    fn mul(left: Token, right: Token) -> Token { right }
-    fn div(left: Token, right: Token) -> Token { right }
-    fn rem(left: Token, right: Token) -> Token { right }
-    fn negate(value: Token) -> Token { value }
-}
-pub fn update() -> Token {
-    let mut value = Token::Token
-    value += Token::Token
-    value
-}
-"#
-        ));
+        assert_solved_emit_snapshot! {r#"
+            enum Token { Token }
+            impl Ord[Token] {
+                fn lt(left: Token, right: Token) -> Bool { false }
+                fn lte(left: Token, right: Token) -> Bool { true }
+                fn gt(left: Token, right: Token) -> Bool { false }
+                fn gte(left: Token, right: Token) -> Bool { true }
+            }
+            impl Num[Token] {
+                fn add(left: Token, right: Token) -> Token { right }
+                fn sub(left: Token, right: Token) -> Token { right }
+                fn mul(left: Token, right: Token) -> Token { right }
+                fn div(left: Token, right: Token) -> Token { right }
+                fn rem(left: Token, right: Token) -> Token { right }
+                fn negate(value: Token) -> Token { value }
+            }
+            pub fn update() -> Token {
+                let mut value = Token::Token
+                value += Token::Token
+                value
+            }
+        "#};
     }
 }

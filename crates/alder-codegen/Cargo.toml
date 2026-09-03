@@ -23,4 +23,5 @@ alder-can = { path = "../alder-can", version = "0.1.0" }
 alder-constrain = { path = "../alder-constrain", version = "0.1.0" }
 alder-parse = { path = "../alder-parse", version = "0.1.0" }
 bumpalo.workspace = true
+indoc.workspace = true
 insta.workspace = true

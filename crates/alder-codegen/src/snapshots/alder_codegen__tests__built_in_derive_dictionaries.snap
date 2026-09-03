@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit(\"#[derive(Show, Ord, Hash, Json)]\\npub enum Status { Ready, Failed(String) }\")"
+description: "#[derive(Show, Ord, Hash, Json)]\npub enum Status { Ready, Failed(String) }\n"
 ---
 import { $compareEnum, $equal, $hash, $jsonDecodeDerived, $jsonEncodeDerived, $show } from "alder:kernel";
 const $c_Status_Ready = Object["freeze"]({ "$": "Ready" });

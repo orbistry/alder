@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit(\"pub fn answer() { let x = 40\\n x + 2 }\")"
+description: "pub fn answer() {\n    let x = 40\n    x + 2\n}\n"
 ---
 function $v_answer() {
 	const $t0 = 40;

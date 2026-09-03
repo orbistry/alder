@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] {\n    fn display(value: a) -> String\n}\n\nfn main() {\n    display(1)\n}\n"
+---
+alder::trait::missing_instance
+
+  × no implementation of `Display[Number]` was found
+   ╭─[/project/src/main.ald:6:5]
+ 5 │ fn main() {
+ 6 │     display(1)
+   ·     ───┬───
+   ·        ╰── trait evidence is required here
+ 7 │ }
+   ╰────

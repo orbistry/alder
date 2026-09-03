@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit(\"pub enum Shape { Point, Circle(Number), Rect { width: Number, height: Number } }\")"
+description: "pub enum Shape { Point, Circle(Number), Rect { width: Number, height: Number } }"
 ---
 import { $equal } from "alder:kernel";
 const $c_Shape_Point = Object["freeze"]({ "$": "Point" });

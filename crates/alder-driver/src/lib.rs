@@ -47,6 +47,7 @@ pub mod error;
 pub mod graph;
 pub mod interface;
 pub mod project;
+mod report;
 pub mod source;
 
 // Re-export main types

@@ -154,6 +154,7 @@ dependencies = [
  "alder-region",
  "alder-solve",
  "bumpalo",
+ "indoc",
  "insta",
  "oxc_allocator",
  "oxc_ast",
@@ -198,6 +199,7 @@ dependencies = [
  "alder-constrain",
  "alder-parse",
  "alder-region",
+ "alder-report",
  "alder-solve",
  "alder-source",
  "async-trait",
@@ -249,6 +251,17 @@ dependencies = [
 [[package]]
 name = "alder-region"
 version = "0.1.0"
+
+[[package]]
+name = "alder-report"
+version = "0.1.0"
+dependencies = [
+ "alder-region",
+ "indoc",
+ "insta",
+ "miette",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "alder-runtime"

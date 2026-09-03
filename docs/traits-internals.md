@@ -1529,24 +1529,38 @@ pub enum DeriveError<'a> {
 }
 ```
 
-Dependency candidates can have `region: None` when source is unavailable. The
-driver replaces string-only failures with:
+Dependency candidates can have `region: None` when source is unavailable.
+Compiler phases retain these typed errors; the driver converts them while both
+the arena-backed error and owned module source are available. The shared
+`alder-report` crate owns the presentation-neutral diagnostic:
 
 ```rust
-pub struct CompilerDiagnostic {
-    pub title: String,
-    pub severity: Severity,
-    pub labels: Vec<DiagnosticLabel>, // URI + Region + message
-    pub notes: Vec<String>,
-    pub help: Option<String>,
+pub struct Source(Arc<NamedSource<String>>);
+
+#[derive(thiserror::Error)]
+pub struct Diagnostic {
+    source_code: Source,
+    message: String,
+    code: Option<String>,
+    severity: miette::Severity,
+    labels: Vec<miette::LabeledSpan>,
+    help: Option<String>,
+    related: Vec<Diagnostic>,
 }
 
-pub enum Severity { Error, Warning }
-pub struct DiagnosticLabel { pub uri: Url, pub region: Region, pub message: String }
+impl miette::Diagnostic for Diagnostic { /* metadata accessors */ }
 ```
 
-`BuildResult` carries structured diagnostics, and CLI rendering is the final
-conversion. `format!("{:?}")` is not an acceptable final M3 path.
+`Source` converts Alder's one-indexed byte-based `Region` coordinates to
+miette byte spans and is shared across a module's diagnostics. `BuildResult`
+carries owned diagnostics for failures and warnings. The CLI hands them to
+miette, retaining normal terminal-aware colors; golden renderer tests choose a
+fixed width and `unicode_nocolor()` explicitly so snapshots are deterministic.
+Parser renderer tests keep the nested syntax error snapshot and separately
+snapshot the final source excerpt, labels, help, and code. Wording and context
+follow Elm's `Reporting/Error/Syntax.hs` where the construct has an Alder
+equivalent, adapted to Alder syntax. Phase-local terminal formatting and
+`format!("{:?}")` are not acceptable final paths.
 
 Required trait diagnostics include:
 

@@ -1,0 +1,18 @@
+[package]
+name = "alder-report"
+version = "0.1.0"
+edition.workspace = true
+description = "Structured source diagnostics for the Alder compiler"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+miette.workspace = true
+thiserror.workspace = true
+
+alder-region = { path = "../alder-region", version = "0.1.0" }
+
+[dev-dependencies]
+indoc.workspace = true
+insta.workspace = true

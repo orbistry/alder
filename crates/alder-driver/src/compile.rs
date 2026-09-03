@@ -14,6 +14,7 @@ use alder_ast::{
     Interface, ModuleId, PackageId, PackageName, ResolvedImport, ResolvedImportKind,
     ResolvedImportName, Visibility,
 };
+use alder_report::{Diagnostic, Source};
 use bumpalo::Bump;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -33,8 +34,8 @@ pub enum ModuleResult {
     },
     /// Module failed to compile.
     Failed {
-        /// Parse or other error message.
-        message: String,
+        /// Structured diagnostics retaining their named source text.
+        diagnostics: Vec<Diagnostic>,
     },
 }
 
@@ -54,7 +55,7 @@ pub struct BuildResult {
     pub failed: usize,
 
     /// Warnings collected during canonicalization.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Diagnostic>,
 
     /// ESM modules produced in build or test mode, keyed by source URI.
     pub artifacts: HashMap<Url, alder_codegen::EmittedModule>,
@@ -79,7 +80,7 @@ impl BuildResult {
 struct CompileOutput {
     uri: Url,
     result: ModuleResult,
-    warnings: Vec<String>,
+    warnings: Vec<Diagnostic>,
     artifact: Option<alder_codegen::EmittedModule>,
 }
 
@@ -116,7 +117,7 @@ fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> B
     let mut interfaces: Vec<Interface<'_>> = Vec::new();
 
     let mut results: HashMap<Url, ModuleResult> = HashMap::new();
-    let mut all_warnings: Vec<String> = Vec::new();
+    let mut all_warnings: Vec<Diagnostic> = Vec::new();
     let mut artifacts = HashMap::new();
     let total = sources.len();
     let mut pending = (0..total).collect::<Vec<_>>();
@@ -215,11 +216,15 @@ fn compile_module<'s>(
     interfaces: &[Interface<'s>],
     mode: BuildMode,
 ) -> (CompileOutput, Option<Interface<'s>>) {
-    let failed = |message: String| {
+    let report_source = Source::new(
+        uri.path(),
+        source.as_ref().map_or("", String::as_str).to_owned(),
+    );
+    let failed = |diagnostics: Vec<Diagnostic>| {
         (
             CompileOutput {
                 uri: uri.clone(),
-                result: ModuleResult::Failed { message },
+                result: ModuleResult::Failed { diagnostics },
                 warnings: vec![],
                 artifact: None,
             },
@@ -229,7 +234,7 @@ fn compile_module<'s>(
 
     let source = match source {
         Ok(s) => s,
-        Err(e) => return failed(e.clone()),
+        Err(e) => return failed(vec![crate::report::source_failure(report_source, e)]),
     };
 
     let src: &'s str = store.alloc_str(source);
@@ -237,7 +242,7 @@ fn compile_module<'s>(
 
     let module = match parser.module() {
         Ok(module) => module,
-        Err(e) => return failed(format!("{:?}", e)),
+        Err(e) => return failed(vec![crate::report::parse(report_source, &e)]),
     };
 
     let home = module_id_from_uri(store, uri);
@@ -250,19 +255,35 @@ fn compile_module<'s>(
     };
     let can_result = match alder_can::canonicalize(store, context, &module) {
         Ok(can_result) => can_result,
-        Err(errors) => return failed(format!("{:?}", errors)),
+        Err(errors) => {
+            return failed(
+                errors
+                    .iter()
+                    .map(|error| crate::report::canonicalize(report_source.clone(), error))
+                    .collect(),
+            );
+        }
     };
-    let warnings: Vec<String> = can_result
+    let warnings: Vec<Diagnostic> = can_result
         .warnings
         .iter()
-        .map(|w| format!("{:?}", w))
+        .map(|warning| crate::report::warning(report_source.clone(), warning))
         .collect();
 
     let constraint = alder_constrain::constrain(store, can_result.module);
     let trait_database = alder_solve::TraitDatabase::build(store, can_result.module, interfaces);
     let solved = match alder_solve::solve(store, &constraint, &trait_database) {
         Ok(solved) => solved,
-        Err(errors) => return failed(alder_solve::format_errors(&errors)),
+        Err(errors) => {
+            return failed(
+                errors
+                    .iter()
+                    .map(|error| {
+                        crate::report::solve(report_source.clone(), can_result.module, error)
+                    })
+                    .collect(),
+            );
+        }
     };
 
     let interface = alder_can::from_module(store, can_result.module, &solved.annotations);
@@ -279,10 +300,7 @@ fn compile_module<'s>(
             match alder_codegen::emit_solved_module(can_result.module, &solved, options) {
                 Ok(artifact) => Some(artifact),
                 Err(error) => {
-                    return failed(format!(
-                        "code generation failed at {:?}: {}",
-                        error.region, error.message
-                    ));
+                    return failed(vec![crate::report::codegen(report_source, &error)]);
                 }
             }
         }
@@ -465,12 +483,98 @@ fn resolve_source_import(
 }
 
 #[cfg(test)]
+macro_rules! assert_rendered_diagnostic_snapshot {
+    ($source:expr, $diagnostic:expr) => {{
+        let source = $source;
+        let diagnostic = $diagnostic;
+        let mut rendered = String::new();
+        miette::GraphicalReportHandler::new_themed(miette::GraphicalTheme::unicode_nocolor())
+            .with_width(80)
+            .render_report(&mut rendered, &diagnostic)
+            .expect("diagnostic renders");
+        insta::with_settings!({
+            description => source,
+            omit_expression => true,
+        }, {
+            insta::assert_snapshot!(rendered);
+        });
+    }};
+}
+
+#[cfg(test)]
+macro_rules! assert_diagnostic_snapshot {
+    ($source:expr) => {{
+        let source = indoc::indoc!($source);
+        let diagnostic = compile_failure(source).await;
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
+    }};
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::source::InMemorySource;
 
     fn url(path: &str) -> Url {
         Url::parse(&format!("file:///{}", path)).unwrap()
+    }
+
+    async fn compile_failure(source: &str) -> Diagnostic {
+        let mem = InMemorySource::new();
+        let uri = url("project/src/main.ald");
+        mem.insert(uri.clone(), source.to_owned());
+        let db = Arc::new(Mutex::new(Database::new(mem)));
+        let graph = build_graph(db.clone(), std::slice::from_ref(&uri))
+            .await
+            .unwrap();
+        let result = build(db, &graph).await;
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("source unexpectedly compiled");
+        };
+        assert_eq!(diagnostics.len(), 1, "expected one diagnostic");
+        diagnostics[0].clone()
+    }
+
+    #[tokio::test]
+    async fn renders_trait_parser_error_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Show[a] where a Show {
+                fn show(value: a) -> String
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_missing_instance_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] {
+                fn display(value: a) -> String
+            }
+
+            fn main() {
+                display(1)
+            }
+        "#};
+    }
+
+    #[test]
+    fn renders_warning_with_source() {
+        let source = indoc::indoc! {r#"
+            fn main() {
+                let unused = 1
+                2
+            }
+        "#};
+        let warning = alder_can::Warning {
+            region: alder_region::Region::new(
+                alder_region::Position::new(2, 9),
+                alder_region::Position::new(2, 15),
+            ),
+            kind: alder_can::WarningKind::UnusedBinding { name: "unused" },
+        };
+        let diagnostic =
+            crate::report::warning(Source::new("/project/src/main.ald", source), &warning);
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
     }
 
     #[tokio::test]
@@ -597,11 +701,14 @@ mod tests {
             .await
             .unwrap();
         let result = build(db, &graph).await;
-        let ModuleResult::Failed { message } = &result.modules[&uri] else {
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
             panic!("missing trait evidence must fail compilation");
         };
-        assert!(message.contains("no implementation of `Display[Number]` was found"));
-        assert!(!message.contains("MissingInstance"));
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].message(),
+            "no implementation of `Display[Number]` was found"
+        );
     }
 
     #[test]

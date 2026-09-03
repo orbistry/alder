@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit(\"pub fn choose(flag, fallback) { if flag && fallback() { 1 } else { 2 } }\")"
+description: "pub fn choose(flag, fallback) { if flag && fallback() { 1 } else { 2 } }"
 ---
 function $v_choose($a0, $a1) {
 	let $l0_flag = $a0;

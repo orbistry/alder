@@ -59,19 +59,32 @@ pub(super) async fn compile(path: &PathBuf, mode: BuildMode) -> Result<Compiled>
     }
     let graph = build_graph(db.clone(), &modules).await.into_diagnostic()?;
     let result = build_with_mode(db, &graph, mode).await;
+    for warning in &result.warnings {
+        eprintln!("{:?}", miette::Report::new(warning.clone()));
+    }
     if !result.is_success() {
-        let errors = result
+        let mut errors = result
             .modules
-            .iter()
-            .filter_map(|(uri, result)| match result {
-                alder_driver::ModuleResult::Failed { message } => {
-                    Some(format!("{}: {message}", uri.path()))
-                }
+            .values()
+            .filter_map(|result| match result {
+                alder_driver::ModuleResult::Failed { diagnostics } => Some(diagnostics.clone()),
                 alder_driver::ModuleResult::Success { .. } => None,
             })
-            .collect::<Vec<_>>()
-            .join("\n");
-        return Err(miette!("compilation failed:\n{errors}"));
+            .flatten()
+            .collect::<Vec<_>>();
+        errors.sort_by(|left, right| {
+            left.source()
+                .name()
+                .cmp(right.source().name())
+                .then_with(|| left.message().cmp(right.message()))
+        });
+        let Some(primary) = errors.pop() else {
+            return Err(miette!("compilation failed without a diagnostic"));
+        };
+        let primary = errors
+            .into_iter()
+            .fold(primary, |primary, related| primary.with_related(related));
+        return Err(miette::Report::new(primary));
     }
     Ok(Compiled {
         root: project.root,
