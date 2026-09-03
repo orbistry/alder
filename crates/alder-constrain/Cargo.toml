@@ -1,6 +1,6 @@
 [package]
 name = "alder-constrain"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 description = """
 Responsible for building the set of constraints that are used \
@@ -13,10 +13,10 @@ license.workspace = true
 
 [dependencies]
 bumpalo.workspace = true
-alder-ast = { path = "../alder-ast", version = "0.1.0" }
-alder-region = { path = "../alder-region", version = "0.1.0" }
+alder-ast = { path = "../alder-ast", version = "0.2.0" }
+alder-region = { path = "../alder-region", version = "0.2.0" }
 
 [dev-dependencies]
-alder-can = { path = "../alder-can", version = "0.1.0" }
-alder-parse = { path = "../alder-parse", version = "0.1.0" }
+alder-can = { path = "../alder-can", version = "0.2.0" }
+alder-parse = { path = "../alder-parse", version = "0.2.0" }
 indoc.workspace = true
