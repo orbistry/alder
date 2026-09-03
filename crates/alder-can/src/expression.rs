@@ -79,6 +79,20 @@ pub fn canonicalize_expr<'a>(
         }
         SourceExpr::Path(path) => canonicalize_path_expr(bump, env, source.region, path)?,
         SourceExpr::PathVar { path, name } => {
+            if let [trait_name] = path.segments
+                && let Some(method) = env.find_trait_method(trait_name.value, name.value)
+            {
+                return Ok(bump.alloc(Located::at(
+                    source.region,
+                    CanExpr::Var {
+                        use_id: env.fresh_use(),
+                        reference: ValueRef::TraitMethod {
+                            method: method.id,
+                            annotation: method.annotation,
+                        },
+                    },
+                )));
+            }
             let Some(module) = path
                 .segments
                 .first()

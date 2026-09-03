@@ -331,10 +331,12 @@ pub enum TraitItem<'a> {
 
 #[derive(Debug)]
 pub struct TraitFn<'a> {
+    pub id: MethodId<'a>,
     pub name: Name<'a>,
     pub params: &'a [Param<'a>],
     pub ret: Option<Node<'a, Type<'a>>>,
     pub constraints: &'a [TypeConstraint<'a>],
+    pub scheme: &'a Annotation<'a>,
     pub body: Option<Node<'a, Block<'a>>>,
 }
 

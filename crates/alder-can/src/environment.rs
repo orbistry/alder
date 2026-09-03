@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use alder_ast::{
-    Annotation, ConstructorRef, Interface, InterfaceEnum, LocalId, LocalName, ModuleId, Namespace,
-    PackageId, QualifiedName, Type, UseId, ValueRef, Variant, VariantPayload,
+    Annotation, AssocTypeId, ConstructorRef, Interface, InterfaceEnum, LocalId, LocalName,
+    MethodId, ModuleId, Namespace, PackageId, QualifiedName, Type, UseId, ValueRef, Variant,
+    VariantPayload,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -43,6 +44,15 @@ pub struct EnumBinding<'a> {
 pub struct TraitBinding<'a> {
     pub reference: QualifiedName<'a>,
     pub arity: usize,
+    pub region: Region,
+    pub associated_types: &'a [AssocTypeId<'a>],
+    pub methods: &'a [MethodBinding<'a>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MethodBinding<'a> {
+    pub id: MethodId<'a>,
+    pub annotation: &'a Annotation<'a>,
     pub region: Region,
 }
 
@@ -339,6 +349,8 @@ impl<'a> Env<'a> {
                 reference,
                 arity,
                 region,
+                associated_types: &[],
+                methods: &[],
             }),
         );
         Ok(())
@@ -472,6 +484,53 @@ impl<'a> Env<'a> {
         Ok(reference)
     }
 
+    pub fn register_trait_members(
+        &mut self,
+        trait_name: &'a str,
+        associated_types: &'a [AssocTypeId<'a>],
+        methods: &'a [MethodBinding<'a>],
+    ) {
+        let Some(Candidate::Unique(binding)) = self.traits.get_mut(trait_name) else {
+            unreachable!("local trait was predeclared")
+        };
+        binding.associated_types = associated_types;
+        binding.methods = methods;
+    }
+
+    pub fn insert_trait_method(&mut self, binding: MethodBinding<'a>) -> Result<(), Region> {
+        if let Some(existing) = self.scopes[0].values.get(binding.id.name) {
+            return Err(existing.region);
+        }
+        self.scopes[0].values.insert(
+            binding.id.name,
+            ValueBinding {
+                reference: ValueRef::TraitMethod {
+                    method: binding.id,
+                    annotation: binding.annotation,
+                },
+                region: binding.region,
+                mutable: false,
+                annotation: Some(binding.annotation),
+            },
+        );
+        Ok(())
+    }
+
+    pub fn find_trait_method(
+        &self,
+        trait_name: &str,
+        method_name: &str,
+    ) -> Option<MethodBinding<'a>> {
+        let Candidate::Unique(trait_) = self.traits.get(trait_name)? else {
+            return None;
+        };
+        trait_
+            .methods
+            .iter()
+            .find(|method| method.id.name == method_name)
+            .copied()
+    }
+
     pub fn register_enum(
         &mut self,
         reference: QualifiedName<'a>,
@@ -508,6 +567,8 @@ impl<'a> Env<'a> {
                 reference,
                 arity,
                 region,
+                associated_types: &[],
+                methods: &[],
             }),
         );
         Ok(reference)
@@ -532,6 +593,8 @@ impl<'a> Env<'a> {
                     reference: trait_.reference,
                     arity: trait_.params.len(),
                     region,
+                    associated_types: &[],
+                    methods: &[],
                 });
             }
             return Err(self.unknown_name(

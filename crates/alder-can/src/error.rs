@@ -110,6 +110,10 @@ pub enum TypeError<'a> {
     UnusedParameter {
         name: &'a str,
     },
+    MissingAnnotation {
+        name: &'a str,
+        position: &'static str,
+    },
     InvalidHole,
 }
 
