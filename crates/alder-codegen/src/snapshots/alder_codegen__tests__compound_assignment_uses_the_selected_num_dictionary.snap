@@ -2,7 +2,17 @@
 source: crates/alder-codegen/src/lib.rs
 description: "enum Token { Token }\nimpl Ord[Token] {\n    fn lt(left: Token, right: Token) -> Bool { false }\n    fn lte(left: Token, right: Token) -> Bool { true }\n    fn gt(left: Token, right: Token) -> Bool { false }\n    fn gte(left: Token, right: Token) -> Bool { true }\n}\nimpl Num[Token] {\n    fn add(left: Token, right: Token) -> Token { right }\n    fn sub(left: Token, right: Token) -> Token { right }\n    fn mul(left: Token, right: Token) -> Token { right }\n    fn div(left: Token, right: Token) -> Token { right }\n    fn rem(left: Token, right: Token) -> Token { right }\n    fn negate(value: Token) -> Token { value }\n}\npub fn update() -> Token {\n    let mut value = Token::Token\n    value += Token::Token\n    value\n}\n"
 ---
-import { $equal } from "alder:kernel";
+import { $equalDerived } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, { "Token": {
+		"record": false,
+		"fields": [],
+		"optional": [],
+		"dictionaries": []
+	} });
+};
+Object["freeze"]($dict$Eq$0);
 const $c_Token_Token = Object["freeze"]({ "$": "Token" });
 function $impl$1$lt($self, $a0, $a1) {
 	let $l0_left = $a0;
@@ -96,9 +106,4 @@ function $v_update() {
 	$l19_value = $dict$Num$2["add"]($l19_value, $c_Token_Token);
 	return $l19_value;
 }
-const $dict$Eq$0 = {};
-$dict$Eq$0["eq"] = ($a0, $a1) => {
-	return $equal($a0, $a1);
-};
-Object["freeze"]($dict$Eq$0);
 export { $dict$Eq$0, $dict$Num$2, $dict$Ord$1, $v_update as update };

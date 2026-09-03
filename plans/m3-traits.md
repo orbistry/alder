@@ -65,6 +65,10 @@ static resolution wherever the type is known.
   a complete owned DTO. Interface and package-instance-index files are versioned,
   reject compiler-version mismatches, and fingerprint canonical bincode bytes
   with SHA-256 rather than Rust's process-oriented `DefaultHasher`.
+- Derived dictionaries consume solver-selected evidence for every payload
+  field. Evidence is retained through nested builtin containers, and generated
+  Eq dictionaries are initialized before dictionaries that use them as a
+  superclass.
 
 ## Open decisions (recommendation in bold)
 

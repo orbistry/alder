@@ -25,6 +25,60 @@ enum SecondHashProbe {
     Value { payload: Number },
 }
 
+enum Secret { Secret }
+
+impl Show[Secret] {
+    fn show(value: Secret) -> String { "redacted" }
+}
+
+impl Hash[Secret] {
+    fn hash(value: Secret) -> BigInt { 23n }
+}
+
+impl Json[Secret] {
+    fn encode(value: Secret) -> String { "\"secret\"" }
+    fn decode(value: String) -> Result[Secret, String] { Result.ok(Secret::Secret) }
+}
+
+#[derive(Show)]
+enum SecretBox { SecretBox(Secret) }
+
+#[derive(Show, Hash, Json)]
+enum NestedSecretBox { NestedSecretBox(Array[Option[Secret]]) }
+
+enum Reverse { Low, High }
+
+impl Ord[Reverse] {
+    fn lt(left: Reverse, right: Reverse) -> Bool {
+        left == Reverse::High && right == Reverse::Low
+    }
+    fn lte(left: Reverse, right: Reverse) -> Bool { left == right || lt(left, right) }
+    fn gt(left: Reverse, right: Reverse) -> Bool { lt(right, left) }
+    fn gte(left: Reverse, right: Reverse) -> Bool { left == right || gt(left, right) }
+}
+
+#[derive(Ord)]
+enum ReverseBox { ReverseBox(Reverse) }
+
+enum HashSecret { First, Second }
+
+impl Hash[HashSecret] {
+    fn hash(value: HashSecret) -> BigInt { 7n }
+}
+
+#[derive(Hash)]
+enum HashSecretBox { HashSecretBox(HashSecret) }
+
+enum JsonSecret { JsonSecret }
+
+impl Json[JsonSecret] {
+    fn encode(value: JsonSecret) -> String { "\"secret\"" }
+    fn decode(value: String) -> Result[JsonSecret, String] { Result.ok(JsonSecret::JsonSecret) }
+}
+
+#[derive(Json)]
+enum JsonSecretBox { JsonSecretBox(JsonSecret) }
+
 trait Describe[a] {
     fn describe(value: a) -> String
 }
@@ -57,6 +111,20 @@ pub fn main() {
     assert(hash(Status::Meta { code: 7, note: "same" }) == hash(Status::Meta { code: 7, note: "same" }))
     assert(hash(Status::Meta { code: 7, note: "same" }) != hash(Status::Meta { code: 8, note: "same" }))
     assert(hash(FirstHashProbe::Value { payload: 1 }) != hash(SecondHashProbe::Value { payload: 1 }))
+    assert(show(SecretBox::SecretBox(Secret::Secret)) == "SecretBox(redacted)")
+    let nested_secret = NestedSecretBox::NestedSecretBox([Option.some(Secret::Secret), Option.none()])
+    assert(show(nested_secret) == "NestedSecretBox([Some(redacted), None])")
+    assert(encode(nested_secret) == "{\"tag\":\"NestedSecretBox\",\"fields\":[[\"secret\",null]]}")
+    let decoded_nested_secret: Result[NestedSecretBox, String] = decode(encode(nested_secret))
+    assert(decoded_nested_secret == Result.ok(nested_secret))
+    assert(hash(nested_secret) == hash(NestedSecretBox::NestedSecretBox([Option.some(Secret::Secret), Option.none()])))
+    assert(ReverseBox::ReverseBox(Reverse::High) < ReverseBox::ReverseBox(Reverse::Low))
+    assert(hash(HashSecretBox::HashSecretBox(HashSecret::First)) == hash(HashSecretBox::HashSecretBox(HashSecret::Second)))
+
+    let secret_json = encode(JsonSecretBox::JsonSecretBox(JsonSecret::JsonSecret))
+    assert(secret_json == "{\"tag\":\"JsonSecretBox\",\"fields\":[\"secret\"]}")
+    let decoded_secret: Result[JsonSecretBox, String] = decode(secret_json)
+    assert(decoded_secret == Result.ok(JsonSecretBox::JsonSecretBox(JsonSecret::JsonSecret)))
 
     let encoded = encode(Status::Meta { code: 42, note: "answer" })
     let decoded: Result[Status, String] = decode(encoded)

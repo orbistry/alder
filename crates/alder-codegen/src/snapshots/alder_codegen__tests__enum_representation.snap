@@ -2,7 +2,31 @@
 source: crates/alder-codegen/src/lib.rs
 description: "pub enum Shape { Point, Circle(Number), Rect { width: Number, height: Number } }"
 ---
-import { $equal } from "alder:kernel";
+import { $equalDerived } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, {
+		"Point": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		"Circle": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [undefined]
+		},
+		"Rect": {
+			"record": true,
+			"fields": ["width", "height"],
+			"optional": [],
+			"dictionaries": [undefined, undefined]
+		}
+	});
+};
+Object["freeze"]($dict$Eq$0);
 const $c_Shape_Point = Object["freeze"]({ "$": "Point" });
 function $c_Shape_Circle($a0) {
 	return {
@@ -17,9 +41,4 @@ function $c_Shape_Rect(width, height) {
 		"height": height
 	};
 }
-const $dict$Eq$0 = {};
-$dict$Eq$0["eq"] = ($a0, $a1) => {
-	return $equal($a0, $a1);
-};
-Object["freeze"]($dict$Eq$0);
 export { $c_Shape_Circle, $c_Shape_Point, $c_Shape_Rect, $dict$Eq$0 };

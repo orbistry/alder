@@ -4,7 +4,10 @@ use std::{cell::RefCell, collections::BTreeSet};
 
 use alder_ast::{Expr, ItemKind, Module, ModuleId, Pattern, RecordField, ValueRef, Visibility};
 use alder_region::Located;
-use alder_solve::{DirectTarget, Evidence, Intrinsic, SolveOutput, UseAction};
+use alder_solve::{
+    DerivedFieldKey, DirectTarget, Evidence, Intrinsic, IntrinsicContainer, SolveOutput,
+    StructuralEqShape, UseAction,
+};
 use oxc_allocator::Vec as ArenaVec;
 use oxc_ast::ast::{Expression, ObjectPropertyKind, Program, Statement, VariableDeclarationKind};
 use oxc_span::SourceType;
@@ -127,7 +130,21 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let mut declarations = self.js.vec();
         let mut exports = Vec::new();
 
-        for item in module.items {
+        let is_synthetic_eq = |item: &&Located<alder_ast::Item<'src>>| {
+            matches!(
+                &item.value.kind,
+                ItemKind::Impl(implementation)
+                    if implementation.synthetic == Some(alder_ast::DeriveKind::Eq)
+            )
+        };
+        let ordered_items = module.items.iter().copied().filter(is_synthetic_eq).chain(
+            module
+                .items
+                .iter()
+                .copied()
+                .filter(|item| !is_synthetic_eq(item)),
+        );
+        for item in ordered_items {
             let public = matches!(item.value.visibility, Visibility::Public(_));
             match &item.value.kind {
                 ItemKind::Enum(enum_) => {
@@ -616,7 +633,14 @@ impl<'src, 'js> Emitter<'src, 'js> {
         self.assign_superclasses(&mut body, self_name, implementation.id);
         match kind {
             alder_ast::DeriveKind::Eq => {
-                self.derived_kernel_method(&mut body, self_name, "eq", "$equal", 2, None);
+                self.derived_shaped_binary_method(
+                    &mut body,
+                    self_name,
+                    "eq",
+                    "$equalDerived",
+                    module,
+                    implementation,
+                );
             }
             alder_ast::DeriveKind::Show => {
                 self.derived_shaped_method(
@@ -718,38 +742,6 @@ impl<'src, 'js> Emitter<'src, 'js> {
         declarations
     }
 
-    fn derived_kernel_method(
-        &mut self,
-        body: &mut ArenaVec<'js, Statement<'js>>,
-        dictionary: &str,
-        method: &str,
-        kernel: &'static str,
-        arity: usize,
-        comparison: Option<BinaryOperator>,
-    ) {
-        self.kernel.insert(kernel);
-        let args = (0..arity)
-            .map(|index| format!("$a{index}"))
-            .collect::<Vec<_>>();
-        let call = self.js.call(
-            self.js.identifier(kernel),
-            args.iter().map(|argument| self.js.identifier(argument)),
-        );
-        let result = match comparison {
-            Some(operator) => self.js.binary(call, operator, self.js.number(0.0)),
-            None => call,
-        };
-        let mut method_body = self.js.vec();
-        method_body.push(self.js.return_statement(result));
-        let target = self.js.member(self.js.identifier(dictionary), method);
-        let assignment = self.js.assignment(
-            target,
-            AssignmentOperator::Assign,
-            self.js.arrow(&args, method_body, false),
-        );
-        body.push(self.js.expression_statement(assignment));
-    }
-
     fn derived_shaped_method(
         &mut self,
         body: &mut ArenaVec<'js, Statement<'js>>,
@@ -810,7 +802,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
     }
 
     fn derived_variant_shape(
-        &self,
+        &mut self,
         module: &Module<'src>,
         implementation: &alder_ast::ImplDecl<'src>,
     ) -> Expression<'js> {
@@ -848,9 +840,14 @@ impl<'src, 'js> Emitter<'src, 'js> {
                                         .collect(),
                                 ),
                             };
+                            let dictionaries = self.derived_field_dictionaries(
+                                implementation,
+                                variant.index,
+                                fields.len(),
+                            );
                             variants.push(self.js.property(
                                 variant.name.variant,
-                                self.variant_shape(record, &fields, &optional),
+                                self.variant_shape(record, &fields, &optional, dictionaries),
                             ));
                         }
                     }
@@ -859,10 +856,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
                             let fields = (0..tag.args.len())
                                 .map(|index| format!("_{index}"))
                                 .collect::<Vec<_>>();
-                            variants.push(
-                                self.js
-                                    .property(tag.name, self.variant_shape(false, &fields, &[])),
+                            let dictionaries = self.derived_field_dictionaries(
+                                implementation,
+                                tag.index,
+                                fields.len(),
                             );
+                            variants.push(self.js.property(
+                                tag.name,
+                                self.variant_shape(false, &fields, &[], dictionaries),
+                            ));
                         }
                     }
                     _ => {}
@@ -877,6 +879,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         record: bool,
         fields: &[String],
         optional: &[String],
+        dictionaries: Vec<Expression<'js>>,
     ) -> Expression<'js> {
         let mut properties = self.js.vec();
         properties.push(self.js.property("record", self.js.boolean(record)));
@@ -894,7 +897,71 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     .array(optional.iter().map(|field| self.js.string(field))),
             ),
         );
+        properties.push(
+            self.js
+                .property("dictionaries", self.js.array(dictionaries)),
+        );
         self.js.object(properties)
+    }
+
+    fn derived_field_dictionaries(
+        &mut self,
+        implementation: &alder_ast::ImplDecl<'src>,
+        variant: u16,
+        fields: usize,
+    ) -> Vec<Expression<'js>> {
+        let evidence = (0..fields)
+            .map(|field| {
+                self.solved.and_then(|solved| {
+                    solved
+                        .derived_fields
+                        .get(&DerivedFieldKey {
+                            implementation: implementation.id,
+                            variant,
+                            field: field as u16,
+                        })
+                        .cloned()
+                })
+            })
+            .collect::<Vec<_>>();
+        evidence
+            .iter()
+            .map(|evidence| match evidence {
+                Some(evidence) => self.evidence(evidence),
+                None => self.js.undefined(),
+            })
+            .collect()
+    }
+
+    fn derived_shaped_binary_method(
+        &mut self,
+        body: &mut ArenaVec<'js, Statement<'js>>,
+        dictionary: &str,
+        method: &str,
+        kernel: &'static str,
+        module: &Module<'src>,
+        implementation: &alder_ast::ImplDecl<'src>,
+    ) {
+        self.kernel.insert(kernel);
+        let args = vec!["$a0".to_owned(), "$a1".to_owned()];
+        let shape = self.derived_variant_shape(module, implementation);
+        let call = self.js.call(
+            self.js.identifier(kernel),
+            [
+                self.js.identifier(&args[0]),
+                self.js.identifier(&args[1]),
+                shape,
+            ],
+        );
+        let mut method_body = self.js.vec();
+        method_body.push(self.js.return_statement(call));
+        let target = self.js.member(self.js.identifier(dictionary), method);
+        let assignment = self.js.assignment(
+            target,
+            AssignmentOperator::Assign,
+            self.js.arrow(&args, method_body, false),
+        );
+        body.push(self.js.expression_statement(assignment));
     }
 
     fn derived_ord_method(
@@ -2403,12 +2470,34 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 }
             }
             Evidence::Intrinsic(intrinsic) => self.intrinsic_dictionary(*intrinsic),
-            Evidence::StructuralEq(_) => {
-                self.kernel.insert("$equal");
+            Evidence::IntrinsicContainer {
+                intrinsic,
+                container,
+                arguments,
+            } => self.intrinsic_container_dictionary(*intrinsic, *container, arguments),
+            Evidence::StructuralEq { shape, fields } => {
+                self.kernel.insert("$equalStructural");
                 let args = vec!["$a".to_owned(), "$b".to_owned()];
+                let (kind, names) = match shape {
+                    StructuralEqShape::Array => ("array", Vec::new()),
+                    StructuralEqShape::Option => ("option", Vec::new()),
+                    StructuralEqShape::Result => ("result", Vec::new()),
+                    StructuralEqShape::Tuple => ("tuple", Vec::new()),
+                    StructuralEqShape::Record(names) => ("record", names.clone()),
+                };
+                let dictionaries = fields
+                    .iter()
+                    .map(|field| self.evidence(field))
+                    .collect::<Vec<_>>();
                 let call = self.js.call(
-                    self.js.identifier("$equal"),
-                    args.iter().map(|arg| self.js.identifier(arg)),
+                    self.js.identifier("$equalStructural"),
+                    [
+                        self.js.identifier(&args[0]),
+                        self.js.identifier(&args[1]),
+                        self.js.string(kind),
+                        self.js.array(names.iter().map(|name| self.js.string(name))),
+                        self.js.array(dictionaries),
+                    ],
                 );
                 let mut body = self.js.vec();
                 body.push(self.js.return_statement(call));
@@ -2604,6 +2693,116 @@ impl<'src, 'js> Emitter<'src, 'js> {
             }
         }
         self.js.object(properties)
+    }
+
+    fn intrinsic_container_dictionary(
+        &mut self,
+        intrinsic: Intrinsic,
+        container: IntrinsicContainer,
+        arguments: &[Evidence<'src>],
+    ) -> Expression<'js> {
+        let kind = match container {
+            IntrinsicContainer::Array => "array",
+            IntrinsicContainer::Option => "option",
+            IntrinsicContainer::Result => "result",
+        };
+        let mut properties = self.js.vec();
+        match intrinsic {
+            Intrinsic::ShowKernel => {
+                properties.push(self.intrinsic_container_property(
+                    "show",
+                    "$showContainer",
+                    kind,
+                    arguments,
+                    1,
+                    false,
+                ));
+            }
+            Intrinsic::HashKernel => {
+                properties.push(self.intrinsic_container_property(
+                    "hash",
+                    "$hashContainer",
+                    kind,
+                    arguments,
+                    1,
+                    false,
+                ));
+                properties.push(self.intrinsic_container_property(
+                    "eq",
+                    "$equalContainer",
+                    kind,
+                    arguments,
+                    2,
+                    true,
+                ));
+                let equality = properties
+                    .pop()
+                    .expect("container equality property was just inserted");
+                let mut equality_properties = self.js.vec();
+                equality_properties.push(equality);
+                properties.push(
+                    self.js
+                        .property("$super0", self.js.object(equality_properties)),
+                );
+            }
+            Intrinsic::JsonKernel => {
+                properties.push(self.intrinsic_container_property(
+                    "encode",
+                    "$jsonEncodeContainer",
+                    kind,
+                    arguments,
+                    1,
+                    false,
+                ));
+                properties.push(self.intrinsic_container_property(
+                    "decode",
+                    "$jsonDecodeContainer",
+                    kind,
+                    arguments,
+                    1,
+                    false,
+                ));
+            }
+            _ => unreachable!("only recursive kernel traits use container evidence"),
+        }
+        self.js.object(properties)
+    }
+
+    fn intrinsic_container_property(
+        &mut self,
+        method: &str,
+        kernel: &'static str,
+        kind: &str,
+        arguments: &[Evidence<'src>],
+        arity: usize,
+        superclasses: bool,
+    ) -> ObjectPropertyKind<'js> {
+        self.kernel.insert(kernel);
+        let params = (0..arity)
+            .map(|index| format!("$a{index}"))
+            .collect::<Vec<_>>();
+        let dictionaries = arguments
+            .iter()
+            .map(|argument| {
+                let dictionary = self.evidence(argument);
+                if superclasses {
+                    self.js.member(dictionary, "$super0")
+                } else {
+                    dictionary
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut call_arguments = params
+            .iter()
+            .map(|param| self.js.identifier(param))
+            .collect::<Vec<_>>();
+        call_arguments.push(self.js.string(kind));
+        call_arguments.push(self.js.array(dictionaries));
+        let call = self.js.call(self.js.identifier(kernel), call_arguments);
+        let mut body = self.js.vec();
+        body.push(self.js.return_statement(call));
+        self.js
+            .property(method, self.js.arrow(&params, body, false))
     }
 
     fn intrinsic_binary_property(

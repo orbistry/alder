@@ -19,6 +19,14 @@ pub struct SolveOutput<'a> {
     pub bindings: BTreeMap<alder_ast::QualifiedName<'a>, BindingEvidence<'a>>,
     pub uses: BTreeMap<UseId, UseAction<'a>>,
     pub impl_superclasses: BTreeMap<(ImplId<'a>, u16), Evidence<'a>>,
+    pub derived_fields: BTreeMap<DerivedFieldKey<'a>, Evidence<'a>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DerivedFieldKey<'a> {
+    pub implementation: ImplId<'a>,
+    pub variant: u16,
+    pub field: u16,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -85,7 +93,31 @@ pub enum Evidence<'a> {
         arguments: Vec<Evidence<'a>>,
     },
     Intrinsic(Intrinsic),
-    StructuralEq(Vec<Evidence<'a>>),
+    IntrinsicContainer {
+        intrinsic: Intrinsic,
+        container: IntrinsicContainer,
+        arguments: Vec<Evidence<'a>>,
+    },
+    StructuralEq {
+        shape: StructuralEqShape<'a>,
+        fields: Vec<Evidence<'a>>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntrinsicContainer {
+    Array,
+    Option,
+    Result,
+}
+
+#[derive(Clone, Debug)]
+pub enum StructuralEqShape<'a> {
+    Array,
+    Option,
+    Result,
+    Tuple,
+    Record(Vec<&'a str>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

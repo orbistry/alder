@@ -1385,6 +1385,20 @@ retains only residual predicates over head parameters, deduplicates them, and
 rejects impossible ground requirements such as a function field. Merely
 mentioning a type parameter does not automatically create a bound.
 
+The solver also records the selected evidence for each
+`(ImplId, variant index, field index)`. Generated Show, Eq, Ord, Hash, and Json
+dictionaries embed that evidence in their payload shape; they never inspect a
+field with an unqualified generic kernel operation. Builtin Array, Option, and
+Result evidence retains its child dictionaries recursively, so a field such as
+`Array[Option[a]]` ultimately dispatches through the selected dictionary for
+`a`. Structural Eq evidence likewise records whether it describes an Array,
+Option, Result, tuple, or record, plus its child dictionaries.
+
+Synthetic Eq dictionaries are emitted before source and derived dictionaries
+that initialize Eq superclass slots. References used only inside dictionary
+method bodies remain lazy, which permits recursive and later-declared field
+instances without a JavaScript temporal-dead-zone access.
+
 Eq is synthesized without an attribute for enums and error groups whose field
 obligations succeed. Closed tuples and anonymous closed records (including
 transparent aliases of them) use structural Eq rules at the use site; open rows

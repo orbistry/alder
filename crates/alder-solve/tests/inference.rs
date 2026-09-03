@@ -921,7 +921,7 @@ fn builtin_containers_require_equality_for_every_type_argument() {
             .filter(|action| matches!(
                 action,
                 alder_solve::UseAction::Operator {
-                    dictionary: alder_solve::Evidence::StructuralEq(_),
+                    dictionary: alder_solve::Evidence::StructuralEq { .. },
                 }
             ))
             .count(),
@@ -1358,4 +1358,25 @@ fn constructor_call_arity_is_checked() {
     assert_inference_error_snapshot!(
         "enum Maybe[a] { Just(a) }\nfn invalid() { Maybe::Just(1, 2) }"
     );
+}
+
+#[test]
+fn derive_rejects_a_payload_without_the_required_instance() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            enum Payload { Payload }
+            #[derive(Show)]
+            enum Wrapper { Wrapper(Payload) }
+        "#},
+    )
+    .expect_err("Payload does not have a Show instance");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+            trait_,
+            ..
+        }) if trait_.0.name == "Show"
+    )));
 }

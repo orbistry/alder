@@ -11,8 +11,9 @@ use alder_region::{Located, Region};
 use bumpalo::Bump;
 
 use crate::{
-    BindingAbi, BindingEvidence, DirectTarget, Evidence, Intrinsic, SolveError, SolveOutput,
-    SolveTraitError, TraitDatabase, UseAction, builtin_trait_id,
+    BindingAbi, BindingEvidence, DerivedFieldKey, DirectTarget, Evidence, Intrinsic,
+    IntrinsicContainer, SolveError, SolveOutput, SolveTraitError, StructuralEqShape, TraitDatabase,
+    UseAction, builtin_trait_id,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -42,6 +43,7 @@ enum TySlot<'a> {
 
 fn resolve_obligations<'a>(
     bump: &'a Bump,
+    module: &'a Module<'a>,
     database: &TraitDatabase<'a>,
     result: InferenceResult<'a>,
 ) -> Result<SolveOutput<'a>, Vec<SolveError<'a>>> {
@@ -131,6 +133,13 @@ fn resolve_obligations<'a>(
         };
         uses.insert(call.use_id, action);
     }
+    let derived_fields = match resolve_derived_fields(bump, module, database) {
+        Ok(fields) => fields,
+        Err(mut derived_errors) => {
+            errors.append(&mut derived_errors);
+            BTreeMap::new()
+        }
+    };
     if errors.is_empty() {
         let schemes = result.annotations.clone();
         Ok(SolveOutput {
@@ -139,9 +148,228 @@ fn resolve_obligations<'a>(
             bindings: result.bindings,
             uses,
             impl_superclasses,
+            derived_fields,
         })
     } else {
         Err(errors)
+    }
+}
+
+fn resolve_derived_fields<'a>(
+    bump: &'a Bump,
+    module: &'a Module<'a>,
+    database: &TraitDatabase<'a>,
+) -> Result<BTreeMap<DerivedFieldKey<'a>, Evidence<'a>>, Vec<SolveError<'a>>> {
+    let mut resolved = BTreeMap::new();
+    let mut errors = Vec::new();
+    for item in module.items {
+        let ItemKind::Impl(implementation) = &item.value.kind else {
+            continue;
+        };
+        if implementation.synthetic.is_none() {
+            continue;
+        }
+        let mut vars = implementation
+            .params
+            .iter()
+            .enumerate()
+            .map(|(index, parameter)| (parameter.name.value, Ty::Var(index)))
+            .collect::<BTreeMap<_, _>>();
+        let self_predicate = predicate_from_ast_ref(implementation.trait_ref, &mut vars);
+        let mut givens = implementation
+            .trait_predicates
+            .iter()
+            .enumerate()
+            .map(|(index, predicate)| Given {
+                predicate: predicate_from_ast_ref(*predicate, &mut vars),
+                evidence: Evidence::Param(index as u16),
+            })
+            .collect::<Vec<_>>();
+        givens.push(Given {
+            predicate: self_predicate.clone(),
+            evidence: Evidence::SelfDictionary,
+        });
+        let Some(subject) = implementation
+            .trait_ref
+            .args
+            .first()
+            .and_then(|subject| match subject.value {
+                Type::Named { reference, .. } => Some(reference),
+                _ => None,
+            })
+        else {
+            continue;
+        };
+        for item in module.items {
+            match &item.value.kind {
+                ItemKind::Enum(enum_) if enum_.name == subject => {
+                    for variant in enum_.variants {
+                        let fields: Vec<alder_ast::Node<'a, Type<'a>>> = match variant.payload {
+                            alder_ast::VariantPayload::Unit => Vec::new(),
+                            alder_ast::VariantPayload::Tuple(fields) => fields.to_vec(),
+                            alder_ast::VariantPayload::Record(fields) => {
+                                fields.iter().map(|field| field.typ).collect()
+                            }
+                        };
+                        resolve_derived_variant_fields(
+                            bump,
+                            database,
+                            implementation,
+                            &self_predicate,
+                            &givens,
+                            variant.index,
+                            fields.into_iter(),
+                            &mut vars,
+                            &mut resolved,
+                            &mut errors,
+                        );
+                    }
+                }
+                ItemKind::ErrorGroup(group) if group.name == subject => {
+                    for tag in group.tags {
+                        resolve_derived_variant_fields(
+                            bump,
+                            database,
+                            implementation,
+                            &self_predicate,
+                            &givens,
+                            tag.index,
+                            tag.args.iter().copied(),
+                            &mut vars,
+                            &mut resolved,
+                            &mut errors,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if errors.is_empty() {
+        Ok(resolved)
+    } else {
+        Err(errors)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_derived_variant_fields<'a, 'field>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    implementation: &'a alder_ast::ImplDecl<'a>,
+    self_predicate: &Predicate<'a>,
+    givens: &[Given<'a>],
+    variant: u16,
+    fields: impl Iterator<Item = &'field Located<Type<'a>>>,
+    vars: &mut BTreeMap<&'a str, Ty<'a>>,
+    resolved: &mut BTreeMap<DerivedFieldKey<'a>, Evidence<'a>>,
+    errors: &mut Vec<SolveError<'a>>,
+) where
+    'a: 'field,
+{
+    for (field, typ) in fields.enumerate() {
+        let predicate = Predicate {
+            trait_: self_predicate.trait_,
+            args: vec![ty_from_ast(typ, vars)],
+        };
+        let mut stack = Vec::new();
+        match resolve_predicate(bump, database, &predicate, givens, typ.region, &mut stack) {
+            Ok(evidence) => {
+                resolved.insert(
+                    DerivedFieldKey {
+                        implementation: implementation.id,
+                        variant,
+                        field: field as u16,
+                    },
+                    evidence,
+                );
+            }
+            Err(error) => errors.push(SolveError::Trait(error)),
+        }
+    }
+}
+
+fn predicate_from_ast_ref<'a>(
+    predicate: alder_ast::TraitRef<'a>,
+    vars: &mut BTreeMap<&'a str, Ty<'a>>,
+) -> Predicate<'a> {
+    Predicate {
+        trait_: predicate.trait_,
+        args: predicate
+            .args
+            .iter()
+            .map(|argument| ty_from_ast(argument, vars))
+            .collect(),
+    }
+}
+
+fn ty_from_ast<'a>(typ: &Located<Type<'a>>, vars: &mut BTreeMap<&'a str, Ty<'a>>) -> Ty<'a> {
+    let apply = |head, args: Vec<_>| {
+        if args.is_empty() {
+            head
+        } else {
+            Ty::App(Box::new(head), args)
+        }
+    };
+    match &typ.value {
+        Type::Var { name, args } => {
+            let next = vars.len();
+            let head = vars.entry(name).or_insert(Ty::Var(next)).clone();
+            apply(
+                head,
+                args.iter()
+                    .map(|argument| ty_from_ast(argument, vars))
+                    .collect(),
+            )
+        }
+        Type::Named { reference, args } => apply(
+            Ty::Con(*reference),
+            args.iter()
+                .map(|argument| ty_from_ast(argument, vars))
+                .collect(),
+        ),
+        Type::Partial { constructor, slots } => Ty::Partial(
+            *constructor,
+            slots
+                .iter()
+                .map(|slot| match slot {
+                    TypeSlot::Hole(index) => TySlot::Hole(*index),
+                    TypeSlot::Fixed(typ) => TySlot::Fixed(ty_from_ast(typ, vars)),
+                })
+                .collect(),
+        ),
+        Type::Projection(projection) => Ty::Projection(
+            projection.trait_ref.trait_,
+            projection
+                .trait_ref
+                .args
+                .iter()
+                .map(|argument| ty_from_ast(argument, vars))
+                .collect(),
+            projection.assoc,
+        ),
+        Type::Fn { params, ret } => Ty::Fn(
+            params
+                .iter()
+                .map(|param| ty_from_ast(param, vars))
+                .collect(),
+            Box::new(ty_from_ast(ret, vars)),
+        ),
+        Type::Unit => Ty::Unit,
+        Type::Tuple(items) => Ty::Tuple(items.iter().map(|item| ty_from_ast(item, vars)).collect()),
+        Type::Record { fields, ext } => Ty::Record(
+            fields
+                .iter()
+                .map(|field| (field.name, (field.presence, ty_from_ast(field.typ, vars))))
+                .collect(),
+            matches!(ext, RowExtension::Open(_)),
+        ),
+        Type::ErrorRow { .. } => Ty::ErrorRow,
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(real) | alder_ast::AliasType::Filled(real) => {
+                ty_from_ast(real, vars)
+            }
+        },
     }
 }
 
@@ -327,8 +555,9 @@ fn resolve_intrinsic<'a>(
         && reference.module.package == PackageId::Builtin
         && matches!(reference.name, "Array" | "Option" | "Result")
     {
+        let mut evidence = Vec::new();
         for argument in arguments {
-            resolve_predicate(
+            evidence.push(resolve_predicate(
                 bump,
                 database,
                 &Predicate {
@@ -338,7 +567,7 @@ fn resolve_intrinsic<'a>(
                 givens,
                 origin,
                 stack,
-            )?;
+            )?);
         }
         let intrinsic = match name {
             "Show" => Intrinsic::ShowKernel,
@@ -346,17 +575,28 @@ fn resolve_intrinsic<'a>(
             "Json" => Intrinsic::JsonKernel,
             _ => unreachable!(),
         };
-        return Ok(Some(Evidence::Intrinsic(intrinsic)));
+        let container = match reference.name {
+            "Array" => IntrinsicContainer::Array,
+            "Option" => IntrinsicContainer::Option,
+            "Result" => IntrinsicContainer::Result,
+            _ => unreachable!(),
+        };
+        return Ok(Some(Evidence::IntrinsicContainer {
+            intrinsic,
+            container,
+            arguments: evidence,
+        }));
     }
     if name == "Eq" && matches!(subject, Ty::Unit) {
         return Ok(Some(Evidence::Intrinsic(Intrinsic::EqUnit)));
     }
     if name == "Eq" {
-        let children = match subject {
-            Ty::Tuple(items) => Some(items.clone()),
-            Ty::Record(fields, false) => {
-                Some(fields.values().map(|(_, typ)| typ.clone()).collect())
-            }
+        let structural = match subject {
+            Ty::Tuple(items) => Some((StructuralEqShape::Tuple, items.clone())),
+            Ty::Record(fields, false) => Some((
+                StructuralEqShape::Record(fields.keys().copied().collect()),
+                fields.values().map(|(_, typ)| typ.clone()).collect(),
+            )),
             _ if matches!(
                 nominal_parts(subject),
                 Some((reference, _))
@@ -364,11 +604,19 @@ fn resolve_intrinsic<'a>(
                         && matches!(reference.name, "Array" | "Option" | "Result")
             ) =>
             {
-                nominal_parts(subject).map(|(_, arguments)| arguments.to_vec())
+                nominal_parts(subject).map(|(reference, arguments)| {
+                    let shape = match reference.name {
+                        "Array" => StructuralEqShape::Array,
+                        "Option" => StructuralEqShape::Option,
+                        "Result" => StructuralEqShape::Result,
+                        _ => unreachable!(),
+                    };
+                    (shape, arguments.to_vec())
+                })
             }
             _ => None,
         };
-        if let Some(children) = children {
+        if let Some((shape, children)) = structural {
             let mut evidence = Vec::new();
             for child in children {
                 evidence.push(resolve_predicate(
@@ -383,7 +631,10 @@ fn resolve_intrinsic<'a>(
                     stack,
                 )?);
             }
-            return Ok(Some(Evidence::StructuralEq(evidence)));
+            return Ok(Some(Evidence::StructuralEq {
+                shape,
+                fields: evidence,
+            }));
         }
     }
     Ok(None)
@@ -678,7 +929,7 @@ pub fn solve<'a>(
     let result = Infer::new(bump, database, constraints.requirement_seeds)
         .infer_module(constraints.module)
         .map_err(|error| vec![SolveError::Core(error)])?;
-    resolve_obligations(bump, database, result)
+    resolve_obligations(bump, constraints.module, database, result)
 }
 
 impl<'a, 'db> Infer<'a, 'db> {

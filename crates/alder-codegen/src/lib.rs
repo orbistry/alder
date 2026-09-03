@@ -450,6 +450,28 @@ mod tests {
     }
 
     #[test]
+    fn derived_show_uses_resolved_payload_dictionary() {
+        assert_solved_emit_snapshot! {r#"
+            enum Secret { Secret }
+            impl Show[Secret] {
+                fn show(value: Secret) -> String { "redacted" }
+            }
+            #[derive(Show)]
+            enum Wrapped { Wrapped(Secret) }
+            pub fn main() -> String { show(Wrapped::Wrapped(Secret::Secret)) }
+        "#};
+    }
+
+    #[test]
+    fn derived_generic_payload_uses_prerequisite_dictionary() {
+        assert_solved_emit_snapshot! {r#"
+            #[derive(Show)]
+            enum Box[a] { Box(a) }
+            pub fn render(value: Box[String]) -> String { show(value) }
+        "#};
+    }
+
+    #[test]
     fn error_group_ord_preserves_declaration_order() {
         let generated = emit(indoc::indoc! {r#"
             #[derive(Ord)]

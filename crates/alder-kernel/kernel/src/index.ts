@@ -5,6 +5,49 @@ export function $equal(left, right) {
     return equalInner(left, right, new WeakMap());
 }
 
+export function $equalDerived(left, right, variants) {
+    if (left?.$ !== right?.$) return false;
+    const shape = left && variants[left.$];
+    if (!shape) throw new TypeError("$: unknown derived Eq variant");
+    return shape.fields.every((field, index) => {
+        const dictionary = shape.dictionaries?.[index];
+        return dictionary ? dictionary.eq(left[field], right[field]) : $equal(left[field], right[field]);
+    });
+}
+
+export function $equalContainer(left, right, kind, dictionaries) {
+    if (kind === "array") {
+        return Array.isArray(left) && Array.isArray(right)
+            && left.length === right.length
+            && left.every((value, index) => dictionaries[0].eq(value, right[index]));
+    }
+    if (kind === "option") {
+        return left === null || right === null
+            ? left === right
+            : dictionaries[0].eq(left, right);
+    }
+    if (kind === "result") {
+        return left?.$ === right?.$
+            && (left?.$ === "Ok" ? dictionaries[0] : dictionaries[1]).eq(left._0, right._0);
+    }
+    throw new TypeError(`unknown Eq container: ${kind}`);
+}
+
+export function $equalStructural(left, right, kind, fields, dictionaries) {
+    if (["array", "option", "result"].includes(kind)) {
+        return $equalContainer(left, right, kind, dictionaries);
+    }
+    if (kind === "tuple") {
+        return Array.isArray(left) && Array.isArray(right)
+            && left.length === right.length
+            && left.every((value, index) => dictionaries[index].eq(value, right[index]));
+    }
+    if (kind === "record") {
+        return fields.every((field, index) => dictionaries[index].eq(left[field], right[field]));
+    }
+    throw new TypeError(`unknown structural Eq shape: ${kind}`);
+}
+
 export function $show(value) {
     if (typeof value === "string") return JSON.stringify(value);
     if (value === undefined) return "()";
@@ -27,13 +70,28 @@ export function $showDerived(value, variants) {
     const shape = value && variants[value.$];
     if (!shape) throw new TypeError("$: unknown derived Show variant");
     if (shape.record) {
-        const fields = shape.fields
-            .filter((field) => Object.hasOwn(value, field))
-            .map((field) => `${field}: ${$show(value[field])}`);
+        const fields = shape.fields.flatMap((field, index) => {
+                if (!Object.hasOwn(value, field)) return [];
+                const dictionary = shape.dictionaries?.[index];
+                return [`${field}: ${dictionary ? dictionary.show(value[field]) : $show(value[field])}`];
+            });
         return `${value.$} { ${fields.join(", ")} }`;
     }
-    const fields = shape.fields.map((field) => $show(value[field]));
+    const fields = shape.fields.map((field, index) => {
+        const dictionary = shape.dictionaries?.[index];
+        return dictionary ? dictionary.show(value[field]) : $show(value[field]);
+    });
     return fields.length === 0 ? value.$ : `${value.$}(${fields.join(", ")})`;
+}
+
+export function $showContainer(value, kind, dictionaries) {
+    if (kind === "array") return `[${value.map(dictionaries[0].show).join(", ")}]`;
+    if (kind === "option") return value === null ? "None" : `Some(${dictionaries[0].show(value)})`;
+    if (kind === "result") {
+        const dictionary = value.$ === "Ok" ? dictionaries[0] : dictionaries[1];
+        return `${value.$}(${dictionary.show(value._0)})`;
+    }
+    throw new TypeError(`unknown Show container: ${kind}`);
 }
 
 export function $compare(left, right) {
@@ -65,8 +123,13 @@ export function $compareDerived(left, right, variants) {
         throw new TypeError("$: unknown derived Ord variant");
     }
     if (leftIndex !== rightIndex) return leftIndex < rightIndex ? -1 : 1;
-    for (const field of variants[left.$].fields) {
-        const ordering = $compare(left[field], right[field]);
+    const shape = variants[left.$];
+    for (const [index, field] of shape.fields.entries()) {
+        const dictionary = shape.dictionaries?.[index];
+        const ordering = dictionary
+            ? (dictionary.lt(left[field], right[field]) ? -1
+                : dictionary.gt(left[field], right[field]) ? 1 : 0)
+            : $compare(left[field], right[field]);
         if (ordering !== 0) return ordering;
     }
     return 0;
@@ -146,8 +209,37 @@ export function $hashDerived(value, typeName, variants) {
     pushU64(bytes, BigInt(variantIndex));
     const fields = variants[value.$].fields;
     pushU64(bytes, BigInt(fields.length));
-    fields.forEach((field, index) => pushChildHash(bytes, index, value[field]));
+    fields.forEach((field, index) => {
+        const dictionary = variants[value.$].dictionaries?.[index];
+        pushChildHashValue(bytes, index, dictionary ? dictionary.hash(value[field]) : $hash(value[field]));
+    });
     return hashBytes(bytes);
+}
+
+export function $hashContainer(value, kind, dictionaries) {
+    const bytes = [];
+    if (kind === "array") {
+        bytes.push(0x10);
+        pushU64(bytes, BigInt(value.length));
+        value.forEach((item, index) => pushChildHashValue(bytes, index, dictionaries[0].hash(item)));
+        return hashBytes(bytes);
+    }
+    if (kind === "option") {
+        bytes.push(0x12);
+        pushText(bytes, value === null ? "None" : "Some");
+        pushU64(bytes, value === null ? 0n : 1n);
+        if (value !== null) pushChildHashValue(bytes, 0, dictionaries[0].hash(value));
+        return hashBytes(bytes);
+    }
+    if (kind === "result") {
+        bytes.push(0x12);
+        pushText(bytes, value.$);
+        pushU64(bytes, 1n);
+        const dictionary = value.$ === "Ok" ? dictionaries[0] : dictionaries[1];
+        pushChildHashValue(bytes, 0, dictionary.hash(value._0));
+        return hashBytes(bytes);
+    }
+    throw new TypeError(`unknown Hash container: ${kind}`);
 }
 
 function hashBytes(bytes) {
@@ -174,8 +266,12 @@ function pushText(bytes, value) {
 }
 
 function pushChildHash(bytes, index, value) {
+    pushChildHashValue(bytes, index, $hash(value));
+}
+
+function pushChildHashValue(bytes, index, value) {
     pushU64(bytes, BigInt(index));
-    pushU64(bytes, $hash(value));
+    pushU64(bytes, value);
 }
 
 function hashStream(value) {
@@ -327,6 +423,52 @@ export function $jsonDecode(value) {
     try { return $resultOk(JSON.parse(value)); }
     catch (error) { return $resultErr(String(error)); }
 }
+export function $jsonEncodeContainer(value, kind, dictionaries) {
+    const encode = (dictionary, item) => JSON.parse(dictionary.encode(item));
+    if (kind === "array") return JSON.stringify(value.map((item) => encode(dictionaries[0], item)));
+    if (kind === "option") {
+        return value === null ? "null" : JSON.stringify(encode(dictionaries[0], value));
+    }
+    if (kind === "result") {
+        const index = value.$ === "Ok" ? 0 : 1;
+        return JSON.stringify({ $: value.$, _0: encode(dictionaries[index], value._0) });
+    }
+    throw new TypeError(`unknown Json container: ${kind}`);
+}
+export function $jsonDecodeContainer(value, kind, dictionaries) {
+    try {
+        const parsed = JSON.parse(value);
+        const decode = (dictionary, item, path) => {
+            const result = dictionary.decode(JSON.stringify(item));
+            return result.$ === "Ok" ? result : $resultErr(prefixJsonPath(path, result._0));
+        };
+        if (kind === "array") {
+            if (!Array.isArray(parsed)) return $resultErr("$: expected an array");
+            const result = [];
+            for (const [index, item] of parsed.entries()) {
+                const decoded = decode(dictionaries[0], item, `$[${index}]`);
+                if (decoded.$ !== "Ok") return decoded;
+                result.push(decoded._0);
+            }
+            return $resultOk(result);
+        }
+        if (kind === "option") {
+            if (parsed === null) return $resultOk(null);
+            return decode(dictionaries[0], parsed, "$" );
+        }
+        if (kind === "result") {
+            if (!parsed || typeof parsed !== "object" || !["Ok", "Err"].includes(parsed.$)) {
+                return $resultErr("$: expected an `Ok` or `Err` result");
+            }
+            const index = parsed.$ === "Ok" ? 0 : 1;
+            const decoded = decode(dictionaries[index], parsed._0, "$._0");
+            return decoded.$ === "Ok" ? $resultOk({ $: parsed.$, _0: decoded._0 }) : decoded;
+        }
+        return $resultErr(`$: unknown Json container: ${kind}`);
+    } catch (error) {
+        return $resultErr(`$: ${String(error)}`);
+    }
+}
 export function $jsonEncodeDerived(value, variants) {
     const shape = value && variants[value.$];
     if (!shape) throw new TypeError("$: unknown derived JSON variant");
@@ -335,11 +477,19 @@ export function $jsonEncodeDerived(value, variants) {
         const optional = new Set(shape.optional ?? []);
         for (const field of shape.fields) {
             if (optional.has(field) && (!Object.hasOwn(value, field) || value[field] === null)) continue;
-            record[field] = value[field];
+            const index = shape.fields.indexOf(field);
+            const dictionary = shape.dictionaries?.[index];
+            record[field] = dictionary ? JSON.parse(dictionary.encode(value[field])) : value[field];
         }
         return JSON.stringify({ tag: value.$, value: record });
     }
-    return JSON.stringify({ tag: value.$, fields: shape.fields.map((field) => value[field]) });
+    return JSON.stringify({
+        tag: value.$,
+        fields: shape.fields.map((field, index) => {
+            const dictionary = shape.dictionaries?.[index];
+            return dictionary ? JSON.parse(dictionary.encode(value[field])) : value[field];
+        }),
+    });
 }
 export function $jsonDecodeDerived(value, variants) {
     try {
@@ -367,7 +517,17 @@ export function $jsonDecodeDerived(value, variants) {
                     if (optional.has(field)) continue;
                     return $resultErr(`$.value.${field}: missing field`);
                 }
-                result[field] = parsed.value[field];
+                const index = shape.fields.indexOf(field);
+                const dictionary = shape.dictionaries?.[index];
+                if (!dictionary) {
+                    result[field] = parsed.value[field];
+                    continue;
+                }
+                const decoded = dictionary.decode(JSON.stringify(parsed.value[field]));
+                if (decoded.$ !== "Ok") {
+                    return $resultErr(prefixJsonPath(`$.value.${field}`, decoded._0));
+                }
+                result[field] = decoded._0;
             }
         } else {
             if (Object.keys(parsed).some((key) => key !== "tag" && key !== "fields")) {
@@ -376,12 +536,29 @@ export function $jsonDecodeDerived(value, variants) {
             if (!Array.isArray(parsed.fields) || parsed.fields.length !== shape.fields.length) {
                 return $resultErr(`$.fields: expected ${shape.fields.length} values`);
             }
-            shape.fields.forEach((field, index) => { result[field] = parsed.fields[index]; });
+            for (const [index, field] of shape.fields.entries()) {
+                const dictionary = shape.dictionaries?.[index];
+                if (!dictionary) {
+                    result[field] = parsed.fields[index];
+                    continue;
+                }
+                const decoded = dictionary.decode(JSON.stringify(parsed.fields[index]));
+                if (decoded.$ !== "Ok") {
+                    return $resultErr(prefixJsonPath(`$.fields.${index}`, decoded._0));
+                }
+                result[field] = decoded._0;
+            }
         }
         return $resultOk(result);
     } catch (error) {
         return $resultErr(`$: ${String(error)}`);
     }
+}
+
+function prefixJsonPath(prefix, message) {
+    if (typeof message !== "string") return `${prefix}: ${String(message)}`;
+    if (message.startsWith("$:")) return `${prefix}${message.slice(1)}`;
+    return `${prefix}: ${message}`;
 }
 export function $ioPrint(value) { console.log(value); }
 export function $cliArgs() { return globalThis.__alderHost?.args ?? []; }
