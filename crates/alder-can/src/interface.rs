@@ -1,7 +1,7 @@
 use alder_ast::{
-    Interface, InterfaceEnum, InterfaceModule, InterfaceTrait, InterfaceType, InterfaceValue,
-    ItemKind, Module, Namespace, OpaqueKind, PrivateName, PublicTypeBody, ResolvedImportKind,
-    ValueKind, Visibility,
+    Interface, InterfaceEnum, InterfaceMethod, InterfaceModule, InterfaceTrait, InterfaceType,
+    InterfaceValue, InterfaceValueIdentity, ItemKind, Kind, Module, Namespace, OpaqueKind,
+    PrivateName, PublicTypeBody, ResolvedImportKind, TypeParam, ValueKind, Visibility,
 };
 use bumpalo::Bump;
 
@@ -64,8 +64,8 @@ pub fn from_module<'a>(
                     types.push(InterfaceType {
                         exported_as: alias.name.name,
                         reference: alias.name,
-                        params: bump
-                            .alloc_slice_fill_iter(alias.params.iter().map(|param| param.value)),
+                        params: type_params(bump, alias.params),
+                        result_kind: Kind::Type,
                         body: PublicTypeBody::Alias(alias.typ),
                     });
                 } else {
@@ -77,8 +77,8 @@ pub fn from_module<'a>(
                     enums.push(InterfaceEnum {
                         exported_as: enum_.name.name,
                         reference: enum_.name,
-                        params: bump
-                            .alloc_slice_fill_iter(enum_.params.iter().map(|param| param.value)),
+                        params: type_params(bump, enum_.params),
+                        result_kind: Kind::Type,
                         variants: enum_.variants,
                     });
                 } else {
@@ -87,21 +87,39 @@ pub fn from_module<'a>(
             }
             ItemKind::Trait(trait_) => {
                 if public {
-                    let assoc_types: Vec<_> = trait_
+                    let methods = trait_
                         .items
                         .iter()
                         .filter_map(|item| match item {
-                            alder_ast::TraitItem::AssocType(name) => Some(name.value),
-                            alder_ast::TraitItem::Fn(_) => None,
+                            alder_ast::TraitItem::AssocType(_) => None,
+                            alder_ast::TraitItem::Fn(method) => Some(InterfaceMethod {
+                                id: method.id,
+                                exported_as: method.name.value,
+                                scheme: method.scheme,
+                                has_default: method.body.is_some(),
+                                default_symbol: method.body.is_some().then_some(method.name.value),
+                            }),
                         })
-                        .collect();
+                        .collect::<Vec<_>>();
+                    let methods = bump.alloc_slice_copy(&methods);
+                    for method in trait_.items.iter().filter_map(|item| match item {
+                        alder_ast::TraitItem::AssocType(_) => None,
+                        alder_ast::TraitItem::Fn(method) => Some(*method),
+                    }) {
+                        values.push(InterfaceValue {
+                            exported_as: method.name.value,
+                            identity: InterfaceValueIdentity::TraitMethod(method.id),
+                            annotation: method.scheme,
+                            kind: ValueKind::TraitMethod,
+                        });
+                    }
                     traits.push(InterfaceTrait {
                         exported_as: trait_.name.name,
-                        reference: trait_.name,
-                        params: bump
-                            .alloc_slice_fill_iter(trait_.params.iter().map(|param| param.value)),
-                        assoc_types: bump.alloc_slice_copy(&assoc_types),
-                        methods: &[],
+                        id: trait_.id,
+                        params: trait_.type_params,
+                        superclasses: trait_.superclasses,
+                        associated_types: trait_.associated_types,
+                        methods,
                     });
                 } else {
                     private(&mut private_names, trait_.name.name, Namespace::Trait);
@@ -163,6 +181,7 @@ pub fn from_module<'a>(
         types: bump.alloc_slice_copy(&types),
         enums: bump.alloc_slice_copy(&enums),
         traits: bump.alloc_slice_copy(&traits),
+        instances: &[],
         modules: bump.alloc_slice_copy(&modules),
         private_names: bump.alloc_slice_copy(&private_names),
     }
@@ -179,7 +198,7 @@ fn value<'a>(
     if public {
         values.push(InterfaceValue {
             exported_as: name.name,
-            reference: name,
+            identity: InterfaceValueIdentity::Binding(name),
             annotation: annotations[&name],
             kind,
         });
@@ -200,11 +219,19 @@ fn opaque_type<'a>(
             exported_as: name.name,
             reference: name,
             params: &[],
+            result_kind: Kind::Type,
             body,
         });
     } else {
         private(private_names, name.name, Namespace::Type);
     }
+}
+
+fn type_params<'a>(bump: &'a Bump, params: &'a [alder_ast::Name<'a>]) -> &'a [TypeParam<'a>] {
+    bump.alloc_slice_fill_iter(params.iter().map(|param| TypeParam {
+        name: *param,
+        kind: Kind::Type,
+    }))
 }
 
 fn private<'a>(names: &mut Vec<PrivateName<'a>>, name: &'a str, namespace: Namespace) {

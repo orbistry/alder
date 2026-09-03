@@ -108,10 +108,7 @@ pub fn canonicalize_expr<'a>(
                 {
                     CanExpr::Var {
                         use_id: env.fresh_use(),
-                        reference: ValueRef::Foreign {
-                            reference: value.reference,
-                            annotation: value.annotation,
-                        },
+                        reference: interface_value_ref(*value),
                     }
                 } else {
                     return Err(vec![unknown_value(name.region, name.value)]);
@@ -195,10 +192,7 @@ pub fn canonicalize_expr<'a>(
                     {
                         CanExpr::Var {
                             use_id: env.fresh_use(),
-                            reference: ValueRef::Foreign {
-                                reference: value.reference,
-                                annotation: value.annotation,
-                            },
+                            reference: interface_value_ref(*value),
                         }
                     } else {
                         return Err(vec![unknown_value(field.region, field.value)]);
@@ -368,6 +362,19 @@ pub fn canonicalize_expr<'a>(
         }
     };
     Ok(bump.alloc(Located::at(source.region, expr)))
+}
+
+fn interface_value_ref<'a>(value: alder_ast::InterfaceValue<'a>) -> ValueRef<'a> {
+    match value.identity {
+        alder_ast::InterfaceValueIdentity::Binding(reference) => ValueRef::Foreign {
+            reference,
+            annotation: value.annotation,
+        },
+        alder_ast::InterfaceValueIdentity::TraitMethod(method) => ValueRef::TraitMethod {
+            method,
+            annotation: value.annotation,
+        },
+    }
 }
 
 pub fn canonicalize_block<'a>(

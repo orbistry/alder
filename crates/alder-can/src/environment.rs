@@ -339,6 +339,8 @@ impl<'a> Env<'a> {
         region: Region,
         reference: QualifiedName<'a>,
         arity: usize,
+        associated_types: &'a [AssocTypeId<'a>],
+        methods: &'a [MethodBinding<'a>],
     ) -> Result<(), Region> {
         if let Some(Candidate::Unique(existing)) = self.traits.get(text) {
             return Err(existing.region);
@@ -349,8 +351,8 @@ impl<'a> Env<'a> {
                 reference,
                 arity,
                 region,
-                associated_types: &[],
-                methods: &[],
+                associated_types,
+                methods,
             }),
         );
         Ok(())
@@ -590,11 +592,22 @@ impl<'a> Env<'a> {
                     .find(|trait_| trait_.exported_as == name)
             {
                 return Ok(TraitBinding {
-                    reference: trait_.reference,
+                    reference: trait_.id.0,
                     arity: trait_.params.len(),
                     region,
-                    associated_types: &[],
-                    methods: &[],
+                    associated_types: bump.alloc_slice_fill_iter(
+                        trait_
+                            .associated_types
+                            .iter()
+                            .map(|associated| associated.id),
+                    ),
+                    methods: bump.alloc_slice_fill_iter(trait_.methods.iter().map(|method| {
+                        MethodBinding {
+                            id: method.id,
+                            annotation: method.scheme,
+                            region,
+                        }
+                    })),
                 });
             }
             return Err(self.unknown_name(
@@ -742,7 +755,7 @@ fn interface_constructor_annotation<'a>(
         bump.alloc(Located::at(
             Region::zero(),
             Type::Var {
-                name: param,
+                name: param.name.value,
                 args: &[],
             },
         )) as &Located<Type<'a>>
@@ -773,10 +786,7 @@ fn interface_constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
-        params: bump.alloc_slice_fill_iter(enum_.params.iter().map(|param| alder_ast::TypeParam {
-            name: Located::at(Region::zero(), *param),
-            kind: alder_ast::Kind::Type,
-        })),
+        params: enum_.params,
         trait_predicates: &[],
         projection_equalities: &[],
         typ,

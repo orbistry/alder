@@ -317,10 +317,21 @@ pub enum VariantPayload<'a> {
 
 #[derive(Debug)]
 pub struct TraitDecl<'a> {
+    pub id: TraitId<'a>,
     pub name: QualifiedName<'a>,
     pub params: &'a [Name<'a>],
+    pub type_params: &'a [TypeParam<'a>],
     pub constraints: &'a [TypeConstraint<'a>],
+    pub superclasses: &'a [TraitRef<'a>],
+    pub associated_types: &'a [AssocTypeDecl<'a>],
     pub items: &'a [TraitItem<'a>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AssocTypeDecl<'a> {
+    pub id: AssocTypeId<'a>,
+    pub kind: Kind<'a>,
+    pub region: Region,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -985,6 +996,7 @@ pub struct Interface<'a> {
     pub types: &'a [InterfaceType<'a>],
     pub enums: &'a [InterfaceEnum<'a>],
     pub traits: &'a [InterfaceTrait<'a>],
+    pub instances: &'a [InterfaceImpl<'a>],
     pub modules: &'a [InterfaceModule<'a>],
     pub private_names: &'a [PrivateName<'a>],
 }
@@ -997,12 +1009,19 @@ pub enum ValueKind {
     Table,
     Schema,
     Extern,
+    TraitMethod,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum InterfaceValueIdentity<'a> {
+    Binding(QualifiedName<'a>),
+    TraitMethod(MethodId<'a>),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct InterfaceValue<'a> {
     pub exported_as: &'a str,
-    pub reference: QualifiedName<'a>,
+    pub identity: InterfaceValueIdentity<'a>,
     pub annotation: &'a Annotation<'a>,
     pub kind: ValueKind,
 }
@@ -1011,7 +1030,8 @@ pub struct InterfaceValue<'a> {
 pub struct InterfaceType<'a> {
     pub exported_as: &'a str,
     pub reference: QualifiedName<'a>,
-    pub params: &'a [&'a str],
+    pub params: &'a [TypeParam<'a>],
+    pub result_kind: Kind<'a>,
     pub body: PublicTypeBody<'a>,
 }
 
@@ -1033,17 +1053,54 @@ pub enum OpaqueKind {
 pub struct InterfaceEnum<'a> {
     pub exported_as: &'a str,
     pub reference: QualifiedName<'a>,
-    pub params: &'a [&'a str],
+    pub params: &'a [TypeParam<'a>],
+    pub result_kind: Kind<'a>,
     pub variants: &'a [Variant<'a>],
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct InterfaceTrait<'a> {
     pub exported_as: &'a str,
-    pub reference: QualifiedName<'a>,
-    pub params: &'a [&'a str],
-    pub assoc_types: &'a [&'a str],
-    pub methods: &'a [InterfaceValue<'a>],
+    pub id: TraitId<'a>,
+    pub params: &'a [TypeParam<'a>],
+    pub superclasses: &'a [TraitRef<'a>],
+    pub associated_types: &'a [AssocTypeDecl<'a>],
+    pub methods: &'a [InterfaceMethod<'a>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct InterfaceMethod<'a> {
+    pub id: MethodId<'a>,
+    pub exported_as: &'a str,
+    pub scheme: &'a Annotation<'a>,
+    pub has_default: bool,
+    pub default_symbol: Option<&'a str>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MethodImplementation<'a> {
+    Provided { symbol: &'a str },
+    Default { symbol: &'a str },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct InterfaceImpl<'a> {
+    pub id: ImplId<'a>,
+    pub params: &'a [TypeParam<'a>],
+    pub trait_ref: TraitRef<'a>,
+    pub trait_predicates: &'a [TraitRef<'a>],
+    pub projection_equalities: &'a [ProjectionEquality<'a>],
+    pub assoc_bindings: &'a [AssocBinding<'a>],
+    pub dictionary_symbol: &'a str,
+    pub dictionary_kind: DictionaryKind,
+    pub methods: &'a [(MethodId<'a>, MethodImplementation<'a>)],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AssocBinding<'a> {
+    pub assoc: AssocTypeId<'a>,
+    pub typ: Node<'a, Type<'a>>,
+    pub region: Region,
 }
 
 #[derive(Clone, Copy, Debug)]

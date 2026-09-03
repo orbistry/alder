@@ -153,13 +153,8 @@ fn import_name<'a>(
         .filter(|value| value.exported_as == source)
     {
         found = true;
-        env.insert_foreign_value(
-            binding.value,
-            binding.region,
-            value.reference,
-            value.annotation,
-        )
-        .map_err(|first| import_collision(binding, first))?;
+        import_value(env, binding.value, binding.region, *value)
+            .map_err(|first| import_collision(binding, first))?;
     }
     for typ in interface
         .types
@@ -189,13 +184,8 @@ fn import_name<'a>(
         .filter(|trait_| trait_.exported_as == source)
     {
         found = true;
-        env.insert_foreign_trait(
-            binding.value,
-            binding.region,
-            trait_.reference,
-            trait_.params.len(),
-        )
-        .map_err(|first| import_collision(binding, first))?;
+        import_trait(bump, env, trait_, binding.value, binding.region)
+            .map_err(|first| import_collision(binding, first))?;
     }
     for module in interface
         .modules
@@ -251,9 +241,7 @@ fn import_all<'a>(
     errors: &mut Vec<Error<'a>>,
 ) {
     for value in interface.values {
-        if let Err(first) =
-            env.insert_foreign_value(value.exported_as, region, value.reference, value.annotation)
-        {
+        if let Err(first) = import_value(env, value.exported_as, region, *value) {
             errors.push(import_collision(
                 Located::at(region, value.exported_as),
                 first,
@@ -276,12 +264,7 @@ fn import_all<'a>(
         }
     }
     for trait_ in interface.traits {
-        if let Err(first) = env.insert_foreign_trait(
-            trait_.exported_as,
-            region,
-            trait_.reference,
-            trait_.params.len(),
-        ) {
+        if let Err(first) = import_trait(bump, env, trait_, trait_.exported_as, region) {
             errors.push(import_collision(
                 Located::at(region, trait_.exported_as),
                 first,
@@ -296,6 +279,52 @@ fn import_all<'a>(
             ));
         }
     }
+}
+
+fn import_value<'a>(
+    env: &mut Env<'a>,
+    name: &'a str,
+    region: Region,
+    value: alder_ast::InterfaceValue<'a>,
+) -> Result<(), Region> {
+    match value.identity {
+        alder_ast::InterfaceValueIdentity::Binding(reference) => {
+            env.insert_foreign_value(name, region, reference, value.annotation)
+        }
+        alder_ast::InterfaceValueIdentity::TraitMethod(method) => {
+            env.insert_trait_method(MethodBinding {
+                id: method,
+                annotation: value.annotation,
+                region,
+            })
+        }
+    }
+}
+
+fn import_trait<'a>(
+    bump: &'a Bump,
+    env: &mut Env<'a>,
+    trait_: &'a alder_ast::InterfaceTrait<'a>,
+    name: &'a str,
+    region: Region,
+) -> Result<(), Region> {
+    env.insert_foreign_trait(
+        name,
+        region,
+        trait_.id.0,
+        trait_.params.len(),
+        bump.alloc_slice_fill_iter(
+            trait_
+                .associated_types
+                .iter()
+                .map(|associated| associated.id),
+        ),
+        bump.alloc_slice_fill_iter(trait_.methods.iter().map(|method| MethodBinding {
+            id: method.id,
+            annotation: method.scheme,
+            region,
+        })),
+    )
 }
 
 fn import_enum<'a>(
@@ -775,7 +804,7 @@ fn interface_constructor_annotation<'a>(
         bump.alloc(Located::at(
             Region::zero(),
             Type::Var {
-                name: param,
+                name: param.name.value,
                 args: &[],
             },
         )) as &Located<Type<'a>>
@@ -806,10 +835,7 @@ fn interface_constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
-        params: bump.alloc_slice_fill_iter(enum_.params.iter().map(|param| alder_ast::TypeParam {
-            name: Located::at(Region::zero(), *param),
-            kind: alder_ast::Kind::Type,
-        })),
+        params: enum_.params,
         trait_predicates: &[],
         projection_equalities: &[],
         typ,
@@ -974,11 +1000,47 @@ fn canonicalize_trait<'a>(
     source: &'a alder_source::TraitDecl<'a>,
 ) -> Result<&'a TraitDecl<'a>, Vec<Error<'a>>> {
     let variables: BTreeSet<_> = source.params.iter().map(|param| param.value).collect();
-    let name = env
+    let binding = env
         .find_trait(bump, source.name.region, None, source.name.value)
-        .map_err(|error| vec![error])?
-        .reference;
+        .map_err(|error| vec![error])?;
+    let name = binding.reference;
     let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
+    let superclasses = trait_refs_from_constraints(bump, constraints);
+    let mut arities = BTreeMap::new();
+    for parameter in source.params {
+        arities.insert(parameter.value, 0);
+    }
+    for item in source.items {
+        if let alder_source::TraitItem::Fn(function) = item {
+            collect_signature_variable_arities(function, &mut arities);
+        }
+    }
+    let type_params =
+        bump.alloc_slice_fill_iter(source.params.iter().map(|parameter| alder_ast::TypeParam {
+            name: *parameter,
+            kind: kind_from_arity(bump, arities.get(parameter.value).copied().unwrap_or(0)),
+        }));
+    let associated_types = source
+        .items
+        .iter()
+        .filter_map(|item| {
+            let alder_source::TraitItem::AssocType(associated) = item else {
+                return None;
+            };
+            let id = binding
+                .associated_types
+                .iter()
+                .find(|candidate| candidate.name == associated.value)
+                .copied()
+                .expect("associated types were registered before canonicalization");
+            Some(alder_ast::AssocTypeDecl {
+                id,
+                kind: alder_ast::Kind::Type,
+                region: associated.region,
+            })
+        })
+        .collect::<Vec<_>>();
+    let associated_types = bump.alloc_slice_copy(&associated_types);
     let mut items = Vec::with_capacity(source.items.len());
     for item in source.items {
         items.push(match item {
@@ -989,11 +1051,40 @@ fn canonicalize_trait<'a>(
         });
     }
     Ok(bump.alloc(TraitDecl {
+        id: alder_ast::TraitId(name),
         name,
         params: source.params,
+        type_params,
         constraints,
+        superclasses,
+        associated_types,
         items: bump.alloc_slice_copy(&items),
     }))
+}
+
+fn trait_refs_from_constraints<'a>(
+    bump: &'a Bump,
+    constraints: &'a [TypeConstraint<'a>],
+) -> &'a [alder_ast::TraitRef<'a>] {
+    let mut predicates = Vec::new();
+    for constraint in constraints {
+        if let TypeConstraint::Bound { var, traits } = constraint {
+            for trait_ in *traits {
+                let argument = bump.alloc(Located::at(
+                    var.region,
+                    Type::Var {
+                        name: var.value,
+                        args: &[],
+                    },
+                ));
+                predicates.push(alder_ast::TraitRef {
+                    trait_: alder_ast::TraitId(*trait_),
+                    args: bump.alloc_slice_copy(&[argument as &Located<Type<'a>>]),
+                });
+            }
+        }
+    }
+    bump.alloc_slice_copy(&predicates)
 }
 
 fn canonicalize_trait_fn<'a>(
@@ -1813,6 +1904,66 @@ mod tests {
             .find(|parameter| parameter.name.value == "f")
             .expect("constructor parameter");
         assert!(matches!(constructor.kind, alder_ast::Kind::Arrow { .. }));
+    }
+
+    #[test]
+    fn public_trait_methods_survive_interfaces_and_trait_only_imports() {
+        let bump = Bump::new();
+        let producer_home = ModuleId {
+            package: PackageId::Application,
+            path: bump.alloc_slice_copy(&["Producer"]),
+        };
+        let producer_text = bump.alloc_str("pub trait Show[a] { fn show(value: a) -> String }");
+        let producer_source =
+            alder_parse::parse_module(&bump, producer_text).expect("producer parses");
+        let producer = canonicalize(
+            &bump,
+            Context {
+                home: producer_home,
+                imports: &[],
+                interfaces: &[],
+            },
+            &producer_source,
+        )
+        .expect("producer canonicalizes");
+        let annotations = crate::Annotations::new();
+        let interface = crate::from_module(&bump, producer.module, &annotations);
+        assert_eq!(interface.traits[0].methods.len(), 1);
+        assert!(matches!(
+            interface.values[0].identity,
+            alder_ast::InterfaceValueIdentity::TraitMethod(method) if method.name == "show"
+        ));
+
+        let consumer_home = ModuleId {
+            package: PackageId::Application,
+            path: bump.alloc_slice_copy(&["Consumer"]),
+        };
+        let imports = bump.alloc_slice_copy(&[ResolvedImport {
+            module: producer_home,
+            region: Region::zero(),
+            visibility: Visibility::Private,
+            kind: ResolvedImportKind::Names(bump.alloc_slice_copy(&[
+                alder_ast::ResolvedImportName {
+                    source: Located::at(Region::zero(), "Show"),
+                    binding: Located::at(Region::zero(), "Show"),
+                },
+            ])),
+        }]);
+        let interfaces = bump.alloc_slice_copy(&[interface]);
+        let consumer_text =
+            bump.alloc_str("fn render(value: a) -> String where a: Show { Show::show(value) }");
+        let consumer_source =
+            alder_parse::parse_module(&bump, consumer_text).expect("consumer parses");
+        canonicalize(
+            &bump,
+            Context {
+                home: consumer_home,
+                imports,
+                interfaces,
+            },
+            &consumer_source,
+        )
+        .expect("consumer canonicalizes against trait interface");
     }
 
     #[test]
