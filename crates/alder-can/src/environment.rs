@@ -390,6 +390,21 @@ impl<'a> Env<'a> {
         }
     }
 
+    pub fn associated_type(
+        &self,
+        trait_: QualifiedName<'a>,
+        name: &str,
+    ) -> Option<AssocTypeId<'a>> {
+        self.traits.values().find_map(|candidate| match candidate {
+            Candidate::Unique(binding) if binding.reference == trait_ => binding
+                .associated_types
+                .iter()
+                .find(|associated| associated.name == name)
+                .copied(),
+            Candidate::Unique(_) | Candidate::Ambiguous(_) | Candidate::Private { .. } => None,
+        })
+    }
+
     pub fn find_provider(&self, text: &str) -> Option<QualifiedName<'a>> {
         self.providers
             .iter()

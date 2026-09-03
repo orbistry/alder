@@ -394,9 +394,9 @@ pub enum TypeConstraint<'a> {
         traits: &'a [QualifiedName<'a>],
     },
     AssocEq {
-        var: Name<'a>,
-        assoc: Name<'a>,
+        projection: ProjectionType<'a>,
         typ: Node<'a, Type<'a>>,
+        region: Region,
     },
 }
 

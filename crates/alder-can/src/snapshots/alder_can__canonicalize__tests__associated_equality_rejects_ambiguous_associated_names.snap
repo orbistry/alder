@@ -1,0 +1,43 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(indoc::indoc!\n{r#\"\n            trait First[a] { type Item }\n            trait Second[a] { type Item }\n            fn bad(value: a) where a: First + Second, a.Item == Number { value }\n        \"#})"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 45,
+            },
+            end: Position {
+                line: 3,
+                column: 49,
+            },
+        },
+        kind: Type(
+            AmbiguousAssocType {
+                name: "Item",
+                traits: [
+                    TraitId(
+                        QualifiedName {
+                            module: ModuleId {
+                                package: Application,
+                                path: [],
+                            },
+                            name: "First",
+                        },
+                    ),
+                    TraitId(
+                        QualifiedName {
+                            module: ModuleId {
+                                package: Application,
+                                path: [],
+                            },
+                            name: "Second",
+                        },
+                    ),
+                ],
+            },
+        ),
+    },
+]

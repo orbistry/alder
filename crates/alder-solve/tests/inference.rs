@@ -366,6 +366,104 @@ fn missing_trait_instance_is_structured() {
 }
 
 #[test]
+fn associated_equality_normalizes_a_generic_method_result() {
+    let bump = Bump::new();
+    let output = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) -> Item
+            }
+            fn increment(value: i) -> Number
+                where i: Iterator, i.Item == Number
+            {
+                next(value) + 1
+            }
+        "#},
+    )
+    .expect("the declared projection equality should normalize Item to Number");
+    let increment = output
+        .schemes
+        .iter()
+        .find(|(name, _)| name.name == "increment")
+        .expect("increment has an inferred scheme")
+        .1;
+    assert_eq!(increment.projection_equalities.len(), 1);
+    assert_eq!(
+        increment.projection_equalities[0].projection.assoc.name,
+        "Item"
+    );
+}
+
+#[test]
+fn an_impl_binding_normalizes_a_concrete_method_result() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            enum Counter { Counter }
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) -> Item
+            }
+            impl Iterator[Counter] {
+                type Item = Number
+                fn next(value: Counter) -> Number { 1 }
+            }
+            fn increment(value: Counter) -> Number { next(value) + 1 }
+        "#},
+    )
+    .expect("the selected impl should normalize Item to Number");
+}
+
+#[test]
+fn impl_method_must_match_the_substituted_associated_type() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            enum Counter { Counter }
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) -> Item
+            }
+            impl Iterator[Counter] {
+                type Item = Number
+                fn next(value: Counter) -> String { "wrong" }
+            }
+        "#},
+    )
+    .expect_err("the method result must equal the impl's Item binding");
+    assert!(matches!(
+        &errors[0],
+        alder_solve::SolveError::Core(Error {
+            kind: ErrorKind::Mismatch { actual, expected },
+            ..
+        }) if (actual == "String" && expected == "Number")
+            || (actual == "Number" && expected == "String")
+    ));
+}
+
+#[test]
+fn trait_method_projection_equalities_are_instantiated_at_use_sites() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            trait NumericIterator[i] {
+                type Item
+                fn next(value: i) -> Item where i.Item == Number
+            }
+            fn increment(value: i) -> Number where i: NumericIterator {
+                next(value) + 1
+            }
+        "#},
+    )
+    .expect("method scheme equalities should remain active after instantiation");
+}
+
+#[test]
 fn overlapping_trait_instances_are_rejected_before_search() {
     let bump = Bump::new();
     let errors = solve_input(

@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{
-    AssocTypeDecl, DictionaryKind, ImplDecl, ImplId, Interface, InterfaceImpl, InterfaceMethod,
-    ItemKind, Kind, MethodId, Module, ModuleId, Name, PackageId, QualifiedName, TraitDecl, TraitId,
-    TraitRef, Type, TypeParam, TypeSlot,
+    AssocBinding, AssocTypeDecl, DictionaryKind, ImplDecl, ImplId, Interface, InterfaceImpl,
+    InterfaceMethod, ItemKind, Kind, MethodId, Module, ModuleId, Name, PackageId, QualifiedName,
+    TraitDecl, TraitId, TraitRef, Type, TypeParam, TypeSlot,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -42,6 +42,13 @@ impl<'a> InstanceHeader<'a> {
         match self {
             Self::Local(implementation) => implementation.trait_predicates,
             Self::Foreign(implementation) => implementation.trait_predicates,
+        }
+    }
+
+    pub fn assoc_bindings(self) -> &'a [AssocBinding<'a>] {
+        match self {
+            Self::Local(implementation) => implementation.assoc_bindings,
+            Self::Foreign(implementation) => implementation.assoc_bindings,
         }
     }
 

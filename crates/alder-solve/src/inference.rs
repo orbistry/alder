@@ -461,6 +461,7 @@ fn render_ty(typ: &Ty<'_>) -> String {
 struct Scheme<'a> {
     quantified: Vec<usize>,
     predicates: Vec<Predicate<'a>>,
+    projection_eqs: Vec<ProjectionEquation<'a>>,
     typ: Ty<'a>,
 }
 
@@ -468,6 +469,12 @@ struct Scheme<'a> {
 struct Predicate<'a> {
     trait_: TraitId<'a>,
     args: Vec<Ty<'a>>,
+}
+
+#[derive(Clone, Debug)]
+struct ProjectionEquation<'a> {
+    projection: Ty<'a>,
+    typ: Ty<'a>,
 }
 
 #[derive(Clone, Debug)]
@@ -510,7 +517,10 @@ struct CallSite<'a> {
 #[derive(Clone, Copy)]
 enum FunctionContext<'a> {
     Ordinary,
-    Impl(&'a alder_ast::ImplDecl<'a>),
+    Impl {
+        implementation: &'a alder_ast::ImplDecl<'a>,
+        method: &'a alder_ast::ImplFn<'a>,
+    },
     Default(&'a alder_ast::TraitDecl<'a>),
 }
 
@@ -536,6 +546,7 @@ struct Infer<'a, 'db> {
     substitutions: Vec<Option<Ty<'a>>>,
     obligations: Vec<Obligation<'a>>,
     givens: Vec<Given<'a>>,
+    projection_equations: Vec<ProjectionEquation<'a>>,
     calls: Vec<CallSite<'a>>,
 }
 
@@ -577,6 +588,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             substitutions: Vec::new(),
             obligations: Vec::new(),
             givens: Vec::new(),
+            projection_equations: Vec::new(),
             calls: Vec::new(),
         }
     }
@@ -680,6 +692,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             Scheme {
                 quantified: Vec::new(),
                 predicates: Vec::new(),
+                projection_eqs: Vec::new(),
                 typ,
             },
         );
@@ -719,7 +732,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                                 params: function.params,
                                 ret: function.ret,
                                 constraints: function.constraints,
-                                context: FunctionContext::Impl(impl_),
+                                context: FunctionContext::Impl {
+                                    implementation: impl_,
+                                    method: function,
+                                },
                                 body: function.body,
                                 region,
                             },
@@ -775,7 +791,7 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<(), Error> {
         match item {
             ItemKind::Fn(function) => {
-                let (typ, predicates) = self.infer_function(
+                let (typ, predicates, projection_eqs) = self.infer_function(
                     env,
                     FunctionInput {
                         params: function.params,
@@ -786,10 +802,12 @@ impl<'a, 'db> Infer<'a, 'db> {
                         region,
                     },
                 )?;
-                env.globals
+                let scheme = env
+                    .globals
                     .get_mut(&function.name)
-                    .expect("function was predeclared")
-                    .predicates = predicates;
+                    .expect("function was predeclared");
+                scheme.predicates = predicates;
+                scheme.projection_eqs = projection_eqs;
                 self.unify_global(env, function.name, typ, region)
             }
             ItemKind::Extern(alder_ast::ExternDecl::Fn {
@@ -809,10 +827,13 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 let ret = self.from_ast(ret, &mut vars);
                 let predicates = self.predicates_from_constraints(constraints, &vars);
-                env.globals
+                let projection_eqs = self.projection_equations_from_constraints(constraints, &vars);
+                let scheme = env
+                    .globals
                     .get_mut(name)
-                    .expect("extern function was predeclared")
-                    .predicates = predicates;
+                    .expect("extern function was predeclared");
+                scheme.predicates = predicates;
+                scheme.projection_eqs = projection_eqs;
                 self.unify_global(env, *name, Ty::Fn(args, Box::new(ret)), region)
             }
             ItemKind::Let(decl) => {
@@ -825,7 +846,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.infer_pattern(env, decl.pattern, value, true)
             }
             ItemKind::Component(component) => {
-                let (typ, predicates) = self.infer_function(
+                let (typ, predicates, projection_eqs) = self.infer_function(
                     env,
                     FunctionInput {
                         params: component.params,
@@ -837,6 +858,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     },
                 )?;
                 debug_assert!(predicates.is_empty());
+                debug_assert!(projection_eqs.is_empty());
                 let Ty::Fn(args, inferred) = typ else {
                     unreachable!()
                 };
@@ -856,7 +878,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         &mut self,
         env: &Env<'a>,
         input: FunctionInput<'a>,
-    ) -> Result<(Ty<'a>, Vec<Predicate<'a>>), Error> {
+    ) -> Result<(Ty<'a>, Vec<Predicate<'a>>, Vec<ProjectionEquation<'a>>), Error> {
         let FunctionInput {
             params,
             ret,
@@ -881,14 +903,30 @@ impl<'a, 'db> Infer<'a, 'db> {
             None => self.fresh(),
         };
         let predicates = self.predicates_from_constraints(constraints, &vars);
+        let local_projection_equations =
+            self.projection_equations_from_constraints(constraints, &vars);
         let outer_givens = std::mem::take(&mut self.givens);
+        let outer_projection_equations = std::mem::take(&mut self.projection_equations);
         self.givens = outer_givens.clone();
+        self.projection_equations = outer_projection_equations.clone();
+        self.projection_equations
+            .extend(local_projection_equations.clone());
         match context {
             FunctionContext::Ordinary => {
                 self.add_parameter_givens(&predicates, 0);
                 self.add_parameter_superclass_givens(&predicates, 0);
             }
-            FunctionContext::Impl(implementation) => {
+            FunctionContext::Impl { implementation, .. } => {
+                for binding in implementation.assoc_bindings {
+                    let projection = alder_ast::ProjectionType {
+                        trait_ref: implementation.trait_ref,
+                        assoc: binding.assoc,
+                    };
+                    let projection = self.projection_from_ast(projection, &mut vars);
+                    let typ = self.from_ast(binding.typ, &mut vars);
+                    self.projection_equations
+                        .push(ProjectionEquation { projection, typ });
+                }
                 let self_predicate =
                     self.predicate_from_trait_ref(implementation.trait_ref, &mut vars);
                 self.givens.push(Given {
@@ -942,9 +980,28 @@ impl<'a, 'db> Infer<'a, 'db> {
             if body.value.tail.is_some() || !block_contains_return(body) {
                 self.unify(body_type, body_result, region)?;
             }
-            Ok((Ty::Fn(args, Box::new(self.prune(result))), predicates))
+            let function_type = Ty::Fn(args, Box::new(self.prune(result)));
+            if let FunctionContext::Impl {
+                implementation,
+                method,
+            } = context
+            {
+                let mut expected_vars = BTreeMap::new();
+                if let Some(header) = self.database.trait_(implementation.trait_ref.trait_) {
+                    for (parameter, argument) in
+                        header.params.iter().zip(implementation.trait_ref.args)
+                    {
+                        expected_vars
+                            .insert(parameter.name.value, self.from_ast(argument, &mut vars));
+                    }
+                }
+                let expected = self.from_ast(method.scheme.typ, &mut expected_vars);
+                self.unify(function_type.clone(), expected, method.name.region)?;
+            }
+            Ok((function_type, predicates, local_projection_equations))
         })();
         self.givens = outer_givens;
+        self.projection_equations = outer_projection_equations;
         inferred
     }
 
@@ -1431,6 +1488,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         Scheme {
                             quantified: Vec::new(),
                             predicates: Vec::new(),
+                            projection_eqs: Vec::new(),
                             typ: expected,
                         },
                     );
@@ -1553,6 +1611,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         Scheme {
                             quantified: Vec::new(),
                             predicates: Vec::new(),
+                            projection_eqs: Vec::new(),
                             typ: self.named("Array", vec![item.clone()]),
                         },
                     );
@@ -1567,6 +1626,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         Scheme {
                             quantified: Vec::new(),
                             predicates: Vec::new(),
+                            projection_eqs: Vec::new(),
                             typ: expected,
                         },
                     );
@@ -1929,13 +1989,23 @@ impl<'a, 'db> Infer<'a, 'db> {
                 *argument = self.prune(argument.clone());
             }
         }
+        let mut projection_eqs = env.globals[&name].projection_eqs.clone();
+        for equation in &mut projection_eqs {
+            equation.projection = self.prune(equation.projection.clone());
+            equation.typ = self.prune(equation.typ.clone());
+        }
         let mut vars = BTreeSet::new();
         self.free_vars(&typ, &mut vars);
+        for equation in &projection_eqs {
+            self.free_vars(&equation.projection, &mut vars);
+            self.free_vars(&equation.typ, &mut vars);
+        }
         env.globals.insert(
             name,
             Scheme {
                 quantified: vars.into_iter().collect(),
                 predicates,
+                projection_eqs,
                 typ,
             },
         );
@@ -1964,11 +2034,20 @@ impl<'a, 'db> Infer<'a, 'db> {
                     .collect(),
             })
             .collect();
+        let projection_eqs = scheme
+            .projection_eqs
+            .iter()
+            .map(|equation| ProjectionEquation {
+                projection: self.replace_vars(&equation.projection, &replacements),
+                typ: self.replace_vars(&equation.typ, &replacements),
+            })
+            .collect::<Vec<_>>();
+        self.projection_equations.extend(projection_eqs);
         (typ, predicates)
     }
 
     fn instantiate_annotation(&mut self, annotation: &'a Annotation<'a>) -> Ty<'a> {
-        self.from_ast(annotation.typ, &mut BTreeMap::new())
+        self.instantiate_annotation_with_vars(annotation).0
     }
 
     fn instantiate_annotation_with_vars(
@@ -1977,6 +2056,12 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> (Ty<'a>, BTreeMap<&'a str, Ty<'a>>) {
         let mut vars = BTreeMap::new();
         let typ = self.from_ast(annotation.typ, &mut vars);
+        for equality in annotation.projection_equalities {
+            let projection = self.projection_from_ast(equality.projection, &mut vars);
+            let typ = self.from_ast(equality.typ, &mut vars);
+            self.projection_equations
+                .push(ProjectionEquation { projection, typ });
+        }
         (typ, vars)
     }
 
@@ -2046,6 +2131,46 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
         }
         predicates
+    }
+
+    fn projection_equations_from_constraints(
+        &mut self,
+        constraints: &'a [alder_ast::TypeConstraint<'a>],
+        vars: &BTreeMap<&'a str, Ty<'a>>,
+    ) -> Vec<ProjectionEquation<'a>> {
+        constraints
+            .iter()
+            .filter_map(|constraint| {
+                let alder_ast::TypeConstraint::AssocEq {
+                    projection, typ, ..
+                } = constraint
+                else {
+                    return None;
+                };
+                let mut vars = vars.clone();
+                Some(ProjectionEquation {
+                    projection: self.projection_from_ast(*projection, &mut vars),
+                    typ: self.from_ast(typ, &mut vars),
+                })
+            })
+            .collect()
+    }
+
+    fn projection_from_ast(
+        &mut self,
+        projection: alder_ast::ProjectionType<'a>,
+        vars: &mut BTreeMap<&'a str, Ty<'a>>,
+    ) -> Ty<'a> {
+        Ty::Projection(
+            projection.trait_ref.trait_,
+            projection
+                .trait_ref
+                .args
+                .iter()
+                .map(|argument| self.from_ast(argument, vars))
+                .collect(),
+            projection.assoc,
+        )
     }
 
     fn predicate_from_trait_ref(
@@ -2183,8 +2308,8 @@ impl<'a, 'db> Infer<'a, 'db> {
     }
 
     fn unify(&mut self, left: Ty<'a>, right: Ty<'a>, region: Region) -> Result<(), Error> {
-        let left = self.prune(left);
-        let right = self.prune(right);
+        let left = self.normalize_projection_root(left);
+        let right = self.normalize_projection_root(right);
         if let Some(result) = self.unify_higher_kinded_pattern(&left, &right, region) {
             return result;
         }
@@ -2252,6 +2377,77 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.unify_records(left, left_open, right, right_open, region)
             }
             (left, right) => Err(self.mismatch(region, left, right)),
+        }
+    }
+
+    fn normalize_projection_root(&mut self, typ: Ty<'a>) -> Ty<'a> {
+        let mut current = self.prune(typ);
+        let mut seen = Vec::new();
+        loop {
+            let Ty::Projection(trait_, args, assoc) = current.clone() else {
+                return current;
+            };
+            let args = args
+                .into_iter()
+                .map(|argument| self.prune(argument))
+                .collect::<Vec<_>>();
+            current = Ty::Projection(trait_, args.clone(), assoc);
+            if seen.contains(&current) {
+                return current;
+            }
+            seen.push(current.clone());
+
+            let equations = self.projection_equations.clone();
+            let mut assumed = None;
+            for equation in equations {
+                let projection = match self.prune(equation.projection) {
+                    Ty::Projection(trait_, args, assoc) => Ty::Projection(
+                        trait_,
+                        args.into_iter()
+                            .map(|argument| self.prune(argument))
+                            .collect(),
+                        assoc,
+                    ),
+                    other => other,
+                };
+                if projection == current {
+                    assumed = Some(self.prune(equation.typ));
+                    break;
+                }
+            }
+            if let Some(typ) = assumed {
+                current = typ;
+                continue;
+            }
+
+            let mut matches = Vec::new();
+            for implementation in self.database.instances(trait_) {
+                let template = implementation.trait_ref();
+                if template.args.len() != args.len() {
+                    continue;
+                }
+                let mut bindings = BTreeMap::new();
+                if !template
+                    .args
+                    .iter()
+                    .zip(&args)
+                    .all(|(template, goal)| match_type(template, goal, &mut bindings))
+                {
+                    continue;
+                }
+                if let Some(binding) = implementation
+                    .assoc_bindings()
+                    .iter()
+                    .find(|binding| binding.assoc == assoc)
+                {
+                    matches.push((binding.typ, bindings));
+                }
+            }
+            if matches.len() != 1 {
+                return current;
+            }
+            let (typ, mut bindings) = matches.pop().expect("one match");
+            current = self.from_ast(typ, &mut bindings);
         }
     }
 
@@ -2575,6 +2771,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.collect_kind_arities(argument, &mut arities);
             }
         }
+        for equation in &scheme.projection_eqs {
+            self.collect_kind_arities(&equation.projection, &mut arities);
+            self.collect_kind_arities(&equation.typ, &mut arities);
+        }
         let mut names = BTreeMap::new();
         let typ = self.to_ast(&typ, &mut names);
         let trait_predicates = self
@@ -2590,6 +2790,18 @@ impl<'a, 'db> Infer<'a, 'db> {
                     ),
                 }
             }));
+        let mut projection_equalities = Vec::with_capacity(scheme.projection_eqs.len());
+        for equation in &scheme.projection_eqs {
+            let projection_type = self.to_ast(&equation.projection, &mut names);
+            let Type::Projection(projection) = projection_type.value else {
+                unreachable!("scheme projection equations have projection left sides")
+            };
+            projection_equalities.push(alder_ast::ProjectionEquality {
+                projection,
+                typ: self.to_ast(&equation.typ, &mut names),
+                region: Region::zero(),
+            });
+        }
         let mut params = names.into_iter().collect::<Vec<_>>();
         params.sort_by_key(|(_, name)| generated_type_name_rank(name));
         self.bump.alloc(Annotation {
@@ -2600,7 +2812,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     kind: self.kind_from_arity(arities.get(&id).copied().unwrap_or(0)),
                 })),
             trait_predicates,
-            projection_equalities: &[],
+            projection_equalities: self.bump.alloc_slice_copy(&projection_equalities),
             typ,
         })
     }

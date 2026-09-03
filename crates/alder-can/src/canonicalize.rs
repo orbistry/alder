@@ -738,7 +738,7 @@ fn trait_method_annotation<'a>(
     Ok(bump.alloc(Annotation {
         params: type_params,
         trait_predicates: bump.alloc_slice_copy(&predicates),
-        projection_equalities: &[],
+        projection_equalities: projection_equalities_from_constraints(bump, constraints),
         typ,
     }))
 }
@@ -1259,6 +1259,28 @@ fn trait_refs_from_constraints<'a>(
     bump.alloc_slice_copy(&predicates)
 }
 
+fn projection_equalities_from_constraints<'a>(
+    bump: &'a Bump,
+    constraints: &'a [TypeConstraint<'a>],
+) -> &'a [alder_ast::ProjectionEquality<'a>] {
+    let equalities = constraints
+        .iter()
+        .filter_map(|constraint| match constraint {
+            TypeConstraint::AssocEq {
+                projection,
+                typ,
+                region,
+            } => Some(alder_ast::ProjectionEquality {
+                projection: *projection,
+                typ,
+                region: *region,
+            }),
+            TypeConstraint::Bound { .. } => None,
+        })
+        .collect::<Vec<_>>();
+    bump.alloc_slice_copy(&equalities)
+}
+
 fn canonicalize_trait_fn<'a>(
     bump: &'a Bump,
     env: &mut Env<'a>,
@@ -1343,6 +1365,7 @@ fn canonicalize_impl<'a>(
     }
     let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
     let trait_predicates = trait_refs_from_constraints(bump, constraints);
+    let projection_equalities = projection_equalities_from_constraints(bump, constraints);
     let mut arities = BTreeMap::new();
     for variable in &variables {
         arities.insert(*variable, 0);
@@ -1487,7 +1510,7 @@ fn canonicalize_impl<'a>(
         params,
         constraints,
         trait_predicates,
-        projection_equalities: &[],
+        projection_equalities,
         assoc_bindings: bump.alloc_slice_copy(&assoc_bindings),
         items: bump.alloc_slice_copy(&items),
         synthetic: None,
@@ -1548,41 +1571,52 @@ fn canonicalize_constraints<'a>(
     variables: &BTreeSet<&'a str>,
 ) -> Result<&'a [TypeConstraint<'a>], Vec<Error<'a>>> {
     let mut constraints = Vec::with_capacity(source.len());
+    let mut resolved_bounds: BTreeMap<&'a str, Vec<alder_ast::QualifiedName<'a>>> = BTreeMap::new();
+    for constraint in source {
+        if let alder_source::Constraint::Bound { var, bounds } = constraint {
+            if !variables.contains(var.value) {
+                return Err(vec![Error::new(
+                    var.region,
+                    ErrorKind::Type(TypeError::UnboundVariable { name: var.value }),
+                )]);
+            }
+            for path in *bounds {
+                let name = path.segments.last().expect("trait path is nonempty");
+                let binding = env
+                    .find_trait(
+                        bump,
+                        path.region(),
+                        (path.segments.len() > 1).then(|| path.segments[0].value),
+                        name.value,
+                    )
+                    .map_err(|error| vec![error])?;
+                if binding.arity != 1 {
+                    return Err(vec![Error::new(
+                        path.region(),
+                        ErrorKind::Type(TypeError::BadArity {
+                            name: binding.reference.name,
+                            expected: binding.arity,
+                            actual: 1,
+                        }),
+                    )]);
+                }
+                resolved_bounds
+                    .entry(var.value)
+                    .or_default()
+                    .push(binding.reference);
+            }
+        }
+    }
     for constraint in source {
         constraints.push(match constraint {
             alder_source::Constraint::Bound { var, bounds } => {
-                if !variables.contains(var.value) {
-                    return Err(vec![Error::new(
-                        var.region,
-                        ErrorKind::Type(TypeError::UnboundVariable { name: var.value }),
-                    )]);
-                }
-                let mut traits = Vec::with_capacity(bounds.len());
-                for path in *bounds {
-                    let name = path.segments.last().expect("trait path is nonempty");
-                    let binding = env
-                        .find_trait(
-                            bump,
-                            path.region(),
-                            (path.segments.len() > 1).then(|| path.segments[0].value),
-                            name.value,
-                        )
-                        .map_err(|error| vec![error])?;
-                    if binding.arity != 1 {
-                        return Err(vec![Error::new(
-                            path.region(),
-                            ErrorKind::Type(TypeError::BadArity {
-                                name: binding.reference.name,
-                                expected: binding.arity,
-                                actual: 1,
-                            }),
-                        )]);
-                    }
-                    traits.push(binding.reference);
-                }
+                let traits = resolved_bounds
+                    .get(var.value)
+                    .expect("bounds were resolved in the first pass");
+                debug_assert_eq!(traits.len(), bounds.len());
                 TypeConstraint::Bound {
                     var: *var,
-                    traits: bump.alloc_slice_copy(&traits),
+                    traits: bump.alloc_slice_copy(traits),
                 }
             }
             alder_source::Constraint::AssocEq { var, assoc, typ } => {
@@ -1592,10 +1626,55 @@ fn canonicalize_constraints<'a>(
                         ErrorKind::Type(TypeError::UnboundVariable { name: var.value }),
                     )]);
                 }
+                let mut candidates = resolved_bounds
+                    .get(var.value)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|trait_| {
+                        env.associated_type(*trait_, assoc.value)
+                            .map(|associated| (*trait_, associated))
+                    })
+                    .collect::<Vec<_>>();
+                if candidates.is_empty()
+                    && let Some(projection) = env.find_associated_type(assoc.value)
+                    && matches!(
+                        projection.trait_ref.args,
+                        [argument]
+                            if matches!(argument.value, Type::Var { name, args: [] } if name == var.value)
+                    )
+                {
+                    candidates.push((projection.trait_ref.trait_.0, projection.assoc));
+                }
+                let [(trait_, associated)] = candidates.as_slice() else {
+                    let kind = if candidates.is_empty() {
+                        TypeError::UnknownAssocType { name: assoc.value }
+                    } else {
+                        TypeError::AmbiguousAssocType {
+                            name: assoc.value,
+                            traits: bump.alloc_slice_fill_iter(
+                                candidates.iter().map(|(trait_, _)| alder_ast::TraitId(*trait_)),
+                            ),
+                        }
+                    };
+                    return Err(vec![Error::new(assoc.region, ErrorKind::Type(kind))]);
+                };
+                let argument = bump.alloc(Located::at(
+                    var.region,
+                    Type::Var {
+                        name: var.value,
+                        args: &[],
+                    },
+                ));
                 TypeConstraint::AssocEq {
-                    var: *var,
-                    assoc: *assoc,
+                    projection: alder_ast::ProjectionType {
+                        trait_ref: alder_ast::TraitRef {
+                            trait_: alder_ast::TraitId(*trait_),
+                            args: bump.alloc_slice_copy(&[argument as &Located<Type<'a>>]),
+                        },
+                        assoc: *associated,
+                    },
                     typ: canonicalize_type(bump, env, variables, typ)?,
+                    region: Region::span_across(&var.region, &typ.region),
                 }
             }
         });
@@ -2556,6 +2635,54 @@ mod tests {
             [alder_ast::TypeConstraint::Bound { var, traits }]
                 if var.value == "a" && traits.len() == 1 && traits[0].name == "Show"
         ));
+    }
+
+    #[test]
+    fn associated_equality_resolves_to_semantic_projection() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                trait Iterator[i] {
+                    type Item
+                    fn next(value: i) -> Item
+                }
+                fn count(value: i) -> Number where i: Iterator, i.Item == Number { 0 }
+            "#},
+        );
+        let ItemKind::Fn(function) = &result.module.items[1].value.kind else {
+            panic!("expected function")
+        };
+        let [
+            _,
+            alder_ast::TypeConstraint::AssocEq {
+                projection, typ, ..
+            },
+        ] = function.constraints
+        else {
+            panic!("expected an associated equality")
+        };
+        assert_eq!(projection.trait_ref.trait_.0.name, "Iterator");
+        assert_eq!(projection.assoc.name, "Item");
+        assert!(matches!(typ.value, Type::Named { reference, .. } if reference.name == "Number"));
+    }
+
+    #[test]
+    fn associated_equality_requires_a_matching_bound() {
+        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+            trait Iterator[i] { type Item }
+            trait Show[a] { fn show(value: a) -> String }
+            fn bad(value: i) where i: Show, i.Item == Number { value }
+        "#}));
+    }
+
+    #[test]
+    fn associated_equality_rejects_ambiguous_associated_names() {
+        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+            trait First[a] { type Item }
+            trait Second[a] { type Item }
+            fn bad(value: a) where a: First + Second, a.Item == Number { value }
+        "#}));
     }
 
     #[test]

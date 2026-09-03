@@ -1,4 +1,4 @@
-use alder_ast::{ModuleId, Namespace, QualifiedName};
+use alder_ast::{ModuleId, Namespace, QualifiedName, TraitId};
 use alder_region::Region;
 
 #[derive(Clone, Debug)]
@@ -123,6 +123,13 @@ pub enum TypeError<'a> {
         trait_name: &'a str,
         name: &'a str,
         item_kind: &'static str,
+    },
+    UnknownAssocType {
+        name: &'a str,
+    },
+    AmbiguousAssocType {
+        name: &'a str,
+        traits: &'a [TraitId<'a>],
     },
     InvalidHole,
 }
