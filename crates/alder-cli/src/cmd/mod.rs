@@ -148,6 +148,7 @@ mod tests {
             dependency.join("src/api.ald"),
             indoc::indoc! {r#"
                 pub enum Token { Token }
+                pub enum Badge { Badge }
                 pub trait Display[a] {
                     fn display(value: a) -> String
                 }
@@ -158,11 +159,21 @@ mod tests {
             dependency.join("src/instances.ald"),
             indoc::indoc! {r#"
                 import ~/api.{ Token, Display }
+                impl Display[Array[a]] where a: Display {
+                    fn display(value: Array[a]) -> String { "array" }
+                }
                 impl Display[Token] {
                     fn display(value: Token) -> String { "token" }
                 }
-                impl Display[Array[a]] where a: Display {
-                    fn display(value: Array[a]) -> String { "array" }
+            "#},
+        )
+        .unwrap();
+        std::fs::write(
+            dependency.join("src/alternate.ald"),
+            indoc::indoc! {r#"
+                import ~/api.{ Badge, Display }
+                impl Display[Badge] {
+                    fn display(value: Badge) -> String { "badge" }
                 }
             "#},
         )
@@ -187,9 +198,13 @@ mod tests {
         std::fs::write(
             application.join("src/main.ald"),
             indoc::indoc! {r#"
-                import @vendor/widgets/api.{ Token, display }
+                import @vendor/widgets/api.{ Badge, Token, display }
                 pub fn render(value: Array[Token]) -> String { display(value) }
-                pub fn main() { assert(render([Token::Token]) == "array") }
+                pub fn render_badge(value: Badge) -> String { display(value) }
+                pub fn main() {
+                    assert(render([Token::Token]) == "array")
+                    assert(render_badge(Badge::Badge) == "badge")
+                }
             "#},
         )
         .unwrap();
@@ -204,6 +219,22 @@ mod tests {
                 .artifacts
                 .values()
                 .any(|artifact| artifact.module_id == "alder://pkg/vendor/widgets/instances.mjs")
+        );
+        let application_module = compiled
+            .result
+            .artifacts
+            .values()
+            .find(|artifact| artifact.module_id == "alder://app/main.mjs")
+            .unwrap();
+        assert!(
+            application_module
+                .dependencies
+                .contains(&"alder://pkg/vendor/widgets/instances.mjs".to_owned())
+        );
+        assert!(
+            application_module
+                .dependencies
+                .contains(&"alder://pkg/vendor/widgets/alternate.mjs".to_owned())
         );
         let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
             .await
