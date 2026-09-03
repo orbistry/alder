@@ -171,6 +171,8 @@ test "higher-kinded trait dictionaries dispatch" {
         Option.some(value + 1)
     })
     assert traversed == Option.some([41, 42])
+    let first: Option[Number] = next([42])
+    assert first == Option.some(42)
     let result = mapped_result()?
     assert result == 42
 }

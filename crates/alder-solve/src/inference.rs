@@ -305,6 +305,7 @@ fn resolve_intrinsic<'a>(
             }
             _ => None,
         },
+        ("Iterator", Some("Array")) => Some(Intrinsic::IteratorArray),
         _ => None,
     };
     if let Some(intrinsic) = intrinsic {
@@ -778,11 +779,11 @@ impl<'a, 'db> Infer<'a, 'db> {
         let mut obligations = std::mem::take(&mut self.obligations);
         for obligation in &mut obligations {
             for argument in &mut obligation.predicate.args {
-                *argument = self.prune(argument.clone());
+                *argument = self.normalize_type(argument.clone());
             }
             for given in &mut obligation.givens {
                 for argument in &mut given.predicate.args {
-                    *argument = self.prune(argument.clone());
+                    *argument = self.normalize_type(argument.clone());
                 }
             }
         }
@@ -2712,6 +2713,63 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             let (typ, mut bindings) = matches.pop().expect("one match");
             current = self.from_ast(typ, &mut bindings);
+        }
+    }
+
+    fn normalize_type(&mut self, typ: Ty<'a>) -> Ty<'a> {
+        match self.normalize_projection_root(typ) {
+            Ty::App(head, args) => {
+                let head = self.normalize_type(*head);
+                let args = args
+                    .into_iter()
+                    .map(|argument| self.normalize_type(argument))
+                    .collect();
+                self.apply(head, args)
+            }
+            Ty::Partial(constructor, slots) => Ty::Partial(
+                constructor,
+                slots
+                    .into_iter()
+                    .map(|slot| match slot {
+                        TySlot::Hole(index) => TySlot::Hole(index),
+                        TySlot::Fixed(typ) => TySlot::Fixed(self.normalize_type(typ)),
+                    })
+                    .collect(),
+            ),
+            Ty::Projection(trait_, args, assoc) => {
+                let args = args
+                    .into_iter()
+                    .map(|argument| self.normalize_type(argument))
+                    .collect::<Vec<_>>();
+                let projection = Ty::Projection(trait_, args, assoc);
+                let normalized = self.normalize_projection_root(projection.clone());
+                if normalized == projection {
+                    projection
+                } else {
+                    self.normalize_type(normalized)
+                }
+            }
+            Ty::Fn(params, ret) => Ty::Fn(
+                params
+                    .into_iter()
+                    .map(|param| self.normalize_type(param))
+                    .collect(),
+                Box::new(self.normalize_type(*ret)),
+            ),
+            Ty::Tuple(items) => Ty::Tuple(
+                items
+                    .into_iter()
+                    .map(|item| self.normalize_type(item))
+                    .collect(),
+            ),
+            Ty::Record(fields, open) => Ty::Record(
+                fields
+                    .into_iter()
+                    .map(|(name, (presence, typ))| (name, (presence, self.normalize_type(typ))))
+                    .collect(),
+                open,
+            ),
+            other => other,
         }
     }
 

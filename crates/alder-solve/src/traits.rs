@@ -348,6 +348,7 @@ impl<'a> TraitDatabase<'a> {
             "Applicative",
             "Monad",
             "Traversable",
+            "Iterator",
         ] {
             let id = builtin_trait_id(name);
             let higher_kinded = matches!(name, "Functor" | "Applicative" | "Monad" | "Traversable");
@@ -362,6 +363,8 @@ impl<'a> TraitDatabase<'a> {
             let params = bump.alloc_slice_copy(&[TypeParam {
                 name: builtin_name(if name == "Traversable" {
                     "t"
+                } else if name == "Iterator" {
+                    "i"
                 } else if higher_kinded {
                     "f"
                 } else {
@@ -379,17 +382,85 @@ impl<'a> TraitDatabase<'a> {
                 "Monad" => bump.alloc_slice_copy(&[builtin_superclass(bump, "Applicative", "f")]),
                 _ => &[],
             };
+            let associated_types: &'a [AssocTypeDecl<'a>] = if name == "Iterator" {
+                bump.alloc_slice_copy(&[AssocTypeDecl {
+                    id: alder_ast::AssocTypeId {
+                        trait_: id,
+                        index: 0,
+                        name: "Item",
+                    },
+                    kind: Kind::Type,
+                    region: Region::zero(),
+                }])
+            } else {
+                &[]
+            };
             self.traits.insert(
                 id,
                 TraitHeader {
                     id,
                     params,
                     superclasses,
-                    associated_types: &[],
+                    associated_types,
                     methods: &[],
                 },
             );
         }
+        self.insert_builtin_array_iterator(bump);
+    }
+
+    fn insert_builtin_array_iterator(&mut self, bump: &'a Bump) {
+        let iterator = builtin_trait_id("Iterator");
+        let parameter = TypeParam {
+            name: builtin_name("a"),
+            kind: Kind::Type,
+        };
+        let item = bump.alloc(Located::at_zero(Type::Var {
+            name: "a",
+            args: &[],
+        }));
+        let array = bump.alloc(Located::at_zero(Type::Named {
+            reference: QualifiedName {
+                module: ModuleId {
+                    package: PackageId::Builtin,
+                    path: &[],
+                },
+                name: "Array",
+            },
+            args: bump.alloc_slice_copy(&[item as &Located<Type<'a>>]),
+        }));
+        let implementation = bump.alloc(InterfaceImpl {
+            id: ImplId {
+                module: ModuleId {
+                    package: PackageId::Builtin,
+                    path: &[],
+                },
+                origin: alder_ast::ImplOrigin::Builtin { index: 0 },
+            },
+            params: bump.alloc_slice_copy(&[parameter]),
+            trait_ref: TraitRef {
+                trait_: iterator,
+                args: bump.alloc_slice_copy(&[array as &Located<Type<'a>>]),
+            },
+            trait_predicates: &[],
+            projection_equalities: &[],
+            assoc_bindings: bump.alloc_slice_copy(&[AssocBinding {
+                assoc: alder_ast::AssocTypeId {
+                    trait_: iterator,
+                    index: 0,
+                    name: "Item",
+                },
+                typ: item,
+                region: Region::zero(),
+            }]),
+            dictionary_symbol: "$dict$Iterator$Array",
+            dictionary_kind: DictionaryKind::Singleton,
+            methods: &[],
+        });
+        self.instances
+            .entry(iterator)
+            .or_default()
+            .push(InstanceHeader::Foreign(implementation));
     }
 }
 

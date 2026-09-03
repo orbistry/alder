@@ -115,6 +115,7 @@ pub enum Intrinsic {
     TraversableArray,
     TraversableOption,
     TraversableResult,
+    IteratorArray,
 }
 
 #[derive(Clone, Debug)]

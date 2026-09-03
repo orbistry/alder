@@ -18,6 +18,7 @@ mod tests {
             "$optionFlatMap",
             "$resultPure",
             "$arrayTraverse",
+            "$arrayNext",
             "$hash",
             "$matchFailure",
             "$optionBox",

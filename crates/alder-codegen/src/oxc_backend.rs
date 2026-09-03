@@ -2453,6 +2453,10 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.kernel.insert(traverse);
                 properties.push(self.js.property("traverse", self.js.identifier(traverse)));
             }
+            Intrinsic::IteratorArray => {
+                self.kernel.insert("$arrayNext");
+                properties.push(self.js.property("next", self.js.identifier("$arrayNext")));
+            }
         }
         self.js.object(properties)
     }
@@ -2574,7 +2578,6 @@ mod tests {
             "function $v_main() {\n\tconst $t0 = 40;\n\treturn $t0 + 2;\n}\nexport { $v_main as main };\n"
         );
     }
-
     #[test]
     fn lowers_the_existing_codegen_surface_without_source_fragments() {
         for source in [

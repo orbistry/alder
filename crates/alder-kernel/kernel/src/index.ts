@@ -91,6 +91,10 @@ export function $arrayTraverse(applicative, values, transform) {
     return result;
 }
 
+export function $arrayNext(values) {
+    return values.length === 0 ? null : $optionSome(values[0]);
+}
+
 export function $optionTraverse(applicative, value, transform) {
     if (value === null) return applicative.pure(null);
     return applicative.$super0.map(transform(value), $optionSome);

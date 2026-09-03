@@ -287,6 +287,7 @@ impl<'a> Env<'a> {
         self.add_builtin_applicative(bump);
         self.add_builtin_monad(bump);
         self.add_builtin_traversable(bump);
+        self.add_builtin_iterator(bump);
     }
 
     fn add_builtin_functor(&mut self, bump: &'a Bump) {
@@ -544,6 +545,79 @@ impl<'a> Env<'a> {
                 region: Region::zero(),
                 has_default: false,
             }]),
+        );
+    }
+
+    fn add_builtin_iterator(&mut self, bump: &'a Bump) {
+        let trait_id = builtin_trait_id("Iterator");
+        let associated = alder_ast::AssocTypeId {
+            trait_: trait_id,
+            index: 0,
+            name: "Item",
+        };
+        let i = type_variable(bump, "i");
+        let projection = bump.alloc(Located::at_zero(Type::Projection(
+            alder_ast::ProjectionType {
+                trait_ref: alder_ast::TraitRef {
+                    trait_: trait_id,
+                    args: bump.alloc_slice_copy(&[i]),
+                },
+                assoc: associated,
+            },
+        ))) as &'a Located<Type<'a>>;
+        let annotation = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
+                name: Located::at_zero("i"),
+                kind: alder_ast::Kind::Type,
+            }]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[i]),
+                ret: bump.alloc(Located::at_zero(Type::Named {
+                    reference: QualifiedName {
+                        module: ModuleId {
+                            package: PackageId::Builtin,
+                            path: &[],
+                        },
+                        name: "Option",
+                    },
+                    args: bump.alloc_slice_copy(&[projection]),
+                })),
+            })),
+        });
+        let method = MethodBinding {
+            id: MethodId {
+                trait_: trait_id,
+                index: 0,
+                name: "next",
+            },
+            annotation,
+            region: Region::zero(),
+            has_default: false,
+        };
+        let methods = bump.alloc_slice_copy(&[method]);
+        self.traits.insert(
+            "Iterator",
+            Candidate::Unique(TraitBinding {
+                reference: trait_id.0,
+                arity: 1,
+                region: Region::zero(),
+                associated_types: bump.alloc_slice_copy(&[associated]),
+                methods,
+            }),
+        );
+        self.scopes[0].values.insert(
+            "next",
+            ValueBinding {
+                reference: ValueRef::TraitMethod {
+                    method: method.id,
+                    annotation,
+                },
+                region: Region::zero(),
+                mutable: false,
+                annotation: Some(annotation),
+            },
         );
     }
 

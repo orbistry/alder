@@ -1077,6 +1077,32 @@ fn builtin_traversable_passes_method_level_applicative_evidence() {
 }
 
 #[test]
+fn builtin_array_iterator_normalizes_its_item_projection() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn first(values: Array[Number]) -> Option[Number] { next(values) }
+            fn generic(value: i) -> Option[Number]
+                where i: Iterator, i.Item == Number
+            {
+                next(value)
+            }
+        "#},
+    )
+    .expect("Array's Iterator Item projection normalizes to its element type");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, method: Some(method) }
+            if method.name == "next"
+                && matches!(
+                    dictionaries.as_slice(),
+                    [alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::IteratorArray)]
+                )
+    )));
+}
+
+#[test]
 fn repeated_higher_kinded_pattern_argument_is_rejected() {
     let bump = Bump::new();
     let errors = infer(
