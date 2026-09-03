@@ -2,6 +2,7 @@
 source: crates/alder-codegen/src/lib.rs
 expression: "emit(\"pub enum Shape { Point, Circle(Number), Rect { width: Number, height: Number } }\")"
 ---
+import { $equal } from "alder:kernel";
 const $c_Shape_Point = Object["freeze"]({ "$": "Point" });
 function $c_Shape_Circle($a0) {
 	return {
@@ -16,4 +17,9 @@ function $c_Shape_Rect(width, height) {
 		"height": height
 	};
 }
-export { $c_Shape_Circle, $c_Shape_Point, $c_Shape_Rect };
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a, $b) => {
+	return $equal($a, $b);
+};
+Object["freeze"]($dict$Eq$0);
+export { $c_Shape_Circle, $c_Shape_Point, $c_Shape_Rect, $dict$Eq$0 };

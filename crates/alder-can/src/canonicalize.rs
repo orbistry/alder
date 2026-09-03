@@ -50,15 +50,28 @@ pub fn canonicalize<'a>(
     }
 
     let mut items = Vec::new();
+    let mut automatic_impls = Vec::new();
     for (item_ordinal, item) in source.items.iter().enumerate() {
         if matches!(item.value.kind, SourceItemKind::Import(_)) {
             continue;
         }
         match canonicalize_item(bump, &mut env, item, &enums, item_ordinal as u32) {
-            Ok(item) => items.push(item),
+            Ok(canonical_item) => {
+                items.push(canonical_item);
+                if let ItemKind::Enum(enum_) = &canonical_item.value.kind {
+                    automatic_impls.push(automatic_eq_impl(
+                        bump,
+                        context.home,
+                        enum_,
+                        item_ordinal as u32,
+                        canonical_item.region,
+                    ));
+                }
+            }
             Err(mut item_errors) => errors.append(&mut item_errors),
         }
     }
+    items.extend(automatic_impls);
     if !errors.is_empty() {
         return Err(errors);
     }
@@ -76,6 +89,75 @@ pub fn canonicalize<'a>(
         module,
         warnings: &[],
     })
+}
+
+fn automatic_eq_impl<'a>(
+    bump: &'a Bump,
+    home: ModuleId<'a>,
+    enum_: &'a EnumDecl<'a>,
+    type_ordinal: u32,
+    region: Region,
+) -> &'a Located<Item<'a>> {
+    let params = bump.alloc_slice_fill_iter(enum_.params.iter().map(|name| alder_ast::TypeParam {
+        name: *name,
+        kind: alder_ast::Kind::Type,
+    }));
+    let arguments = bump.alloc_slice_fill_iter(enum_.params.iter().map(|name| {
+        bump.alloc(Located::at(
+            name.region,
+            Type::Var {
+                name: name.value,
+                args: &[],
+            },
+        )) as &Located<Type<'a>>
+    }));
+    let subject = bump.alloc(Located::at(
+        region,
+        Type::Named {
+            reference: enum_.name,
+            args: arguments,
+        },
+    ));
+    let eq = alder_ast::TraitId(QualifiedName {
+        module: ModuleId {
+            package: alder_ast::PackageId::Builtin,
+            path: &[],
+        },
+        name: "Eq",
+    });
+    let trait_predicates =
+        bump.alloc_slice_fill_iter(arguments.iter().map(|argument| alder_ast::TraitRef {
+            trait_: eq,
+            args: bump.alloc_slice_copy(&[*argument]),
+        }));
+    let trait_ref = alder_ast::TraitRef {
+        trait_: eq,
+        args: bump.alloc_slice_copy(&[subject as &Located<Type<'a>>]),
+    };
+    bump.alloc(Located::at(
+        region,
+        Item {
+            visibility: Visibility::Private,
+            attributes: &[],
+            kind: ItemKind::Impl(bump.alloc(ImplDecl {
+                id: alder_ast::ImplId {
+                    module: home,
+                    origin: alder_ast::ImplOrigin::AutomaticEq { type_ordinal },
+                },
+                trait_: eq.0,
+                args: trait_ref.args,
+                trait_ref,
+                params,
+                constraints: &[],
+                trait_predicates,
+                projection_equalities: &[],
+                assoc_bindings: &[],
+                items: &[],
+                synthetic: Some(alder_ast::DeriveKind::Eq),
+                region,
+            })),
+        },
+    ))
 }
 
 fn load_imports<'a>(

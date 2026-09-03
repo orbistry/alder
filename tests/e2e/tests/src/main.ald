@@ -76,6 +76,7 @@ test "trait dictionaries dispatch" {
 }
 
 test "higher-kinded trait dictionaries dispatch" {
+    assert Maybe::Some(1) == Maybe::Some(1)
     let mapped = map(Maybe::Some(41), fn(value) { value + 1 })
     assert match mapped {
         Maybe::Some(value) => value == 42,

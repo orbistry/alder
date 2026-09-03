@@ -426,6 +426,9 @@ impl<'src, 'js> Emitter<'src, 'js> {
         implementation: &alder_ast::ImplDecl<'src>,
         dictionary_symbol: &str,
     ) -> Result<ArenaVec<'js, Statement<'js>>, Error> {
+        if implementation.synthetic == Some(alder_ast::DeriveKind::Eq) {
+            return Ok(self.automatic_eq_dictionary(implementation, dictionary_symbol));
+        }
         let mut declarations = self.js.vec();
         let prerequisite_args = (0..implementation.trait_predicates.len())
             .map(|index| format!("$dict{index}"))
@@ -584,6 +587,58 @@ impl<'src, 'js> Emitter<'src, 'js> {
             ));
         }
         Ok(declarations)
+    }
+
+    fn automatic_eq_dictionary(
+        &mut self,
+        implementation: &alder_ast::ImplDecl<'src>,
+        dictionary_symbol: &str,
+    ) -> ArenaVec<'js, Statement<'js>> {
+        self.kernel.insert("$equal");
+        let prerequisite_args = (0..implementation.trait_predicates.len())
+            .map(|index| format!("$dict{index}"))
+            .collect::<Vec<_>>();
+        let self_name = if prerequisite_args.is_empty() {
+            dictionary_symbol
+        } else {
+            "$self"
+        };
+        let mut body = self.js.vec();
+        body.push(self.js.variable(
+            VariableDeclarationKind::Const,
+            self_name,
+            Some(self.js.object(self.js.vec())),
+        ));
+        let args = vec!["$a".to_owned(), "$b".to_owned()];
+        let equal = self.js.call(
+            self.js.identifier("$equal"),
+            args.iter().map(|argument| self.js.identifier(argument)),
+        );
+        let mut equal_body = self.js.vec();
+        equal_body.push(self.js.return_statement(equal));
+        let target = self.js.member(self.js.identifier(self_name), "eq");
+        let assignment = self.js.assignment(
+            target,
+            AssignmentOperator::Assign,
+            self.js.arrow(&args, equal_body, false),
+        );
+        body.push(self.js.expression_statement(assignment));
+        let frozen = self.js.call(
+            self.js.member(self.js.identifier("Object"), "freeze"),
+            [self.js.identifier(self_name)],
+        );
+        let mut declarations = self.js.vec();
+        if prerequisite_args.is_empty() {
+            body.push(self.js.expression_statement(frozen));
+            declarations.extend(body);
+        } else {
+            body.push(self.js.return_statement(frozen));
+            declarations.push(
+                self.js
+                    .function(dictionary_symbol, &prerequisite_args, body, false),
+            );
+        }
+        declarations
     }
 
     fn top_let(

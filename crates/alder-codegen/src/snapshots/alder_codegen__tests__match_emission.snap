@@ -2,7 +2,7 @@
 source: crates/alder-codegen/src/lib.rs
 expression: "emit(\"enum Maybe[a] { Nothing, Just(a) }\\npub fn unwrap(value) { match value { Maybe::Just(x) => x, Maybe::Nothing => 0 } }\")"
 ---
-import { $matchFailure } from "alder:kernel";
+import { $equal, $matchFailure } from "alder:kernel";
 const $c_Maybe_Nothing = Object["freeze"]({ "$": "Nothing" });
 function $c_Maybe_Just($a0) {
 	return {
@@ -28,4 +28,11 @@ function $v_unwrap($a0) {
 	}
 	return $t1;
 }
-export { $v_unwrap as unwrap };
+function $dict$Eq$0($dict0) {
+	const $self = {};
+	$self["eq"] = ($a, $b) => {
+		return $equal($a, $b);
+	};
+	return Object["freeze"]($self);
+}
+export { $dict$Eq$0, $v_unwrap as unwrap };
