@@ -1160,6 +1160,54 @@ fn higher_kinded_application_is_preserved_and_specialized() {
 }
 
 #[test]
+fn higher_kinded_unification_recovers_partial_result() {
+    assert_inference_snapshot! {r#"
+        fn adapt(value: f[a]) -> f[a] { value }
+        fn specialize(value: Result[Number, String]) { adapt(value) }
+    "#};
+}
+
+#[test]
+fn higher_kinded_unification_preserves_two_hole_order() {
+    assert_inference_snapshot! {r#"
+        fn adapt(value: f[a, b], first: a, second: b) -> f[a, b] { value }
+        fn specialize(value: Result[Number, String]) {
+            adapt(value, 1, "second")
+        }
+    "#};
+}
+
+#[test]
+fn higher_kinded_unification_rejects_inconsistent_partial_sections() {
+    assert_inference_error_snapshot! {r#"
+        fn combine(left: f[a], right: f[b]) -> f[a] { left }
+        fn invalid(
+            left: Result[Number, String],
+            right: Result[Bool, Bool],
+        ) {
+            combine(left, right)
+        }
+    "#};
+}
+
+#[test]
+fn higher_kinded_unification_rejects_an_occurs_cycle() {
+    assert_inference_error_snapshot! {r#"
+        fn impossible(value: f[a]) -> a { value }
+    "#};
+}
+
+#[test]
+fn higher_kinded_unification_expands_transparent_aliases() {
+    assert_inference_snapshot! {r#"
+        type Wrapped[a, e] = Result[a, e]
+
+        fn adapt(value: f[a]) -> f[a] { value }
+        fn specialize(value: Wrapped[Number, String]) { adapt(value) }
+    "#};
+}
+
+#[test]
 fn builtin_functor_instances_cover_array_option_and_partial_result() {
     let bump = Bump::new();
     let solved = solve_input(
