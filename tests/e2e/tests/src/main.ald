@@ -101,6 +101,11 @@ enum Phase {
     Alpha,
 }
 
+#[derive(Show, Hash, Json)]
+enum Phantom[a, b] {
+    Present(a),
+}
+
 impl Functor[Maybe] {
     fn map(value: Maybe[a], transform: fn(a) -> b) -> Maybe[b] {
         match value {
@@ -165,6 +170,12 @@ test "derived dictionaries execute" {
     assert show(Phase::Alpha) == "Alpha"
     let phase_hash: BigInt = hash(Phase::Alpha)
     assert phase_hash == hash(Phase::Alpha)
+    let phantom: Phantom[Number, fn(Number) -> Number] = Phantom::Present(42)
+    assert show(phantom) == "Present(42)"
+    let phantom_hash: BigInt = hash(phantom)
+    assert phantom_hash == hash(phantom)
+    let decoded_phantom: Phantom[Number, fn(Number) -> Number] = decode(encode(phantom))?
+    assert decoded_phantom == phantom
     let decoded = decode(encode(Phase::Beta))?
     assert decoded == Phase::Beta
     let expected = Phase::Alpha

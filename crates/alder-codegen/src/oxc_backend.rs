@@ -2382,6 +2382,31 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.kernel.insert(symbol);
                 properties.push(self.js.property("map", self.js.identifier(symbol)));
             }
+            Intrinsic::ShowKernel => {
+                self.kernel.insert("$show");
+                properties.push(self.js.property("show", self.js.identifier("$show")));
+            }
+            Intrinsic::HashKernel => {
+                self.kernel.insert("$equal");
+                self.kernel.insert("$hash");
+                let mut equality_properties = self.js.vec();
+                equality_properties.push(self.js.property("eq", self.js.identifier("$equal")));
+                let equality = self.js.object(equality_properties);
+                properties.push(self.js.property("$super0", equality));
+                properties.push(self.js.property("hash", self.js.identifier("$hash")));
+            }
+            Intrinsic::JsonKernel => {
+                self.kernel.insert("$jsonEncode");
+                self.kernel.insert("$jsonDecode");
+                properties.push(
+                    self.js
+                        .property("encode", self.js.identifier("$jsonEncode")),
+                );
+                properties.push(
+                    self.js
+                        .property("decode", self.js.identifier("$jsonDecode")),
+                );
+            }
         }
         self.js.object(properties)
     }

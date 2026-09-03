@@ -103,6 +103,9 @@ pub enum Intrinsic {
     FunctorArray,
     FunctorOption,
     FunctorResult,
+    ShowKernel,
+    HashKernel,
+    JsonKernel,
 }
 
 #[derive(Clone, Debug)]

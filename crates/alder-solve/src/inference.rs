@@ -257,12 +257,18 @@ fn resolve_intrinsic<'a>(
     origin: Region,
     stack: &mut Vec<(TraitId<'a>, String)>,
 ) -> Result<Option<Evidence<'a>>, SolveTraitError<'a>> {
+    if predicate.trait_.0.module.package != PackageId::Builtin {
+        return Ok(None);
+    }
     let Some(subject) = predicate.args.first() else {
         return Ok(None);
     };
     let name = predicate.trait_.0.name;
     let nominal = nominal_name(subject);
     let intrinsic = match (name, nominal) {
+        ("Show", Some("Number" | "String" | "Bool" | "BigInt")) => Some(Intrinsic::ShowKernel),
+        ("Hash", Some("Number" | "String" | "Bool" | "BigInt")) => Some(Intrinsic::HashKernel),
+        ("Json", Some("Number" | "String" | "Bool" | "BigInt")) => Some(Intrinsic::JsonKernel),
         ("Eq", Some("Number")) => Some(Intrinsic::EqNumber),
         ("Eq", Some("String")) => Some(Intrinsic::EqString),
         ("Eq", Some("Bool")) => Some(Intrinsic::EqBool),
@@ -293,6 +299,43 @@ fn resolve_intrinsic<'a>(
         _ => None,
     };
     if let Some(intrinsic) = intrinsic {
+        return Ok(Some(Evidence::Intrinsic(intrinsic)));
+    }
+    if matches!(subject, Ty::Unit) {
+        let intrinsic = match name {
+            "Show" => Some(Intrinsic::ShowKernel),
+            "Hash" => Some(Intrinsic::HashKernel),
+            "Json" => Some(Intrinsic::JsonKernel),
+            _ => None,
+        };
+        if intrinsic.is_some() {
+            return Ok(intrinsic.map(Evidence::Intrinsic));
+        }
+    }
+    if matches!(name, "Show" | "Hash" | "Json")
+        && let Some((reference, arguments)) = nominal_parts(subject)
+        && reference.module.package == PackageId::Builtin
+        && matches!(reference.name, "Array" | "Option" | "Result")
+    {
+        for argument in arguments {
+            resolve_predicate(
+                bump,
+                database,
+                &Predicate {
+                    trait_: predicate.trait_,
+                    args: vec![argument.clone()],
+                },
+                givens,
+                origin,
+                stack,
+            )?;
+        }
+        let intrinsic = match name {
+            "Show" => Intrinsic::ShowKernel,
+            "Hash" => Intrinsic::HashKernel,
+            "Json" => Intrinsic::JsonKernel,
+            _ => unreachable!(),
+        };
         return Ok(Some(Evidence::Intrinsic(intrinsic)));
     }
     if name == "Eq" && matches!(subject, Ty::Unit) {
