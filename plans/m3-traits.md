@@ -77,6 +77,9 @@ static resolution wherever the type is known.
   loads the validated interface set plus complete instance index once for each
   actually imported path dependency. Trait databases deduplicate repeated
   headers by stable `ImplId`.
+- Path dependency source modules join build/test compilations so evidence-only
+  imports—including factories selected from an otherwise unimported sibling
+  module—remain direct in-memory Oxc AST edges through Rolldown bundling.
 - Derived dictionaries consume solver-selected evidence for every payload
   field. Evidence is retained through nested builtin containers, and generated
   Eq dictionaries are initialized before dictionaries that use them as a

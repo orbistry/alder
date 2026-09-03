@@ -82,6 +82,9 @@ pub enum BuildMode {
 
 #[derive(Clone, Debug, Default)]
 pub struct BuildDependencies {
+    /// Dependency source modules that must participate in this compilation so
+    /// generated evidence imports retain in-memory Oxc ASTs through bundling.
+    pub source_modules: Vec<Url>,
     pub module_packages: BTreeMap<Url, OwnedPackageId>,
     pub interfaces: Vec<InterfaceFile>,
     pub package_instance_indexes: Vec<PackageInstanceIndexFile>,
@@ -1337,6 +1340,7 @@ mod tests {
                 module_packages: BTreeMap::new(),
                 interfaces: vec![api],
                 package_instance_indexes: vec![index],
+                ..BuildDependencies::default()
             },
         )
         .await;

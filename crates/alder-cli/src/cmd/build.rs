@@ -60,7 +60,7 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
     let project = Project::load(path).await.into_diagnostic()?;
     let target = project_target(&project.config)?;
     let db = Arc::new(Mutex::new(Database::new(FileSystemSource::new())));
-    let modules = project
+    let mut modules = project
         .discover_modules(&*db.lock().await)
         .await
         .into_diagnostic()?;
@@ -71,6 +71,9 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
         .build_dependencies(&mut *db.lock().await, &modules, mode == BuildMode::Test)
         .await
         .into_diagnostic()?;
+    modules.extend(dependencies.source_modules.iter().cloned());
+    modules.sort();
+    modules.dedup();
     let graph = build_graph(db.clone(), &modules).await.into_diagnostic()?;
     let result = build_with_dependencies(db, &graph, mode, dependencies).await;
     for warning in &result.warnings {

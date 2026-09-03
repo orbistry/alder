@@ -183,6 +183,27 @@ impl Project {
                             .join(name.project())
                     }
                 };
+                if root.join("alder.jsonc").is_file() {
+                    let dependency_project = Project::load(&root).await?;
+                    let dependency_modules = dependency_project.discover_modules(db).await?;
+                    let declared_package = dependency_project
+                        .members
+                        .first()
+                        .map(ProjectMember::package_id);
+                    if declared_package.as_ref() != Some(&package) {
+                        return Err(DriverError::IncompatibleInterface {
+                            reason: "path dependency declares a different package identity"
+                                .to_owned(),
+                        });
+                    }
+                    result.module_packages.extend(
+                        dependency_modules
+                            .iter()
+                            .cloned()
+                            .map(|module| (module, package.clone())),
+                    );
+                    result.source_modules.extend(dependency_modules);
+                }
                 let cache = InterfaceCache::new(&root);
                 let index = cache.load_package_index_checked(&package)?;
                 if index.package != package {

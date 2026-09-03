@@ -161,6 +161,9 @@ mod tests {
                 impl Display[Token] {
                     fn display(value: Token) -> String { "token" }
                 }
+                impl Display[Array[a]] where a: Display {
+                    fn display(value: Array[a]) -> String { "array" }
+                }
             "#},
         )
         .unwrap();
@@ -185,15 +188,27 @@ mod tests {
             application.join("src/main.ald"),
             indoc::indoc! {r#"
                 import @vendor/widgets/api.{ Token, display }
-                pub fn render(value: Token) -> String { display(value) }
+                pub fn render(value: Array[Token]) -> String { display(value) }
+                pub fn main() { assert(render([Token::Token]) == "array") }
             "#},
         )
         .unwrap();
-        let compiled = super::build::compile(&application, BuildMode::Check)
+        let compiled = super::build::compile_ephemeral(&application, BuildMode::Build)
             .await
             .unwrap();
 
         assert!(compiled.result.is_success());
+        assert!(
+            compiled
+                .result
+                .artifacts
+                .values()
+                .any(|artifact| artifact.module_id == "alder://pkg/vendor/widgets/instances.mjs")
+        );
+        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+            .await
+            .unwrap();
+        assert_eq!(alder_runtime::execute(bundle, Vec::new()).await.unwrap(), 0);
         std::fs::remove_dir_all(root).unwrap();
     }
 }
