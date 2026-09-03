@@ -115,4 +115,85 @@ mod tests {
         assert!(root.join(".alder/instances/application.aldi").is_file());
         std::fs::remove_dir_all(root).unwrap();
     }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cli_loads_a_path_dependency_package_instance_index() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-cli-dependency-test-{}-{nonce}",
+            std::process::id()
+        ));
+        let dependency = root.join("widgets");
+        let application = root.join("app");
+        std::fs::create_dir_all(dependency.join("src")).unwrap();
+        std::fs::create_dir_all(application.join("src")).unwrap();
+        std::fs::write(
+            dependency.join("alder.jsonc"),
+            indoc::indoc! {r#"
+                {
+                  "type": "package",
+                  "name": "vendor/widgets",
+                  "version": "0.1.0",
+                  "summary": "Trait fixtures",
+                  "license": "MIT",
+                  "target": "standalone"
+                }
+            "#},
+        )
+        .unwrap();
+        std::fs::write(
+            dependency.join("src/api.ald"),
+            indoc::indoc! {r#"
+                pub enum Token { Token }
+                pub trait Display[a] {
+                    fn display(value: a) -> String
+                }
+            "#},
+        )
+        .unwrap();
+        std::fs::write(
+            dependency.join("src/instances.ald"),
+            indoc::indoc! {r#"
+                import ~/api.{ Token, Display }
+                impl Display[Token] {
+                    fn display(value: Token) -> String { "token" }
+                }
+            "#},
+        )
+        .unwrap();
+        super::build::compile(&dependency, BuildMode::Check)
+            .await
+            .unwrap();
+
+        std::fs::write(
+            application.join("alder.jsonc"),
+            indoc::indoc! {r#"
+                {
+                  "type": "application",
+                  "target": "standalone",
+                  "dependencies": {
+                    "vendor/widgets": { "path": "../widgets" }
+                  }
+                }
+            "#},
+        )
+        .unwrap();
+        std::fs::write(
+            application.join("src/main.ald"),
+            indoc::indoc! {r#"
+                import @vendor/widgets/api.{ Token, display }
+                pub fn render(value: Token) -> String { display(value) }
+            "#},
+        )
+        .unwrap();
+        let compiled = super::build::compile(&application, BuildMode::Check)
+            .await
+            .unwrap();
+
+        assert!(compiled.result.is_success());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

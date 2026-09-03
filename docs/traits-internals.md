@@ -496,6 +496,12 @@ signature/default-presence changes also change the interface fingerprint.
 The dependency resolver loads `PackageInstanceIndexFile` once when any module
 from that package is imported. Saving validates that every listed impl belongs
 to a listed module and exposes only externally nameable identities.
+For path dependencies, the project resolver reads the referenced package's
+validated `.alder` artifacts, hydrates every interface named by its index, and
+adds the complete index to the frozen database even when the defining instance
+module was not imported directly. Source modules carry their declared package
+identity, and `~/` imports retain that identity rather than becoming application
+imports. Duplicate interface/index paths converge by stable `ImplId`.
 Successful driver builds return deterministic owned interface files and one
 deduplicated instance index per package. CLI build, check, run, and test flows
 persist those artifacts below `.alder/interfaces/` and `.alder/instances/` only

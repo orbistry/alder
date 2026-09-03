@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use alder_driver::{Database, FileSystemSource, Project, build, build_graph};
+use alder_driver::{
+    BuildMode, Database, FileSystemSource, Project, build_graph, build_with_dependencies,
+};
 use miette::{IntoDiagnostic, Result};
 use tokio::sync::Mutex;
 
@@ -36,12 +38,16 @@ impl Args {
         }
 
         eprintln!("Building dependency graph...");
+        let dependencies = project
+            .build_dependencies(&mut *db.lock().await, &modules, false)
+            .await
+            .into_diagnostic()?;
         let graph = build_graph(db.clone(), &modules).await.into_diagnostic()?;
 
         eprintln!("Dependency order: {} modules", graph.order.len());
 
         eprintln!("Compiling...");
-        let result = build(db, &graph).await;
+        let result = build_with_dependencies(db, &graph, BuildMode::Check, dependencies).await;
 
         eprintln!();
         if !result.warnings.is_empty() {

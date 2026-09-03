@@ -4,7 +4,7 @@ use alder_bundle::EntryKind;
 use alder_config::{Config, Target};
 use alder_driver::{
     BuildMode, BuildResult, Database, FileSystemSource, InterfaceCache, Project, build_graph,
-    build_with_mode,
+    build_with_dependencies,
 };
 use miette::{IntoDiagnostic, Result, miette};
 use tokio::sync::Mutex;
@@ -67,8 +67,12 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
     if modules.is_empty() {
         return Err(miette!("no Alder source files found"));
     }
+    let dependencies = project
+        .build_dependencies(&mut *db.lock().await, &modules, mode == BuildMode::Test)
+        .await
+        .into_diagnostic()?;
     let graph = build_graph(db.clone(), &modules).await.into_diagnostic()?;
-    let result = build_with_mode(db, &graph, mode).await;
+    let result = build_with_dependencies(db, &graph, mode, dependencies).await;
     for warning in &result.warnings {
         eprintln!("{:?}", miette::Report::new(warning.clone()));
     }

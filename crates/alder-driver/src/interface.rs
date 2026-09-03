@@ -311,12 +311,23 @@ impl InterfaceCache {
         InterfaceFile::load(&self.cache_path(module_name)).ok()
     }
 
+    pub fn load_interface(&self, module: &OwnedModuleId) -> Result<InterfaceFile, DriverError> {
+        InterfaceFile::load(&self.interface_path(module))
+    }
+
     pub fn save(&self, interface: &InterfaceFile) -> Result<(), DriverError> {
         interface.save(&self.interface_path(&interface.module))
     }
 
     pub fn load_package_index(&self, package: &OwnedPackageId) -> Option<PackageInstanceIndexFile> {
         PackageInstanceIndexFile::load(&self.package_index_path(package)).ok()
+    }
+
+    pub fn load_package_index_checked(
+        &self,
+        package: &OwnedPackageId,
+    ) -> Result<PackageInstanceIndexFile, DriverError> {
+        PackageInstanceIndexFile::load(&self.package_index_path(package))
     }
 
     pub fn save_package_index(&self, index: &PackageInstanceIndexFile) -> Result<(), DriverError> {

@@ -80,6 +80,13 @@ pub enum BuildMode {
     Test,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct BuildDependencies {
+    pub module_packages: BTreeMap<Url, OwnedPackageId>,
+    pub interfaces: Vec<InterfaceFile>,
+    pub package_instance_indexes: Vec<PackageInstanceIndexFile>,
+}
+
 impl BuildResult {
     /// Check if the build was completely successful.
     pub fn is_success(&self) -> bool {
@@ -114,10 +121,19 @@ pub async fn build_with_mode(
     graph: &DepGraph,
     mode: BuildMode,
 ) -> BuildResult {
+    build_with_dependencies(db, graph, mode, BuildDependencies::default()).await
+}
+
+pub async fn build_with_dependencies(
+    db: Arc<Mutex<Database>>,
+    graph: &DepGraph,
+    mode: BuildMode,
+    dependencies: BuildDependencies,
+) -> BuildResult {
     let modules: Vec<&Url> = graph.levels().into_iter().flatten().collect();
     let sources = fetch_sources(&db, &modules).await;
 
-    tokio::task::spawn_blocking(move || build_sync(sources, mode))
+    tokio::task::spawn_blocking(move || build_sync(sources, mode, dependencies))
         .await
         .expect("compile task panicked")
 }
@@ -130,12 +146,27 @@ pub async fn build_with_mode(
 ///
 /// Type checking is inherently dependency-ordered, so within-build
 /// parallelism is limited to source fetching for now.
-fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> BuildResult {
+fn build_sync(
+    sources: Vec<(Url, Result<String, String>)>,
+    mode: BuildMode,
+    dependencies: BuildDependencies,
+) -> BuildResult {
     // This arena owns canonical package headers and solved public interfaces.
     // Every source module and all phase-local ASTs use a separate arena in
     // `compile_module`.
     let store = Bump::new();
-    let mut interfaces: Vec<Interface<'_>> = Vec::new();
+    let mut interfaces = dependencies
+        .interfaces
+        .iter()
+        .map(|interface| interface.hydrate(&store))
+        .collect::<Vec<_>>();
+    let package_instances = dependencies
+        .package_instance_indexes
+        .iter()
+        .flat_map(|index| index.hydrate_instances(&store).iter().copied())
+        .collect::<Vec<_>>();
+    let package_instances = store.alloc_slice_copy(&package_instances);
+    let default_package = OwnedPackageId::Application;
 
     let total = sources.len();
     let mut solved_interfaces = vec![false; total];
@@ -147,8 +178,19 @@ fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> B
                 continue;
             }
             let (uri, source) = &sources[index];
-            let (_, discovered) =
-                compile_module(uri, source, &store, &interfaces, BuildMode::Check);
+            let package = dependencies
+                .module_packages
+                .get(uri)
+                .unwrap_or(&default_package);
+            let (_, discovered) = compile_module(
+                uri,
+                source,
+                package,
+                &store,
+                &interfaces,
+                package_instances,
+                BuildMode::Check,
+            );
             if let Some(interface) = discovered.interface {
                 let existing = interfaces
                     .iter()
@@ -175,7 +217,19 @@ fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> B
     let mut artifacts = HashMap::new();
     let mut interface_files = Vec::new();
     for (uri, source) in &sources {
-        let (output, discovered) = compile_module(uri, source, &store, &interfaces, mode);
+        let package = dependencies
+            .module_packages
+            .get(uri)
+            .unwrap_or(&default_package);
+        let (output, discovered) = compile_module(
+            uri,
+            source,
+            package,
+            &store,
+            &interfaces,
+            package_instances,
+            mode,
+        );
         if discovered.solved
             && let Some(interface) = discovered.interface
         {
@@ -273,8 +327,10 @@ async fn fetch_sources(
 fn compile_module<'s>(
     uri: &Url,
     source: &Result<String, String>,
+    package: &OwnedPackageId,
     store: &'s Bump,
     interfaces: &[Interface<'s>],
+    package_instances: &'s [alder_ast::InterfaceImpl<'s>],
     mode: BuildMode,
 ) -> (CompileOutput, InterfaceOutput<'s>) {
     let report_source = Source::new(
@@ -310,14 +366,28 @@ fn compile_module<'s>(
         Err(e) => return failed(vec![crate::report::parse(report_source, &e)]),
     };
 
-    let home = module_id_from_uri(&module_arena, uri);
-    let imports = resolve_imports(&module_arena, &module);
+    let home = module_id_from_uri(&module_arena, uri, package);
+    let imports = resolve_imports(&module_arena, &module, home.package);
     let interfaces = interfaces
         .iter()
         .filter(|interface| interface.home != home)
         .map(|interface| alder_ast::copy_interface(&module_arena, interface))
         .collect::<Vec<_>>();
     let interfaces = module_arena.alloc_slice_copy(&interfaces);
+    let package_instances = alder_ast::copy_interface(
+        &module_arena,
+        &Interface {
+            home,
+            values: &[],
+            types: &[],
+            enums: &[],
+            traits: &[],
+            instances: package_instances,
+            modules: &[],
+            private_names: &[],
+        },
+    )
+    .instances;
     let context = alder_can::Context {
         home,
         imports,
@@ -329,7 +399,12 @@ fn compile_module<'s>(
         .map(|result| alder_can::headers_from_module(&module_arena, result.module))
         .map(|interface| alder_ast::copy_interface(store, &interface));
     if let Some(header) = &header_result {
-        let database = alder_solve::TraitDatabase::build(&module_arena, header.module, interfaces);
+        let database = alder_solve::TraitDatabase::build_with_package_instances(
+            &module_arena,
+            header.module,
+            interfaces,
+            package_instances,
+        );
         let coherence = database
             .validate(&module_arena)
             .into_iter()
@@ -386,8 +461,12 @@ fn compile_module<'s>(
     });
 
     let constraint = alder_constrain::constrain(&module_arena, can_result.module);
-    let trait_database =
-        alder_solve::TraitDatabase::build(&module_arena, can_result.module, interfaces);
+    let trait_database = alder_solve::TraitDatabase::build_with_package_instances(
+        &module_arena,
+        can_result.module,
+        interfaces,
+        package_instances,
+    );
     let solved = match alder_solve::solve(&module_arena, &constraint, &trait_database) {
         Ok(solved) => solved,
         Err(errors) => {
@@ -470,7 +549,7 @@ fn coherence_belongs_to(error: &alder_solve::CoherenceError<'_>, home: ModuleId<
     }
 }
 
-fn module_id_from_uri<'a>(bump: &'a Bump, uri: &Url) -> ModuleId<'a> {
+fn module_id_from_uri<'a>(bump: &'a Bump, uri: &Url, package: &OwnedPackageId) -> ModuleId<'a> {
     let path = uri.path();
     let relative = path
         .split("/src/")
@@ -482,7 +561,7 @@ fn module_id_from_uri<'a>(bump: &'a Bump, uri: &Url) -> ModuleId<'a> {
         segments.pop();
     }
     ModuleId {
-        package: PackageId::Application,
+        package: hydrate_package_id(bump, package),
         path: bump.alloc_slice_fill_iter(
             segments
                 .into_iter()
@@ -491,9 +570,24 @@ fn module_id_from_uri<'a>(bump: &'a Bump, uri: &Url) -> ModuleId<'a> {
     }
 }
 
+fn hydrate_package_id<'a>(bump: &'a Bump, package: &OwnedPackageId) -> PackageId<'a> {
+    match package {
+        OwnedPackageId::Named { author, project } => PackageId::Named(PackageName {
+            author: bump.alloc_str(author),
+            project: bump.alloc_str(project),
+        }),
+        OwnedPackageId::Application => PackageId::Application,
+        OwnedPackageId::ApplicationMember(member) => {
+            PackageId::ApplicationMember(bump.alloc_str(member))
+        }
+        OwnedPackageId::Builtin => PackageId::Builtin,
+    }
+}
+
 fn resolve_imports<'a>(
     bump: &'a Bump,
     module: &alder_source::Module<'a>,
+    home_package: PackageId<'a>,
 ) -> &'a [ResolvedImport<'a>] {
     let imports: Vec<_> = module
         .items
@@ -504,7 +598,7 @@ fn resolve_imports<'a>(
             };
             let path = import.path.value;
             let (package, root_name) = match path.root {
-                alder_source::ModuleRoot::Local(_) => (PackageId::Application, None),
+                alder_source::ModuleRoot::Local(_) => (home_package, None),
                 alder_source::ModuleRoot::Package { author, package } => (
                     PackageId::Named(PackageName {
                         author: author.value,
@@ -668,6 +762,48 @@ mod tests {
 
     fn url(path: &str) -> Url {
         Url::parse(&format!("file:///{}", path)).unwrap()
+    }
+
+    fn dependency_interface(
+        source: &str,
+        path: &'static [&'static str],
+        dependencies: &[InterfaceFile],
+    ) -> InterfaceFile {
+        let bump = Bump::new();
+        let source = bump.alloc_str(source);
+        let parsed = alder_parse::parse_module(&bump, source).expect("dependency source parses");
+        let interfaces = dependencies
+            .iter()
+            .map(|interface| interface.hydrate(&bump))
+            .collect::<Vec<_>>();
+        let interfaces = bump.alloc_slice_copy(&interfaces);
+        let home = ModuleId {
+            package: PackageId::Named(PackageName {
+                author: "vendor",
+                project: "widgets",
+            }),
+            path,
+        };
+        let canonical = alder_can::canonicalize(
+            &bump,
+            alder_can::Context {
+                home,
+                imports: resolve_imports(&bump, &parsed, home.package),
+                interfaces,
+            },
+            &parsed,
+        )
+        .expect("dependency source canonicalizes");
+        let constraints = alder_constrain::constrain(&bump, canonical.module);
+        let database = alder_solve::TraitDatabase::build(&bump, canonical.module, interfaces);
+        let solved =
+            alder_solve::solve(&bump, &constraints, &database).expect("dependency source solves");
+        let interface = alder_can::from_module(&bump, canonical.module, &solved.annotations);
+        InterfaceFile::dehydrate_with_source(
+            &interface,
+            &format!("file:///dependency/src/{}.ald", path.join("/")),
+        )
+        .expect("dependency interface serializes")
     }
 
     async fn compile_failure(source: &str) -> Diagnostic {
@@ -1008,6 +1144,112 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn named_package_identity_applies_to_modules_local_imports_and_indexes() {
+        let mem = InMemorySource::new();
+        let model = url("package/src/model.ald");
+        let implementation = url("package/src/instances.ald");
+        mem.insert(
+            model.clone(),
+            "pub enum Token { Token }\npub trait Display[a] { fn display(value: a) -> String }"
+                .to_owned(),
+        );
+        mem.insert(
+            implementation.clone(),
+            indoc::indoc! {r#"
+                import ~/model.{ Token, Display }
+                impl Display[Token] {
+                    fn display(value: Token) -> String { "token" }
+                }
+            "#}
+            .to_owned(),
+        );
+        let db = Arc::new(Mutex::new(Database::new(mem)));
+        let modules = vec![model.clone(), implementation.clone()];
+        let graph = build_graph(db.clone(), &modules).await.unwrap();
+        let package = OwnedPackageId::Named {
+            author: "vendor".to_owned(),
+            project: "widgets".to_owned(),
+        };
+        let result = build_with_dependencies(
+            db,
+            &graph,
+            BuildMode::Check,
+            BuildDependencies {
+                module_packages: BTreeMap::from([
+                    (model, package.clone()),
+                    (implementation, package.clone()),
+                ]),
+                ..BuildDependencies::default()
+            },
+        )
+        .await;
+
+        assert!(result.is_success(), "{:?}", result.modules);
+        assert!(
+            result
+                .interfaces
+                .iter()
+                .all(|interface| interface.module.package == package)
+        );
+        assert_eq!(result.package_instance_indexes.len(), 1);
+        assert_eq!(result.package_instance_indexes[0].package, package);
+        assert_eq!(result.package_instance_indexes[0].instances.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn package_index_supplies_instances_from_an_unimported_dependency_module() {
+        let api = dependency_interface(
+            "pub enum Token { Token }\npub trait Display[a] { fn display(value: a) -> String }",
+            &["api"],
+            &[],
+        );
+        let instances = dependency_interface(
+            indoc::indoc! {r#"
+                import @vendor/widgets/api.{ Token, Display }
+                impl Display[Token] {
+                    fn display(value: Token) -> String { "token" }
+                }
+            "#},
+            &["instances"],
+            std::slice::from_ref(&api),
+        );
+        let index = PackageInstanceIndexFile::new(
+            api.module.package.clone(),
+            vec![api.module.clone(), instances.module.clone()],
+            instances.instances.clone(),
+        )
+        .unwrap();
+
+        let mem = InMemorySource::new();
+        let consumer = url("project/src/main.ald");
+        mem.insert(
+            consumer.clone(),
+            indoc::indoc! {r#"
+                import @vendor/widgets/api.{ Token, display }
+                pub fn render(value: Token) -> String { display(value) }
+            "#}
+            .to_owned(),
+        );
+        let db = Arc::new(Mutex::new(Database::new(mem)));
+        let graph = build_graph(db.clone(), std::slice::from_ref(&consumer))
+            .await
+            .unwrap();
+        let result = build_with_dependencies(
+            db,
+            &graph,
+            BuildMode::Check,
+            BuildDependencies {
+                module_packages: BTreeMap::new(),
+                interfaces: vec![api],
+                package_instance_indexes: vec![index],
+            },
+        )
+        .await;
+
+        assert!(result.is_success(), "{:?}", result.modules[&consumer]);
+    }
+
+    #[tokio::test]
     async fn test_cross_module_type_error() {
         let mem = InMemorySource::new();
 
@@ -1085,6 +1327,7 @@ mod tests {
                 ),
             ],
             BuildMode::Check,
+            BuildDependencies::default(),
         );
 
         assert!(result.is_success(), "{:?}", result.modules[&consumer]);
@@ -1119,6 +1362,7 @@ mod tests {
                 ),
             ],
             BuildMode::Check,
+            BuildDependencies::default(),
         );
 
         for module in [first, second] {

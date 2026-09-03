@@ -134,6 +134,7 @@ dependencies = [
  "dirs",
  "futures",
  "glob",
+ "indoc",
  "miette",
  "octocrab",
  "tar",

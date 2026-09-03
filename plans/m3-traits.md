@@ -73,6 +73,10 @@ static resolution wherever the type is known.
 - Successful builds expose deterministic semantic interfaces and a deduplicated
   instance index per package; CLI compilation persists them only after all
   modules succeed.
+- Project compilation assigns declared package identities to source modules and
+  loads the validated interface set plus complete instance index once for each
+  actually imported path dependency. Trait databases deduplicate repeated
+  headers by stable `ImplId`.
 - Derived dictionaries consume solver-selected evidence for every payload
   field. Evidence is retained through nested builtin containers, and generated
   Eq dictionaries are initialized before dictionaries that use them as a

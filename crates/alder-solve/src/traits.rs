@@ -129,6 +129,15 @@ impl<'a> TraitDatabase<'a> {
         module: &'a Module<'a>,
         dependencies: &'a [Interface<'a>],
     ) -> Self {
+        Self::build_with_package_instances(bump, module, dependencies, &[])
+    }
+
+    pub fn build_with_package_instances(
+        bump: &'a Bump,
+        module: &'a Module<'a>,
+        dependencies: &'a [Interface<'a>],
+        package_instances: &'a [InterfaceImpl<'a>],
+    ) -> Self {
         let mut database = Self {
             traits: BTreeMap::new(),
             instances: BTreeMap::new(),
@@ -137,6 +146,13 @@ impl<'a> TraitDatabase<'a> {
         database.insert_interface(&builtins);
         for interface in dependencies {
             database.insert_interface(interface);
+        }
+        for implementation in package_instances {
+            database
+                .instances
+                .entry(implementation.trait_ref.trait_)
+                .or_default()
+                .push(InstanceHeader::Foreign(implementation));
         }
         for item in module.items {
             match &item.value.kind {
@@ -151,6 +167,7 @@ impl<'a> TraitDatabase<'a> {
         }
         for instances in database.instances.values_mut() {
             instances.sort_by_key(|implementation| implementation.id());
+            instances.dedup_by_key(|implementation| implementation.id());
         }
         database
     }
