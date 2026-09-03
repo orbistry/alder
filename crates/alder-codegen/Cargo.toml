@@ -1,6 +1,6 @@
 [package]
 name = "alder-codegen"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 description = "JavaScript code generation for Alder"
 homepage.workspace = true
@@ -8,9 +8,9 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-alder-ast = { path = "../alder-ast", version = "0.1.0" }
-alder-region = { path = "../alder-region", version = "0.1.0" }
-alder-solve = { path = "../alder-solve", version = "0.1.0" }
+alder-ast = { path = "../alder-ast", version = "0.2.0" }
+alder-region = { path = "../alder-region", version = "0.2.0" }
+alder-solve = { path = "../alder-solve", version = "0.2.0" }
 rolldown_ecmascript = "=0.1.0"
 oxc_allocator = "=0.95.0"
 oxc_ast = "=0.95.0"
@@ -19,9 +19,9 @@ oxc_span = "=0.95.0"
 oxc_syntax = "=0.95.0"
 
 [dev-dependencies]
-alder-can = { path = "../alder-can", version = "0.1.0" }
-alder-constrain = { path = "../alder-constrain", version = "0.1.0" }
-alder-parse = { path = "../alder-parse", version = "0.1.0" }
+alder-can = { path = "../alder-can", version = "0.2.0" }
+alder-constrain = { path = "../alder-constrain", version = "0.2.0" }
+alder-parse = { path = "../alder-parse", version = "0.2.0" }
 bumpalo.workspace = true
 indoc.workspace = true
 insta.workspace = true

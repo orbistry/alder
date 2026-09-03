@@ -1,6 +1,6 @@
 [package]
 name = "alder-runtime"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 description = "Embedded V8 runtime for standalone Alder programs"
 homepage.workspace = true

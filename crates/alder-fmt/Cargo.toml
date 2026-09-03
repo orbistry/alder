@@ -1,6 +1,6 @@
 [package]
 name = "alder-fmt"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 description = "Comment-preserving formatter for Alder source"
 homepage.workspace = true
@@ -10,8 +10,8 @@ license.workspace = true
 [dependencies]
 bumpalo.workspace = true
 thiserror.workspace = true
-alder-parse = { path = "../alder-parse", version = "0.1.0" }
-alder-source = { path = "../alder-source", version = "0.1.0" }
+alder-parse = { path = "../alder-parse", version = "0.2.0" }
+alder-source = { path = "../alder-source", version = "0.2.0" }
 
 [dev-dependencies]
 indoc.workspace = true

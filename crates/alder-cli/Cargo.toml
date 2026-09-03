@@ -1,6 +1,6 @@
 [package]
 name = "alder-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 description = "The Alder programming language"
 homepage.workspace = true
@@ -21,11 +21,11 @@ color-print.workspace = true
 dirs.workspace = true
 futures.workspace = true
 miette.workspace = true
-alder-config = { path = "../alder-config", version = "0.1.0" }
-alder-bundle = { path = "../alder-bundle", version = "0.1.0" }
-alder-driver = { path = "../alder-driver", version = "0.1.0" }
-alder-fmt = { path = "../alder-fmt", version = "0.1.0" }
-alder-runtime = { path = "../alder-runtime", version = "0.1.0" }
+alder-config = { path = "../alder-config", version = "0.2.0" }
+alder-bundle = { path = "../alder-bundle", version = "0.2.0" }
+alder-driver = { path = "../alder-driver", version = "0.2.0" }
+alder-fmt = { path = "../alder-fmt", version = "0.2.0" }
+alder-runtime = { path = "../alder-runtime", version = "0.2.0" }
 alder-language-server = { path = "../alder-language-server", version = "0.1.0" }
 octocrab.workspace = true
 glob.workspace = true
