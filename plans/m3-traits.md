@@ -1,5 +1,8 @@
 # M3: Traits
 
+Status: complete. The verification matrix and milestone gates passed on
+2026-09-03.
+
 Type classes in the Haskell style with Rust spelling: the subject type is
 an explicit parameter (`trait Show[a]`, `impl Show[User]`), higher-kinded
 parameters are inferred from use (`trait Functor[f]`, `impl Functor[Option]`),

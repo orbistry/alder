@@ -265,11 +265,11 @@ then, by design.
 
 ### M3: Traits
 
-- [ ] Type-class constraints in `alder-constrain`/`alder-solve` (argument zero is the coherence subject; colon bounds are unary)
-- [ ] Higher-kinded type parameters
-- [ ] Dictionary-passing codegen with static resolution where possible
-- [ ] Compiler-backed derive surface (`Show`, `Eq`, `Ord`, `Hash`, `Json`; macro implementation replaces it in M5)
-- [ ] Orphan rule checking in `alder-can`
+- [x] Type-class constraints in `alder-constrain`/`alder-solve` (argument zero is the coherence subject; colon bounds are unary)
+- [x] Higher-kinded type parameters
+- [x] Dictionary-passing codegen with static resolution where possible
+- [x] Compiler-backed derive surface (`Show`, `Eq`, `Ord`, `Hash`, `Json`; macro implementation replaces it in M5)
+- [x] Orphan rule checking in `alder-can`
 
 ### M4: Errors and async
 
