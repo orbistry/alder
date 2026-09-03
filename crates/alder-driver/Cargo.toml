@@ -1,6 +1,6 @@
 [package]
 name = "alder-driver"
-version = "0.2.0"
+version = "0.2.1"
 edition.workspace = true
 description = "Build system and driver for Alder projects"
 homepage.workspace = true
@@ -21,13 +21,13 @@ url.workspace = true
 
 alder-config = { path = "../alder-config", version = "0.2.0" }
 alder-ast = { path = "../alder-ast", version = "0.2.0" }
-alder-can = { path = "../alder-can", version = "0.2.0" }
-alder-codegen = { path = "../alder-codegen", version = "0.2.0" }
-alder-constrain = { path = "../alder-constrain", version = "0.2.0" }
+alder-can = { path = "../alder-can", version = "0.2.1" }
+alder-codegen = { path = "../alder-codegen", version = "0.2.1" }
+alder-constrain = { path = "../alder-constrain", version = "0.2.1" }
 alder-parse = { path = "../alder-parse", version = "0.2.0" }
 alder-region = { path = "../alder-region", version = "0.2.0" }
 alder-report = { path = "../alder-report", version = "0.2.0" }
-alder-solve = { path = "../alder-solve", version = "0.2.0" }
+alder-solve = { path = "../alder-solve", version = "0.2.1" }
 alder-source = { path = "../alder-source", version = "0.2.0" }
 
 [dev-dependencies]

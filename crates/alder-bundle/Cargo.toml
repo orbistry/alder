@@ -1,6 +1,6 @@
 [package]
 name = "alder-bundle"
-version = "0.2.0"
+version = "0.2.1"
 edition.workspace = true
 description = "Isolated Rolldown integration for Alder ESM artifacts"
 homepage.workspace = true
@@ -8,7 +8,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-alder-codegen = { path = "../alder-codegen", version = "0.2.0" }
+alder-codegen = { path = "../alder-codegen", version = "0.2.1" }
 alder-kernel = { path = "../alder-kernel", version = "0.2.0" }
 rolldown = { version = "=0.1.0", default-features = false }
 # Keep Rolldown's pre-1.0 family coherent. Its internal dependencies use
