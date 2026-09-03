@@ -1,0 +1,17 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Source[a] {\n    type Item\n    fn next(value: a) -> Item\n}\nimpl Source[Number] {\n    type Item = Number\n    type Item = Number\n    fn next(value: Number) -> Number { value }\n}\n"
+---
+alder::canonicalize::duplicate_definition
+
+  × `Item` is defined more than once
+   ╭─[/project/src/main.ald:7:10]
+ 5 │ impl Source[Number] {
+ 6 │     type Item = Number
+   ·          ──┬─
+   ·            ╰── first definition is here
+ 7 │     type Item = Number
+   ·          ──┬─
+   ·            ╰── reported here
+ 8 │     fn next(value: Number) -> Number { value }
+   ╰────

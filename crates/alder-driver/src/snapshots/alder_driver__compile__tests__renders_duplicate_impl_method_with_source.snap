@@ -1,0 +1,17 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] { fn display(value: a) -> String }\nimpl Display[Number] {\n    fn display(value: Number) -> String { \"first\" }\n    fn display(value: Number) -> String { \"second\" }\n}\n"
+---
+alder::canonicalize::duplicate_definition
+
+  × `display` is defined more than once
+   ╭─[/project/src/main.ald:4:8]
+ 2 │ impl Display[Number] {
+ 3 │     fn display(value: Number) -> String { "first" }
+   ·        ───┬───
+   ·           ╰── first definition is here
+ 4 │     fn display(value: Number) -> String { "second" }
+   ·        ───┬───
+   ·           ╰── reported here
+ 5 │ }
+   ╰────

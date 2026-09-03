@@ -968,6 +968,172 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_missing_trait_method_annotation_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] {
+                fn display(value) -> String
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_duplicate_trait_parameter_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Convert[a, a] {
+                fn convert(value: a) -> a
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_unknown_associated_type_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Source[a] { type Item }
+            fn take(value: a) -> Number
+                where a: Source, a.Missing == Number
+            {
+                0
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_ambiguous_associated_type_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait First[a] { type Item }
+            trait Second[a] { type Item }
+            fn take(value: a) -> Number
+                where a: First + Second, a.Item == Number
+            {
+                0
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_unknown_impl_method_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] { fn display(value: a) -> String }
+            impl Display[Number] {
+                fn render(value: Number) -> String { "number" }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_missing_impl_method_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] { fn display(value: a) -> String }
+            impl Display[Number] {}
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_missing_associated_binding_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Source[a] {
+                type Item
+                fn next(value: a) -> Item
+            }
+            impl Source[Number] {
+                fn next(value: Number) -> Number { value }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_impl_method_type_mismatch_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] { fn display(value: a) -> String }
+            impl Display[Number] {
+                fn display(value: Number) -> Number { value }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_associated_type_mismatch_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Source[a] {
+                type Item
+                fn next(value: a) -> Item
+            }
+            impl Source[Number] {
+                type Item = String
+                fn next(value: Number) -> Number { value }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_duplicate_trait_method_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] {
+                fn display(value: a) -> String
+                fn display(value: a) -> String
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_duplicate_associated_type_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Source[a] {
+                type Item
+                type Item
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_duplicate_impl_method_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] { fn display(value: a) -> String }
+            impl Display[Number] {
+                fn display(value: Number) -> String { "first" }
+                fn display(value: Number) -> String { "second" }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_duplicate_associated_binding_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Source[a] {
+                type Item
+                fn next(value: a) -> Item
+            }
+            impl Source[Number] {
+                type Item = Number
+                type Item = Number
+                fn next(value: Number) -> Number { value }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_invalid_derive_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            #[derive(Show)]
+            type Label = String
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_invalid_nested_impl_hole_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Convert[a] { fn convert(value: a) -> a }
+            impl Convert[Result[Array[_], String]] {
+                fn convert(value: Result[Array[Number], String])
+                    -> Result[Array[Number], String]
+                {
+                    value
+                }
+            }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_missing_instance_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Display[a] {

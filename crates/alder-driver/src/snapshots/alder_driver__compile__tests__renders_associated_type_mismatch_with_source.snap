@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Source[a] {\n    type Item\n    fn next(value: a) -> Item\n}\nimpl Source[Number] {\n    type Item = String\n    fn next(value: Number) -> Number { value }\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/project/src/main.ald:7:8]
+ 6 │     type Item = String
+ 7 │     fn next(value: Number) -> Number { value }
+   ·        ──┬─
+   ·          ╰── type requirement originates here
+ 8 │ }
+   ╰────

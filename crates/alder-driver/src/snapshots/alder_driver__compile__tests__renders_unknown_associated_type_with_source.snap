@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Source[a] { type Item }\nfn take(value: a) -> Number\n    where a: Source, a.Missing == Number\n{\n    0\n}\n"
+---
+alder::canonicalize::unknown_associated_type
+
+  × unknown associated type `Missing`
+   ╭─[/project/src/main.ald:3:24]
+ 2 │ fn take(value: a) -> Number
+ 3 │     where a: Source, a.Missing == Number
+   ·                        ───┬───
+   ·                           ╰── reported here
+ 4 │ {
+   ╰────

@@ -1,0 +1,17 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] {\n    fn display(value: a) -> String\n    fn display(value: a) -> String\n}\n"
+---
+alder::canonicalize::duplicate_definition
+
+  × `display` is defined more than once
+   ╭─[/project/src/main.ald:3:8]
+ 1 │ trait Display[a] {
+ 2 │     fn display(value: a) -> String
+   ·        ───┬───
+   ·           ╰── first definition is here
+ 3 │     fn display(value: a) -> String
+   ·        ───┬───
+   ·           ╰── reported here
+ 4 │ }
+   ╰────

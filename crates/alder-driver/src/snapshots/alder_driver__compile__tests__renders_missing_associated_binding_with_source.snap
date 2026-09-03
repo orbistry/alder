@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Source[a] {\n    type Item\n    fn next(value: a) -> Item\n}\nimpl Source[Number] {\n    fn next(value: Number) -> Number { value }\n}\n"
+---
+alder::canonicalize::missing_impl_item
+
+  × impl of `Source` is missing associated type `Item`
+   ╭─[/project/src/main.ald:5:1]
+ 4 │     }
+ 5 │ ╭─▶ impl Source[Number] {
+ 6 │ │       fn next(value: Number) -> Number { value }
+ 7 │ ├─▶ }
+   · ╰──── reported here
+   ╰────

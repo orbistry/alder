@@ -1670,12 +1670,14 @@ fn type_error(error: &TypeError<'_>) -> CanDetails {
             None,
             None,
         ),
-        TypeError::MissingAnnotation { name, position } => (
-            "missing_annotation",
-            format!("`{name}` needs a type annotation in {position}"),
-            None,
-            None,
-        ),
+        TypeError::MissingAnnotation { name, position } => {
+            let message = match *position {
+                "parameter" => format!("every parameter of `{name}` needs a type annotation"),
+                "return type" => format!("`{name}` needs a return type annotation"),
+                position => format!("`{name}` needs a type annotation for its {position}"),
+            };
+            ("missing_annotation", message, None, None)
+        }
         TypeError::UnknownImplItem {
             trait_name,
             name,

@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait First[a] { type Item }\ntrait Second[a] { type Item }\nfn take(value: a) -> Number\n    where a: First + Second, a.Item == Number\n{\n    0\n}\n"
+---
+alder::canonicalize::ambiguous_associated_type
+
+  × associated type `Item` is declared by 2 traits
+   ╭─[/project/src/main.ald:4:32]
+ 3 │ fn take(value: a) -> Number
+ 4 │     where a: First + Second, a.Item == Number
+   ·                                ──┬─
+   ·                                  ╰── reported here
+ 5 │ {
+   ╰────
+  help: qualify the associated type through its trait

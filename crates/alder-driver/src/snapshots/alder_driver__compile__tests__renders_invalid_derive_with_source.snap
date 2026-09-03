@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "#[derive(Show)]\ntype Label = String\n"
+---
+alder::canonicalize::invalid_derive
+
+  × invalid derive attribute: built-in derives are only available on enums and
+  │ error groups
+   ╭─[/project/src/main.ald:1:1]
+ 1 │ ╭─▶ #[derive(Show)]
+ 2 │ ├─▶ type Label = String
+   · ╰──── reported here
+   ╰────

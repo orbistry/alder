@@ -1,0 +1,17 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Source[a] {\n    type Item\n    type Item\n}\n"
+---
+alder::canonicalize::duplicate_definition
+
+  × `Item` is defined more than once
+   ╭─[/project/src/main.ald:3:10]
+ 1 │ trait Source[a] {
+ 2 │     type Item
+   ·          ──┬─
+   ·            ╰── first definition is here
+ 3 │     type Item
+   ·          ──┬─
+   ·            ╰── reported here
+ 4 │ }
+   ╰────
