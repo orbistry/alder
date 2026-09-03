@@ -19,9 +19,9 @@ oxc_span = "=0.95.0"
 oxc_syntax = "=0.95.0"
 
 [dev-dependencies]
-alder-can = { path = "../alder-can", version = "0.2.1" }
-alder-constrain = { path = "../alder-constrain", version = "0.2.1" }
-alder-parse = { path = "../alder-parse", version = "0.2.0" }
+alder-can = { path = "../alder-can" }
+alder-constrain = { path = "../alder-constrain" }
+alder-parse = { path = "../alder-parse" }
 bumpalo.workspace = true
 indoc.workspace = true
 insta.workspace = true

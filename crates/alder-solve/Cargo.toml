@@ -17,5 +17,5 @@ alder-region = { path = "../alder-region", version = "0.2.0" }
 [dev-dependencies]
 indoc.workspace = true
 insta.workspace = true
-alder-parse = { path = "../alder-parse", version = "0.2.0" }
-alder-source = { path = "../alder-source", version = "0.2.0" }
+alder-parse = { path = "../alder-parse" }
+alder-source = { path = "../alder-source" }
