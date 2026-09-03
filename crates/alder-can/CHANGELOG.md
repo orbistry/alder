@@ -1,5 +1,12 @@
 # alder-can
 
+## 0.2.1 — 2026-09-03
+
+### Patch changes
+
+- [c8fe6ce](https://github.com/orbistry/alder/commit/c8fe6ce6fdf364087ef57d077c4839049e044dff) Package the embedded first-party trait source inside `alder-can` so published
+  crates build independently of the workspace layout. — Thanks @rvcas!
+
 ## 0.2.0 — 2026-09-03
 
 ### Minor changes

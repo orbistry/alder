@@ -1,5 +1,11 @@
 # alder-constrain
 
+## 0.2.1 — 2026-09-03
+
+### Patch changes
+
+- Updated dependencies: alder-can@0.2.1
+
 ## 0.2.0 — 2026-09-03
 
 ### Minor changes
