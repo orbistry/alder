@@ -286,6 +286,15 @@ fn resolve_intrinsic<'a>(
             Ty::Record(fields, false) => {
                 Some(fields.values().map(|(_, typ)| typ.clone()).collect())
             }
+            _ if matches!(
+                nominal_parts(subject),
+                Some((reference, _))
+                    if reference.module.package == PackageId::Builtin
+                        && matches!(reference.name, "Array" | "Option" | "Result")
+            ) =>
+            {
+                nominal_parts(subject).map(|(_, arguments)| arguments.to_vec())
+            }
             _ => None,
         };
         if let Some(children) = children {

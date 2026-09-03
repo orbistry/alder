@@ -730,6 +730,56 @@ fn functions_have_no_structural_eq_instance() {
     ));
 }
 
+#[test]
+fn builtin_containers_require_equality_for_every_type_argument() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn same_arrays(left: Array[a], right: Array[a]) -> Bool where a: Eq {
+                left == right
+            }
+            fn same_options(left: Option[a], right: Option[a]) -> Bool where a: Eq {
+                left == right
+            }
+            fn same_results(left: Result[a, e], right: Result[a, e]) -> Bool
+                where a: Eq, e: Eq {
+                left == right
+            }
+        "#},
+    )
+    .expect("container equality is structural when all contained types implement Eq");
+    assert_eq!(
+        solved
+            .uses
+            .values()
+            .filter(|action| matches!(
+                action,
+                alder_solve::UseAction::Operator {
+                    dictionary: alder_solve::Evidence::StructuralEq(_),
+                }
+            ))
+            .count(),
+        3
+    );
+
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            fn invalid(left: Array[fn(Number) -> Number], right: Array[fn(Number) -> Number]) -> Bool {
+                left == right
+            }
+        "#},
+    )
+    .expect_err("container equality cannot hide a function-valued element");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+            trait_, subject, ..
+        }) if trait_.0.name == "Eq" && subject.starts_with("fn(")
+    )));
+}
+
 macro_rules! assert_inference_snapshot {
     ($source:expr) => {{
         let source = indoc!($source);

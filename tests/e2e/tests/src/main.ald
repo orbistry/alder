@@ -114,6 +114,13 @@ test "arithmetic works" {
     assert generic_greater(2, 1)
     assert ordered_equal(1, 1)
     assert ranked_same(42, 42)
+    assert [1, 2, 3] == [1, 2, 3]
+    let some: Option[Number] = Option.some(42)
+    let also_some: Option[Number] = Option.some(42)
+    assert some == also_some
+    let ok: Result[Number, String] = Result.ok(42)
+    let also_ok: Result[Number, String] = Result.ok(42)
+    assert ok == also_ok
 }
 
 test "trait dictionaries dispatch" {
