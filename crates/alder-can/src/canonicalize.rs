@@ -230,11 +230,17 @@ fn enum_derive_impl<'a>(
             alder_ast::DeriveKind::Json => "Json",
         },
     });
-    let trait_predicates =
-        bump.alloc_slice_fill_iter(arguments.iter().map(|argument| alder_ast::TraitRef {
+    let trait_predicates = enum_
+        .params
+        .iter()
+        .zip(arguments.iter().copied())
+        .filter(|(parameter, _)| enum_payload_mentions(enum_, parameter.value))
+        .map(|(_, argument)| alder_ast::TraitRef {
             trait_,
-            args: bump.alloc_slice_copy(&[*argument]),
-        }));
+            args: bump.alloc_slice_copy(&[argument]),
+        })
+        .collect::<Vec<_>>();
+    let trait_predicates = bump.alloc_slice_copy(&trait_predicates);
     let trait_ref = alder_ast::TraitRef {
         trait_,
         args: bump.alloc_slice_copy(&[subject as &Located<Type<'a>>]),
@@ -263,6 +269,61 @@ fn enum_derive_impl<'a>(
             })),
         },
     ))
+}
+
+fn enum_payload_mentions(enum_: &EnumDecl<'_>, variable: &str) -> bool {
+    enum_.variants.iter().any(|variant| match variant.payload {
+        VariantPayload::Unit => false,
+        VariantPayload::Tuple(types) => types
+            .iter()
+            .any(|typ| canonical_type_mentions(&typ.value, variable)),
+        VariantPayload::Record(fields) => fields
+            .iter()
+            .any(|field| canonical_type_mentions(&field.typ.value, variable)),
+    })
+}
+
+fn canonical_type_mentions(typ: &Type<'_>, variable: &str) -> bool {
+    match typ {
+        Type::Var { name, args } => {
+            *name == variable
+                || args
+                    .iter()
+                    .any(|argument| canonical_type_mentions(&argument.value, variable))
+        }
+        Type::Named { args, .. } | Type::Tuple(args) => args
+            .iter()
+            .any(|argument| canonical_type_mentions(&argument.value, variable)),
+        Type::Partial { slots, .. } => slots.iter().any(|slot| match slot {
+            alder_ast::TypeSlot::Hole(_) => false,
+            alder_ast::TypeSlot::Fixed(typ) => canonical_type_mentions(&typ.value, variable),
+        }),
+        Type::Projection(projection) => projection
+            .trait_ref
+            .args
+            .iter()
+            .any(|argument| canonical_type_mentions(&argument.value, variable)),
+        Type::Fn { params, ret } => {
+            params
+                .iter()
+                .any(|parameter| canonical_type_mentions(&parameter.value, variable))
+                || canonical_type_mentions(&ret.value, variable)
+        }
+        Type::Record { fields, .. } => fields
+            .iter()
+            .any(|field| canonical_type_mentions(&field.typ.value, variable)),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(typ) | alder_ast::AliasType::Filled(typ) => {
+                canonical_type_mentions(&typ.value, variable)
+            }
+        },
+        Type::ErrorRow { tags, .. } => tags.iter().any(|tag| {
+            tag.args
+                .iter()
+                .any(|argument| canonical_type_mentions(&argument.value, variable))
+        }),
+        Type::Unit => false,
+    }
 }
 
 fn load_imports<'a>(
@@ -2818,6 +2879,30 @@ mod tests {
                 derive_index: 0
             }
         ));
+    }
+
+    #[test]
+    fn enum_derives_only_require_payload_type_parameters() {
+        let bump = Bump::new();
+        let result = can(&bump, "#[derive(Show)]\nenum Phantom[a, b] { Phantom(a) }");
+        let implementations = result
+            .module
+            .items
+            .iter()
+            .filter_map(|item| match item.value.kind {
+                ItemKind::Impl(implementation) => Some(implementation),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(implementations.len(), 2);
+        for implementation in implementations {
+            assert_eq!(implementation.trait_predicates.len(), 1);
+            let Type::Var { name, args: [] } = implementation.trait_predicates[0].args[0].value
+            else {
+                panic!("derive prerequisite should target a type parameter")
+            };
+            assert_eq!(name, "a");
+        }
     }
 
     #[test]
