@@ -1,7 +1,8 @@
 use alder_ast::{
-    Interface, InterfaceEnum, InterfaceMethod, InterfaceModule, InterfaceTrait, InterfaceType,
-    InterfaceValue, InterfaceValueIdentity, ItemKind, Kind, Module, Namespace, OpaqueKind,
-    PrivateName, PublicTypeBody, ResolvedImportKind, TypeParam, ValueKind, Visibility,
+    DictionaryKind, Interface, InterfaceEnum, InterfaceImpl, InterfaceMethod, InterfaceModule,
+    InterfaceTrait, InterfaceType, InterfaceValue, InterfaceValueIdentity, ItemKind, Kind,
+    MethodImplementation, Module, Namespace, OpaqueKind, PrivateName, PublicTypeBody,
+    ResolvedImportKind, TypeParam, ValueKind, Visibility,
 };
 use bumpalo::Bump;
 
@@ -17,6 +18,7 @@ pub fn from_module<'a>(
     let mut types = Vec::new();
     let mut enums = Vec::new();
     let mut traits = Vec::new();
+    let mut instances = Vec::new();
     let mut modules = Vec::new();
     let mut private_names = Vec::new();
 
@@ -155,11 +157,66 @@ pub fn from_module<'a>(
                 &mut types,
                 &mut private_names,
             ),
-            ItemKind::Impl(_)
-            | ItemKind::Test(_)
-            | ItemKind::Tests(_)
-            | ItemKind::Macro(_)
-            | ItemKind::Comptime(_) => {}
+            ItemKind::Impl(implementation) => {
+                let dictionary_symbol = bump.alloc_str(&format!(
+                    "$dict${}${}",
+                    implementation.trait_.name,
+                    impl_origin_index(implementation.id.origin)
+                ));
+                let mut methods = Vec::new();
+                if let Some(trait_) = module.items.iter().find_map(|item| match &item.value.kind {
+                    ItemKind::Trait(trait_) if trait_.id == implementation.trait_ref.trait_ => {
+                        Some(*trait_)
+                    }
+                    _ => None,
+                }) {
+                    for item in trait_.items {
+                        let alder_ast::TraitItem::Fn(trait_method) = item else {
+                            continue;
+                        };
+                        let provided = implementation.items.iter().find_map(|item| match item {
+                            alder_ast::ImplItem::Fn(method) if method.method == trait_method.id => {
+                                Some(*method)
+                            }
+                            _ => None,
+                        });
+                        let method = if provided.is_some() {
+                            MethodImplementation::Provided {
+                                symbol: bump.alloc_str(&format!(
+                                    "$impl${}${}",
+                                    impl_origin_index(implementation.id.origin),
+                                    trait_method.id.name
+                                )),
+                            }
+                        } else {
+                            MethodImplementation::Default {
+                                symbol: bump.alloc_str(&format!(
+                                    "$default${}${}",
+                                    trait_.id.0.name, trait_method.id.name
+                                )),
+                            }
+                        };
+                        methods.push((trait_method.id, method));
+                    }
+                }
+                instances.push(InterfaceImpl {
+                    id: implementation.id,
+                    params: implementation.params,
+                    trait_ref: implementation.trait_ref,
+                    trait_predicates: implementation.trait_predicates,
+                    projection_equalities: implementation.projection_equalities,
+                    assoc_bindings: implementation.assoc_bindings,
+                    dictionary_symbol,
+                    dictionary_kind: if implementation.trait_predicates.is_empty() {
+                        DictionaryKind::Singleton
+                    } else {
+                        DictionaryKind::Factory
+                    },
+                    methods: bump.alloc_slice_copy(&methods),
+                });
+            }
+            ItemKind::Test(_) | ItemKind::Tests(_) | ItemKind::Macro(_) | ItemKind::Comptime(_) => {
+            }
         }
     }
 
@@ -181,7 +238,7 @@ pub fn from_module<'a>(
         types: bump.alloc_slice_copy(&types),
         enums: bump.alloc_slice_copy(&enums),
         traits: bump.alloc_slice_copy(&traits),
-        instances: &[],
+        instances: bump.alloc_slice_copy(&instances),
         modules: bump.alloc_slice_copy(&modules),
         private_names: bump.alloc_slice_copy(&private_names),
     }
@@ -236,4 +293,16 @@ fn type_params<'a>(bump: &'a Bump, params: &'a [alder_ast::Name<'a>]) -> &'a [Ty
 
 fn private<'a>(names: &mut Vec<PrivateName<'a>>, name: &'a str, namespace: Namespace) {
     names.push(PrivateName { name, namespace });
+}
+
+fn impl_origin_index(origin: alder_ast::ImplOrigin) -> u32 {
+    match origin {
+        alder_ast::ImplOrigin::Source { item_ordinal } => item_ordinal,
+        alder_ast::ImplOrigin::Derived {
+            type_ordinal,
+            derive_index,
+        } => type_ordinal.saturating_mul(1_000) + u32::from(derive_index),
+        alder_ast::ImplOrigin::AutomaticEq { type_ordinal } => type_ordinal,
+        alder_ast::ImplOrigin::Builtin { index } => u32::from(index),
+    }
 }

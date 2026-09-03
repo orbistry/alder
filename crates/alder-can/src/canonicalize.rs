@@ -2534,6 +2534,14 @@ mod tests {
             panic!("expected method")
         };
         assert_eq!(method.method.name, "next");
+        let interface = crate::from_module(&bump, result.module, &crate::Annotations::new());
+        assert_eq!(interface.instances.len(), 1);
+        assert_eq!(interface.instances[0].id, implementation.id);
+        assert_eq!(
+            interface.instances[0].dictionary_kind,
+            alder_ast::DictionaryKind::Factory
+        );
+        assert_eq!(interface.instances[0].methods.len(), 1);
     }
 
     #[test]
