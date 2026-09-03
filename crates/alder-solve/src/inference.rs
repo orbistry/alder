@@ -2,15 +2,20 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{
     Annotation, BinOp, BindingName, Block, Child, ChildBlock, ChildItem, Expr, FieldPresence,
-    ItemKind, Module, ModuleId, PackageId, Pattern, QualifiedName, RecordField, RowExtension, Stmt,
-    Type, TypeSlot, ValueRef,
+    ItemKind, MethodId, Module, ModuleId, PackageId, Pattern, QualifiedName, RecordField,
+    RowExtension, Stmt, TraitId, Type, TypeSlot, UseId, ValueRef,
 };
 use alder_can::Annotations;
 use alder_constrain::{Constraints, Error, ErrorKind};
 use alder_region::{Located, Region};
 use bumpalo::Bump;
 
-#[derive(Clone, Debug)]
+use crate::{
+    Evidence, Intrinsic, SolveError, SolveOutput, SolveTraitError, TraitDatabase, UseAction,
+    builtin_trait_id,
+};
+
+#[derive(Clone, Debug, PartialEq)]
 enum Ty<'a> {
     Var(usize),
     Con(QualifiedName<'a>),
@@ -29,10 +34,399 @@ enum Ty<'a> {
     Any,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum TySlot<'a> {
     Hole(u16),
     Fixed(Ty<'a>),
+}
+
+fn resolve_obligations<'a>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    result: InferenceResult<'a>,
+) -> Result<SolveOutput<'a>, Vec<SolveError<'a>>> {
+    let mut uses = BTreeMap::new();
+    let mut errors = Vec::new();
+    for obligation in result.obligations {
+        let mut stack = Vec::new();
+        match resolve_predicate(
+            bump,
+            database,
+            &obligation.predicate,
+            &obligation.givens,
+            obligation.region,
+            &mut stack,
+        ) {
+            Ok(evidence) => match obligation.action {
+                ObligationAction::Reference(method) => match uses.entry(obligation.use_id) {
+                    std::collections::btree_map::Entry::Vacant(entry) => {
+                        entry.insert(UseAction::Reference {
+                            dictionaries: vec![evidence],
+                            method,
+                        });
+                    }
+                    std::collections::btree_map::Entry::Occupied(mut entry) => {
+                        if let UseAction::Reference { dictionaries, .. } = entry.get_mut() {
+                            dictionaries.push(evidence);
+                        }
+                    }
+                },
+                ObligationAction::Operator => {
+                    uses.insert(
+                        obligation.use_id,
+                        UseAction::Operator {
+                            dictionary: evidence,
+                        },
+                    );
+                }
+                ObligationAction::Pin => {
+                    uses.insert(
+                        obligation.use_id,
+                        UseAction::Pin {
+                            dictionary: evidence,
+                        },
+                    );
+                }
+                ObligationAction::CompoundAssign => {
+                    uses.insert(
+                        obligation.use_id,
+                        UseAction::CompoundAssign {
+                            dictionary: evidence,
+                        },
+                    );
+                }
+            },
+            Err(error) => errors.push(SolveError::Trait(error)),
+        }
+    }
+    if errors.is_empty() {
+        Ok(SolveOutput {
+            annotations: result.annotations,
+            uses,
+        })
+    } else {
+        Err(errors)
+    }
+}
+
+fn resolve_predicate<'a>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    predicate: &Predicate<'a>,
+    givens: &[Predicate<'a>],
+    origin: Region,
+    stack: &mut Vec<(TraitId<'a>, String)>,
+) -> Result<Evidence<'a>, SolveTraitError<'a>> {
+    let subject = predicate.args.first().cloned().unwrap_or(Ty::Unit);
+    let rendered = render_ty(&subject);
+    if let Some(index) = givens
+        .iter()
+        .position(|given| given.trait_ == predicate.trait_ && given.args == predicate.args)
+    {
+        return Ok(Evidence::Param(index as u16));
+    }
+    if stack
+        .iter()
+        .any(|(trait_, active)| *trait_ == predicate.trait_ && *active == rendered)
+    {
+        return Err(SolveTraitError::InstanceCycle {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            origin,
+        });
+    }
+    if let Some(evidence) = resolve_intrinsic(bump, database, predicate, givens, origin, stack)? {
+        return Ok(evidence);
+    }
+    stack.push((predicate.trait_, rendered.clone()));
+    let mut successes = Vec::new();
+    let mut nested_error = None;
+    for implementation in database.instances(predicate.trait_) {
+        let template = implementation.trait_ref();
+        if template.args.len() != predicate.args.len() {
+            continue;
+        }
+        let mut bindings = BTreeMap::new();
+        if !template
+            .args
+            .iter()
+            .zip(&predicate.args)
+            .all(|(template, goal)| match_type(template, goal, &mut bindings))
+        {
+            continue;
+        }
+        let mut arguments = Vec::new();
+        let mut failed = None;
+        for prerequisite in implementation.predicates() {
+            let prerequisite = Predicate {
+                trait_: prerequisite.trait_,
+                args: prerequisite
+                    .args
+                    .iter()
+                    .map(|argument| substitute_type(argument, &bindings))
+                    .collect(),
+            };
+            match resolve_predicate(bump, database, &prerequisite, givens, origin, stack) {
+                Ok(evidence) => arguments.push(evidence),
+                Err(error) => {
+                    failed = Some(error);
+                    break;
+                }
+            }
+        }
+        if let Some(error) = failed {
+            nested_error = Some(error);
+        } else {
+            let impl_id = implementation.id();
+            successes.push((impl_id, Evidence::Impl { impl_id, arguments }));
+        }
+    }
+    stack.pop();
+    match successes.len() {
+        1 => Ok(successes.pop().expect("one success").1),
+        count if count > 1 => Err(SolveTraitError::AmbiguousInstance {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            origin,
+            candidates: bump
+                .alloc_slice_fill_iter(successes.into_iter().map(|(impl_id, _)| impl_id)),
+        }),
+        _ if nested_error.is_some() => Err(nested_error.expect("checked above")),
+        _ if contains_variable(&subject) => Err(SolveTraitError::UnsatisfiedBound {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            origin,
+        }),
+        _ => Err(SolveTraitError::MissingInstance {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            origin,
+        }),
+    }
+}
+
+fn resolve_intrinsic<'a>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    predicate: &Predicate<'a>,
+    givens: &[Predicate<'a>],
+    origin: Region,
+    stack: &mut Vec<(TraitId<'a>, String)>,
+) -> Result<Option<Evidence<'a>>, SolveTraitError<'a>> {
+    let Some(subject) = predicate.args.first() else {
+        return Ok(None);
+    };
+    let name = predicate.trait_.0.name;
+    let nominal = nominal_name(subject);
+    let intrinsic = match (name, nominal) {
+        ("Eq", Some("Number")) => Some(Intrinsic::EqNumber),
+        ("Eq", Some("String")) => Some(Intrinsic::EqString),
+        ("Eq", Some("Bool")) => Some(Intrinsic::EqBool),
+        ("Eq", Some("BigInt")) => Some(Intrinsic::EqBigInt),
+        ("Ord", Some("Number")) => Some(Intrinsic::OrdNumber),
+        ("Ord", Some("String")) => Some(Intrinsic::OrdString),
+        ("Ord", Some("BigInt")) => Some(Intrinsic::OrdBigInt),
+        ("Num", Some("Number")) => Some(Intrinsic::NumNumber),
+        ("Num", Some("BigInt")) => Some(Intrinsic::NumBigInt),
+        _ => None,
+    };
+    if let Some(intrinsic) = intrinsic {
+        return Ok(Some(Evidence::Intrinsic(intrinsic)));
+    }
+    if name == "Eq" && matches!(subject, Ty::Unit) {
+        return Ok(Some(Evidence::Intrinsic(Intrinsic::EqUnit)));
+    }
+    if name == "Eq" {
+        let children = match subject {
+            Ty::Tuple(items) => Some(items.clone()),
+            Ty::Record(fields, false) => {
+                Some(fields.values().map(|(_, typ)| typ.clone()).collect())
+            }
+            _ => None,
+        };
+        if let Some(children) = children {
+            let mut evidence = Vec::new();
+            for child in children {
+                evidence.push(resolve_predicate(
+                    bump,
+                    database,
+                    &Predicate {
+                        trait_: predicate.trait_,
+                        args: vec![child],
+                    },
+                    givens,
+                    origin,
+                    stack,
+                )?);
+            }
+            return Ok(Some(Evidence::StructuralEq(evidence)));
+        }
+    }
+    Ok(None)
+}
+
+fn match_type<'a>(
+    template: &'a Located<Type<'a>>,
+    goal: &Ty<'a>,
+    bindings: &mut BTreeMap<&'a str, Ty<'a>>,
+) -> bool {
+    match &template.value {
+        Type::Var { name, args: [] } => match bindings.get(name) {
+            Some(bound) => bound == goal,
+            None => {
+                bindings.insert(name, goal.clone());
+                true
+            }
+        },
+        Type::Named { reference, args } => match nominal_parts(goal) {
+            Some((actual, actual_args))
+                if actual == *reference && actual_args.len() == args.len() =>
+            {
+                args.iter()
+                    .zip(actual_args)
+                    .all(|(template, actual)| match_type(template, actual, bindings))
+            }
+            _ => false,
+        },
+        Type::Partial { constructor, slots } => match goal {
+            Ty::Partial(actual, actual_slots) => {
+                constructor == actual
+                    && slots.len() == actual_slots.len()
+                    && slots
+                        .iter()
+                        .zip(actual_slots)
+                        .all(|(left, right)| match (left, right) {
+                            (TypeSlot::Hole(_), TySlot::Hole(_)) => true,
+                            (TypeSlot::Fixed(left), TySlot::Fixed(right)) => {
+                                match_type(left, right, bindings)
+                            }
+                            _ => false,
+                        })
+            }
+            _ => false,
+        },
+        Type::Unit => matches!(goal, Ty::Unit),
+        Type::Tuple(items) => match goal {
+            Ty::Tuple(actual) if actual.len() == items.len() => items
+                .iter()
+                .zip(actual)
+                .all(|(template, actual)| match_type(template, actual, bindings)),
+            _ => false,
+        },
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(real) | alder_ast::AliasType::Filled(real) => {
+                match_type(real, goal, bindings)
+            }
+        },
+        Type::Fn { .. }
+        | Type::Record { .. }
+        | Type::ErrorRow { .. }
+        | Type::Projection(_)
+        | Type::Var { .. } => false,
+    }
+}
+
+fn substitute_type<'a>(typ: &'a Located<Type<'a>>, bindings: &BTreeMap<&'a str, Ty<'a>>) -> Ty<'a> {
+    match &typ.value {
+        Type::Var { name, args: [] } => bindings.get(name).cloned().unwrap_or(Ty::Any),
+        Type::Named { reference, args } => {
+            let arguments = args
+                .iter()
+                .map(|argument| substitute_type(argument, bindings))
+                .collect::<Vec<_>>();
+            if arguments.is_empty() {
+                Ty::Con(*reference)
+            } else {
+                Ty::App(Box::new(Ty::Con(*reference)), arguments)
+            }
+        }
+        Type::Unit => Ty::Unit,
+        Type::Tuple(items) => Ty::Tuple(
+            items
+                .iter()
+                .map(|item| substitute_type(item, bindings))
+                .collect(),
+        ),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(real) | alder_ast::AliasType::Filled(real) => {
+                substitute_type(real, bindings)
+            }
+        },
+        _ => Ty::Any,
+    }
+}
+
+fn nominal_parts<'t, 'a>(typ: &'t Ty<'a>) -> Option<(QualifiedName<'a>, &'t [Ty<'a>])> {
+    match typ {
+        Ty::Con(name) => Some((*name, &[])),
+        Ty::App(head, args) => match head.as_ref() {
+            Ty::Con(name) => Some((*name, args)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn nominal_name<'a>(typ: &Ty<'a>) -> Option<&'a str> {
+    nominal_parts(typ).map(|(name, _)| name.name)
+}
+
+fn contains_variable(typ: &Ty<'_>) -> bool {
+    match typ {
+        Ty::Var(_) => true,
+        Ty::App(head, args) => contains_variable(head) || args.iter().any(contains_variable),
+        Ty::Partial(_, slots) => slots.iter().any(|slot| match slot {
+            TySlot::Hole(_) => false,
+            TySlot::Fixed(typ) => contains_variable(typ),
+        }),
+        Ty::Projection(_, args, _) | Ty::Tuple(args) => args.iter().any(contains_variable),
+        Ty::Fn(params, ret) => params.iter().any(contains_variable) || contains_variable(ret),
+        Ty::Record(fields, _) => fields.values().any(|(_, typ)| contains_variable(typ)),
+        Ty::Con(_) | Ty::Unit | Ty::ErrorRow | Ty::Any => false,
+    }
+}
+
+fn render_ty(typ: &Ty<'_>) -> String {
+    match typ {
+        Ty::Var(id) => format!("t{id}"),
+        Ty::Con(name) => name.name.to_owned(),
+        Ty::App(head, args) => format!(
+            "{}[{}]",
+            render_ty(head),
+            args.iter().map(render_ty).collect::<Vec<_>>().join(", ")
+        ),
+        Ty::Partial(name, slots) => format!(
+            "{}[{}]",
+            name.name,
+            slots
+                .iter()
+                .map(|slot| match slot {
+                    TySlot::Hole(_) => "_".to_owned(),
+                    TySlot::Fixed(typ) => render_ty(typ),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Ty::Projection(trait_, args, assoc) => format!(
+            "{}[{}]::{}",
+            trait_.0.name,
+            args.iter().map(render_ty).collect::<Vec<_>>().join(", "),
+            assoc.name
+        ),
+        Ty::Fn(params, ret) => format!(
+            "fn({}) -> {}",
+            params.iter().map(render_ty).collect::<Vec<_>>().join(", "),
+            render_ty(ret)
+        ),
+        Ty::Unit => "()".to_owned(),
+        Ty::Tuple(items) => format!(
+            "({})",
+            items.iter().map(render_ty).collect::<Vec<_>>().join(", ")
+        ),
+        Ty::Record(_, _) => "{ .. }".to_owned(),
+        Ty::ErrorRow => "[:_ | e]".to_owned(),
+        Ty::Any => "_".to_owned(),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -41,31 +435,78 @@ struct Scheme<'a> {
     typ: Ty<'a>,
 }
 
+#[derive(Clone, Debug)]
+struct Predicate<'a> {
+    trait_: TraitId<'a>,
+    args: Vec<Ty<'a>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ObligationAction<'a> {
+    Reference(Option<MethodId<'a>>),
+    Operator,
+    Pin,
+    CompoundAssign,
+}
+
+#[derive(Clone, Debug)]
+struct Obligation<'a> {
+    use_id: UseId,
+    predicate: Predicate<'a>,
+    region: Region,
+    action: ObligationAction<'a>,
+    givens: Vec<Predicate<'a>>,
+}
+
+struct InferenceResult<'a> {
+    annotations: Annotations<'a>,
+    obligations: Vec<Obligation<'a>>,
+}
+
 #[derive(Clone, Default)]
 struct Env<'a> {
     locals: BTreeMap<u32, Scheme<'a>>,
     globals: BTreeMap<QualifiedName<'a>, Scheme<'a>>,
 }
 
-struct Infer<'a> {
+struct Infer<'a, 'db> {
     bump: &'a Bump,
+    database: &'db TraitDatabase<'a>,
     substitutions: Vec<Option<Ty<'a>>>,
+    obligations: Vec<Obligation<'a>>,
+    givens: Vec<Predicate<'a>>,
 }
 
 pub fn run<'a>(
     bump: &'a Bump,
     constraints: &Constraints<'a>,
 ) -> Result<Annotations<'a>, Vec<Error>> {
-    Infer::new(bump)
+    let database = TraitDatabase::build(bump, constraints.module, &[]);
+    Infer::new(bump, &database)
         .infer_module(constraints.module)
+        .map(|result| result.annotations)
         .map_err(|error| vec![error])
 }
 
-impl<'a> Infer<'a> {
-    fn new(bump: &'a Bump) -> Self {
+pub fn solve<'a>(
+    bump: &'a Bump,
+    constraints: &Constraints<'a>,
+    database: &TraitDatabase<'a>,
+) -> Result<SolveOutput<'a>, Vec<SolveError<'a>>> {
+    let result = Infer::new(bump, database)
+        .infer_module(constraints.module)
+        .map_err(|error| vec![SolveError::Core(error)])?;
+    resolve_obligations(bump, database, result)
+}
+
+impl<'a, 'db> Infer<'a, 'db> {
+    fn new(bump: &'a Bump, database: &'db TraitDatabase<'a>) -> Self {
         Self {
             bump,
+            database,
             substitutions: Vec::new(),
+            obligations: Vec::new(),
+            givens: Vec::new(),
         }
     }
 
@@ -75,7 +516,7 @@ impl<'a> Infer<'a> {
         Ty::Var(id)
     }
 
-    fn infer_module(&mut self, module: &'a Module<'a>) -> Result<Annotations<'a>, Error> {
+    fn infer_module(&mut self, module: &'a Module<'a>) -> Result<InferenceResult<'a>, Error> {
         let mut env = Env::default();
         let mut value_items = BTreeMap::new();
         for item in module.items {
@@ -128,7 +569,21 @@ impl<'a> Infer<'a> {
         for (name, scheme) in env.globals {
             annotations.insert(name, self.annotation(&scheme.typ));
         }
-        Ok(annotations)
+        let mut obligations = std::mem::take(&mut self.obligations);
+        for obligation in &mut obligations {
+            for argument in &mut obligation.predicate.args {
+                *argument = self.prune(argument.clone());
+            }
+            for given in &mut obligation.givens {
+                for argument in &mut given.args {
+                    *argument = self.prune(argument.clone());
+                }
+            }
+        }
+        Ok(InferenceResult {
+            annotations,
+            obligations,
+        })
     }
 
     fn predeclare(&mut self, env: &mut Env<'a>, name: QualifiedName<'a>) {
@@ -174,6 +629,7 @@ impl<'a> Infer<'a> {
                             env,
                             function.params,
                             function.ret,
+                            function.constraints,
                             function.body,
                             region,
                         )?;
@@ -185,7 +641,14 @@ impl<'a> Infer<'a> {
                     if let alder_ast::TraitItem::Fn(function) = item
                         && let Some(body) = function.body
                     {
-                        self.infer_function(env, function.params, function.ret, body, region)?;
+                        self.infer_function(
+                            env,
+                            function.params,
+                            function.ret,
+                            function.constraints,
+                            body,
+                            region,
+                        )?;
                     }
                 }
             }
@@ -218,8 +681,14 @@ impl<'a> Infer<'a> {
     ) -> Result<(), Error> {
         match item {
             ItemKind::Fn(function) => {
-                let typ =
-                    self.infer_function(env, function.params, function.ret, function.body, region)?;
+                let typ = self.infer_function(
+                    env,
+                    function.params,
+                    function.ret,
+                    function.constraints,
+                    function.body,
+                    region,
+                )?;
                 self.unify_global(env, function.name, typ, region)
             }
             ItemKind::Extern(alder_ast::ExternDecl::Fn {
@@ -247,7 +716,7 @@ impl<'a> Infer<'a> {
             }
             ItemKind::Component(component) => {
                 let typ =
-                    self.infer_function(env, component.params, None, component.body, region)?;
+                    self.infer_function(env, component.params, None, &[], component.body, region)?;
                 let Ty::Fn(args, inferred) = typ else {
                     unreachable!()
                 };
@@ -268,6 +737,7 @@ impl<'a> Infer<'a> {
         env: &Env<'a>,
         params: &'a [alder_ast::Param<'a>],
         ret: Option<&'a Located<Type<'a>>>,
+        constraints: &'a [alder_ast::TypeConstraint<'a>],
         body: &'a Located<Block<'a>>,
         region: Region,
     ) -> Result<Ty<'a>, Error> {
@@ -286,6 +756,23 @@ impl<'a> Infer<'a> {
             Some(ret) => self.from_ast(ret, &mut vars),
             None => self.fresh(),
         };
+        let outer_givens = std::mem::take(&mut self.givens);
+        self.givens = outer_givens.clone();
+        for constraint in constraints {
+            if let alder_ast::TypeConstraint::Bound {
+                var,
+                traits: trait_names,
+            } = constraint
+                && let Some(subject) = vars.get(var.value).cloned()
+            {
+                for trait_name in *trait_names {
+                    self.givens.push(Predicate {
+                        trait_: TraitId(*trait_name),
+                        args: vec![subject.clone()],
+                    });
+                }
+            }
+        }
         let body_result = match self.prune(result.clone()) {
             Ty::App(head, args)
                 if matches!(*head, Ty::Con(reference) if reference.name == "Task")
@@ -295,11 +782,15 @@ impl<'a> Infer<'a> {
             }
             _ => result.clone(),
         };
-        let body_type = self.infer_block(&mut local, body, Some(body_result.clone()))?;
-        if body.value.tail.is_some() || !block_contains_return(body) {
-            self.unify(body_type, body_result, region)?;
-        }
-        Ok(Ty::Fn(args, Box::new(self.prune(result))))
+        let inferred = (|| {
+            let body_type = self.infer_block(&mut local, body, Some(body_result.clone()))?;
+            if body.value.tail.is_some() || !block_contains_return(body) {
+                self.unify(body_type, body_result, region)?;
+            }
+            Ok(Ty::Fn(args, Box::new(self.prune(result))))
+        })();
+        self.givens = outer_givens;
+        inferred
     }
 
     fn infer_block(
@@ -333,10 +824,24 @@ impl<'a> Infer<'a> {
                 self.infer_pattern(env, decl.pattern, value, false)?;
             }
             Stmt::Use { .. } => {}
-            Stmt::Assign { place, value, .. } => {
+            Stmt::Assign {
+                use_id,
+                place,
+                value,
+                ..
+            } => {
                 let expected = self.place_type(env, place, statement.region)?;
                 let actual = self.infer_expr(env, value, return_type.clone())?;
-                self.unify(actual, expected, statement.region)?;
+                self.unify(actual, expected.clone(), statement.region)?;
+                if let Some(use_id) = use_id {
+                    self.record_builtin_obligation(
+                        *use_id,
+                        "Num",
+                        expected,
+                        statement.region,
+                        ObligationAction::CompoundAssign,
+                    );
+                }
             }
             Stmt::For {
                 pattern,
@@ -412,7 +917,9 @@ impl<'a> Infer<'a> {
             }
             Expr::Bool(_) => Ok(self.named("Bool", Vec::new())),
             Expr::Unit => Ok(Ty::Unit),
-            Expr::Var { reference, .. } => self.infer_reference(env, *reference, region),
+            Expr::Var { use_id, reference } => {
+                self.infer_reference(env, *use_id, *reference, region)
+            }
             Expr::Constructor(constructor) => {
                 Ok(self.instantiate_annotation(constructor.annotation))
             }
@@ -512,10 +1019,16 @@ impl<'a> Infer<'a> {
                 Ok(self.prune(value))
             }
             Expr::Pin(expr) | Expr::State(expr) => self.infer_expr(env, expr, return_type),
-            Expr::Negate { expr, .. } => {
+            Expr::Negate { use_id, expr } => {
                 let actual = self.infer_expr(env, expr, return_type)?;
-                self.unify(actual, self.named("Number", Vec::new()), region)?;
-                Ok(self.named("Number", Vec::new()))
+                self.record_builtin_obligation(
+                    *use_id,
+                    "Num",
+                    actual.clone(),
+                    region,
+                    ObligationAction::Operator,
+                );
+                Ok(self.prune(actual))
             }
             Expr::Not(expr) => {
                 let actual = self.infer_expr(env, expr, return_type)?;
@@ -523,8 +1036,11 @@ impl<'a> Infer<'a> {
                 Ok(self.named("Bool", Vec::new()))
             }
             Expr::Binop {
-                op, left, right, ..
-            } => self.infer_binop(env, op.value, left, right, return_type),
+                use_id,
+                op,
+                left,
+                right,
+            } => self.infer_binop(env, *use_id, op.value, left, right, return_type),
             Expr::Block(block) => self.infer_block(&mut env.clone(), block, return_type),
             Expr::Lambda { params, ret, body } => {
                 let mut local = env.clone();
@@ -625,14 +1141,55 @@ impl<'a> Infer<'a> {
     fn infer_reference(
         &mut self,
         env: &Env<'a>,
+        use_id: UseId,
         reference: ValueRef<'a>,
-        _region: Region,
+        region: Region,
     ) -> Result<Ty<'a>, Error> {
         match reference {
             ValueRef::Local(local) => Ok(self.instantiate(&env.locals[&local.id.0])),
             ValueRef::TopLevel(name) => Ok(self.instantiate(&env.globals[&name])),
-            ValueRef::Foreign { annotation, .. } | ValueRef::TraitMethod { annotation, .. } => {
-                Ok(self.instantiate_annotation(annotation))
+            ValueRef::Foreign { annotation, .. } => {
+                let (typ, vars) = self.instantiate_annotation_with_vars(annotation);
+                self.record_annotation_predicates(
+                    use_id,
+                    annotation,
+                    &vars,
+                    region,
+                    ObligationAction::Reference(None),
+                );
+                Ok(typ)
+            }
+            ValueRef::TraitMethod { method, annotation } => {
+                let (typ, vars) = self.instantiate_annotation_with_vars(annotation);
+                if let Some(header) = self.database.trait_(method.trait_) {
+                    let args = header
+                        .params
+                        .iter()
+                        .map(|parameter| {
+                            vars.get(parameter.name.value)
+                                .cloned()
+                                .unwrap_or_else(|| self.fresh())
+                        })
+                        .collect();
+                    self.obligations.push(Obligation {
+                        use_id,
+                        predicate: Predicate {
+                            trait_: method.trait_,
+                            args,
+                        },
+                        region,
+                        action: ObligationAction::Reference(Some(method)),
+                        givens: self.givens.clone(),
+                    });
+                }
+                self.record_annotation_predicates(
+                    use_id,
+                    annotation,
+                    &vars,
+                    region,
+                    ObligationAction::Reference(Some(method)),
+                );
+                Ok(typ)
             }
             ValueRef::Module(_)
             | ValueRef::Builtin(_)
@@ -691,9 +1248,19 @@ impl<'a> Infer<'a> {
                     }
                 }
             },
-            Pattern::Pin { value: expr, .. } => {
+            Pattern::Pin {
+                use_id,
+                value: expr,
+            } => {
                 let actual = self.infer_expr(env, expr, None)?;
-                self.unify(actual, expected, pattern.region)?;
+                self.unify(actual, expected.clone(), pattern.region)?;
+                self.record_builtin_obligation(
+                    *use_id,
+                    "Eq",
+                    expected,
+                    pattern.region,
+                    ObligationAction::Pin,
+                );
             }
             Pattern::Number { .. } => {
                 self.unify(expected, self.named("Number", Vec::new()), pattern.region)?;
@@ -817,6 +1384,7 @@ impl<'a> Infer<'a> {
     fn infer_binop(
         &mut self,
         env: &Env<'a>,
+        use_id: UseId,
         op: BinOp,
         left: &'a Located<Expr<'a>>,
         right: &'a Located<Expr<'a>>,
@@ -826,13 +1394,36 @@ impl<'a> Infer<'a> {
         let right_type = self.infer_expr(env, right, return_type)?;
         match op {
             BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Rem => {
-                let number = self.named("Number", Vec::new());
-                self.unify(left_type, number.clone(), left.region)?;
-                self.unify(right_type, number.clone(), right.region)?;
-                Ok(number)
+                self.unify(left_type.clone(), right_type, right.region)?;
+                self.record_builtin_obligation(
+                    use_id,
+                    "Num",
+                    left_type.clone(),
+                    left.region,
+                    ObligationAction::Operator,
+                );
+                Ok(self.prune(left_type))
             }
-            BinOp::Eq | BinOp::NotEq | BinOp::Lt | BinOp::LtEq | BinOp::Gt | BinOp::GtEq => {
-                self.unify(left_type, right_type, right.region)?;
+            BinOp::Eq | BinOp::NotEq => {
+                self.unify(left_type.clone(), right_type, right.region)?;
+                self.record_builtin_obligation(
+                    use_id,
+                    "Eq",
+                    left_type,
+                    left.region,
+                    ObligationAction::Operator,
+                );
+                Ok(self.named("Bool", Vec::new()))
+            }
+            BinOp::Lt | BinOp::LtEq | BinOp::Gt | BinOp::GtEq => {
+                self.unify(left_type.clone(), right_type, right.region)?;
+                self.record_builtin_obligation(
+                    use_id,
+                    "Ord",
+                    left_type,
+                    left.region,
+                    ObligationAction::Operator,
+                );
                 Ok(self.named("Bool", Vec::new()))
             }
             BinOp::And | BinOp::Or => {
@@ -856,6 +1447,26 @@ impl<'a> Infer<'a> {
             }
             BinOp::In => Ok(self.named("Bool", Vec::new())),
         }
+    }
+
+    fn record_builtin_obligation(
+        &mut self,
+        use_id: UseId,
+        trait_name: &'static str,
+        subject: Ty<'a>,
+        region: Region,
+        action: ObligationAction<'a>,
+    ) {
+        self.obligations.push(Obligation {
+            use_id,
+            predicate: Predicate {
+                trait_: builtin_trait_id(trait_name),
+                args: vec![subject],
+            },
+            region,
+            action,
+            givens: self.givens.clone(),
+        });
     }
 
     fn place_type(
@@ -1139,6 +1750,43 @@ impl<'a> Infer<'a> {
 
     fn instantiate_annotation(&mut self, annotation: &'a Annotation<'a>) -> Ty<'a> {
         self.from_ast(annotation.typ, &mut BTreeMap::new())
+    }
+
+    fn instantiate_annotation_with_vars(
+        &mut self,
+        annotation: &'a Annotation<'a>,
+    ) -> (Ty<'a>, BTreeMap<&'a str, Ty<'a>>) {
+        let mut vars = BTreeMap::new();
+        let typ = self.from_ast(annotation.typ, &mut vars);
+        (typ, vars)
+    }
+
+    fn record_annotation_predicates(
+        &mut self,
+        use_id: UseId,
+        annotation: &'a Annotation<'a>,
+        vars: &BTreeMap<&'a str, Ty<'a>>,
+        region: Region,
+        action: ObligationAction<'a>,
+    ) {
+        for predicate in annotation.trait_predicates {
+            let mut vars = vars.clone();
+            let args = predicate
+                .args
+                .iter()
+                .map(|argument| self.from_ast(argument, &mut vars))
+                .collect();
+            self.obligations.push(Obligation {
+                use_id,
+                predicate: Predicate {
+                    trait_: predicate.trait_,
+                    args,
+                },
+                region,
+                action,
+                givens: self.givens.clone(),
+            });
+        }
     }
 
     #[allow(clippy::wrong_self_convention)]
