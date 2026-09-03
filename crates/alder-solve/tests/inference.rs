@@ -300,6 +300,33 @@ fn default_body_can_use_a_superclass_dictionary() {
 }
 
 #[test]
+fn generic_bounds_expose_transitive_superclass_dictionaries() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Equal[a] { fn equal(left: a, right: a) -> Bool }
+            trait Ordered[a] where a: Equal { fn less(left: a, right: a) -> Bool }
+            trait Ranked[a] where a: Ordered { fn rank(value: a) -> Number }
+            fn same(left: a, right: a) -> Bool where a: Ranked { equal(left, right) }
+        "#},
+    )
+    .expect("Ranked exposes Equal through its Ordered superclass");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(method),
+        } if method.name == "equal"
+            && matches!(
+                dictionaries.as_slice(),
+                [alder_solve::Evidence::ParamSuperPath { param: 0, path }]
+                    if path == &[0, 0]
+            )
+    )));
+}
+
+#[test]
 fn implementation_must_supply_each_superclass_dictionary() {
     let bump = Bump::new();
     let errors = solve_input(

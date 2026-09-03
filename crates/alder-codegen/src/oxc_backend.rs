@@ -2162,10 +2162,19 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.js.identifier(&format!("$dict{param}")),
                 &format!("$super{slot}"),
             ),
+            Evidence::ParamSuperPath { param, path } => path.iter().fold(
+                self.js.identifier(&format!("$dict{param}")),
+                |dictionary, slot| self.js.member(dictionary, &format!("$super{slot}")),
+            ),
             Evidence::SelfDictionary => self.js.identifier("$self"),
             Evidence::Super(index) => self
                 .js
                 .member(self.js.identifier("$self"), &format!("$super{index}")),
+            Evidence::SuperPath(path) => path
+                .iter()
+                .fold(self.js.identifier("$self"), |dictionary, slot| {
+                    self.js.member(dictionary, &format!("$super{slot}"))
+                }),
             Evidence::Impl {
                 module,
                 symbol,

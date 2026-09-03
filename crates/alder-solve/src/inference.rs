@@ -2310,7 +2310,65 @@ impl<'a, 'db> Infer<'a, 'db> {
     }
 
     fn add_superclass_givens(&mut self, predicate: &Predicate<'a>) {
+        let mut superclasses = Vec::new();
+        self.collect_superclasses(
+            predicate,
+            &mut Vec::new(),
+            &mut BTreeSet::new(),
+            &mut superclasses,
+        );
+        for (path, predicate) in superclasses {
+            let evidence = if path.len() == 1 {
+                Evidence::Super(path[0])
+            } else {
+                Evidence::SuperPath(path)
+            };
+            self.givens.push(Given {
+                predicate,
+                evidence,
+            });
+        }
+    }
+
+    fn add_parameter_superclass_givens(&mut self, predicates: &[Predicate<'a>], offset: usize) {
+        for (parameter_index, predicate) in predicates.iter().enumerate() {
+            let mut superclasses = Vec::new();
+            self.collect_superclasses(
+                predicate,
+                &mut Vec::new(),
+                &mut BTreeSet::new(),
+                &mut superclasses,
+            );
+            for (path, predicate) in superclasses {
+                let param = (offset + parameter_index) as u16;
+                let evidence = if path.len() == 1 {
+                    Evidence::ParamSuper {
+                        param,
+                        slot: path[0],
+                    }
+                } else {
+                    Evidence::ParamSuperPath { param, path }
+                };
+                self.givens.push(Given {
+                    predicate,
+                    evidence,
+                });
+            }
+        }
+    }
+
+    fn collect_superclasses(
+        &mut self,
+        predicate: &Predicate<'a>,
+        path: &mut Vec<u16>,
+        active: &mut BTreeSet<TraitId<'a>>,
+        output: &mut Vec<(Vec<u16>, Predicate<'a>)>,
+    ) {
+        if !active.insert(predicate.trait_) {
+            return;
+        }
         let Some(header) = self.database.trait_(predicate.trait_) else {
+            active.remove(&predicate.trait_);
             return;
         };
         let mut vars = header
@@ -2319,37 +2377,14 @@ impl<'a, 'db> Infer<'a, 'db> {
             .zip(&predicate.args)
             .map(|(parameter, argument)| (parameter.name.value, argument.clone()))
             .collect::<BTreeMap<_, _>>();
-        for (index, superclass) in header.superclasses.iter().enumerate() {
-            let predicate = self.predicate_from_trait_ref(*superclass, &mut vars);
-            self.givens.push(Given {
-                predicate,
-                evidence: Evidence::Super(index as u16),
-            });
+        for (slot, superclass) in header.superclasses.iter().enumerate() {
+            let superclass = self.predicate_from_trait_ref(*superclass, &mut vars);
+            path.push(slot as u16);
+            output.push((path.clone(), superclass.clone()));
+            self.collect_superclasses(&superclass, path, active, output);
+            path.pop();
         }
-    }
-
-    fn add_parameter_superclass_givens(&mut self, predicates: &[Predicate<'a>], offset: usize) {
-        for (parameter_index, predicate) in predicates.iter().enumerate() {
-            let Some(header) = self.database.trait_(predicate.trait_) else {
-                continue;
-            };
-            let mut vars = header
-                .params
-                .iter()
-                .zip(&predicate.args)
-                .map(|(parameter, argument)| (parameter.name.value, argument.clone()))
-                .collect::<BTreeMap<_, _>>();
-            for (slot, superclass) in header.superclasses.iter().enumerate() {
-                let predicate = self.predicate_from_trait_ref(*superclass, &mut vars);
-                self.givens.push(Given {
-                    predicate,
-                    evidence: Evidence::ParamSuper {
-                        param: (offset + parameter_index) as u16,
-                        slot: slot as u16,
-                    },
-                });
-            }
-        }
+        active.remove(&predicate.trait_);
     }
 
     fn require_impl_superclasses(
@@ -2377,22 +2412,26 @@ impl<'a, 'db> Infer<'a, 'db> {
             })
             .collect::<Vec<_>>();
         for (parameter_index, prerequisite) in prerequisites.iter().enumerate() {
-            let Some(prerequisite_header) = self.database.trait_(prerequisite.trait_) else {
-                continue;
-            };
-            let mut prerequisite_vars = prerequisite_header
-                .params
-                .iter()
-                .zip(&prerequisite.args)
-                .map(|(parameter, argument)| (parameter.name.value, argument.clone()))
-                .collect::<BTreeMap<_, _>>();
-            for (slot, superclass) in prerequisite_header.superclasses.iter().enumerate() {
+            let mut superclasses = Vec::new();
+            self.collect_superclasses(
+                prerequisite,
+                &mut Vec::new(),
+                &mut BTreeSet::new(),
+                &mut superclasses,
+            );
+            for (path, predicate) in superclasses {
+                let param = parameter_index as u16;
+                let evidence = if path.len() == 1 {
+                    Evidence::ParamSuper {
+                        param,
+                        slot: path[0],
+                    }
+                } else {
+                    Evidence::ParamSuperPath { param, path }
+                };
                 givens.push(Given {
-                    predicate: self.predicate_from_trait_ref(*superclass, &mut prerequisite_vars),
-                    evidence: Evidence::ParamSuper {
-                        param: parameter_index as u16,
-                        slot: slot as u16,
-                    },
+                    predicate,
+                    evidence,
                 });
             }
         }

@@ -70,8 +70,13 @@ pub enum Evidence<'a> {
         param: u16,
         slot: u16,
     },
+    ParamSuperPath {
+        param: u16,
+        path: Vec<u16>,
+    },
     SelfDictionary,
     Super(u16),
+    SuperPath(Vec<u16>),
     Impl {
         impl_id: ImplId<'a>,
         module: ModuleId<'a>,
