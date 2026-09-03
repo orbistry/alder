@@ -679,7 +679,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 );
             }
             alder_ast::DeriveKind::Hash => {
-                self.derived_kernel_method(&mut body, self_name, "hash", "$hash", 1, None);
+                self.derived_hash_method(&mut body, self_name, module, implementation);
             }
             alder_ast::DeriveKind::Json => {
                 self.derived_shaped_method(
@@ -768,6 +768,39 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let mut method_body = self.js.vec();
         method_body.push(self.js.return_statement(call));
         let target = self.js.member(self.js.identifier(dictionary), method);
+        let assignment = self.js.assignment(
+            target,
+            AssignmentOperator::Assign,
+            self.js.arrow(&["$a0".to_owned()], method_body, false),
+        );
+        body.push(self.js.expression_statement(assignment));
+    }
+
+    fn derived_hash_method(
+        &mut self,
+        body: &mut ArenaVec<'js, Statement<'js>>,
+        dictionary: &str,
+        module: &Module<'src>,
+        implementation: &alder_ast::ImplDecl<'src>,
+    ) {
+        self.kernel.insert("$hashDerived");
+        let shape = self.derived_variant_shape(module, implementation);
+        let type_name = implementation
+            .trait_ref
+            .args
+            .first()
+            .and_then(|subject| match subject.value {
+                alder_ast::Type::Named { reference, .. } => Some(qualified_key(reference)),
+                _ => None,
+            })
+            .expect("derived Hash has a nominal subject");
+        let call = self.js.call(
+            self.js.identifier("$hashDerived"),
+            [self.js.identifier("$a0"), self.js.string(&type_name), shape],
+        );
+        let mut method_body = self.js.vec();
+        method_body.push(self.js.return_statement(call));
+        let target = self.js.member(self.js.identifier(dictionary), "hash");
         let assignment = self.js.assignment(
             target,
             AssignmentOperator::Assign,

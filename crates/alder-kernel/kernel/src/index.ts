@@ -137,6 +137,19 @@ export function $hash(value) {
     return hashBytes(hashStream(value));
 }
 
+export function $hashDerived(value, typeName, variants) {
+    const names = Object.keys(variants);
+    const variantIndex = names.indexOf(value?.$);
+    if (variantIndex < 0) throw new TypeError("$: unknown derived Hash variant");
+    const bytes = [0x12];
+    pushText(bytes, typeName);
+    pushU64(bytes, BigInt(variantIndex));
+    const fields = variants[value.$].fields;
+    pushU64(bytes, BigInt(fields.length));
+    fields.forEach((field, index) => pushChildHash(bytes, index, value[field]));
+    return hashBytes(bytes);
+}
+
 function hashBytes(bytes) {
     let hash = 14695981039346656037n;
     for (const byte of bytes) {
@@ -319,7 +332,11 @@ export function $jsonEncodeDerived(value, variants) {
     if (!shape) throw new TypeError("$: unknown derived JSON variant");
     if (shape.record) {
         const record = {};
-        for (const field of shape.fields) record[field] = value[field];
+        const optional = new Set(shape.optional ?? []);
+        for (const field of shape.fields) {
+            if (optional.has(field) && (!Object.hasOwn(value, field) || value[field] === null)) continue;
+            record[field] = value[field];
+        }
         return JSON.stringify({ tag: value.$, value: record });
     }
     return JSON.stringify({ tag: value.$, fields: shape.fields.map((field) => value[field]) });
@@ -334,10 +351,17 @@ export function $jsonDecodeDerived(value, variants) {
         if (!shape) return $resultErr(`$.tag: unknown variant ${JSON.stringify(parsed.tag)}`);
         const result = { $: parsed.tag };
         if (shape.record) {
+            if (Object.keys(parsed).some((key) => key !== "tag" && key !== "value")) {
+                return $resultErr("$: expected only `tag` and `value`");
+            }
             if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
                 return $resultErr("$.value: expected an object");
             }
             const optional = new Set(shape.optional ?? []);
+            const expected = new Set(shape.fields);
+            for (const field of Object.keys(parsed.value)) {
+                if (!expected.has(field)) return $resultErr(`$.value.${field}: unexpected field`);
+            }
             for (const field of shape.fields) {
                 if (!Object.hasOwn(parsed.value, field)) {
                     if (optional.has(field)) continue;
@@ -346,6 +370,9 @@ export function $jsonDecodeDerived(value, variants) {
                 result[field] = parsed.value[field];
             }
         } else {
+            if (Object.keys(parsed).some((key) => key !== "tag" && key !== "fields")) {
+                return $resultErr("$: expected only `tag` and `fields`");
+            }
             if (!Array.isArray(parsed.fields) || parsed.fields.length !== shape.fields.length) {
                 return $resultErr(`$.fields: expected ${shape.fields.length} values`);
             }

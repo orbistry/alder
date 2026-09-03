@@ -2,7 +2,7 @@
 source: crates/alder-codegen/src/lib.rs
 description: "#[derive(Show, Ord, Hash, Json)]\npub enum Status { Ready, Failed(String) }\n"
 ---
-import { $compareDerived, $equal, $hash, $jsonDecodeDerived, $jsonEncodeDerived, $showDerived } from "alder:kernel";
+import { $compareDerived, $equal, $hashDerived, $jsonDecodeDerived, $jsonEncodeDerived, $showDerived } from "alder:kernel";
 const $c_Status_Ready = Object["freeze"]({ "$": "Ready" });
 function $c_Status_Failed($a0) {
 	return {
@@ -92,7 +92,18 @@ $dict$Ord$0["gte"] = ($a0, $a1) => {
 Object["freeze"]($dict$Ord$0);
 const $dict$Hash$0 = {};
 $dict$Hash$0["hash"] = ($a0) => {
-	return $hash($a0);
+	return $hashDerived($a0, "alder://app/main.mjs::Status", {
+		"Ready": {
+			"record": false,
+			"fields": [],
+			"optional": []
+		},
+		"Failed": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": []
+		}
+	});
 };
 Object["freeze"]($dict$Hash$0);
 const $dict$Json$0 = {};

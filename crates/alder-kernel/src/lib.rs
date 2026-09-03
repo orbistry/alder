@@ -24,6 +24,7 @@ mod tests {
             "$jsonEncodeDerived",
             "$jsonDecodeDerived",
             "$hash",
+            "$hashDerived",
             "$matchFailure",
             "$optionBox",
             "$providerPush",

@@ -15,6 +15,16 @@ enum OrderProbe {
     Value { zed: Number, alpha: Number },
 }
 
+#[derive(Hash)]
+enum FirstHashProbe {
+    Value { payload: Number },
+}
+
+#[derive(Hash)]
+enum SecondHashProbe {
+    Value { payload: Number },
+}
+
 trait Describe[a] {
     fn describe(value: a) -> String
 }
@@ -45,6 +55,8 @@ pub fn main() {
     assert(Status::Ready < Status::Failed("later"))
     assert(OrderProbe::Value { zed: 0, alpha: 9 } < OrderProbe::Value { zed: 1, alpha: 0 })
     assert(hash(Status::Meta { code: 7, note: "same" }) == hash(Status::Meta { code: 7, note: "same" }))
+    assert(hash(Status::Meta { code: 7, note: "same" }) != hash(Status::Meta { code: 8, note: "same" }))
+    assert(hash(FirstHashProbe::Value { payload: 1 }) != hash(SecondHashProbe::Value { payload: 1 }))
 
     let encoded = encode(Status::Meta { code: 42, note: "answer" })
     let decoded: Result[Status, String] = decode(encoded)
@@ -55,6 +67,10 @@ pub fn main() {
     assert(config_json == "{\"tag\":\"Config\",\"value\":{\"name\":\"alder\"}}")
     let decoded_config: Result[Config, String] = decode(config_json)
     assert(decoded_config == Result.ok(config))
+    let extra_config_field: Result[Config, String] = decode("{\"tag\":\"Config\",\"value\":{\"name\":\"alder\",\"extra\":true}}")
+    assert(extra_config_field == Result.err("$.value.extra: unexpected field"))
+    let extra_config_envelope: Result[Config, String] = decode("{\"tag\":\"Config\",\"value\":{\"name\":\"alder\"},\"extra\":true}")
+    assert(extra_config_envelope == Result.err("$: expected only `tag` and `value`"))
 
     let mapped: Option[Number] = map(Option.some(1), fn(value) { value + 1 })
     assert(mapped == Option.some(2))
