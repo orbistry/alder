@@ -580,9 +580,36 @@ fn cyclic_associated_binding_is_rejected() {
     assert!(errors.iter().any(|error| matches!(
         error,
         alder_solve::SolveError::Coherence(alder_solve::CoherenceError::ProjectionCycle {
-            assoc,
+            chain,
             ..
-        }) if assoc.name == "Item"
+        }) if chain.iter().map(|assoc| assoc.name).collect::<Vec<_>>() == ["Item"]
+    )));
+}
+
+#[test]
+fn indirect_associated_binding_cycle_is_rejected() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            enum Counter { Counter }
+            trait Pair[i] {
+                type Left
+                type Right
+            }
+            impl Pair[Counter] {
+                type Left = Right
+                type Right = Left
+            }
+        "#},
+    )
+    .expect_err("associated bindings cannot form an indirect cycle");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::ProjectionCycle {
+            chain,
+            ..
+        }) if chain.iter().map(|assoc| assoc.name).collect::<Vec<_>>() == ["Left", "Right"]
     )));
 }
 

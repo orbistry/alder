@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "enum Counter { Counter }\ntrait Pair[i] {\n    type Left\n    type Right\n}\nimpl Pair[Counter] {\n    type Left = Right\n    type Right = Left\n}\n"
+---
+alder::trait::projection_cycle
+
+  × associated type cycle: Left -> Right -> Left
+   ╭─[/project/src/main.ald:6:1]
+ 5 │     }
+ 6 │ ╭─▶ impl Pair[Counter] {
+ 7 │ │       type Left = Right
+ 8 │ │       type Right = Left
+ 9 │ ├─▶ }
+   · ╰──── invalid implementation
+   ╰────

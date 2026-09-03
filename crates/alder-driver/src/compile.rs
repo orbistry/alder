@@ -557,6 +557,21 @@ mod tests {
         "#};
     }
 
+    #[tokio::test]
+    async fn renders_associated_type_cycle_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            enum Counter { Counter }
+            trait Pair[i] {
+                type Left
+                type Right
+            }
+            impl Pair[Counter] {
+                type Left = Right
+                type Right = Left
+            }
+        "#};
+    }
+
     #[test]
     fn renders_warning_with_source() {
         let source = indoc::indoc! {r#"

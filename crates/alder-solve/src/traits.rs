@@ -119,7 +119,7 @@ pub enum CoherenceError<'a> {
     },
     ProjectionCycle {
         implementation: ImplId<'a>,
-        assoc: alder_ast::AssocTypeId<'a>,
+        chain: &'a [alder_ast::AssocTypeId<'a>],
     },
 }
 
@@ -211,13 +211,11 @@ impl<'a> TraitDatabase<'a> {
                         }
                     }
                 }
-                for binding in implementation.assoc_bindings() {
-                    if contains_associated_projection(&binding.typ.value, binding.assoc) {
-                        errors.push(CoherenceError::ProjectionCycle {
-                            implementation: implementation.id(),
-                            assoc: binding.assoc,
-                        });
-                    }
+                for chain in projection_cycles(implementation.assoc_bindings()) {
+                    errors.push(CoherenceError::ProjectionCycle {
+                        implementation: implementation.id(),
+                        chain: bump.alloc_slice_copy(&chain),
+                    });
                 }
                 let subject = trait_ref.args.first().copied();
                 let type_package = subject.and_then(outer_nominal_package);
@@ -476,46 +474,112 @@ impl<'a> TraitDatabase<'a> {
     }
 }
 
-fn contains_associated_projection(typ: &Type<'_>, assoc: alder_ast::AssocTypeId<'_>) -> bool {
+fn projection_cycles<'a>(bindings: &[AssocBinding<'a>]) -> Vec<Vec<alder_ast::AssocTypeId<'a>>> {
+    fn visit<'a>(
+        assoc: alder_ast::AssocTypeId<'a>,
+        edges: &BTreeMap<alder_ast::AssocTypeId<'a>, BTreeSet<alder_ast::AssocTypeId<'a>>>,
+        states: &mut BTreeMap<alder_ast::AssocTypeId<'a>, u8>,
+        stack: &mut Vec<alder_ast::AssocTypeId<'a>>,
+        cycles: &mut BTreeSet<Vec<alder_ast::AssocTypeId<'a>>>,
+    ) {
+        match states.get(&assoc).copied().unwrap_or(0) {
+            2 => return,
+            1 => {
+                let start = stack.iter().position(|item| *item == assoc).unwrap_or(0);
+                let mut cycle = stack[start..].to_vec();
+                if let Some((minimum, _)) = cycle.iter().enumerate().min_by_key(|(_, id)| *id) {
+                    cycle.rotate_left(minimum);
+                }
+                cycles.insert(cycle);
+                return;
+            }
+            _ => {}
+        }
+        states.insert(assoc, 1);
+        stack.push(assoc);
+        if let Some(targets) = edges.get(&assoc) {
+            for target in targets {
+                visit(*target, edges, states, stack, cycles);
+            }
+        }
+        stack.pop();
+        states.insert(assoc, 2);
+    }
+
+    let declared = bindings
+        .iter()
+        .map(|binding| binding.assoc)
+        .collect::<BTreeSet<_>>();
+    let edges = bindings
+        .iter()
+        .map(|binding| {
+            let mut referenced = BTreeSet::new();
+            collect_associated_projections(&binding.typ.value, &mut referenced);
+            referenced.retain(|assoc| declared.contains(assoc));
+            (binding.assoc, referenced)
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut states = BTreeMap::new();
+    let mut stack = Vec::new();
+    let mut cycles = BTreeSet::new();
+    for assoc in declared {
+        visit(assoc, &edges, &mut states, &mut stack, &mut cycles);
+    }
+    cycles.into_iter().collect()
+}
+
+fn collect_associated_projections<'a>(
+    typ: &Type<'a>,
+    found: &mut BTreeSet<alder_ast::AssocTypeId<'a>>,
+) {
     match typ {
         Type::Projection(projection) => {
-            projection.assoc == assoc
-                || projection
-                    .trait_ref
-                    .args
-                    .iter()
-                    .any(|argument| contains_associated_projection(&argument.value, assoc))
+            found.insert(projection.assoc);
+            for argument in projection.trait_ref.args {
+                collect_associated_projections(&argument.value, found);
+            }
         }
-        Type::Var { args, .. } | Type::Named { args, .. } => args
-            .iter()
-            .any(|argument| contains_associated_projection(&argument.value, assoc)),
-        Type::Partial { slots, .. } => slots.iter().any(|slot| match slot {
-            TypeSlot::Hole(_) => false,
-            TypeSlot::Fixed(typ) => contains_associated_projection(&typ.value, assoc),
-        }),
+        Type::Var { args, .. } | Type::Named { args, .. } => {
+            for argument in *args {
+                collect_associated_projections(&argument.value, found);
+            }
+        }
+        Type::Partial { slots, .. } => {
+            for slot in *slots {
+                if let TypeSlot::Fixed(typ) = slot {
+                    collect_associated_projections(&typ.value, found);
+                }
+            }
+        }
         Type::Fn { params, ret } => {
-            params
-                .iter()
-                .any(|param| contains_associated_projection(&param.value, assoc))
-                || contains_associated_projection(&ret.value, assoc)
+            for param in *params {
+                collect_associated_projections(&param.value, found);
+            }
+            collect_associated_projections(&ret.value, found);
         }
-        Type::Tuple(items) => items
-            .iter()
-            .any(|item| contains_associated_projection(&item.value, assoc)),
-        Type::Record { fields, .. } => fields
-            .iter()
-            .any(|field| contains_associated_projection(&field.typ.value, assoc)),
-        Type::ErrorRow { tags, .. } => tags.iter().any(|tag| {
-            tag.args
-                .iter()
-                .any(|argument| contains_associated_projection(&argument.value, assoc))
-        }),
+        Type::Tuple(items) => {
+            for item in *items {
+                collect_associated_projections(&item.value, found);
+            }
+        }
+        Type::Record { fields, .. } => {
+            for field in *fields {
+                collect_associated_projections(&field.typ.value, found);
+            }
+        }
+        Type::ErrorRow { tags, .. } => {
+            for tag in *tags {
+                for argument in tag.args {
+                    collect_associated_projections(&argument.value, found);
+                }
+            }
+        }
         Type::Alias { target, .. } => match target {
             alder_ast::AliasType::Open(typ) | alder_ast::AliasType::Filled(typ) => {
-                contains_associated_projection(&typ.value, assoc)
+                collect_associated_projections(&typ.value, found);
             }
         },
-        Type::Unit => false,
+        Type::Unit => {}
     }
 }
 

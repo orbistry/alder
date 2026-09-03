@@ -11,3 +11,5 @@ derived record-payload constructors in Alder syntax and source field order.
 Derived hashes now include canonical type identity, declaration variant index,
 and every payload field. Derived JSON decoding rejects unexpected envelope and
 payload fields.
+Associated-type validation now rejects indirect projection cycles and reports
+the complete cycle through the structured diagnostic renderer.

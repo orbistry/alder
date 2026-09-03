@@ -582,12 +582,17 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
         ),
         CoherenceError::ProjectionCycle {
             implementation,
-            assoc,
+            chain,
         } => (
             "projection_cycle",
             format!(
-                "associated type `{}` is defined in terms of itself",
-                assoc.name
+                "associated type cycle: {} -> {}",
+                chain
+                    .iter()
+                    .map(|assoc| assoc.name)
+                    .collect::<Vec<_>>()
+                    .join(" -> "),
+                chain.first().map_or("associated type", |assoc| assoc.name)
             ),
             impl_region(module, *implementation),
             None,
