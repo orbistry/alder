@@ -8,10 +8,11 @@ use bumpalo::Bump;
 
 use crate::Annotations;
 
+const BUILTIN_TRAITS_SOURCE: &str = include_str!("../stdlib/Traits.ald");
+
 /// Canonical first-party trait headers authored in Alder source.
 pub fn builtin_trait_interface<'a>(bump: &'a Bump) -> Interface<'a> {
-    const SOURCE: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../std/Traits.ald"));
-    let source = alder_parse::parse_module(bump, SOURCE)
+    let source = alder_parse::parse_module(bump, BUILTIN_TRAITS_SOURCE)
         .expect("the embedded first-party trait module must parse");
     let result = crate::canonicalize_headers(
         bump,
@@ -479,5 +480,22 @@ fn impl_origin_index(origin: alder_ast::ImplOrigin) -> u32 {
         } => type_ordinal.saturating_mul(1_000) + u32::from(derive_index),
         alder_ast::ImplOrigin::AutomaticEq { type_ordinal } => type_ordinal,
         alder_ast::ImplOrigin::Builtin { index } => u32::from(index),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BUILTIN_TRAITS_SOURCE;
+
+    #[test]
+    fn packaged_builtin_traits_match_the_workspace_stdlib() {
+        let workspace_source =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../std/Traits.ald");
+        if workspace_source.is_file() {
+            assert_eq!(
+                std::fs::read_to_string(workspace_source).unwrap(),
+                BUILTIN_TRAITS_SOURCE
+            );
+        }
     }
 }
