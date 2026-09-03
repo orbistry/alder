@@ -33,6 +33,17 @@ export function $compare(left, right) {
     return stableText(left) < stableText(right) ? -1 : 1;
 }
 
+export function $compareEnum(left, right, variants) {
+    if (left && right && typeof left.$ === "string" && typeof right.$ === "string") {
+        const leftIndex = variants.indexOf(left.$);
+        const rightIndex = variants.indexOf(right.$);
+        if (leftIndex !== rightIndex && leftIndex >= 0 && rightIndex >= 0) {
+            return leftIndex < rightIndex ? -1 : 1;
+        }
+    }
+    return $compare(left, right);
+}
+
 export function $hash(value) {
     const text = stableText(value);
     let hash = 2166136261;

@@ -427,7 +427,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         dictionary_symbol: &str,
     ) -> Result<ArenaVec<'js, Statement<'js>>, Error> {
         if implementation.synthetic.is_some() {
-            return Ok(self.derived_dictionary(implementation, dictionary_symbol));
+            return Ok(self.derived_dictionary(module, implementation, dictionary_symbol));
         }
         let mut declarations = self.js.vec();
         let prerequisite_args = (0..implementation.trait_predicates.len())
@@ -592,6 +592,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
 
     fn derived_dictionary(
         &mut self,
+        module: &Module<'src>,
         implementation: &alder_ast::ImplDecl<'src>,
         dictionary_symbol: &str,
     ) -> ArenaVec<'js, Statement<'js>> {
@@ -621,6 +622,22 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.derived_kernel_method(&mut body, self_name, "show", "$show", 1, None);
             }
             alder_ast::DeriveKind::Ord => {
+                let variants = implementation
+                    .trait_ref
+                    .args
+                    .first()
+                    .and_then(|subject| match subject.value {
+                        alder_ast::Type::Named { reference, .. } => Some(reference),
+                        _ => None,
+                    })
+                    .and_then(|reference| {
+                        module.items.iter().find_map(|item| match &item.value.kind {
+                            ItemKind::Enum(enum_) if enum_.name == reference => {
+                                Some(enum_.variants)
+                            }
+                            _ => None,
+                        })
+                    });
                 let equality = format!("$dict$Eq${}", impl_origin_index(implementation.id.origin));
                 let super_target = self.js.member(self.js.identifier(self_name), "$super0");
                 let equality = if prerequisite_args.is_empty() {
@@ -637,37 +654,33 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     self.js
                         .assignment(super_target, AssignmentOperator::Assign, equality);
                 body.push(self.js.expression_statement(super_assignment));
-                self.derived_kernel_method(
+                self.derived_ord_method(
                     &mut body,
                     self_name,
                     "lt",
-                    "$compare",
-                    2,
-                    Some(BinaryOperator::LessThan),
+                    variants,
+                    BinaryOperator::LessThan,
                 );
-                self.derived_kernel_method(
+                self.derived_ord_method(
                     &mut body,
                     self_name,
                     "lte",
-                    "$compare",
-                    2,
-                    Some(BinaryOperator::LessEqualThan),
+                    variants,
+                    BinaryOperator::LessEqualThan,
                 );
-                self.derived_kernel_method(
+                self.derived_ord_method(
                     &mut body,
                     self_name,
                     "gt",
-                    "$compare",
-                    2,
-                    Some(BinaryOperator::GreaterThan),
+                    variants,
+                    BinaryOperator::GreaterThan,
                 );
-                self.derived_kernel_method(
+                self.derived_ord_method(
                     &mut body,
                     self_name,
                     "gte",
-                    "$compare",
-                    2,
-                    Some(BinaryOperator::GreaterEqualThan),
+                    variants,
+                    BinaryOperator::GreaterEqualThan,
                 );
             }
             alder_ast::DeriveKind::Hash => {
@@ -725,6 +738,48 @@ impl<'src, 'js> Emitter<'src, 'js> {
             AssignmentOperator::Assign,
             self.js.arrow(&args, method_body, false),
         );
+        body.push(self.js.expression_statement(assignment));
+    }
+
+    fn derived_ord_method(
+        &mut self,
+        body: &mut ArenaVec<'js, Statement<'js>>,
+        dictionary: &str,
+        method: &str,
+        variants: Option<&'src [alder_ast::Variant<'src>]>,
+        operator: BinaryOperator,
+    ) {
+        let args = vec!["$a0".to_owned(), "$a1".to_owned()];
+        let comparison = if let Some(variants) = variants {
+            self.kernel.insert("$compareEnum");
+            let order = self.js.array(
+                variants
+                    .iter()
+                    .map(|variant| self.js.string(variant.name.variant)),
+            );
+            self.js.call(
+                self.js.identifier("$compareEnum"),
+                [
+                    self.js.identifier(&args[0]),
+                    self.js.identifier(&args[1]),
+                    order,
+                ],
+            )
+        } else {
+            self.kernel.insert("$compare");
+            self.js.call(
+                self.js.identifier("$compare"),
+                args.iter().map(|argument| self.js.identifier(argument)),
+            )
+        };
+        let result = self.js.binary(comparison, operator, self.js.number(0.0));
+        let mut method_body = self.js.vec();
+        method_body.push(self.js.return_statement(result));
+        let arrow = self.js.arrow(&args, method_body, false);
+        let target = self.js.member(self.js.identifier(dictionary), method);
+        let assignment = self
+            .js
+            .assignment(target, AssignmentOperator::Assign, arrow);
         body.push(self.js.expression_statement(assignment));
     }
 

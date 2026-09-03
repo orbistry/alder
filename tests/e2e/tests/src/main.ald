@@ -93,8 +93,8 @@ enum Maybe[a] {
 
 #[derive(Show, Ord, Hash, Json)]
 enum Phase {
-    Alpha,
     Beta,
+    Alpha,
 }
 
 impl Functor[Maybe] {
@@ -156,7 +156,7 @@ test "higher-kinded trait dictionaries dispatch" {
 
 test "derived dictionaries execute" {
     assert Phase::Alpha == Phase::Alpha
-    assert Phase::Alpha < Phase::Beta
+    assert Phase::Beta < Phase::Alpha
     assert show(Phase::Alpha) == "Alpha"
     assert hash(Phase::Alpha) == hash(Phase::Alpha)
     let decoded = decode(encode(Phase::Beta))?

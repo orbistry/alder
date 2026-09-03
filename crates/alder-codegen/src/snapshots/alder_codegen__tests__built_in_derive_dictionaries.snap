@@ -2,7 +2,7 @@
 source: crates/alder-codegen/src/lib.rs
 expression: "emit(\"#[derive(Show, Ord, Hash, Json)]\\npub enum Status { Ready, Failed(String) }\")"
 ---
-import { $compare, $equal, $hash, $jsonDecode, $jsonEncode, $show } from "alder:kernel";
+import { $compareEnum, $equal, $hash, $jsonDecode, $jsonEncode, $show } from "alder:kernel";
 const $c_Status_Ready = Object["freeze"]({ "$": "Ready" });
 function $c_Status_Failed($a0) {
 	return {
@@ -23,16 +23,16 @@ Object["freeze"]($dict$Show$0);
 const $dict$Ord$0 = {};
 $dict$Ord$0["$super0"] = $dict$Eq$0;
 $dict$Ord$0["lt"] = ($a0, $a1) => {
-	return $compare($a0, $a1) < 0;
+	return $compareEnum($a0, $a1, ["Ready", "Failed"]) < 0;
 };
 $dict$Ord$0["lte"] = ($a0, $a1) => {
-	return $compare($a0, $a1) <= 0;
+	return $compareEnum($a0, $a1, ["Ready", "Failed"]) <= 0;
 };
 $dict$Ord$0["gt"] = ($a0, $a1) => {
-	return $compare($a0, $a1) > 0;
+	return $compareEnum($a0, $a1, ["Ready", "Failed"]) > 0;
 };
 $dict$Ord$0["gte"] = ($a0, $a1) => {
-	return $compare($a0, $a1) >= 0;
+	return $compareEnum($a0, $a1, ["Ready", "Failed"]) >= 0;
 };
 Object["freeze"]($dict$Ord$0);
 const $dict$Hash$0 = {};

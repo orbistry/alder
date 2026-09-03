@@ -13,6 +13,7 @@ mod tests {
             "$equal",
             "$show",
             "$compare",
+            "$compareEnum",
             "$hash",
             "$matchFailure",
             "$optionBox",
