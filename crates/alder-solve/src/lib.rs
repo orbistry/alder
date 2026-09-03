@@ -65,6 +65,8 @@ pub enum DirectTarget<'a> {
 #[derive(Clone, Debug)]
 pub enum Evidence<'a> {
     Param(u16),
+    SelfDictionary,
+    Super(u16),
     Impl {
         impl_id: ImplId<'a>,
         arguments: Vec<Evidence<'a>>,

@@ -209,6 +209,97 @@ fn declared_bound_supplies_trait_method_evidence() {
 }
 
 #[test]
+fn implementation_body_uses_its_current_dictionary() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            impl Show[Number] {
+                fn show(value: Number) -> String { show(value) }
+            }
+        "#},
+    )
+    .expect("recursive method dispatch uses the current dictionary");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(_),
+        } if matches!(dictionaries.as_slice(), [alder_solve::Evidence::SelfDictionary])
+    )));
+}
+
+#[test]
+fn implementation_prerequisite_is_available_to_method_bodies() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            impl Show[Array[a]] where a: Show {
+                fn show(values: Array[a]) -> String { show(values[0]) }
+            }
+        "#},
+    )
+    .expect("the factory prerequisite is in the method evidence scope");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(_),
+        } if matches!(dictionaries.as_slice(), [alder_solve::Evidence::Param(0)])
+    )));
+}
+
+#[test]
+fn default_body_can_dispatch_through_its_current_dictionary() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] {
+                fn show(value: a) -> String
+                fn render(value: a) -> String { show(value) }
+            }
+        "#},
+    )
+    .expect("default methods receive the current dictionary");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(method),
+        } if method.name == "show"
+            && matches!(dictionaries.as_slice(), [alder_solve::Evidence::SelfDictionary])
+    )));
+}
+
+#[test]
+fn default_body_can_use_a_superclass_dictionary() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Equal[a] { fn equal(left: a, right: a) -> Bool }
+            trait Ordered[a] where a: Equal {
+                fn compare(left: a, right: a) -> Number
+                fn same(left: a, right: a) -> Bool { equal(left, right) }
+            }
+        "#},
+    )
+    .expect("default methods receive direct superclass slots");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(method),
+        } if method.name == "equal"
+            && matches!(dictionaries.as_slice(), [alder_solve::Evidence::Super(0)])
+    )));
+}
+
+#[test]
 fn declared_bounds_are_preserved_in_the_binding_abi() {
     let bump = Bump::new();
     let solved = solve_input(

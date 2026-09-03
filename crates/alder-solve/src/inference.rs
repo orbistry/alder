@@ -133,17 +133,16 @@ fn resolve_predicate<'a>(
     bump: &'a Bump,
     database: &TraitDatabase<'a>,
     predicate: &Predicate<'a>,
-    givens: &[Predicate<'a>],
+    givens: &[Given<'a>],
     origin: Region,
     stack: &mut Vec<(TraitId<'a>, String)>,
 ) -> Result<Evidence<'a>, SolveTraitError<'a>> {
     let subject = predicate.args.first().cloned().unwrap_or(Ty::Unit);
     let rendered = render_ty(&subject);
-    if let Some(index) = givens
-        .iter()
-        .position(|given| given.trait_ == predicate.trait_ && given.args == predicate.args)
-    {
-        return Ok(Evidence::Param(index as u16));
+    if let Some(given) = givens.iter().find(|given| {
+        given.predicate.trait_ == predicate.trait_ && given.predicate.args == predicate.args
+    }) {
+        return Ok(given.evidence.clone());
     }
     if stack
         .iter()
@@ -229,7 +228,7 @@ fn resolve_intrinsic<'a>(
     bump: &'a Bump,
     database: &TraitDatabase<'a>,
     predicate: &Predicate<'a>,
-    givens: &[Predicate<'a>],
+    givens: &[Given<'a>],
     origin: Region,
     stack: &mut Vec<(TraitId<'a>, String)>,
 ) -> Result<Option<Evidence<'a>>, SolveTraitError<'a>> {
@@ -462,6 +461,12 @@ struct Predicate<'a> {
     args: Vec<Ty<'a>>,
 }
 
+#[derive(Clone, Debug)]
+struct Given<'a> {
+    predicate: Predicate<'a>,
+    evidence: Evidence<'a>,
+}
+
 #[derive(Clone, Copy, Debug)]
 enum ObligationAction<'a> {
     Reference(Option<MethodId<'a>>),
@@ -476,7 +481,7 @@ struct Obligation<'a> {
     predicate: Predicate<'a>,
     region: Region,
     action: ObligationAction<'a>,
-    givens: Vec<Predicate<'a>>,
+    givens: Vec<Given<'a>>,
 }
 
 struct InferenceResult<'a> {
@@ -493,6 +498,23 @@ struct CallSite<'a> {
     target: Option<DirectTarget<'a>>,
 }
 
+#[derive(Clone, Copy)]
+enum FunctionContext<'a> {
+    Ordinary,
+    Impl(&'a alder_ast::ImplDecl<'a>),
+    Default(&'a alder_ast::TraitDecl<'a>),
+}
+
+#[derive(Clone, Copy)]
+struct FunctionInput<'a> {
+    params: &'a [alder_ast::Param<'a>],
+    ret: Option<&'a Located<Type<'a>>>,
+    constraints: &'a [alder_ast::TypeConstraint<'a>],
+    context: FunctionContext<'a>,
+    body: &'a Located<Block<'a>>,
+    region: Region,
+}
+
 #[derive(Clone, Default)]
 struct Env<'a> {
     locals: BTreeMap<u32, Scheme<'a>>,
@@ -504,7 +526,7 @@ struct Infer<'a, 'db> {
     database: &'db TraitDatabase<'a>,
     substitutions: Vec<Option<Ty<'a>>>,
     obligations: Vec<Obligation<'a>>,
-    givens: Vec<Predicate<'a>>,
+    givens: Vec<Given<'a>>,
     calls: Vec<CallSite<'a>>,
 }
 
@@ -629,7 +651,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 *argument = self.prune(argument.clone());
             }
             for given in &mut obligation.givens {
-                for argument in &mut given.args {
+                for argument in &mut given.predicate.args {
                     *argument = self.prune(argument.clone());
                 }
             }
@@ -684,11 +706,14 @@ impl<'a, 'db> Infer<'a, 'db> {
                     if let alder_ast::ImplItem::Fn(function) = item {
                         self.infer_function(
                             env,
-                            function.params,
-                            function.ret,
-                            function.constraints,
-                            function.body,
-                            region,
+                            FunctionInput {
+                                params: function.params,
+                                ret: function.ret,
+                                constraints: function.constraints,
+                                context: FunctionContext::Impl(impl_),
+                                body: function.body,
+                                region,
+                            },
                         )?;
                     }
                 }
@@ -700,11 +725,14 @@ impl<'a, 'db> Infer<'a, 'db> {
                     {
                         self.infer_function(
                             env,
-                            function.params,
-                            function.ret,
-                            function.constraints,
-                            body,
-                            region,
+                            FunctionInput {
+                                params: function.params,
+                                ret: function.ret,
+                                constraints: function.constraints,
+                                context: FunctionContext::Default(trait_),
+                                body,
+                                region,
+                            },
                         )?;
                     }
                 }
@@ -740,11 +768,14 @@ impl<'a, 'db> Infer<'a, 'db> {
             ItemKind::Fn(function) => {
                 let (typ, predicates) = self.infer_function(
                     env,
-                    function.params,
-                    function.ret,
-                    function.constraints,
-                    function.body,
-                    region,
+                    FunctionInput {
+                        params: function.params,
+                        ret: function.ret,
+                        constraints: function.constraints,
+                        context: FunctionContext::Ordinary,
+                        body: function.body,
+                        region,
+                    },
                 )?;
                 env.globals
                     .get_mut(&function.name)
@@ -785,8 +816,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.infer_pattern(env, decl.pattern, value, true)
             }
             ItemKind::Component(component) => {
-                let (typ, predicates) =
-                    self.infer_function(env, component.params, None, &[], component.body, region)?;
+                let (typ, predicates) = self.infer_function(
+                    env,
+                    FunctionInput {
+                        params: component.params,
+                        ret: None,
+                        constraints: &[],
+                        context: FunctionContext::Ordinary,
+                        body: component.body,
+                        region,
+                    },
+                )?;
                 debug_assert!(predicates.is_empty());
                 let Ty::Fn(args, inferred) = typ else {
                     unreachable!()
@@ -806,12 +846,16 @@ impl<'a, 'db> Infer<'a, 'db> {
     fn infer_function(
         &mut self,
         env: &Env<'a>,
-        params: &'a [alder_ast::Param<'a>],
-        ret: Option<&'a Located<Type<'a>>>,
-        constraints: &'a [alder_ast::TypeConstraint<'a>],
-        body: &'a Located<Block<'a>>,
-        region: Region,
+        input: FunctionInput<'a>,
     ) -> Result<(Ty<'a>, Vec<Predicate<'a>>), Error> {
+        let FunctionInput {
+            params,
+            ret,
+            constraints,
+            context,
+            body,
+            region,
+        } = input;
         let mut local = env.clone();
         let mut vars = BTreeMap::new();
         let mut args = Vec::with_capacity(params.len());
@@ -830,7 +874,47 @@ impl<'a, 'db> Infer<'a, 'db> {
         let predicates = self.predicates_from_constraints(constraints, &vars);
         let outer_givens = std::mem::take(&mut self.givens);
         self.givens = outer_givens.clone();
-        self.givens.extend(predicates.iter().cloned());
+        match context {
+            FunctionContext::Ordinary => {
+                self.add_parameter_givens(&predicates, 0);
+            }
+            FunctionContext::Impl(implementation) => {
+                let self_predicate =
+                    self.predicate_from_trait_ref(implementation.trait_ref, &mut vars);
+                self.givens.push(Given {
+                    predicate: self_predicate.clone(),
+                    evidence: Evidence::SelfDictionary,
+                });
+                self.add_superclass_givens(&self_predicate);
+                let prerequisites = implementation
+                    .trait_predicates
+                    .iter()
+                    .map(|predicate| self.predicate_from_trait_ref(*predicate, &mut vars))
+                    .collect::<Vec<_>>();
+                self.add_parameter_givens(&prerequisites, 0);
+                self.add_parameter_givens(&predicates, prerequisites.len());
+            }
+            FunctionContext::Default(trait_) => {
+                let self_predicate = Predicate {
+                    trait_: trait_.id,
+                    args: trait_
+                        .type_params
+                        .iter()
+                        .map(|parameter| {
+                            vars.get(parameter.name.value)
+                                .cloned()
+                                .unwrap_or_else(|| self.fresh())
+                        })
+                        .collect(),
+                };
+                self.givens.push(Given {
+                    predicate: self_predicate.clone(),
+                    evidence: Evidence::SelfDictionary,
+                });
+                self.add_superclass_givens(&self_predicate);
+                self.add_parameter_givens(&predicates, 0);
+            }
+        }
         let body_result = match self.prune(result.clone()) {
             Ty::App(head, args)
                 if matches!(*head, Ty::Con(reference) if reference.name == "Task")
@@ -1949,6 +2033,53 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
         }
         predicates
+    }
+
+    fn predicate_from_trait_ref(
+        &mut self,
+        predicate: alder_ast::TraitRef<'a>,
+        vars: &mut BTreeMap<&'a str, Ty<'a>>,
+    ) -> Predicate<'a> {
+        Predicate {
+            trait_: predicate.trait_,
+            args: predicate
+                .args
+                .iter()
+                .map(|argument| self.from_ast(argument, vars))
+                .collect(),
+        }
+    }
+
+    fn add_parameter_givens(&mut self, predicates: &[Predicate<'a>], offset: usize) {
+        self.givens.extend(
+            predicates
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(index, predicate)| Given {
+                    predicate,
+                    evidence: Evidence::Param((offset + index) as u16),
+                }),
+        );
+    }
+
+    fn add_superclass_givens(&mut self, predicate: &Predicate<'a>) {
+        let Some(header) = self.database.trait_(predicate.trait_) else {
+            return;
+        };
+        let mut vars = header
+            .params
+            .iter()
+            .zip(&predicate.args)
+            .map(|(parameter, argument)| (parameter.name.value, argument.clone()))
+            .collect::<BTreeMap<_, _>>();
+        for (index, superclass) in header.superclasses.iter().enumerate() {
+            let predicate = self.predicate_from_trait_ref(*superclass, &mut vars);
+            self.givens.push(Given {
+                predicate,
+                evidence: Evidence::Super(index as u16),
+            });
+        }
     }
 
     #[allow(clippy::wrong_self_convention)]
