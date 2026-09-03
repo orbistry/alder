@@ -1518,6 +1518,18 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 let local = self.value_import(reference, reference.name.to_owned());
                 self.js.identifier(&local)
             }
+            ValueRef::TraitMethod { method, .. } => {
+                let reference = alder_ast::QualifiedName {
+                    module: method.trait_.0.module,
+                    name: method.name,
+                };
+                if reference.module == self.home {
+                    self.js.identifier(&top_name(reference))
+                } else {
+                    let local = self.value_import(reference, reference.name.to_owned());
+                    self.js.identifier(&local)
+                }
+            }
             ValueRef::Provider(provider) => {
                 self.kernel.insert("$providerGet");
                 self.js.call(

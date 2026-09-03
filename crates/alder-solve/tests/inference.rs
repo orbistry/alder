@@ -2,7 +2,7 @@
 
 use alder_ast::{Annotation, FieldPresence, Kind, ModuleId, PackageId, RowExtension, Type};
 use alder_can::{Annotations, Context};
-use alder_constrain::{Error, ErrorKind, UnionFind};
+use alder_constrain::{Error, ErrorKind};
 use alder_region::Located;
 use bumpalo::Bump;
 use indoc::indoc;
@@ -23,9 +23,8 @@ fn infer<'a>(bump: &'a Bump, input: &str) -> Result<Annotations<'a>, Vec<Error>>
         &module,
     )
     .expect("source canonicalizes");
-    let mut uf = UnionFind::new();
-    let constraints = alder_constrain::constrain(bump, &mut uf, can_result.module);
-    alder_solve::run(bump, &mut uf, &constraints)
+    let constraints = alder_constrain::constrain(bump, can_result.module);
+    alder_solve::run(bump, &constraints)
 }
 
 fn render_annotations(annotations: &Annotations<'_>) -> String {

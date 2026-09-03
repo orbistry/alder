@@ -237,9 +237,8 @@ fn compile_module<'s>(
         .map(|w| format!("{:?}", w))
         .collect();
 
-    let mut uf = alder_constrain::UnionFind::new();
-    let constraint = alder_constrain::constrain(store, &mut uf, can_result.module);
-    let annotations = match alder_solve::run(store, &mut uf, &constraint) {
+    let constraint = alder_constrain::constrain(store, can_result.module);
+    let annotations = match alder_solve::run(store, &constraint) {
         Ok(annotations) => annotations,
         Err(errors) => return failed(format!("{:?}", errors)),
     };

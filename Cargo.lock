@@ -178,8 +178,11 @@ name = "alder-constrain"
 version = "0.1.0"
 dependencies = [
  "alder-ast",
+ "alder-can",
+ "alder-parse",
  "alder-region",
  "bumpalo",
+ "indoc",
 ]
 
 [[package]]

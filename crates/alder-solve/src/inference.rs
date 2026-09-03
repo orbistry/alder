@@ -6,7 +6,7 @@ use alder_ast::{
     Type, TypeSlot, ValueRef,
 };
 use alder_can::Annotations;
-use alder_constrain::{Constraints, Error, ErrorKind, UnionFind};
+use alder_constrain::{Constraints, Error, ErrorKind};
 use alder_region::{Located, Region};
 use bumpalo::Bump;
 
@@ -54,7 +54,6 @@ struct Infer<'a> {
 
 pub fn run<'a>(
     bump: &'a Bump,
-    _uf: &mut UnionFind,
     constraints: &Constraints<'a>,
 ) -> Result<Annotations<'a>, Vec<Error>> {
     Infer::new(bump)
@@ -632,7 +631,9 @@ impl<'a> Infer<'a> {
         match reference {
             ValueRef::Local(local) => Ok(self.instantiate(&env.locals[&local.id.0])),
             ValueRef::TopLevel(name) => Ok(self.instantiate(&env.globals[&name])),
-            ValueRef::Foreign { annotation, .. } => Ok(self.instantiate_annotation(annotation)),
+            ValueRef::Foreign { annotation, .. } | ValueRef::TraitMethod { annotation, .. } => {
+                Ok(self.instantiate_annotation(annotation))
+            }
             ValueRef::Module(_)
             | ValueRef::Builtin(_)
             | ValueRef::Provider(_)

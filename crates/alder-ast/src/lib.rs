@@ -508,6 +508,10 @@ pub enum ValueRef<'a> {
         reference: QualifiedName<'a>,
         annotation: &'a Annotation<'a>,
     },
+    TraitMethod {
+        method: MethodId<'a>,
+        annotation: &'a Annotation<'a>,
+    },
     /// A value exported by an embedded first-party stdlib module. Its
     /// signature is opaque until stdlib interfaces are loaded by the driver.
     Builtin(QualifiedName<'a>),
