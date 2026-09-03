@@ -1,0 +1,19 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn impossible(value: f[a]) a { value }\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 1,
+                column: 39,
+            },
+        },
+        kind: InfiniteType,
+    },
+]

@@ -1,0 +1,176 @@
+pub trait Show[a] {
+    fn show(value: a) String
+}
+
+pub trait Eq[a] {
+    fn eq(left: a, right: a) Bool
+}
+
+pub enum Ordering { Less, Equal, Greater }
+
+pub trait Ord[a] where a: Eq {
+    fn compare(left: a, right: a) Ordering
+}
+
+pub trait Hash[a] where a: Eq {
+    fn hash(value: a) BigInt
+}
+
+pub trait Json[a] {
+    fn encode(value: a) String
+    fn decode(value: String) Result[a, String]
+}
+
+pub trait Num[a] where a: Eq + Ord {
+    fn add(left: a, right: a) a
+    fn sub(left: a, right: a) a
+    fn mul(left: a, right: a) a
+    fn div(left: a, right: a) a
+    fn rem(left: a, right: a) a
+    fn negate(value: a) a
+}
+
+pub trait Functor[f] {
+    fn map(value: f[a], transform: fn(a) b) f[b]
+}
+
+pub trait Applicative[f] where f: Functor {
+    fn pure(value: a) f[a]
+    fn apply(function: f[fn(a) b], value: f[a]) f[b]
+}
+
+pub trait Monad[f] where f: Applicative {
+    fn flat_map(value: f[a], transform: fn(a) f[b]) f[b]
+}
+
+pub trait Traversable[t] {
+    fn traverse(value: t[a], transform: fn(a) f[b]) f[t[b]] where f: Applicative
+}
+
+pub trait Iterator[i] {
+    type Item
+    fn next(iterator: i) Option[Item]
+}
+
+impl Show[Number] { fn show(value: Number) String }
+impl Show[String] { fn show(value: String) String }
+impl Show[Bool] { fn show(value: Bool) String }
+impl Show[BigInt] { fn show(value: BigInt) String }
+impl Show[()] { fn show(value: ()) String }
+impl Show[Array[a]] where a: Show { fn show(value: Array[a]) String }
+impl Show[Option[a]] where a: Show { fn show(value: Option[a]) String }
+impl Show[Result[a, e]] where a: Show, e: Show { fn show(value: Result[a, e]) String }
+
+impl Eq[Number] { fn eq(left: Number, right: Number) Bool }
+impl Eq[String] { fn eq(left: String, right: String) Bool }
+impl Eq[Bool] { fn eq(left: Bool, right: Bool) Bool }
+impl Eq[BigInt] { fn eq(left: BigInt, right: BigInt) Bool }
+impl Eq[()] { fn eq(left: (), right: ()) Bool }
+impl Eq[Array[a]] where a: Eq { fn eq(left: Array[a], right: Array[a]) Bool }
+impl Eq[Option[a]] where a: Eq { fn eq(left: Option[a], right: Option[a]) Bool }
+impl Eq[Result[a, e]] where a: Eq, e: Eq { fn eq(left: Result[a, e], right: Result[a, e]) Bool }
+
+impl Ord[Number] {
+    fn compare(left: Number, right: Number) Ordering
+}
+impl Ord[String] {
+    fn compare(left: String, right: String) Ordering
+}
+impl Ord[BigInt] {
+    fn compare(left: BigInt, right: BigInt) Ordering
+}
+
+impl Hash[Number] { fn hash(value: Number) BigInt }
+impl Hash[String] { fn hash(value: String) BigInt }
+impl Hash[Bool] { fn hash(value: Bool) BigInt }
+impl Hash[BigInt] { fn hash(value: BigInt) BigInt }
+impl Hash[()] { fn hash(value: ()) BigInt }
+impl Hash[Array[a]] where a: Hash { fn hash(value: Array[a]) BigInt }
+impl Hash[Option[a]] where a: Hash { fn hash(value: Option[a]) BigInt }
+impl Hash[Result[a, e]] where a: Hash, e: Hash { fn hash(value: Result[a, e]) BigInt }
+
+impl Json[Number] {
+    fn encode(value: Number) String
+    fn decode(value: String) Result[Number, String]
+}
+impl Json[String] {
+    fn encode(value: String) String
+    fn decode(value: String) Result[String, String]
+}
+impl Json[Bool] {
+    fn encode(value: Bool) String
+    fn decode(value: String) Result[Bool, String]
+}
+impl Json[BigInt] {
+    fn encode(value: BigInt) String
+    fn decode(value: String) Result[BigInt, String]
+}
+impl Json[()] {
+    fn encode(value: ()) String
+    fn decode(value: String) Result[(), String]
+}
+impl Json[Array[a]] where a: Json {
+    fn encode(value: Array[a]) String
+    fn decode(value: String) Result[Array[a], String]
+}
+impl Json[Option[a]] where a: Json {
+    fn encode(value: Option[a]) String
+    fn decode(value: String) Result[Option[a], String]
+}
+impl Json[Result[a, e]] where a: Json, e: Json {
+    fn encode(value: Result[a, e]) String
+    fn decode(value: String) Result[Result[a, e], String]
+}
+
+impl Num[Number] {
+    fn add(left: Number, right: Number) Number
+    fn sub(left: Number, right: Number) Number
+    fn mul(left: Number, right: Number) Number
+    fn div(left: Number, right: Number) Number
+    fn rem(left: Number, right: Number) Number
+    fn negate(value: Number) Number
+}
+impl Num[BigInt] {
+    fn add(left: BigInt, right: BigInt) BigInt
+    fn sub(left: BigInt, right: BigInt) BigInt
+    fn mul(left: BigInt, right: BigInt) BigInt
+    fn div(left: BigInt, right: BigInt) BigInt
+    fn rem(left: BigInt, right: BigInt) BigInt
+    fn negate(value: BigInt) BigInt
+}
+
+impl Functor[Array] { fn map(value: Array[a], transform: fn(a) b) Array[b] }
+impl Functor[Option] { fn map(value: Option[a], transform: fn(a) b) Option[b] }
+impl Functor[Result[_, e]] { fn map(value: Result[a, e], transform: fn(a) b) Result[b, e] }
+
+impl Applicative[Array] {
+    fn pure(value: a) Array[a]
+    fn apply(function: Array[fn(a) b], value: Array[a]) Array[b]
+}
+impl Applicative[Option] {
+    fn pure(value: a) Option[a]
+    fn apply(function: Option[fn(a) b], value: Option[a]) Option[b]
+}
+impl Applicative[Result[_, e]] {
+    fn pure(value: a) Result[a, e]
+    fn apply(function: Result[fn(a) b, e], value: Result[a, e]) Result[b, e]
+}
+
+impl Monad[Array] { fn flat_map(value: Array[a], transform: fn(a) Array[b]) Array[b] }
+impl Monad[Option] { fn flat_map(value: Option[a], transform: fn(a) Option[b]) Option[b] }
+impl Monad[Result[_, e]] { fn flat_map(value: Result[a, e], transform: fn(a) Result[b, e]) Result[b, e] }
+
+impl Traversable[Array] {
+    fn traverse(value: Array[a], transform: fn(a) f[b]) f[Array[b]] where f: Applicative
+}
+impl Traversable[Option] {
+    fn traverse(value: Option[a], transform: fn(a) f[b]) f[Option[b]] where f: Applicative
+}
+impl Traversable[Result[_, e]] {
+    fn traverse(value: Result[a, e], transform: fn(a) f[b]) f[Result[b, e]] where f: Applicative
+}
+
+impl Iterator[Array[a]] {
+    type Item = a
+    fn next(iterator: Array[a]) Option[a]
+}

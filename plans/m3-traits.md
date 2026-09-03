@@ -1,5 +1,8 @@
 # M3: Traits
 
+Status: complete. The verification matrix and milestone gates passed on
+2026-09-03.
+
 Type classes in the Haskell style with Rust spelling: the subject type is
 an explicit parameter (`trait Show[a]`, `impl Show[User]`), higher-kinded
 parameters are inferred from use (`trait Functor[f]`, `impl Functor[Option]`),
@@ -22,7 +25,7 @@ static resolution wherever the type is known.
   bodies, superclass constraints (`trait Ord[a] where a: Eq`), and
   higher-kinded parameters type-check with Elm-quality errors for missing
   instances, ambiguous instances, orphan impls, and unsatisfiable bounds.
-- A generic function `fn describe(xs: Array[a]) -> String where a: Show`
+- A generic function `fn describe(xs: Array[a]) String where a: Show`
   compiles to JS taking a dictionary and is called with a statically
   selected dictionary at monomorphic call sites.
 - `Functor`, `Applicative`-style HKT traits work end to end (`map` over
@@ -37,15 +40,80 @@ static resolution wherever the type is known.
 
 - Explicit subject parameter; `impl Trait[Type]`; no `Self`, no receivers,
   no `x.show()`.
+- Existing multi-parameter trait heads remain accepted; argument zero is the
+  coherence subject. The current `where a: Trait` shorthand names unary traits
+  only until bound syntax grows explicit trait arguments.
 - Associated types: `type Item` in the trait, `type Item = T` in the impl,
   constrained in `where` with `i.Item == Number`.
 - Default method bodies allowed in the trait.
 - Orphan rule: an `impl` must live in the package defining the trait or
   the type.
+- `alder-can` rejects a source orphan immediately after canonicalizing its impl
+  head; package-wide solver coherence repeats the check for dependency and
+  persistent-header defense.
 - Higher-kinded variables get their kind inferred from use; `f[a]` in a
   type is `Type::Var { name, args }` in the source AST already.
 - No explicit type arguments at call sites; ambiguity is resolved by
   annotation or is an error.
+- Compiler phases keep structured, typed errors and use `thiserror` where an
+  error owns its display text. Presentation is centralized in an
+  `alder-report` crate: its owned diagnostic type implements
+  `miette::Diagnostic`, retains the named source, translates Alder `Region`s
+  to byte spans, and carries codes, severity, primary and secondary labels,
+  help, and related diagnostics. The driver performs phase-to-report
+  conversion while the module source and arena-backed errors are both alive;
+  the CLI delegates snippet rendering for errors and warnings to miette.
+- Snapshot helpers for compiler pipeline tests follow the parser convention:
+  source is passed through `indoc!`, installed as insta's `description`, and
+  `omit_expression` is enabled. Multiline Alder programs must not be hidden in
+  escaped Rust expressions in snapshots.
+- Solved module interfaces cross arena and persistent-cache boundaries through
+  a complete owned DTO. Interface and package-instance-index files are versioned,
+  reject compiler-version mismatches, and fingerprint canonical bincode bytes
+  with SHA-256 rather than Rust's process-oriented `DefaultHasher`.
+- Impl source regions and URIs survive interface and package-index dehydration,
+  persistence, loading, and arena hydration for downstream diagnostics.
+- Successful builds expose deterministic semantic interfaces and a deduplicated
+  instance index per package; CLI compilation persists them only after all
+  modules succeed.
+- Project compilation assigns declared package identities to source modules and
+  loads the validated interface set plus complete instance index once for each
+  actually imported path dependency. Trait databases deduplicate repeated
+  headers by stable `ImplId`.
+- Path dependency source modules join build/test compilations so evidence-only
+  imports—including factories selected from an otherwise unimported sibling
+  module—remain direct in-memory Oxc AST edges through Rolldown bundling.
+- Derived dictionaries consume solver-selected evidence for every payload
+  field. Evidence is retained through nested builtin containers, and generated
+  Eq dictionaries are initialized before dictionaries that use them as a
+  superclass.
+- Package builds run a header-only canonicalization pass that skips value,
+  default-method, and implementation-method bodies. Canonical headers survive
+  body failures, and a final body pass uses the same complete package header
+  closure for coherence and instance resolution.
+- First-party trait and primitive/container instance headers are authored in
+  `std/Traits.ald`, canonicalized through the header pipeline, and inserted
+  into the ordinary `TraitDatabase`. Intrinsic evidence is selected only after
+  an ordinary matching header wins instance search.
+- `Ord` has one `compare(left, right) Ordering` method. Generic comparisons
+  inspect the `Less`/`Equal`/`Greater` tag, while primitive intrinsics retain
+  allocation-free native relational operators.
+- Trait and impl parser diagnostics descend through their function, parameter,
+  pattern, block, expression-leaf, and complete type error hierarchies before
+  building an owned miette report, preserving the innermost source location
+  and syntax-specific correction.
+- Trait solver and coherence reports preserve source type-variable spellings,
+  never expose unification-variable IDs, label both local impl sites for an
+  overlap, and attach actionable help for bounds, ownership, kinds, and cycles.
+  Deterministic no-color snapshots cover the rendered source.
+- Instance search retains root-to-leaf obligation frames in structured errors.
+  Ambiguity reports label every available local candidate and identify foreign
+  candidates whose source is unavailable; nested missing-instance reports show
+  the prerequisite chain that led to the leaf failure.
+- The complete Traits guide example is byte-for-byte tied to an executed CLI
+  fixture. Runtime coverage also exercises generic Applicative dispatch,
+  Monad, Traversable, Iterator, all three builtin Functors, and dictionary
+  capture through a first-class constrained callback.
 
 ## Open decisions (recommendation in bold)
 
@@ -65,16 +133,19 @@ static resolution wherever the type is known.
    `BigInt`; comparisons are `Ord`.**
 2. Coherence beyond orphans. **Overlapping impls are an error; no
    specialization.**
-3. Instance resolution strategy. **Elm's solver gains deferred
-   constraints: a bound is recorded when a trait function is used at a
-   type variable, discharged when the variable is unified with a concrete
-   type or generalized into the enclosing function's `where`.** Resolution
-   runs after generalization, per declaration.
-4. Dictionary representation. **A plain JS object per impl, one field per
-   trait function (and per associated function), created once per impl
-   at module load; generic functions take dictionaries as leading
-   parameters in trait-declaration order.** HKT dictionaries are the same
-   shape.
+3. Instance resolution strategy. **The active solver gains deferred
+   constraints: a bound is recorded when a trait function is used at a type
+   variable, discharged when the variable becomes concrete, or checked against
+   the enclosing function's explicit `where` clause during generalization.** A
+   missing generic bound is reported with a suggested clause; body edits never
+   silently change public dictionary ABI. Resolution runs per value SCC.
+4. Dictionary representation. **A plain JS object per closed impl, one field
+   per trait function (and per associated function), created once at module
+   load; an impl with `where` prerequisites is a dictionary factory receiving
+   those prerequisite dictionaries. Generic functions take dictionaries as
+   leading parameters in predicate order.** HKT dictionaries are the same
+   shape. A singleton for every impl is impossible for an impl such as
+   `Show[Array[a]] where a: Show`, because its methods need `Show[a]`.
 5. Superclass access. **A dictionary carries its superclass dictionaries
    as fields** (`Ord` dict has `eq`), Haskell style.
 
@@ -97,9 +168,14 @@ Design panel producing `docs/traits-internals.md`:
   parameters and arguments after solving (a separate elaborated form or
   annotations on nodes; the panel decides).
 - Codegen rules for dictionaries and static resolution.
-- Built-in derive implementations as a compiler pass over enum/record
-  declarations.
+- Built-in derive implementations as a compiler pass over enums and error
+  groups; closed records use structural Eq because Alder record aliases are
+  transparent, not nominal declarations.
 - File ownership.
+
+The resulting contract also fixes package-wide, build-order-independent impl
+collection and adds the narrowly scoped `_` type hole required to represent
+`Result[_, e]` in an impl head. The hole is not a general inferred annotation.
 
 ### Wave 1: front end (parallel)
 
@@ -109,7 +185,8 @@ Design panel producing `docs/traits-internals.md`:
   superclass expansion.
 - `alder-solve`: deferred constraints, instance search, kind inference,
   generalization with bounds, elaboration.
-- Error rendering for the new error types.
+- Error rendering for the new error types through `alder-report` and miette;
+  no phase-local terminal or source-snippet formatter.
 - Tests: inference tests for every rule; snapshot tests for every error.
 
 ### Wave 2: back end (parallel)

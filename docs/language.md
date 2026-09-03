@@ -99,34 +99,39 @@ Uncurried, JS-style call syntax. The pipe operator passes the value as the
 first argument.
 
 ```alder
-pub fn add(a: Number, b: Number) -> Number {
+pub fn add(a: Number, b: Number) Number {
     a + b
 }
 
-fn greet(name: String) -> String {
+fn greet(name: String) String {
     `Hello ${name}`
 }
 
-let inc = fn(x) x + 1
-let block = fn(x) {
+let inc = x -> x + 1
+let block = x -> {
     let y = x * 2
     y + 1
 }
 
 [1, 2, 3]
-    |> Array.map(fn(x) x * 2)
-    |> Array.filter(fn(x) x > 2)
+    |> Array.map(x -> x * 2)
+    |> Array.filter(x -> x > 2)
 ```
 
-- Return type follows `->` after the parameter list and may be omitted
-  when it is inferred (including inferred `Result` errors and `Task`).
+- A return type is juxtaposed after the parameter list, begins on that same
+  line, and may be omitted when it is inferred (including inferred `Result`
+  errors and `Task`). A record return type is parenthesized so its opening
+  `{` is not mistaken for the function body.
 - The last expression of a block is its value. `return` exits early.
-- Partial application uses `_` placeholders: `add(1, _)` and
+- `value |> function(args...)` inserts `value` as the first argument.
+  Partial application uses `_` placeholders: `add(1, _)` and
   `Array.map(_, double)` each become a lambda with one parameter per `_`,
-  in order. Lambdas remain for anything more involved.
+  in order. That also selects another pipe position:
+  `value |> function(first, _, third)`. Lambdas remain for anything more
+  involved.
 - Functions have no generic parameter list. Lowercase names in type
   positions are type variables, generalized per declaration:
-  `fn first(xs: Array[a]) -> Option[a]`. Bounds go in a `where` clause.
+  `fn first(xs: Array[a]) Option[a]`. Bounds go in a `where` clause.
 
 ## Statements and control flow
 
@@ -134,7 +139,7 @@ Function bodies are statement blocks. `if`, `match`, and `loop` are
 expressions.
 
 ```alder
-fn classify(n: Number) -> String {
+fn classify(n: Number) String {
     if n < 0 {
         "negative"
     } else if n == 0 {
@@ -193,12 +198,12 @@ that fix an arity name them in their head (`enum Result[a, e]`,
 `type Cache[k, v] = ...`, `trait Functor[f]`).
 
 ```alder
-fn zip(xs: Array[a], ys: Array[b]) -> Array[(a, b)]
+fn zip(xs: Array[a], ys: Array[b]) Array[(a, b)]
 
-fn lookup(cache: Cache[k, v], key: k) -> Option[v]
+fn lookup(cache: Cache[k, v], key: k) Option[v]
     where k: Eq + Hash
 
-fn traverse(xs: t[f[a]], g: fn(a) -> f[b]) -> f[t[b]]
+fn traverse(xs: t[f[a]], g: fn(a) f[b]) f[t[b]]
     where
         t: Traversable,
         f: Applicative,
@@ -248,7 +253,7 @@ type User = {
     nickname?: String,        // read as Option[String]
 }
 
-fn rename(user: { r | name: String }, name: String) -> { r | name: String } {
+fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {
     { ..user, name }
 }
 
@@ -271,29 +276,44 @@ parameters. No `self`; trait functions are ordinary functions called by
 name or through the pipe.
 
 ```alder
+enum User { User(String) }
+
 pub trait Show[a] {
-    fn show(value: a) -> String
+    fn show(value: a) String
 }
 
 impl Show[User] {
-    fn show(user: User) -> String { user.name }
-}
-
-pub trait Functor[f] {
-    fn map(fa: f[a], g: fn(a) -> b) -> f[b]
-}
-
-impl Functor[Option] {
-    fn map(fa: Option[a], g: fn(a) -> b) -> Option[b] {
-        match fa {
-            Some(x) => Some(g(x)),
-            None => None,
-        }
+    fn show(user: User) String {
+        match user { User::User(name) => name }
     }
 }
 
-fn describe(xs: Array[a]) -> String where a: Show {
-    xs |> Array.map(show) |> String.join(", ")
+pub trait Functor[f] {
+    fn map(fa: f[a], g: fn(a) b) f[b]
+}
+
+enum Box[a] { Box(a) }
+
+impl Functor[Box] {
+    fn map(fa: Box[a], g: fn(a) b) Box[b] {
+        match fa { Box::Box(value) => Box::Box(g(value)) }
+    }
+}
+
+trait SequenceIterator[i] {
+    type Item
+    fn next(it: i) Option[Item]
+}
+
+fn describe(value: a) String where a: Show {
+    show(value)
+}
+
+pub fn main() {
+    assert(describe(User::User("Ada")) == "Ada")
+
+    let boxed: Box[Number] = map(Box::Box(1), value -> value + 1)
+    assert(boxed == Box::Box(2))
 }
 ```
 
@@ -301,15 +321,8 @@ fn describe(xs: Array[a]) -> String where a: Show {
   may constrain their own parameters the same way
   (`trait Ord[a] where a: Eq`), and impls too
   (`impl Show[Cache[k, v]] where k: Show, v: Show`).
-- Associated types are declared one item per line, like every other
-  trait item:
-
-  ```alder
-  trait Iterator[i] {
-      type Item
-      fn next(it: i) -> Option[Item]
-  }
-  ```
+- Associated types are declared one item per line, like `type Item` in the
+  `SequenceIterator` example above.
 
 - Default method bodies are allowed in the trait.
 - Rust's orphan rule applies: an `impl` must live in the package that
@@ -317,8 +330,12 @@ fn describe(xs: Array[a]) -> String where a: Show {
 - There is no method-call sugar. `show(user)` or `user |> show`, never
   `user.show()`. `.` is for modules, record fields, and tuple indices.
 - `Eq` is derived automatically for every type whose parts are `Eq`;
-  `Show`, `Ord`, `Hash`, and `Json` are `#[derive(...)]` macros. Arithmetic
-  is the `Num` trait (`Number`, `BigInt`); comparisons are `Ord`.
+  `Show`, `Ord`, `Hash`, and `Json` use compiler-backed `#[derive(...)]`
+  attributes in M3, replaced by macros in M5 without changing user code.
+  Arithmetic is the `Num` trait (`Number`, `BigInt`); comparisons use
+  `Ord.compare(left, right) Ordering`, where `Ordering` has `Less`, `Equal`,
+  and `Greater` variants. Primitive comparisons lower directly to JavaScript
+  relational operators, while generic comparisons inspect that result.
 
 ### Errors
 
@@ -330,20 +347,20 @@ collects every tag the body can produce. Spell the row out only to close
 it or to document it.
 
 ```alder
-fn find(id: Id) -> Result[User] {              // error inferred: [:not_found(Id) | r]
+fn find(id: Id) Result[User] {                 // error inferred: [:not_found(Id) | r]
     match db.get(id) {
         Some(u) => Ok(u),
         None => Err(:not_found(id)),
     }
 }
 
-fn load(id: Id) -> Result[Profile] {           // inferred: [:not_found(Id) | :timeout | r]
+fn load(id: Id) Result[Profile] {              // inferred: [:not_found(Id) | :timeout | r]
     let user = find(id)?          // rows merge through ?
     let prefs = fetchPrefs(user).await?
     Ok({ user, prefs })
 }
 
-fn loadStrict(id: Id) -> Result[Profile, [:not_found(Id) | :timeout]] {
+fn loadStrict(id: Id) Result[Profile, [:not_found(Id) | :timeout]] {
     load(id)                       // explicit, closed row
 }
 
@@ -363,7 +380,7 @@ pub error AuthError {
     :expired(Timestamp),
 }
 
-fn check(token: String) -> Result[Session, AuthError]
+fn check(token: String) Result[Session, AuthError]
 ```
 
 - `Result[a]` with one argument means an inferred error row. Hover, docs,
@@ -389,7 +406,7 @@ structured concurrency, interruption, and scopes without an `Effect` type
 in user code.
 
 ```alder
-fn profile(id: Id) -> Result[Profile] {
+fn profile(id: Id) Result[Profile] {
     let user = Http.get(`/users/${id}`).await?
     let posts = Http.get(`/users/${id}/posts`).await?
     Ok({ user, posts })
@@ -399,7 +416,7 @@ let (a, b) = Fiber.all(profile(1), profile(2)).await
 ```
 
 - `Task` is a visible type. Signatures may write it
-  (`fn load(id: Id) -> Task[Result[User]]`), hover shows
+  (`fn load(id: Id) Task[Result[User]]`), hover shows
   it when inferred, and an un-awaited call is a `Task` value you can pass
   to `Fiber.fork`, `Fiber.all`, or `Fiber.race`.
 - **Open:** how a top-level entry point runs the scheduler; the exact fiber
@@ -411,7 +428,7 @@ Services are requested by type with `use` and supplied by `provide` in an
 enclosing scope. Missing providers are compile errors at entry points.
 
 ```alder
-fn saveUser(user: User) -> Result[()] {
+fn saveUser(user: User) Result[()] {
     use Db
     Db.insert(users, user).await
 }
@@ -502,7 +519,7 @@ pub component Counter(props: { start?: Number, label: String }) {
     let mut count = state(props.start ?? 0)
     let double = count * 2                     // memoized automatically
 
-    <button onClick={fn() count += 1}>
+    <button onClick={() -> count += 1}>
         {props.label}: {count} ({double})
     </button>
 }
@@ -523,7 +540,10 @@ build time in the compiler's embedded V8, with Elixir-style
 
 ```alder
 #[derive(Show, Eq, Json)]
-type Point = { x: Number, y: Number }
+enum Shape {
+    Point { x: Number, y: Number },
+    Circle(Number),
+}
 
 macro assert_eq(left, right) {
     quote {
@@ -575,13 +595,13 @@ TypeScript can consume Alder modules.
 
 ```alder
 #[extern("node:crypto", "randomUUID")]
-fn randomUUID() -> String
+fn randomUUID() String
 
 #[extern("node:fs/promises", "readFile")]
-fn readFile(path: String, encoding: String) -> Task[Result[String, [:io(String)]]]
+fn readFile(path: String, encoding: String) Task[Result[String, [:io(String)]]]
 
 #[extern("globalThis", "JSON.parse")]
-fn parseJson(s: String) -> Result[Json, [:syntax(String)]]
+fn parseJson(s: String) Result[Json, [:syntax(String)]]
 ```
 
 - If the declared return type is `Result`, the kernel wraps the call in

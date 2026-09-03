@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "fn profile(id: Id) -> Result[Profile] {\n    let user = Http.get(`/users/${id}`).await?\n    let posts = Http.get(`/users/${id}/posts`).await?\n    Ok({ user, posts })\n}\n\nlet (a, b) = Fiber.all(profile(1), profile(2)).await\n"
+description: "fn profile(id: Id) Result[Profile] {\n    let user = Http.get(`/users/${id}`).await?\n    let posts = Http.get(`/users/${id}/posts`).await?\n    Ok({ user, posts })\n}\n\nlet (a, b) = Fiber.all(profile(1), profile(2)).await\n"
 ---
 Module {
     items: [
@@ -92,11 +92,11 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 23,
+                                        column: 20,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 38,
+                                        column: 35,
                                     },
                                 },
                                 value: Named {
@@ -106,11 +106,11 @@ Module {
                                                 region: Region {
                                                     start: Position {
                                                         line: 1,
-                                                        column: 23,
+                                                        column: 20,
                                                     },
                                                     end: Position {
                                                         line: 1,
-                                                        column: 29,
+                                                        column: 26,
                                                     },
                                                 },
                                                 value: "Result",
@@ -122,11 +122,11 @@ Module {
                                             region: Region {
                                                 start: Position {
                                                     line: 1,
-                                                    column: 30,
+                                                    column: 27,
                                                 },
                                                 end: Position {
                                                     line: 1,
-                                                    column: 37,
+                                                    column: 34,
                                                 },
                                             },
                                             value: Named {
@@ -136,11 +136,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 1,
-                                                                    column: 30,
+                                                                    column: 27,
                                                                 },
                                                                 end: Position {
                                                                     line: 1,
-                                                                    column: 37,
+                                                                    column: 34,
                                                                 },
                                                             },
                                                             value: "Profile",
@@ -160,7 +160,7 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 39,
+                                        column: 36,
                                     },
                                     end: Position {
                                         line: 5,

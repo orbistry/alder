@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: "fn() { x }"
+description: "() -> { x }"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 11,
+            column: 12,
         },
     },
     value: Lambda(
@@ -21,11 +21,11 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 6,
+                        column: 7,
                     },
                     end: Position {
                         line: 1,
-                        column: 11,
+                        column: 12,
                     },
                 },
                 value: Block(
@@ -33,11 +33,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 6,
+                                column: 7,
                             },
                             end: Position {
                                 line: 1,
-                                column: 11,
+                                column: 12,
                             },
                         },
                         value: Block {
@@ -47,11 +47,11 @@ Located {
                                     region: Region {
                                         start: Position {
                                             line: 1,
-                                            column: 8,
+                                            column: 9,
                                         },
                                         end: Position {
                                             line: 1,
-                                            column: 9,
+                                            column: 10,
                                         },
                                     },
                                     value: Var(

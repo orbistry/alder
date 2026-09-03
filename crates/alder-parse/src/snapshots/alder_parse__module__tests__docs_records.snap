@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "type User = {\n    id: Id,\n    name: String,\n    nickname?: String,        // read as Option[String]\n}\n\nfn rename(user: { r | name: String }, name: String) -> { r | name: String } {\n    { ..user, name }\n}\n\nlet u: User = { id, name: \"Ada\" }          // nickname omitted\n"
+description: "type User = {\n    id: Id,\n    name: String,\n    nickname?: String,        // read as Option[String]\n}\n\nfn rename(user: { r | name: String }, name: String) ({ r | name: String }) {\n    { ..user, name }\n}\n\nlet u: User = { id, name: \"Ada\" }          // nickname omitted\n"
 ---
 Module {
     items: [
@@ -397,11 +397,11 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 7,
-                                        column: 56,
+                                        column: 53,
                                     },
                                     end: Position {
                                         line: 7,
-                                        column: 76,
+                                        column: 75,
                                     },
                                 },
                                 value: Record {
@@ -411,11 +411,11 @@ Module {
                                                 region: Region {
                                                     start: Position {
                                                         line: 7,
-                                                        column: 62,
+                                                        column: 60,
                                                     },
                                                     end: Position {
                                                         line: 7,
-                                                        column: 66,
+                                                        column: 64,
                                                     },
                                                 },
                                                 value: "name",
@@ -425,11 +425,11 @@ Module {
                                                 region: Region {
                                                     start: Position {
                                                         line: 7,
-                                                        column: 68,
+                                                        column: 66,
                                                     },
                                                     end: Position {
                                                         line: 7,
-                                                        column: 74,
+                                                        column: 72,
                                                     },
                                                 },
                                                 value: Named {
@@ -439,11 +439,11 @@ Module {
                                                                 region: Region {
                                                                     start: Position {
                                                                         line: 7,
-                                                                        column: 68,
+                                                                        column: 66,
                                                                     },
                                                                     end: Position {
                                                                         line: 7,
-                                                                        column: 74,
+                                                                        column: 72,
                                                                     },
                                                                 },
                                                                 value: "String",
@@ -460,11 +460,11 @@ Module {
                                             region: Region {
                                                 start: Position {
                                                     line: 7,
-                                                    column: 58,
+                                                    column: 56,
                                                 },
                                                 end: Position {
                                                     line: 7,
-                                                    column: 59,
+                                                    column: 57,
                                                 },
                                             },
                                             value: "r",
@@ -479,7 +479,7 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 7,
-                                        column: 77,
+                                        column: 76,
                                     },
                                     end: Position {
                                         line: 9,

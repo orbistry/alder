@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn ambiguous() {\n    let equal = (left, right) -> { left == right }\n    ()\n}\n"
+---
+alder::trait::ambiguous_type_variable
+
+  × cannot determine which type must implement `Eq[a]`
+   ╭─[/project/src/main.ald:2:41]
+ 1 │ fn ambiguous() {
+ 2 │     let equal = (left, right) -> { left == right }
+   ·                                         ─┬
+   ·                                          ╰── this trait use has no determining type
+ 3 │     ()
+   ╰────
+  help: add a type annotation that fixes the operand type

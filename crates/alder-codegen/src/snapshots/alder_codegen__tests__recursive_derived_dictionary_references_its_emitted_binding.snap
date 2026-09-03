@@ -1,0 +1,57 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "#[derive(Show)]\npub enum Chain { End, Link(Number, Chain) }\n\npub fn render(value: Chain) -> String { show(value) }\n"
+---
+import { $equalDerived, $show, $showDerived } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, {
+		"End": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		"Link": {
+			"record": false,
+			"fields": ["_0", "_1"],
+			"optional": [],
+			"dictionaries": [{ "eq": ($a, $b) => {
+				return $a === $b;
+			} }, $dict$Eq$0]
+		}
+	});
+};
+Object["freeze"]($dict$Eq$0);
+const $c_Chain_End = Object["freeze"]({ "$": "End" });
+function $c_Chain_Link($a0, $a1) {
+	return {
+		"$": "Link",
+		"_0": $a0,
+		"_1": $a1
+	};
+}
+function $v_render($a0) {
+	let $l0_value = $a0;
+	const $t0 = $dict$Show$0["show"];
+	return $t0($l0_value);
+}
+const $dict$Show$0 = {};
+$dict$Show$0["show"] = ($a0) => {
+	return $showDerived($a0, {
+		"End": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		"Link": {
+			"record": false,
+			"fields": ["_0", "_1"],
+			"optional": [],
+			"dictionaries": [{ "show": $show }, $dict$Show$0]
+		}
+	});
+};
+Object["freeze"]($dict$Show$0);
+export { $c_Chain_End, $c_Chain_Link, $dict$Eq$0, $dict$Show$0, $v_render as render };

@@ -1,0 +1,32 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "trait Display[a] { fn display(value: a) -> String }\ntrait Render[a] { fn render(value: a) -> String }\n\nimpl Display[a] where a: Render {\n    fn display(value: a) -> String { \"display\" }\n}\n"
+---
+[
+    Coherence(
+        InvalidTermination {
+            implementation: ImplId {
+                module: ModuleId {
+                    package: Application,
+                    path: [
+                        "Main",
+                    ],
+                },
+                origin: Source {
+                    item_ordinal: 2,
+                },
+            },
+            prerequisite: TraitId(
+                QualifiedName {
+                    module: ModuleId {
+                        package: Application,
+                        path: [
+                            "Main",
+                        ],
+                    },
+                    name: "Render",
+                },
+            ),
+        },
+    ),
+]

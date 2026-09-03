@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit(\"fn expected() { 1 }\\npub fn same(value) { match value { ^expected() => true, _ => false } }\")"
+description: "fn expected() { 1 }\npub fn same(value) { match value { ^expected() => true, _ => false } }\n"
 ---
 import { $equal, $matchFailure } from "alder:kernel";
 function $v_expected() {

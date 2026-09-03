@@ -1,0 +1,24 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "trait Show[a] { fn show(value: a) }"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 20,
+            },
+            end: Position {
+                line: 1,
+                column: 24,
+            },
+        },
+        kind: Type(
+            MissingAnnotation {
+                name: "show",
+                position: "return type",
+            },
+        ),
+    },
+]

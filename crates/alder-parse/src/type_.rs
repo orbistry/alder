@@ -6,9 +6,10 @@
 //!
 //! ```ebnf
 //! type        = fn_type | type_term ;
-//! fn_type     = 'fn' '(' [ type { ',' type } [ ',' ] ] ')' '->' type ;
+//! fn_type     = 'fn' '(' [ type { ',' type } [ ',' ] ] ')' type ;
 //! type_term   = path [ type_args ]
 //!             | lower_ident [ type_args ]
+//!             | '_'
 //!             | '(' ')' | '(' type ')' | '(' type ',' type { ',' type } [ ',' ] ')'
 //!             | '{' [ lower_ident '|' ] [ field_type { ',' field_type } [ ',' ] ] '}'
 //!             | '[' [ tag_variant { '|' tag_variant } ] [ '|' lower_ident ] ']' ;
@@ -41,6 +42,18 @@ use crate::error::{self, TArgs, TErrorRow, TFn, TRecord, TTuple};
 use crate::keyword::Keyword;
 
 impl<'a> Parser<'a> {
+    /// Whether the cursor is on a token that can begin a type expression.
+    pub(crate) fn starts_type(&self) -> bool {
+        match self.peek() {
+            Some(b'_') | Some(b'(') | Some(b'{') | Some(b'[') => true,
+            Some(byte) if byte.is_ascii_uppercase() => true,
+            Some(byte) if byte.is_ascii_lowercase() => {
+                self.peek_keyword(b"fn") || Keyword::from_word(self.peek_word()).is_none()
+            }
+            _ => false,
+        }
+    }
+
     /// `fn` type or term. Chomps trailing whitespace. Counts one nesting
     /// level (§10.44).
     pub fn type_expr(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
@@ -61,12 +74,23 @@ impl<'a> Parser<'a> {
         Ok(typ)
     }
 
-    /// path[args] | var[args] | ( ) | tuple | record | error row.
+    /// path[args] | var[args] | `_` | ( ) | tuple | record | error row.
     ///
     /// Dispatches on the first byte and reports `Start` itself. Does not chomp.
     pub(crate) fn type_term(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
         let start = self.get_position();
         match self.peek() {
+            Some(b'_') => {
+                if self
+                    .peek_at(1)
+                    .is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                {
+                    let (row, col) = self.position();
+                    return Err(error::Type::Start(row, col));
+                }
+                self.advance();
+                Ok(self.add_end(start, Type::Hole))
+            }
             Some(b) if b.is_ascii_uppercase() => {
                 let path = self.path(error::Type::Start, error::Type::PathMember)?;
                 // `path` stops before `::lower` (a value member); a type
@@ -296,8 +320,8 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// At `fn`: `fn(A, B) -> C`. The return type is a full `type_expr`, so
-    /// `fn(a) -> fn(b) -> c` nests to the right.
+    /// At `fn`: `fn(A, B) C`. The return type is a full `type_expr`, so
+    /// `fn(a) fn(b) c` nests to the right.
     fn type_fn(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TFn<'a>> {
         self.advance_by(2); // `fn` (peeked by the caller)
         self.chomp();
@@ -333,8 +357,6 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.chomp();
-        self.word2(b'-', b'>', TFn::Arrow)?;
         self.chomp();
         let ret = self.specialize(
             |bump, e, row, col| TFn::Ret(bump.alloc(e), row, col),
@@ -531,6 +553,26 @@ mod tests {
     }
 
     #[test]
+    fn hole() {
+        assert_type_snapshot!("_");
+    }
+
+    #[test]
+    fn partial_constructor_hole() {
+        assert_type_snapshot!("Result[_, e]");
+    }
+
+    #[test]
+    fn partial_constructor_hole_order() {
+        assert_type_snapshot!("Map[_, Array[_]]");
+    }
+
+    #[test]
+    fn error_underscore_is_not_a_type_name() {
+        assert_type_error_snapshot!("_value");
+    }
+
+    #[test]
     fn named_simple() {
         assert_type_snapshot!("User");
     }
@@ -597,32 +639,32 @@ mod tests {
 
     #[test]
     fn fn_no_params() {
-        assert_type_snapshot!("fn() -> Number");
+        assert_type_snapshot!("fn() Number");
     }
 
     #[test]
     fn fn_one_param() {
-        assert_type_snapshot!("fn(a) -> b");
+        assert_type_snapshot!("fn(a) b");
     }
 
     #[test]
     fn fn_many_params() {
-        assert_type_snapshot!("fn(String, Number) -> Bool");
+        assert_type_snapshot!("fn(String, Number) Bool");
     }
 
     #[test]
     fn fn_returning_fn() {
-        assert_type_snapshot!("fn(a) -> fn(b) -> c");
+        assert_type_snapshot!("fn(a) fn(b) c");
     }
 
     #[test]
     fn fn_hkt() {
-        assert_type_snapshot!("fn(a) -> f[b]");
+        assert_type_snapshot!("fn(a) f[b]");
     }
 
     #[test]
     fn fn_param_is_fn() {
-        assert_type_snapshot!("fn(fn(a) -> b, Array[a]) -> Array[b]");
+        assert_type_snapshot!("fn(fn(a) b, Array[a]) Array[b]");
     }
 
     // ---- unit and tuples
@@ -770,23 +812,18 @@ mod tests {
     }
 
     #[test]
-    fn error_fn_missing_arrow() {
-        assert_type_error_snapshot!("fn(a) b");
-    }
-
-    #[test]
     fn error_fn_missing_parens() {
         assert_type_error_snapshot!("fn -> a");
     }
 
     #[test]
     fn error_fn_param_end() {
-        assert_type_error_snapshot!("fn(a b) -> c");
+        assert_type_error_snapshot!("fn(a b) c");
     }
 
     #[test]
     fn error_fn_missing_ret() {
-        assert_type_error_snapshot!("fn(a) ->");
+        assert_type_error_snapshot!("fn(a)");
     }
 
     #[test]

@@ -1,12 +1,12 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: fn() f() /= 2
+description: () -> f() /= 2
 ---
 Lambda(
     AssignTarget(
         Div,
         1,
-        6,
+        7,
     ),
     1,
     1,

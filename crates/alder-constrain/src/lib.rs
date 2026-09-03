@@ -6,21 +6,28 @@
 //! boundary without carrying Elm's binary-function and fixed-tuple constraint
 //! vocabulary into Alder.
 
-use alder_ast::Module;
+use alder_ast::{MethodId, Module, UseId};
 use alder_region::Region;
 
 #[derive(Debug)]
 pub struct Constraints<'a> {
     pub module: &'a Module<'a>,
+    pub requirement_seeds: &'a [RequirementSeed<'a>],
 }
 
-#[derive(Debug, Default)]
-pub struct UnionFind;
+#[derive(Clone, Copy, Debug)]
+pub struct RequirementSeed<'a> {
+    pub use_id: UseId,
+    pub kind: RequirementKind<'a>,
+    pub region: Region,
+}
 
-impl UnionFind {
-    pub const fn new() -> Self {
-        Self
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RequirementKind<'a> {
+    TraitMethod(MethodId<'a>),
+    Eq,
+    Ord,
+    Num,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,19 +38,35 @@ pub struct Error {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
-    Mismatch { actual: String, expected: String },
-    Arity { expected: usize, actual: usize },
-    MissingField { field: String },
+    Mismatch {
+        actual: String,
+        expected: String,
+    },
+    Arity {
+        expected: usize,
+        actual: usize,
+    },
+    MissingField {
+        field: String,
+    },
+    AssocTypeMismatch {
+        assoc: String,
+        expected: String,
+        actual: String,
+    },
     InfiniteType,
+    UnsupportedHigherKindedUnification,
     InvalidAwait,
     InvalidTry,
     ReturnMismatch,
 }
 
-pub fn constrain<'a>(
-    _bump: &'a bumpalo::Bump,
-    _uf: &mut UnionFind,
-    module: &'a Module<'a>,
-) -> Constraints<'a> {
-    Constraints { module }
+pub fn constrain<'a>(bump: &'a bumpalo::Bump, module: &'a Module<'a>) -> Constraints<'a> {
+    let requirement_seeds = requirements::collect(bump, module);
+    Constraints {
+        module,
+        requirement_seeds,
+    }
 }
+
+mod requirements;

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit(\"pub fn first(name) { let value = { name: name, scores: [10, 20] }\\n value.scores[0] }\")"
+description: "pub fn first(name) {\n    let value = { name: name, scores: [10, 20] }\n    value.scores[0]\n}\n"
 ---
 function $v_first($a0) {
 	let $l0_name = $a0;

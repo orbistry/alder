@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn subtract(left: Number, right: Number) Number { left - right }\nlet answer = 44 |> subtract(2)"
+---
+answer: Number
+subtract: fn(Number, Number) Number

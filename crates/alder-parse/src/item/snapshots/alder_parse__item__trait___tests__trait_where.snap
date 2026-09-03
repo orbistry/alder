@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/trait_.rs
-description: "trait Ord[a] where a: Eq {\n    fn compare(x: a, y: a) -> Ordering\n}\n"
+description: "trait Ord[a] where a: Eq {\n    fn compare(x: a, y: a) Ordering\n}\n"
 ---
 TraitDecl {
     name: Located {
@@ -162,11 +162,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 31,
+                                column: 28,
                             },
                             end: Position {
                                 line: 2,
-                                column: 39,
+                                column: 36,
                             },
                         },
                         value: Named {
@@ -176,11 +176,11 @@ TraitDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 31,
+                                                column: 28,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 39,
+                                                column: 36,
                                             },
                                         },
                                         value: "Ordering",

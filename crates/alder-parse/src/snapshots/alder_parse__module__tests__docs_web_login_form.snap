@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "schema SignUp from users {\n    pick email, name\n    name: min(3)\n    password: String, min(12)\n    confirm: String, equals(password)\n}\n\n// lib/auth.remote.ald\npub fn signUp(input: SignUp) -> Result[User] {\n    Ok(createUser(input))\n}\n\ncomponent LoginForm() {\n    <Form action={signUp}>\n        <Field name=\"email\" />\n        <Field name=\"password\" type=\"password\" />\n    </Form>\n}\n"
+description: "schema SignUp from users {\n    pick email, name\n    name: min(3)\n    password: String, min(12)\n    confirm: String, equals(password)\n}\n\n// lib/auth.remote.ald\npub fn signUp(input: SignUp) Result[User] {\n    Ok(createUser(input))\n}\n\ncomponent LoginForm() {\n    <Form action={signUp}>\n        <Field name=\"email\" />\n        <Field name=\"password\" type=\"password\" />\n    </Form>\n}\n"
 ---
 Module {
     items: [
@@ -405,11 +405,11 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 9,
-                                        column: 33,
+                                        column: 30,
                                     },
                                     end: Position {
                                         line: 9,
-                                        column: 45,
+                                        column: 42,
                                     },
                                 },
                                 value: Named {
@@ -419,11 +419,11 @@ Module {
                                                 region: Region {
                                                     start: Position {
                                                         line: 9,
-                                                        column: 33,
+                                                        column: 30,
                                                     },
                                                     end: Position {
                                                         line: 9,
-                                                        column: 39,
+                                                        column: 36,
                                                     },
                                                 },
                                                 value: "Result",
@@ -435,11 +435,11 @@ Module {
                                             region: Region {
                                                 start: Position {
                                                     line: 9,
-                                                    column: 40,
+                                                    column: 37,
                                                 },
                                                 end: Position {
                                                     line: 9,
-                                                    column: 44,
+                                                    column: 41,
                                                 },
                                             },
                                             value: Named {
@@ -449,11 +449,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 9,
-                                                                    column: 40,
+                                                                    column: 37,
                                                                 },
                                                                 end: Position {
                                                                     line: 9,
-                                                                    column: 44,
+                                                                    column: 41,
                                                                 },
                                                             },
                                                             value: "User",
@@ -473,7 +473,7 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 9,
-                                        column: 46,
+                                        column: 43,
                                     },
                                     end: Position {
                                         line: 11,

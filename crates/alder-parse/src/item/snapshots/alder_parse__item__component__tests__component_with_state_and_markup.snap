@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/component.rs
-description: "component Counter(props: { start?: Number, label: String }) {\n    let mut count = state(props.start ?? 0)\n    let double = count * 2                     // memoized automatically\n\n    <button onClick={fn() count += 1}>\n        {props.label}: {count} ({double})\n    </button>\n}\n"
+description: "component Counter(props: { start?: Number, label: String }) {\n    let mut count = state(props.start ?? 0)\n    let double = count * 2                     // memoized automatically\n\n    <button onClick={() -> count += 1}>\n        {props.label}: {count} ({double})\n    </button>\n}\n"
 ---
 ComponentDecl {
     name: Located {
@@ -477,7 +477,7 @@ ComponentDecl {
                                                         },
                                                         end: Position {
                                                             line: 5,
-                                                            column: 37,
+                                                            column: 38,
                                                         },
                                                     },
                                                     value: Lambda(
@@ -488,11 +488,11 @@ ComponentDecl {
                                                                 region: Region {
                                                                     start: Position {
                                                                         line: 5,
-                                                                        column: 27,
+                                                                        column: 28,
                                                                     },
                                                                     end: Position {
                                                                         line: 5,
-                                                                        column: 37,
+                                                                        column: 38,
                                                                     },
                                                                 },
                                                                 value: Block(
@@ -500,11 +500,11 @@ ComponentDecl {
                                                                         region: Region {
                                                                             start: Position {
                                                                                 line: 5,
-                                                                                column: 27,
+                                                                                column: 28,
                                                                             },
                                                                             end: Position {
                                                                                 line: 5,
-                                                                                column: 37,
+                                                                                column: 38,
                                                                             },
                                                                         },
                                                                         value: Block {
@@ -513,11 +513,11 @@ ComponentDecl {
                                                                                     region: Region {
                                                                                         start: Position {
                                                                                             line: 5,
-                                                                                            column: 27,
+                                                                                            column: 28,
                                                                                         },
                                                                                         end: Position {
                                                                                             line: 5,
-                                                                                            column: 37,
+                                                                                            column: 38,
                                                                                         },
                                                                                     },
                                                                                     value: Assign {
@@ -525,11 +525,11 @@ ComponentDecl {
                                                                                             region: Region {
                                                                                                 start: Position {
                                                                                                     line: 5,
-                                                                                                    column: 27,
+                                                                                                    column: 28,
                                                                                                 },
                                                                                                 end: Position {
                                                                                                     line: 5,
-                                                                                                    column: 32,
+                                                                                                    column: 33,
                                                                                                 },
                                                                                             },
                                                                                             value: Place {
@@ -537,11 +537,11 @@ ComponentDecl {
                                                                                                     region: Region {
                                                                                                         start: Position {
                                                                                                             line: 5,
-                                                                                                            column: 27,
+                                                                                                            column: 28,
                                                                                                         },
                                                                                                         end: Position {
                                                                                                             line: 5,
-                                                                                                            column: 32,
+                                                                                                            column: 33,
                                                                                                         },
                                                                                                     },
                                                                                                     value: "count",
@@ -553,11 +553,11 @@ ComponentDecl {
                                                                                             region: Region {
                                                                                                 start: Position {
                                                                                                     line: 5,
-                                                                                                    column: 33,
+                                                                                                    column: 34,
                                                                                                 },
                                                                                                 end: Position {
                                                                                                     line: 5,
-                                                                                                    column: 35,
+                                                                                                    column: 36,
                                                                                                 },
                                                                                             },
                                                                                             value: Add,
@@ -566,11 +566,11 @@ ComponentDecl {
                                                                                             region: Region {
                                                                                                 start: Position {
                                                                                                     line: 5,
-                                                                                                    column: 36,
+                                                                                                    column: 37,
                                                                                                 },
                                                                                                 end: Position {
                                                                                                     line: 5,
-                                                                                                    column: 37,
+                                                                                                    column: 38,
                                                                                                 },
                                                                                             },
                                                                                             value: Number(

@@ -14,6 +14,7 @@ bumpalo.workspace = true
 glob.workspace = true
 miette.workspace = true
 serde.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync", "fs"] }
 url.workspace = true
@@ -25,6 +26,7 @@ alder-codegen = { path = "../alder-codegen", version = "0.1.0" }
 alder-constrain = { path = "../alder-constrain", version = "0.1.0" }
 alder-parse = { path = "../alder-parse", version = "0.1.0" }
 alder-region = { path = "../alder-region", version = "0.1.0" }
+alder-report = { path = "../alder-report", version = "0.1.0" }
 alder-solve = { path = "../alder-solve", version = "0.1.0" }
 alder-source = { path = "../alder-source", version = "0.1.0" }
 

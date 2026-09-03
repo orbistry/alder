@@ -1,0 +1,22 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn combine(left: f[a], right: f[b]) -> f[a] { left }\nfn invalid(\n    left: Result[Number, String],\n    right: Result[Bool, Bool],\n) {\n    combine(left, right)\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 6,
+                column: 5,
+            },
+            end: Position {
+                line: 6,
+                column: 25,
+            },
+        },
+        kind: Mismatch {
+            actual: "String",
+            expected: "Bool",
+        },
+    },
+]

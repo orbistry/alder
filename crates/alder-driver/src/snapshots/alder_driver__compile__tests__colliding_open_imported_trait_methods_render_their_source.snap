@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/first.*\nimport ~/second.*\npub fn main() String { render(1) }\n"
+---
+alder::canonicalize::import_alias_collision
+
+  × import name `render` is already bound
+   ╭─[/project/src/main.ald:2:1]
+ 1 │ import ~/first.*
+   · ────────┬───────
+   ·         ╰── first binding is here
+ 2 │ import ~/second.*
+   · ────────┬────────
+   ·         ╰── reported here
+ 3 │ pub fn main() String { render(1) }
+   ╰────

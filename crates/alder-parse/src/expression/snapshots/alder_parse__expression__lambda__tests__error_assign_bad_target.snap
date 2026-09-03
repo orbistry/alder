@@ -1,12 +1,12 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: fn() 1 += 2
+description: () -> 1 += 2
 ---
 Lambda(
     AssignTarget(
         Add,
         1,
-        6,
+        7,
     ),
     1,
     1,

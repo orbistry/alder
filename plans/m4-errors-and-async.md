@@ -18,7 +18,7 @@ resolved at compile time.
 
 ## Exit criteria
 
-- `fn find(id: Id) -> Result[User]` infers `[:not_found(Id) | r]` from the
+- `fn find(id: Id) Result[User]` infers `[:not_found(Id) | r]` from the
   body; `?` merges rows across calls; a named `error` group flattens into
   an open row on `?` and closes it when written explicitly; `match` on a
   closed row is exhaustive and an open row requires `_`; hover, docs, and

@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn adapt(value: f[a]) f[a] { value }\nfn specialize(value: Result[Number, String]) { adapt(value) }\n"
+---
+adapt: forall a, b. fn(a[b]) a[b]
+specialize: fn(Result[Number, String]) Result[Number, String]

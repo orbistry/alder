@@ -1,0 +1,29 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\nimpl Show[Array[a]] where a: Show {\n    fn show(value: Array[a]) -> String { \"array\" }\n}\npub fn main() -> String { show([1]) }\n"
+---
+function $impl$1$show($self, $a0) {
+	let $l1_value = $a0;
+	return "number";
+}
+const $dict$Show$1 = {};
+$dict$Show$1["show"] = ($a0) => {
+	return $impl$1$show($dict$Show$1, $a0);
+};
+Object["freeze"]($dict$Show$1);
+function $impl$2$show($self, $dict0, $a0) {
+	let $l2_value = $a0;
+	return "array";
+}
+function $dict$Show$2($dict0) {
+	const $self = {};
+	$self["show"] = ($a0) => {
+		return $impl$2$show($self, $dict0, $a0);
+	};
+	return Object["freeze"]($self);
+}
+function $v_main() {
+	const $t0 = $dict$Show$2($dict$Show$1)["show"];
+	return $t0([1]);
+}
+export { $dict$Show$1, $dict$Show$2, $v_main as main };

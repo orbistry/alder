@@ -1,0 +1,22 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "let mut identity = fn(value) { value }\nfn forward(value) { identity(value) }\nfn number() { forward(1) }\nfn text() { forward(\"text\") }\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 4,
+                column: 13,
+            },
+            end: Position {
+                line: 4,
+                column: 28,
+            },
+        },
+        kind: Mismatch {
+            actual: "Number",
+            expected: "String",
+        },
+    },
+]

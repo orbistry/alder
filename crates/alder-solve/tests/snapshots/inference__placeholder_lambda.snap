@@ -2,5 +2,5 @@
 source: crates/alder-solve/tests/inference.rs
 description: "fn add(x, y) { x + y }\nlet increment = add(1, _)"
 ---
-add: fn(Number, Number) -> Number
-increment: fn(Number) -> Number
+add: forall a. fn(a, a) a
+increment: fn(Number) Number

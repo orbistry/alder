@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit(\"pub fn sum() { let mut total = 0\\n for value in [1, 2] { total += value }\\n total }\")"
+description: "pub fn sum() {\n    let mut total = 0\n    for value in [1, 2] { total += value }\n    total\n}\n"
 ---
 function $v_sum() {
 	const $t0 = 0;

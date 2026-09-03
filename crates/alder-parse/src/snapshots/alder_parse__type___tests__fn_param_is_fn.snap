@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/type_.rs
-description: "fn(fn(a) -> b, Array[a]) -> Array[b]"
+description: "fn(fn(a) b, Array[a]) Array[b]"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 37,
+            column: 31,
         },
     },
     value: Fn {
@@ -23,7 +23,7 @@ Located {
                     },
                     end: Position {
                         line: 1,
-                        column: 14,
+                        column: 11,
                     },
                 },
                 value: Fn {
@@ -49,11 +49,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 13,
+                                column: 10,
                             },
                             end: Position {
                                 line: 1,
-                                column: 14,
+                                column: 11,
                             },
                         },
                         value: Var {
@@ -67,11 +67,11 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 16,
+                        column: 13,
                     },
                     end: Position {
                         line: 1,
-                        column: 24,
+                        column: 21,
                     },
                 },
                 value: Named {
@@ -81,11 +81,11 @@ Located {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 16,
+                                        column: 13,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 21,
+                                        column: 18,
                                     },
                                 },
                                 value: "Array",
@@ -97,11 +97,11 @@ Located {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 22,
+                                    column: 19,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 23,
+                                    column: 20,
                                 },
                             },
                             value: Var {
@@ -117,11 +117,11 @@ Located {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 29,
+                    column: 23,
                 },
                 end: Position {
                     line: 1,
-                    column: 37,
+                    column: 31,
                 },
             },
             value: Named {
@@ -131,11 +131,11 @@ Located {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 29,
+                                    column: 23,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 34,
+                                    column: 28,
                                 },
                             },
                             value: "Array",
@@ -147,11 +147,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 35,
+                                column: 29,
                             },
                             end: Position {
                                 line: 1,
-                                column: 36,
+                                column: 30,
                             },
                         },
                         value: Var {

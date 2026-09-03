@@ -180,7 +180,7 @@ mod tests {
         assert_trait_snapshot!(
             r#"
             trait Show[a] {
-                fn show(value: a) -> String
+                fn show(value: a) String
             }
         "#
         );
@@ -192,7 +192,7 @@ mod tests {
         assert_trait_snapshot!(
             r#"
             trait Functor[f] {
-                fn map(fa: f[a], g: fn(a) -> b) -> f[b]
+                fn map(fa: f[a], g: fn(a) b) f[b]
             }
         "#
         );
@@ -203,7 +203,7 @@ mod tests {
         assert_trait_snapshot!(
             r#"
             trait Show[a] {
-                fn show(value: a) -> String { "?" }
+                fn show(value: a) String { "?" }
             }
         "#
         );
@@ -227,7 +227,7 @@ mod tests {
             r#"
             trait Iterator[i] {
                 type Item
-                fn next(it: i) -> Option[Item]
+                fn next(it: i) Option[Item]
             }
         "#
         );
@@ -239,7 +239,7 @@ mod tests {
         assert_trait_snapshot!(
             r#"
             trait Ord[a] where a: Eq {
-                fn compare(x: a, y: a) -> Ordering
+                fn compare(x: a, y: a) Ordering
             }
         "#
         );
@@ -253,7 +253,7 @@ mod tests {
                 where
                     a: Eq,
             {
-                fn compare(x: a, y: a) -> Ordering
+                fn compare(x: a, y: a) Ordering
             }
         "#
         );
@@ -264,9 +264,9 @@ mod tests {
         assert_trait_snapshot!(
             r#"
             trait Monoid[a] {
-                fn empty() -> a
-                fn append(x: a, y: a) -> a
-                fn concat(xs: Array[a]) -> a { Array.fold(xs, empty(), append) }
+                fn empty() a
+                fn append(x: a, y: a) a
+                fn concat(xs: Array[a]) a { Array.fold(xs, empty(), append) }
             }
         "#
         );
@@ -278,7 +278,7 @@ mod tests {
             r#"
             trait Container[c] {
                 type Item
-                fn sum(xs: c) -> Number where c.Item == Number
+                fn sum(xs: c) Number where c.Item == Number
             }
         "#
         );
@@ -289,7 +289,7 @@ mod tests {
         assert_trait_snapshot!(
             r#"
             trait Convert[a, b] {
-                fn convert(x: a) -> b
+                fn convert(x: a) b
             }
         "#
         );
@@ -306,7 +306,7 @@ mod tests {
         assert_item_snapshot!(
             r#"
             pub trait Show[a] {
-                fn show(value: a) -> String
+                fn show(value: a) String
             }
         "#
         );
@@ -342,7 +342,7 @@ mod tests {
         assert_trait_error_snapshot!(
             r#"
             trait Show[a] {
-                fn show(value: a) -> String
+                fn show(value: a) String
         "#
         );
     }
@@ -365,20 +365,20 @@ mod tests {
 
     #[test]
     fn error_fn() {
-        assert_trait_error_snapshot!("trait Show[a] { fn (value: a) -> String }");
+        assert_trait_error_snapshot!("trait Show[a] { fn (value: a) String }");
     }
 
     /// language.md's one-line `Iterator` example (§10.35, §10.38).
     #[test]
     fn error_semicolon_between_items() {
         assert_trait_error_snapshot!(
-            "trait Iterator[i] { type Item; fn next(it: i) -> Option[Item] }"
+            "trait Iterator[i] { type Item; fn next(it: i) Option[Item] }"
         );
     }
 
     #[test]
     fn error_same_line_items() {
-        assert_trait_error_snapshot!("trait Iterator[i] { type Item fn next(it: i) -> Item }");
+        assert_trait_error_snapshot!("trait Iterator[i] { type Item fn next(it: i) Item }");
     }
 
     #[test]
@@ -386,7 +386,7 @@ mod tests {
         assert_trait_error_snapshot!(
             r#"
             trait Show[a] {
-                fn show(value: a) -> String { "?" } fn other(value: a) -> String
+                fn show(value: a) String { "?" } fn other(value: a) String
             }
         "#
         );

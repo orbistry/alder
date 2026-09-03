@@ -1,0 +1,23 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "#[derive(\"Eq\")]\nenum Status { Ready }\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 10,
+            },
+            end: Position {
+                line: 1,
+                column: 14,
+            },
+        },
+        kind: Attribute(
+            InvalidDerive {
+                reason: "derive arguments must be trait names",
+            },
+        ),
+    },
+]

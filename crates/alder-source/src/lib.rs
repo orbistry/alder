@@ -611,7 +611,7 @@ impl BinOp {
 pub struct Lambda<'a> {
     pub params: &'a [Param<'a>],
     pub ret: Option<&'a Located<Type<'a>>>,
-    /// `{ … }` bodies are `Expr::Block`; an assignment body (`fn() count += 1`)
+    /// `{ … }` bodies are `Expr::Block`; an assignment body (`() -> count += 1`)
     /// is wrapped as a one-statement block with no tail.
     pub body: &'a Located<Expr<'a>>,
 }
@@ -905,6 +905,8 @@ pub struct FieldPattern<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Type<'a> {
+    /// `_`, a partial-constructor slot whose legal context is checked later.
+    Hole,
     /// `a`, and applied higher-kinded variables `f[a]`, `t[f[a]]`.
     Var {
         name: &'a str,

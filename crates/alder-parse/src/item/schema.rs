@@ -13,7 +13,7 @@
 //!
 //! Items are line-separated only by convention. After a field's `:`, a
 //! non-reserved lowercase word starts the rule list; anything else
-//! (`String`, `Array[String]`, `fn(a) -> b`, `(a, b)`) is a type, which may
+//! (`String`, `Array[String]`, `fn(a) b`, `(a, b)`) is a type, which may
 //! be followed by `,` and rules or stand alone (§10.28, extended: SPEC
 //! requires at least one rule after a type; the standalone form is
 //! accepted here because `confirm: String` is the natural way to declare
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn schema_type_fn() {
-        assert_schema_snapshot!("schema S { check: fn(String) -> Bool, required }");
+        assert_schema_snapshot!("schema S { check: fn(String) Bool, required }");
     }
 
     #[test]
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn schema_rule_custom_fn() {
         assert_schema_snapshot!(
-            "schema S { confirm: String, equals(password), check(fn(c) c != \"\") }"
+            "schema S { confirm: String, equals(password), check(c -> c != \"\") }"
         );
     }
 

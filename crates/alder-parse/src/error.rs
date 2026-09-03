@@ -465,10 +465,10 @@ pub enum Lambda<'a> {
     Ret(&'a Type<'a>, Row, Col),
     Body(&'a Expr<'a>, Row, Col),
     Block(&'a Block<'a>, Row, Col),
-    /// `fn() 1 += 2`: the left side of the assignment body is not a place
+    /// `() -> 1 += 2`: the left side of the assignment body is not a place
     /// (renderer: for `/=` mention `!=`). Position is the target's start.
     AssignTarget(AssignOp, Row, Col),
-    /// `fn() x +=` with no value.
+    /// `() -> x +=` with no value.
     AssignValue(&'a Expr<'a>, Row, Col),
 }
 
@@ -830,7 +830,6 @@ pub enum TFn<'a> {
     Open(Row, Col),
     Param(&'a Type<'a>, Row, Col),
     ParamEnd(Row, Col),
-    Arrow(Row, Col),
     Ret(&'a Type<'a>, Row, Col),
 }
 
@@ -942,7 +941,7 @@ impl Clause {
 
 #[derive(Debug)]
 pub enum BadOperator {
-    /// `->` (hint: `=>` in match arms, `fn(A) -> B` in types)
+    /// `->` outside an anonymous function (hint: `=>` in match arms)
     Arrow,
     /// `|` (hint: `||`, or `|` only between match patterns)
     Bar,

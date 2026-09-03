@@ -1,0 +1,41 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "#[derive(Show)]\nenum Box[a] { Box(a) }\npub fn render(value: Box[String]) -> String { show(value) }\n"
+---
+import { $equalDerived, $show, $showDerived } from "alder:kernel";
+function $dict$Eq$0($dict0) {
+	const $self = {};
+	$self["eq"] = ($a0, $a1) => {
+		return $equalDerived($a0, $a1, { "Box": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [$dict0]
+		} });
+	};
+	return Object["freeze"]($self);
+}
+function $c_Box_Box($a0) {
+	return {
+		"$": "Box",
+		"_0": $a0
+	};
+}
+function $v_render($a0) {
+	let $l0_value = $a0;
+	const $t0 = $dict$Show$0({ "show": $show })["show"];
+	return $t0($l0_value);
+}
+function $dict$Show$0($dict0) {
+	const $self = {};
+	$self["show"] = ($a0) => {
+		return $showDerived($a0, { "Box": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [$dict0]
+		} });
+	};
+	return Object["freeze"]($self);
+}
+export { $dict$Eq$0, $dict$Show$0, $v_render as render };

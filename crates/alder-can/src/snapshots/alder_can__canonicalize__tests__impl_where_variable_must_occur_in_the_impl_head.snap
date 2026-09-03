@@ -1,0 +1,23 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Array[a]] where b: Show {\n    fn show(value: Array[a]) -> String { \"array\" }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 27,
+            },
+            end: Position {
+                line: 2,
+                column: 28,
+            },
+        },
+        kind: Type(
+            UnboundVariable {
+                name: "b",
+            },
+        ),
+    },
+]

@@ -76,6 +76,7 @@ version = "0.1.0"
 dependencies = [
  "alder-region",
  "alder-source",
+ "bumpalo",
 ]
 
 [[package]]
@@ -133,6 +134,7 @@ dependencies = [
  "dirs",
  "futures",
  "glob",
+ "indoc",
  "miette",
  "octocrab",
  "tar",
@@ -149,9 +151,12 @@ version = "0.1.0"
 dependencies = [
  "alder-ast",
  "alder-can",
+ "alder-constrain",
  "alder-parse",
  "alder-region",
+ "alder-solve",
  "bumpalo",
+ "indoc",
  "insta",
  "oxc_allocator",
  "oxc_ast",
@@ -178,8 +183,11 @@ name = "alder-constrain"
 version = "0.1.0"
 dependencies = [
  "alder-ast",
+ "alder-can",
+ "alder-parse",
  "alder-region",
  "bumpalo",
+ "indoc",
 ]
 
 [[package]]
@@ -193,6 +201,7 @@ dependencies = [
  "alder-constrain",
  "alder-parse",
  "alder-region",
+ "alder-report",
  "alder-solve",
  "alder-source",
  "async-trait",
@@ -203,6 +212,7 @@ dependencies = [
  "insta",
  "miette",
  "serde",
+ "sha2",
  "thiserror 2.0.20",
  "tokio",
  "url",
@@ -244,6 +254,20 @@ dependencies = [
 [[package]]
 name = "alder-region"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "alder-report"
+version = "0.1.0"
+dependencies = [
+ "alder-region",
+ "indoc",
+ "insta",
+ "miette",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "alder-runtime"

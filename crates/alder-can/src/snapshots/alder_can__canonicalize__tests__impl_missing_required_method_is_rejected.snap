@@ -1,0 +1,25 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] {}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 1,
+            },
+            end: Position {
+                line: 2,
+                column: 21,
+            },
+        },
+        kind: Type(
+            MissingImplItem {
+                trait_name: "Show",
+                name: "show",
+                item_kind: "method",
+            },
+        ),
+    },
+]

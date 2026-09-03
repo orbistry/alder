@@ -12,8 +12,8 @@ bumpalo.workspace = true
 alder-ast = { path = "../alder-ast", version = "0.1.0" }
 alder-region = { path = "../alder-region", version = "0.1.0" }
 alder-source = { path = "../alder-source", version = "0.1.0" }
+alder-parse = { path = "../alder-parse", version = "0.1.0" }
 
 [dev-dependencies]
 indoc.workspace = true
 insta.workspace = true
-alder-parse = { path = "../alder-parse", version = "0.1.0" }

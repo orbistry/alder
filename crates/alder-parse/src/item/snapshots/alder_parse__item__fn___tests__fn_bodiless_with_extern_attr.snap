@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "#[extern(\"node:crypto\", \"randomUUID\")]\nfn randomUUID() -> String\n"
+description: "#[extern(\"node:crypto\", \"randomUUID\")]\nfn randomUUID() String\n"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 2,
-            column: 26,
+            column: 23,
         },
     },
     value: Item {
@@ -97,11 +97,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 20,
+                                column: 17,
                             },
                             end: Position {
                                 line: 2,
-                                column: 26,
+                                column: 23,
                             },
                         },
                         value: Named {
@@ -111,11 +111,11 @@ Located {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 20,
+                                                column: 17,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 26,
+                                                column: 23,
                                             },
                                         },
                                         value: "String",

@@ -8,15 +8,17 @@ mod error;
 pub mod expression;
 mod interface;
 pub mod pattern;
+mod scc;
 pub mod types;
+mod value_scc;
 mod warning;
 
-pub use canonicalize::{CanResult, Context, canonicalize};
+pub use canonicalize::{CanResult, Context, canonicalize, canonicalize_headers};
 pub use error::{
     AttributeError, Error, ErrorKind, ExprError, ImportError, ItemError, NameError, PatternError,
     StmtError, TypeError,
 };
-pub use interface::from_module;
+pub use interface::{builtin_trait_interface, from_module, headers_from_module};
 pub use warning::{Warning, WarningKind};
 
 /// Type annotations produced for top-level values by the solver.

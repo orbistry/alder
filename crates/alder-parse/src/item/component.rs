@@ -154,7 +154,7 @@ mod tests {
                 let mut count = state(props.start ?? 0)
                 let double = count * 2                     // memoized automatically
 
-                <button onClick={fn() count += 1}>
+                <button onClick={() -> count += 1}>
                     {props.label}: {count} ({double})
                 </button>
             }

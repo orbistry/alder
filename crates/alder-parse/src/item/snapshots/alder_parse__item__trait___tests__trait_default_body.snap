@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/trait_.rs
-description: "trait Show[a] {\n    fn show(value: a) -> String { \"?\" }\n}\n"
+description: "trait Show[a] {\n    fn show(value: a) String { \"?\" }\n}\n"
 ---
 TraitDecl {
     name: Located {
@@ -91,11 +91,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 26,
+                                column: 23,
                             },
                             end: Position {
                                 line: 2,
-                                column: 32,
+                                column: 29,
                             },
                         },
                         value: Named {
@@ -105,11 +105,11 @@ TraitDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 26,
+                                                column: 23,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 32,
+                                                column: 29,
                                             },
                                         },
                                         value: "String",
@@ -126,11 +126,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 33,
+                                column: 30,
                             },
                             end: Position {
                                 line: 2,
-                                column: 40,
+                                column: 37,
                             },
                         },
                         value: Block {
@@ -140,11 +140,11 @@ TraitDecl {
                                     region: Region {
                                         start: Position {
                                             line: 2,
-                                            column: 35,
+                                            column: 32,
                                         },
                                         end: Position {
                                             line: 2,
-                                            column: 38,
+                                            column: 35,
                                         },
                                     },
                                     value: Str(

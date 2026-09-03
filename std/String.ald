@@ -1,5 +1,5 @@
 #[extern("alder:kernel", "$stringLength")]
-pub fn length(value: String) -> Number
+pub fn length(value: String) Number
 
 #[extern("alder:kernel", "$stringConcat")]
-pub fn concat(left: String, right: String) -> String
+pub fn concat(left: String, right: String) String

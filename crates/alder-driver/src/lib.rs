@@ -47,13 +47,17 @@ pub mod error;
 pub mod graph;
 pub mod interface;
 pub mod project;
+mod report;
 pub mod source;
 
 // Re-export main types
-pub use compile::{BuildMode, BuildResult, ModuleResult, build, build_graph, build_with_mode};
+pub use compile::{
+    BuildDependencies, BuildMode, BuildResult, ModuleResult, build, build_graph,
+    build_with_dependencies, build_with_mode,
+};
 pub use database::Database;
 pub use error::DriverError;
 pub use graph::DepGraph;
-pub use interface::{Export, Interface, InterfaceCache, ModuleMeta};
+pub use interface::{InterfaceCache, InterfaceFile, ModuleMeta, PackageInstanceIndexFile};
 pub use project::{Project, ProjectMember};
 pub use source::{FileSource, FileSystemSource, InMemorySource, OverlaySource};

@@ -1,0 +1,39 @@
+enum User { User(String) }
+
+pub trait Show[a] {
+    fn show(value: a) String
+}
+
+impl Show[User] {
+    fn show(user: User) String {
+        match user { User::User(name) => name }
+    }
+}
+
+pub trait Functor[f] {
+    fn map(fa: f[a], g: fn(a) b) f[b]
+}
+
+enum Box[a] { Box(a) }
+
+impl Functor[Box] {
+    fn map(fa: Box[a], g: fn(a) b) Box[b] {
+        match fa { Box::Box(value) => Box::Box(g(value)) }
+    }
+}
+
+trait SequenceIterator[i] {
+    type Item
+    fn next(it: i) Option[Item]
+}
+
+fn describe(value: a) String where a: Show {
+    show(value)
+}
+
+pub fn main() {
+    assert(describe(User::User("Ada")) == "Ada")
+
+    let boxed: Box[Number] = map(Box::Box(1), value -> value + 1)
+    assert(boxed == Box::Box(2))
+}

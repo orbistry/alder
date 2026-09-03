@@ -1,8 +1,8 @@
 #[extern("alder:kernel", "$resultOk")]
-pub fn ok(value: a) -> Result[a, e]
+pub fn ok(value: a) Result[a, e]
 
 #[extern("alder:kernel", "$resultErr")]
-pub fn err(reason: e) -> Result[a, e]
+pub fn err(reason: e) Result[a, e]
 
 #[extern("alder:kernel", "$resultMap")]
-pub fn map(value: Result[a, e], transform: fn(a) -> b) -> Result[b, e]
+pub fn map(value: Result[a, e], transform: fn(a) b) Result[b, e]

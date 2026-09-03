@@ -1,8 +1,8 @@
 #[extern("alder:kernel", "$optionSome")]
-pub fn some(value: a) -> Option[a]
+pub fn some(value: a) Option[a]
 
 #[extern("alder:kernel", "$optionNone")]
-pub fn none() -> Option[a]
+pub fn none() Option[a]
 
 #[extern("alder:kernel", "$optionMap")]
-pub fn map(value: Option[a], transform: fn(a) -> b) -> Option[b]
+pub fn map(value: Option[a], transform: fn(a) b) Option[b]

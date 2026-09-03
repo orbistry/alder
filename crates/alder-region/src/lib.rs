@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 
-#[derive(Clone, Debug, Eq, Copy, PartialEq, PartialOrd, Ord, Hash)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Eq, Copy, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Located<T> {
     pub region: Region,
     pub value: T,
@@ -18,7 +20,7 @@ impl<T> Located<T> {
     }
 }
 
-#[derive(Clone, Debug, Eq, Copy, PartialEq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, Eq, Copy, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Region {
     pub start: Position,
     pub end: Position,
@@ -63,7 +65,7 @@ impl Region {
     }
 }
 
-#[derive(Clone, Debug, Eq, Copy, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, Copy, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Position {
     pub line: u32,
     pub column: u32,

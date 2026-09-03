@@ -5,18 +5,20 @@ use alder_ast::{
     ErrorTagType, ExternDecl, FnDecl, ImplDecl, ImplFn, ImplItem, Interface, Item, ItemKind,
     MacroDecl, Modifier, Module, ModuleId, Param, QualifiedName, ResolvedImport,
     ResolvedImportKind, SchemaDecl, SchemaItem, TableColumn, TableDecl, TestDecl, TopLevelLet,
-    TraitDecl, TraitFn, TraitItem, Type, TypeAlias, TypeConstraint, ValueScc, Variant,
-    VariantPayload, Visibility,
+    TraitDecl, TraitFn, TraitItem, Type, TypeAlias, TypeConstraint, Variant, VariantPayload,
+    Visibility,
 };
 use alder_region::{Located, Region};
 use alder_source::{Item as SourceItem, ItemKind as SourceItemKind, Module as SourceModule};
 use bumpalo::Bump;
 
-use crate::environment::Env;
+use crate::environment::{Env, MethodBinding};
 use crate::expression::{canonicalize_block, canonicalize_expr};
 use crate::pattern::{BindingMode, canonicalize_pattern};
-use crate::types::{canonicalize_type, is_task_type};
-use crate::{AttributeError, Error, ErrorKind, ImportError, ItemError, NameError, Warning};
+use crate::types::{canonicalize_impl_head_type, canonicalize_type, is_task_type};
+use crate::{
+    AttributeError, Error, ErrorKind, ImportError, ItemError, NameError, TypeError, Warning,
+};
 
 /// All dependency information needed to canonicalize one source module.
 #[derive(Clone, Copy)]
@@ -38,39 +40,453 @@ pub fn canonicalize<'a>(
     context: Context<'a>,
     source: &SourceModule<'a>,
 ) -> Result<CanResult<'a>, Vec<Error<'a>>> {
-    let mut env = Env::new(context.home);
+    canonicalize_mode(bump, context, source, false)
+}
+
+/// Canonicalize only declarations needed by package-wide trait collection.
+/// Value and default/implementation method bodies are deliberately skipped.
+pub fn canonicalize_headers<'a>(
+    bump: &'a Bump,
+    context: Context<'a>,
+    source: &SourceModule<'a>,
+) -> Result<CanResult<'a>, Vec<Error<'a>>> {
+    canonicalize_mode(bump, context, source, true)
+}
+
+fn canonicalize_mode<'a>(
+    bump: &'a Bump,
+    context: Context<'a>,
+    source: &SourceModule<'a>,
+    headers_only: bool,
+) -> Result<CanResult<'a>, Vec<Error<'a>>> {
+    let mut env = Env::new(bump, context.home);
     let mut errors = load_imports(bump, &mut env, context.imports, context.interfaces);
     errors.extend(predeclare(&mut env, source));
     let enums = canonicalize_enums(bump, &mut env, source, &mut errors);
+    errors.extend(predeclare_trait_members(bump, &mut env, source));
     if !errors.is_empty() {
         return Err(errors);
     }
 
     let mut items = Vec::new();
-    for item in source.items {
+    let mut automatic_impls = Vec::new();
+    for (item_ordinal, item) in source.items.iter().enumerate() {
         if matches!(item.value.kind, SourceItemKind::Import(_)) {
             continue;
         }
-        match canonicalize_item(bump, &mut env, item, &enums) {
-            Ok(item) => items.push(item),
+        if headers_only && !is_header_item(&item.value.kind) {
+            continue;
+        }
+        match canonicalize_item(
+            bump,
+            &mut env,
+            item,
+            &enums,
+            item_ordinal as u32,
+            !headers_only,
+        ) {
+            Ok(canonical_item) => {
+                items.push(canonical_item);
+                if let ItemKind::Enum(enum_) = &canonical_item.value.kind {
+                    if enum_supports_structural_derive(enum_) {
+                        automatic_impls.push(enum_derive_impl(
+                            bump,
+                            context.home,
+                            enum_,
+                            canonical_item.region,
+                            alder_ast::DeriveKind::Eq,
+                            alder_ast::ImplOrigin::AutomaticEq {
+                                type_ordinal: item_ordinal as u32,
+                            },
+                        ));
+                    }
+                    for attribute in canonical_item.value.attributes {
+                        let Attribute::Derive { region, names } = attribute else {
+                            continue;
+                        };
+                        for (derive_index, name) in names.iter().enumerate() {
+                            let kind = derive_kind(name.name)
+                                .expect("derive attributes contain validated built-in names");
+                            if kind == alder_ast::DeriveKind::Eq {
+                                if !enum_supports_structural_derive(enum_) {
+                                    errors.push(Error::new(
+                                        *region,
+                                        ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                            reason: "function-valued fields cannot derive Eq",
+                                        }),
+                                    ));
+                                }
+                                continue;
+                            }
+                            if !enum_supports_structural_derive(enum_) {
+                                errors.push(Error::new(
+                                    *region,
+                                    ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                        reason: "function-valued fields cannot use built-in derives",
+                                    }),
+                                ));
+                                continue;
+                            }
+                            automatic_impls.push(enum_derive_impl(
+                                bump,
+                                context.home,
+                                enum_,
+                                canonical_item.region,
+                                kind,
+                                alder_ast::ImplOrigin::Derived {
+                                    type_ordinal: item_ordinal as u32,
+                                    derive_index: derive_index as u16,
+                                },
+                            ));
+                        }
+                    }
+                }
+                if let ItemKind::ErrorGroup(group) = &canonical_item.value.kind {
+                    if error_group_supports_structural_derive(group) {
+                        automatic_impls.push(error_group_derive_impl(
+                            bump,
+                            context.home,
+                            group,
+                            canonical_item.region,
+                            alder_ast::DeriveKind::Eq,
+                            alder_ast::ImplOrigin::AutomaticEq {
+                                type_ordinal: item_ordinal as u32,
+                            },
+                        ));
+                    }
+                    for attribute in canonical_item.value.attributes {
+                        let Attribute::Derive { region, names } = attribute else {
+                            continue;
+                        };
+                        for (derive_index, name) in names.iter().enumerate() {
+                            let kind = derive_kind(name.name)
+                                .expect("derive attributes contain validated built-in names");
+                            if kind == alder_ast::DeriveKind::Eq {
+                                if !error_group_supports_structural_derive(group) {
+                                    errors.push(Error::new(
+                                        *region,
+                                        ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                            reason: "function-valued fields cannot derive Eq",
+                                        }),
+                                    ));
+                                }
+                                continue;
+                            }
+                            if !error_group_supports_structural_derive(group) {
+                                errors.push(Error::new(
+                                    *region,
+                                    ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                        reason: "function-valued fields cannot use built-in derives",
+                                    }),
+                                ));
+                                continue;
+                            }
+                            automatic_impls.push(error_group_derive_impl(
+                                bump,
+                                context.home,
+                                group,
+                                canonical_item.region,
+                                kind,
+                                alder_ast::ImplOrigin::Derived {
+                                    type_ordinal: item_ordinal as u32,
+                                    derive_index: derive_index as u16,
+                                },
+                            ));
+                        }
+                    }
+                }
+            }
             Err(mut item_errors) => errors.append(&mut item_errors),
         }
     }
+    items.extend(automatic_impls);
     if !errors.is_empty() {
         return Err(errors);
     }
 
+    let items = bump.alloc_slice_copy(&items);
+    let value_sccs = crate::value_scc::build(bump, context.home, items);
     let module = bump.alloc(Module {
         id: context.home,
         imports: context.imports,
-        items: bump.alloc_slice_copy(&items),
-        value_sccs: &[] as &[ValueScc<'a>],
+        items,
+        value_sccs,
     });
 
     Ok(CanResult {
         module,
         warnings: &[],
     })
+}
+
+fn is_header_item(item: &SourceItemKind<'_>) -> bool {
+    matches!(
+        item,
+        SourceItemKind::TypeAlias(_)
+            | SourceItemKind::OpaqueType(_)
+            | SourceItemKind::Enum(_)
+            | SourceItemKind::Trait(_)
+            | SourceItemKind::Impl(_)
+            | SourceItemKind::Error(_)
+            | SourceItemKind::Table(_)
+            | SourceItemKind::Schema(_)
+    )
+}
+
+fn enum_supports_structural_derive(enum_: &EnumDecl<'_>) -> bool {
+    enum_.variants.iter().all(|variant| match variant.payload {
+        VariantPayload::Unit => true,
+        VariantPayload::Tuple(types) => {
+            types.iter().all(|typ| type_supports_structural_derive(typ))
+        }
+        VariantPayload::Record(fields) => fields
+            .iter()
+            .all(|field| type_supports_structural_derive(field.typ)),
+    })
+}
+
+fn error_group_supports_structural_derive(group: &ErrorGroup<'_>) -> bool {
+    group.tags.iter().all(|tag| {
+        tag.args
+            .iter()
+            .all(|typ| type_supports_structural_derive(typ))
+    })
+}
+
+fn type_supports_structural_derive(typ: &Located<Type<'_>>) -> bool {
+    match &typ.value {
+        Type::Fn { .. } => false,
+        Type::Var { args, .. } | Type::Named { args, .. } => args
+            .iter()
+            .all(|argument| type_supports_structural_derive(argument)),
+        Type::Partial { slots, .. } => slots.iter().all(|slot| match slot {
+            alder_ast::TypeSlot::Hole(_) => true,
+            alder_ast::TypeSlot::Fixed(typ) => type_supports_structural_derive(typ),
+        }),
+        Type::Projection(projection) => projection
+            .trait_ref
+            .args
+            .iter()
+            .all(|argument| type_supports_structural_derive(argument)),
+        Type::Tuple(items) => items
+            .iter()
+            .all(|item| type_supports_structural_derive(item)),
+        Type::Record { fields, .. } => fields
+            .iter()
+            .all(|field| type_supports_structural_derive(field.typ)),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(typ) | alder_ast::AliasType::Filled(typ) => {
+                type_supports_structural_derive(typ)
+            }
+        },
+        Type::Unit | Type::ErrorRow { .. } => true,
+    }
+}
+
+fn derive_kind(name: &str) -> Option<alder_ast::DeriveKind> {
+    match name {
+        "Show" => Some(alder_ast::DeriveKind::Show),
+        "Eq" => Some(alder_ast::DeriveKind::Eq),
+        "Ord" => Some(alder_ast::DeriveKind::Ord),
+        "Hash" => Some(alder_ast::DeriveKind::Hash),
+        "Json" => Some(alder_ast::DeriveKind::Json),
+        _ => None,
+    }
+}
+
+fn enum_derive_impl<'a>(
+    bump: &'a Bump,
+    home: ModuleId<'a>,
+    enum_: &'a EnumDecl<'a>,
+    region: Region,
+    kind: alder_ast::DeriveKind,
+    origin: alder_ast::ImplOrigin,
+) -> &'a Located<Item<'a>> {
+    let params = bump.alloc_slice_fill_iter(enum_.params.iter().map(|name| alder_ast::TypeParam {
+        name: *name,
+        kind: alder_ast::Kind::Type,
+    }));
+    let arguments = bump.alloc_slice_fill_iter(enum_.params.iter().map(|name| {
+        bump.alloc(Located::at(
+            name.region,
+            Type::Var {
+                name: name.value,
+                args: &[],
+            },
+        )) as &Located<Type<'a>>
+    }));
+    let subject = bump.alloc(Located::at(
+        region,
+        Type::Named {
+            reference: enum_.name,
+            args: arguments,
+        },
+    ));
+    let trait_ = alder_ast::TraitId(QualifiedName {
+        module: ModuleId {
+            package: alder_ast::PackageId::Builtin,
+            path: &[],
+        },
+        name: match kind {
+            alder_ast::DeriveKind::Show => "Show",
+            alder_ast::DeriveKind::Eq => "Eq",
+            alder_ast::DeriveKind::Ord => "Ord",
+            alder_ast::DeriveKind::Hash => "Hash",
+            alder_ast::DeriveKind::Json => "Json",
+        },
+    });
+    let trait_predicates = enum_
+        .params
+        .iter()
+        .zip(arguments.iter().copied())
+        .filter(|(parameter, _)| enum_payload_mentions(enum_, parameter.value))
+        .map(|(_, argument)| alder_ast::TraitRef {
+            trait_,
+            args: bump.alloc_slice_copy(&[argument]),
+        })
+        .collect::<Vec<_>>();
+    let trait_predicates = bump.alloc_slice_copy(&trait_predicates);
+    let trait_ref = alder_ast::TraitRef {
+        trait_,
+        args: bump.alloc_slice_copy(&[subject as &Located<Type<'a>>]),
+    };
+    bump.alloc(Located::at(
+        region,
+        Item {
+            visibility: Visibility::Private,
+            attributes: &[],
+            kind: ItemKind::Impl(bump.alloc(ImplDecl {
+                id: alder_ast::ImplId {
+                    module: home,
+                    origin,
+                },
+                trait_: trait_.0,
+                args: trait_ref.args,
+                trait_ref,
+                params,
+                constraints: &[],
+                trait_predicates,
+                projection_equalities: &[],
+                assoc_bindings: &[],
+                items: &[],
+                synthetic: Some(kind),
+                region,
+            })),
+        },
+    ))
+}
+
+fn error_group_derive_impl<'a>(
+    bump: &'a Bump,
+    home: ModuleId<'a>,
+    group: &'a ErrorGroup<'a>,
+    region: Region,
+    kind: alder_ast::DeriveKind,
+    origin: alder_ast::ImplOrigin,
+) -> &'a Located<Item<'a>> {
+    let subject = bump.alloc(Located::at(
+        region,
+        Type::Named {
+            reference: group.name,
+            args: &[],
+        },
+    ));
+    let trait_ = alder_ast::TraitId(QualifiedName {
+        module: ModuleId {
+            package: alder_ast::PackageId::Builtin,
+            path: &[],
+        },
+        name: match kind {
+            alder_ast::DeriveKind::Show => "Show",
+            alder_ast::DeriveKind::Eq => "Eq",
+            alder_ast::DeriveKind::Ord => "Ord",
+            alder_ast::DeriveKind::Hash => "Hash",
+            alder_ast::DeriveKind::Json => "Json",
+        },
+    });
+    let trait_ref = alder_ast::TraitRef {
+        trait_,
+        args: bump.alloc_slice_copy(&[subject as &Located<Type<'a>>]),
+    };
+    bump.alloc(Located::at(
+        region,
+        Item {
+            visibility: Visibility::Private,
+            attributes: &[],
+            kind: ItemKind::Impl(bump.alloc(ImplDecl {
+                id: alder_ast::ImplId {
+                    module: home,
+                    origin,
+                },
+                trait_: trait_.0,
+                args: trait_ref.args,
+                trait_ref,
+                params: &[],
+                constraints: &[],
+                trait_predicates: &[],
+                projection_equalities: &[],
+                assoc_bindings: &[],
+                items: &[],
+                synthetic: Some(kind),
+                region,
+            })),
+        },
+    ))
+}
+
+fn enum_payload_mentions(enum_: &EnumDecl<'_>, variable: &str) -> bool {
+    enum_.variants.iter().any(|variant| match variant.payload {
+        VariantPayload::Unit => false,
+        VariantPayload::Tuple(types) => types
+            .iter()
+            .any(|typ| canonical_type_mentions(&typ.value, variable)),
+        VariantPayload::Record(fields) => fields
+            .iter()
+            .any(|field| canonical_type_mentions(&field.typ.value, variable)),
+    })
+}
+
+fn canonical_type_mentions(typ: &Type<'_>, variable: &str) -> bool {
+    match typ {
+        Type::Var { name, args } => {
+            *name == variable
+                || args
+                    .iter()
+                    .any(|argument| canonical_type_mentions(&argument.value, variable))
+        }
+        Type::Named { args, .. } | Type::Tuple(args) => args
+            .iter()
+            .any(|argument| canonical_type_mentions(&argument.value, variable)),
+        Type::Partial { slots, .. } => slots.iter().any(|slot| match slot {
+            alder_ast::TypeSlot::Hole(_) => false,
+            alder_ast::TypeSlot::Fixed(typ) => canonical_type_mentions(&typ.value, variable),
+        }),
+        Type::Projection(projection) => projection
+            .trait_ref
+            .args
+            .iter()
+            .any(|argument| canonical_type_mentions(&argument.value, variable)),
+        Type::Fn { params, ret } => {
+            params
+                .iter()
+                .any(|parameter| canonical_type_mentions(&parameter.value, variable))
+                || canonical_type_mentions(&ret.value, variable)
+        }
+        Type::Record { fields, .. } => fields
+            .iter()
+            .any(|field| canonical_type_mentions(&field.typ.value, variable)),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(typ) | alder_ast::AliasType::Filled(typ) => {
+                canonical_type_mentions(&typ.value, variable)
+            }
+        },
+        Type::ErrorRow { tags, .. } => tags.iter().any(|tag| {
+            tag.args
+                .iter()
+                .any(|argument| canonical_type_mentions(&argument.value, variable))
+        }),
+        Type::Unit => false,
+    }
 }
 
 fn load_imports<'a>(
@@ -148,13 +564,8 @@ fn import_name<'a>(
         .filter(|value| value.exported_as == source)
     {
         found = true;
-        env.insert_foreign_value(
-            binding.value,
-            binding.region,
-            value.reference,
-            value.annotation,
-        )
-        .map_err(|first| import_collision(binding, first))?;
+        import_value(env, binding.value, binding.region, *value)
+            .map_err(|first| import_collision(binding, first))?;
     }
     for typ in interface
         .types
@@ -184,13 +595,8 @@ fn import_name<'a>(
         .filter(|trait_| trait_.exported_as == source)
     {
         found = true;
-        env.insert_foreign_trait(
-            binding.value,
-            binding.region,
-            trait_.reference,
-            trait_.params.len(),
-        )
-        .map_err(|first| import_collision(binding, first))?;
+        import_trait(bump, env, trait_, binding.value, binding.region)
+            .map_err(|first| import_collision(binding, first))?;
     }
     for module in interface
         .modules
@@ -246,9 +652,7 @@ fn import_all<'a>(
     errors: &mut Vec<Error<'a>>,
 ) {
     for value in interface.values {
-        if let Err(first) =
-            env.insert_foreign_value(value.exported_as, region, value.reference, value.annotation)
-        {
+        if let Err(first) = import_value(env, value.exported_as, region, *value) {
             errors.push(import_collision(
                 Located::at(region, value.exported_as),
                 first,
@@ -271,12 +675,7 @@ fn import_all<'a>(
         }
     }
     for trait_ in interface.traits {
-        if let Err(first) = env.insert_foreign_trait(
-            trait_.exported_as,
-            region,
-            trait_.reference,
-            trait_.params.len(),
-        ) {
+        if let Err(first) = import_trait(bump, env, trait_, trait_.exported_as, region) {
             errors.push(import_collision(
                 Located::at(region, trait_.exported_as),
                 first,
@@ -291,6 +690,54 @@ fn import_all<'a>(
             ));
         }
     }
+}
+
+fn import_value<'a>(
+    env: &mut Env<'a>,
+    name: &'a str,
+    region: Region,
+    value: alder_ast::InterfaceValue<'a>,
+) -> Result<(), Region> {
+    match value.identity {
+        alder_ast::InterfaceValueIdentity::Binding(reference) => {
+            env.insert_foreign_value(name, region, reference, value.annotation)
+        }
+        alder_ast::InterfaceValueIdentity::TraitMethod(method) => {
+            env.insert_trait_method(MethodBinding {
+                id: method,
+                annotation: value.annotation,
+                region,
+                has_default: false,
+            })
+        }
+    }
+}
+
+fn import_trait<'a>(
+    bump: &'a Bump,
+    env: &mut Env<'a>,
+    trait_: &'a alder_ast::InterfaceTrait<'a>,
+    name: &'a str,
+    region: Region,
+) -> Result<(), Region> {
+    env.insert_foreign_trait(
+        name,
+        region,
+        trait_.id.0,
+        trait_.params.len(),
+        bump.alloc_slice_fill_iter(
+            trait_
+                .associated_types
+                .iter()
+                .map(|associated| associated.id),
+        ),
+        bump.alloc_slice_fill_iter(trait_.methods.iter().map(|method| MethodBinding {
+            id: method.id,
+            annotation: method.scheme,
+            region,
+            has_default: method.has_default,
+        })),
+    )
 }
 
 fn import_enum<'a>(
@@ -398,6 +845,231 @@ fn predeclare<'a>(env: &mut Env<'a>, source: &SourceModule<'a>) -> Vec<Error<'a>
         }
     }
     errors
+}
+
+fn predeclare_trait_members<'a>(
+    bump: &'a Bump,
+    env: &mut Env<'a>,
+    source: &SourceModule<'a>,
+) -> Vec<Error<'a>> {
+    let mut errors = Vec::new();
+    for item in source.items {
+        let SourceItemKind::Trait(declaration) = item.value.kind else {
+            continue;
+        };
+        let trait_binding =
+            match env.find_trait(bump, declaration.name.region, None, declaration.name.value) {
+                Ok(binding) => binding,
+                Err(error) => {
+                    errors.push(error);
+                    continue;
+                }
+            };
+        let trait_id = alder_ast::TraitId(trait_binding.reference);
+        let mut seen_parameters = BTreeMap::new();
+        for parameter in declaration.params {
+            if let Some(first) = seen_parameters.insert(parameter.value, parameter.region) {
+                errors.push(Error::new(
+                    parameter.region,
+                    ErrorKind::Type(TypeError::DuplicateParameter {
+                        name: parameter.value,
+                        first,
+                    }),
+                ));
+            }
+        }
+        let mut associated_types = Vec::new();
+        let mut methods = Vec::new();
+        let mut associated_names = BTreeMap::new();
+        let mut method_names = BTreeMap::new();
+        let trait_variables: BTreeSet<_> =
+            declaration.params.iter().map(|param| param.value).collect();
+        let mut trait_arities = BTreeMap::new();
+        for parameter in declaration.params {
+            trait_arities.insert(parameter.value, 0);
+        }
+        for member in declaration.items {
+            if let alder_source::TraitItem::Fn(function) = member {
+                collect_signature_variable_arities(function, &mut trait_arities);
+            }
+        }
+
+        for member in declaration.items {
+            let alder_source::TraitItem::AssocType(name) = member else {
+                continue;
+            };
+            if let Some(first) = associated_names.insert(name.value, name.region) {
+                errors.push(duplicate(
+                    name.value,
+                    name.region,
+                    first,
+                    alder_ast::Namespace::AssociatedItem,
+                ));
+                continue;
+            }
+            associated_types.push(alder_ast::AssocTypeId {
+                trait_: trait_id,
+                index: associated_types.len() as u16,
+                name: name.value,
+            });
+        }
+        let associated_types = bump.alloc_slice_copy(&associated_types);
+        env.register_trait_members(declaration.name.value, associated_types, &[]);
+        let trait_args = bump.alloc_slice_fill_iter(declaration.params.iter().map(|parameter| {
+            bump.alloc(Located::at(
+                parameter.region,
+                Type::Var {
+                    name: parameter.value,
+                    args: &[],
+                },
+            )) as &Located<Type<'a>>
+        }));
+        let trait_ref = alder_ast::TraitRef {
+            trait_: trait_id,
+            args: trait_args,
+        };
+        env.push_associated_types(
+            associated_types
+                .iter()
+                .map(|associated| {
+                    (
+                        associated.name,
+                        alder_ast::ProjectionType {
+                            trait_ref,
+                            assoc: *associated,
+                        },
+                    )
+                })
+                .collect(),
+        );
+
+        for member in declaration.items {
+            match member {
+                alder_source::TraitItem::AssocType(_) => {}
+                alder_source::TraitItem::Fn(function) => {
+                    if let Some(first) =
+                        method_names.insert(function.name.value, function.name.region)
+                    {
+                        errors.push(duplicate(
+                            function.name.value,
+                            function.name.region,
+                            first,
+                            alder_ast::Namespace::Value,
+                        ));
+                        continue;
+                    }
+                    let id = alder_ast::MethodId {
+                        trait_: trait_id,
+                        index: methods.len() as u16,
+                        name: function.name.value,
+                    };
+                    match trait_method_annotation(
+                        bump,
+                        env,
+                        function,
+                        &trait_variables,
+                        &trait_arities,
+                    ) {
+                        Ok(annotation) => methods.push(MethodBinding {
+                            id,
+                            annotation,
+                            region: function.name.region,
+                            has_default: function.body.is_some(),
+                        }),
+                        Err(mut method_errors) => errors.append(&mut method_errors),
+                    }
+                }
+            }
+        }
+
+        env.pop_associated_types();
+        let methods = bump.alloc_slice_copy(&methods);
+        env.register_trait_members(declaration.name.value, associated_types, methods);
+        for method in methods.iter() {
+            if let Err(first) = env.insert_trait_method(*method) {
+                errors.push(duplicate(
+                    method.id.name,
+                    method.region,
+                    first,
+                    alder_ast::Namespace::Value,
+                ));
+            }
+        }
+    }
+    errors
+}
+
+fn trait_method_annotation<'a>(
+    bump: &'a Bump,
+    env: &Env<'a>,
+    source: &'a alder_source::FnDecl<'a>,
+    trait_variables: &BTreeSet<&'a str>,
+    trait_arities: &BTreeMap<&'a str, usize>,
+) -> Result<&'a Annotation<'a>, Vec<Error<'a>>> {
+    let mut variables = trait_variables.clone();
+    variables.extend(signature_variables(source));
+    let mut arities = trait_arities.clone();
+    collect_signature_variable_arities(source, &mut arities);
+    let mut params = Vec::with_capacity(source.params.len());
+    for param in source.params {
+        let Some(annotation) = param.annotation else {
+            return Err(vec![Error::new(
+                param.pattern.region,
+                ErrorKind::Type(TypeError::MissingAnnotation {
+                    name: source.name.value,
+                    position: "parameter",
+                }),
+            )]);
+        };
+        params.push(canonicalize_type(bump, env, &variables, annotation)?);
+    }
+    let Some(ret) = source.ret else {
+        return Err(vec![Error::new(
+            source.name.region,
+            ErrorKind::Type(TypeError::MissingAnnotation {
+                name: source.name.value,
+                position: "return type",
+            }),
+        )]);
+    };
+    let ret = canonicalize_type(bump, env, &variables, ret)?;
+    let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
+    let mut predicates = Vec::new();
+    for constraint in constraints {
+        if let TypeConstraint::Bound { var, traits } = constraint {
+            for trait_ in *traits {
+                let argument = bump.alloc(Located::at(
+                    var.region,
+                    Type::Var {
+                        name: var.value,
+                        args: &[],
+                    },
+                ));
+                predicates.push(alder_ast::TraitRef {
+                    trait_: alder_ast::TraitId(*trait_),
+                    args: bump.alloc_slice_copy(&[argument as &Located<Type<'a>>]),
+                });
+            }
+        }
+    }
+    let typ = bump.alloc(Located::at(
+        source.name.region,
+        Type::Fn {
+            params: bump.alloc_slice_copy(&params),
+            ret,
+        },
+    ));
+    let type_params =
+        bump.alloc_slice_fill_iter(variables.into_iter().map(|name| alder_ast::TypeParam {
+            name: Located::at(source.name.region, name),
+            kind: kind_from_arity(bump, arities.get(name).copied().unwrap_or(0)),
+        }));
+    Ok(bump.alloc(Annotation {
+        params: type_params,
+        trait_predicates: bump.alloc_slice_copy(&predicates),
+        projection_equalities: projection_equalities_from_constraints(bump, constraints),
+        typ,
+    }))
 }
 
 fn insert_value<'a>(
@@ -509,7 +1181,11 @@ fn canonicalize_enum<'a>(
                     canonical.push(alder_ast::RecordTypeField {
                         index: field_index as u16,
                         name: field.field.value,
-                        presence: alder_ast::FieldPresence::Required,
+                        presence: if field.optional.is_some() {
+                            alder_ast::FieldPresence::Optional
+                        } else {
+                            alder_ast::FieldPresence::Required
+                        },
                         typ: canonicalize_type(bump, env, &variables, field.typ)?,
                     });
                 }
@@ -573,7 +1249,12 @@ fn constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
-        free_vars: bump.alloc_slice_fill_iter(enum_.params.iter().map(|param| param.value)),
+        params: bump.alloc_slice_fill_iter(enum_.params.iter().map(|param| alder_ast::TypeParam {
+            name: *param,
+            kind: alder_ast::Kind::Type,
+        })),
+        trait_predicates: &[],
+        projection_equalities: &[],
         typ,
     })
 }
@@ -587,7 +1268,7 @@ fn interface_constructor_annotation<'a>(
         bump.alloc(Located::at(
             Region::zero(),
             Type::Var {
-                name: param,
+                name: param.name.value,
                 args: &[],
             },
         )) as &Located<Type<'a>>
@@ -618,7 +1299,9 @@ fn interface_constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
-        free_vars: enum_.params,
+        params: enum_.params,
+        trait_predicates: &[],
+        projection_equalities: &[],
         typ,
     })
 }
@@ -628,6 +1311,8 @@ fn canonicalize_item<'a>(
     env: &mut Env<'a>,
     item: &'a Located<SourceItem<'a>>,
     enums: &BTreeMap<&'a str, &'a EnumDecl<'a>>,
+    item_ordinal: u32,
+    include_bodies: bool,
 ) -> Result<&'a Located<Item<'a>>, Vec<Error<'a>>> {
     let visibility = match item.value.visibility {
         alder_source::Visibility::Private => Visibility::Private,
@@ -650,13 +1335,14 @@ fn canonicalize_item<'a>(
             env.push_scope();
             let params = canonicalize_params(bump, env, decl.params, &variables)?;
             env.pop_scope();
+            let constraints = canonicalize_constraints(bump, env, decl.where_clause, &variables)?;
             ItemKind::Extern(bump.alloc(ExternDecl::Fn {
                 module,
                 symbol,
                 name: top_level_name(env, decl.name.value),
                 params,
                 ret: canonicalize_type(bump, env, &variables, ret)?,
-                constraints: &[],
+                constraints,
             }))
         }
         SourceItemKind::Let(decl) => {
@@ -708,8 +1394,17 @@ fn canonicalize_item<'a>(
             }))
         }
         SourceItemKind::Enum(decl) => ItemKind::Enum(enums[decl.name.value]),
-        SourceItemKind::Trait(decl) => ItemKind::Trait(canonicalize_trait(bump, env, decl)?),
-        SourceItemKind::Impl(decl) => ItemKind::Impl(canonicalize_impl(bump, env, decl)?),
+        SourceItemKind::Trait(decl) => {
+            ItemKind::Trait(canonicalize_trait(bump, env, decl, include_bodies)?)
+        }
+        SourceItemKind::Impl(decl) => ItemKind::Impl(canonicalize_impl(
+            bump,
+            env,
+            decl,
+            item_ordinal,
+            item.region,
+            include_bodies,
+        )?),
         SourceItemKind::Error(decl) => {
             ItemKind::ErrorGroup(canonicalize_error_group(bump, env, decl)?)
         }
@@ -749,7 +1444,7 @@ fn canonicalize_item<'a>(
                 return Err(nested_errors);
             }
             let mut canonical = Vec::with_capacity(items.len());
-            for nested in items {
+            for (nested_ordinal, nested) in items.iter().enumerate() {
                 if matches!(nested.value.kind, SourceItemKind::Import(_)) {
                     continue;
                 }
@@ -758,12 +1453,26 @@ fn canonicalize_item<'a>(
                     &mut nested_env,
                     nested,
                     &nested_enums,
+                    nested_ordinal as u32,
+                    true,
                 )?);
             }
             ItemKind::Tests(bump.alloc_slice_copy(&canonical))
         }
         SourceItemKind::Import(_) => unreachable!("imports are filtered before item conversion"),
     };
+    if attributes
+        .iter()
+        .any(|attribute| matches!(attribute, Attribute::Derive { .. }))
+        && !matches!(kind, ItemKind::Enum(_) | ItemKind::ErrorGroup(_))
+    {
+        return Err(vec![Error::new(
+            item.region,
+            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                reason: "built-in derives are only available on enums and error groups",
+            }),
+        )]);
+    }
     Ok(bump.alloc(Located::at(
         item.region,
         Item {
@@ -778,28 +1487,154 @@ fn canonicalize_trait<'a>(
     bump: &'a Bump,
     env: &mut Env<'a>,
     source: &'a alder_source::TraitDecl<'a>,
+    include_bodies: bool,
 ) -> Result<&'a TraitDecl<'a>, Vec<Error<'a>>> {
     let variables: BTreeSet<_> = source.params.iter().map(|param| param.value).collect();
-    let name = env
+    let binding = env
         .find_trait(bump, source.name.region, None, source.name.value)
-        .map_err(|error| vec![error])?
-        .reference;
+        .map_err(|error| vec![error])?;
+    let name = binding.reference;
     let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
-    let mut items = Vec::with_capacity(source.items.len());
-    for item in source.items {
-        items.push(match item {
-            alder_source::TraitItem::AssocType(name) => TraitItem::AssocType(*name),
-            alder_source::TraitItem::Fn(function) => {
-                TraitItem::Fn(canonicalize_trait_fn(bump, env, function, &variables)?)
-            }
-        });
+    let superclasses = trait_refs_from_constraints(bump, constraints);
+    let mut arities = BTreeMap::new();
+    for parameter in source.params {
+        arities.insert(parameter.value, 0);
     }
+    for item in source.items {
+        if let alder_source::TraitItem::Fn(function) = item {
+            collect_signature_variable_arities(function, &mut arities);
+        }
+    }
+    let type_params =
+        bump.alloc_slice_fill_iter(source.params.iter().map(|parameter| alder_ast::TypeParam {
+            name: *parameter,
+            kind: kind_from_arity(bump, arities.get(parameter.value).copied().unwrap_or(0)),
+        }));
+    let associated_types = source
+        .items
+        .iter()
+        .filter_map(|item| {
+            let alder_source::TraitItem::AssocType(associated) = item else {
+                return None;
+            };
+            let id = binding
+                .associated_types
+                .iter()
+                .find(|candidate| candidate.name == associated.value)
+                .copied()
+                .expect("associated types were registered before canonicalization");
+            Some(alder_ast::AssocTypeDecl {
+                id,
+                kind: alder_ast::Kind::Type,
+                region: associated.region,
+            })
+        })
+        .collect::<Vec<_>>();
+    let associated_types = bump.alloc_slice_copy(&associated_types);
+    let trait_args = bump.alloc_slice_fill_iter(source.params.iter().map(|parameter| {
+        bump.alloc(Located::at(
+            parameter.region,
+            Type::Var {
+                name: parameter.value,
+                args: &[],
+            },
+        )) as &Located<Type<'a>>
+    }));
+    let trait_ref = alder_ast::TraitRef {
+        trait_: alder_ast::TraitId(name),
+        args: trait_args,
+    };
+    env.push_associated_types(
+        binding
+            .associated_types
+            .iter()
+            .map(|associated| {
+                (
+                    associated.name,
+                    alder_ast::ProjectionType {
+                        trait_ref,
+                        assoc: *associated,
+                    },
+                )
+            })
+            .collect(),
+    );
+    let items = (|| {
+        let mut items = Vec::with_capacity(source.items.len());
+        for item in source.items {
+            items.push(match item {
+                alder_source::TraitItem::AssocType(name) => TraitItem::AssocType(*name),
+                alder_source::TraitItem::Fn(function) => TraitItem::Fn(canonicalize_trait_fn(
+                    bump,
+                    env,
+                    function,
+                    &variables,
+                    name.name,
+                    include_bodies,
+                )?),
+            });
+        }
+        Ok::<_, Vec<Error<'a>>>(bump.alloc_slice_copy(&items))
+    })();
+    env.pop_associated_types();
+    let items = items?;
     Ok(bump.alloc(TraitDecl {
+        id: alder_ast::TraitId(name),
         name,
         params: source.params,
+        type_params,
         constraints,
-        items: bump.alloc_slice_copy(&items),
+        superclasses,
+        associated_types,
+        items,
     }))
+}
+
+fn trait_refs_from_constraints<'a>(
+    bump: &'a Bump,
+    constraints: &'a [TypeConstraint<'a>],
+) -> &'a [alder_ast::TraitRef<'a>] {
+    let mut predicates = Vec::new();
+    for constraint in constraints {
+        if let TypeConstraint::Bound { var, traits } = constraint {
+            for trait_ in *traits {
+                let argument = bump.alloc(Located::at(
+                    var.region,
+                    Type::Var {
+                        name: var.value,
+                        args: &[],
+                    },
+                ));
+                predicates.push(alder_ast::TraitRef {
+                    trait_: alder_ast::TraitId(*trait_),
+                    args: bump.alloc_slice_copy(&[argument as &Located<Type<'a>>]),
+                });
+            }
+        }
+    }
+    bump.alloc_slice_copy(&predicates)
+}
+
+fn projection_equalities_from_constraints<'a>(
+    bump: &'a Bump,
+    constraints: &'a [TypeConstraint<'a>],
+) -> &'a [alder_ast::ProjectionEquality<'a>] {
+    let equalities = constraints
+        .iter()
+        .filter_map(|constraint| match constraint {
+            TypeConstraint::AssocEq {
+                projection,
+                typ,
+                region,
+            } => Some(alder_ast::ProjectionEquality {
+                projection: *projection,
+                typ,
+                region: *region,
+            }),
+            TypeConstraint::Bound { .. } => None,
+        })
+        .collect::<Vec<_>>();
+    bump.alloc_slice_copy(&equalities)
 }
 
 fn canonicalize_trait_fn<'a>(
@@ -807,6 +1642,8 @@ fn canonicalize_trait_fn<'a>(
     env: &mut Env<'a>,
     source: &'a alder_source::FnDecl<'a>,
     trait_variables: &BTreeSet<&'a str>,
+    trait_name: &'a str,
+    include_body: bool,
 ) -> Result<&'a TraitFn<'a>, Vec<Error<'a>>> {
     let mut variables = trait_variables.clone();
     variables.extend(signature_variables(source));
@@ -815,6 +1652,9 @@ fn canonicalize_trait_fn<'a>(
     env.control.function_depth += 1;
     env.control.loop_depth = 0;
     let result = (|| {
+        let method = env
+            .find_trait_method(trait_name, source.name.value)
+            .expect("trait methods were registered before body canonicalization");
         let params = canonicalize_params(bump, env, source.params, &variables)?;
         let ret = source
             .ret
@@ -822,15 +1662,29 @@ fn canonicalize_trait_fn<'a>(
             .transpose()?;
         env.control.task_return = ret.is_some_and(is_task_type);
         let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
-        let body = source
-            .body
-            .map(|body| canonicalize_block(bump, env, body))
-            .transpose()?;
+        let body = if include_body {
+            source
+                .body
+                .map(|body| canonicalize_block(bump, env, body))
+                .transpose()?
+        } else {
+            source.body.map(|body| {
+                bump.alloc(Located::at(
+                    body.region,
+                    alder_ast::Block {
+                        statements: &[],
+                        tail: None,
+                    },
+                )) as &Located<alder_ast::Block<'a>>
+            })
+        };
         Ok(bump.alloc(TraitFn {
+            id: method.id,
             name: source.name,
             params,
             ret,
             constraints,
+            scheme: method.annotation,
             body,
         }) as &'a TraitFn<'a>)
     })();
@@ -843,51 +1697,285 @@ fn canonicalize_impl<'a>(
     bump: &'a Bump,
     env: &mut Env<'a>,
     source: &'a alder_source::ImplDecl<'a>,
+    item_ordinal: u32,
+    region: Region,
+    include_bodies: bool,
 ) -> Result<&'a ImplDecl<'a>, Vec<Error<'a>>> {
     let trait_name = source
         .trait_
         .segments
         .last()
         .expect("trait path is nonempty");
-    let trait_ = env
+    let trait_binding = env
         .find_trait(
             bump,
             source.trait_.region(),
             (source.trait_.segments.len() > 1).then(|| source.trait_.segments[0].value),
             trait_name.value,
         )
-        .map_err(|error| vec![error])?
-        .reference;
+        .map_err(|error| vec![error])?;
+    if source.args.len() != trait_binding.arity {
+        return Err(vec![Error::new(
+            source.trait_.region(),
+            ErrorKind::Type(TypeError::BadArity {
+                name: trait_binding.reference.name,
+                expected: trait_binding.arity,
+                actual: source.args.len(),
+            }),
+        )]);
+    }
+    let trait_ = trait_binding.reference;
     let mut variables = BTreeSet::new();
     for arg in source.args {
         collect_type_variables(arg, &mut variables);
     }
-    for constraint in source.where_clause {
-        collect_constraint_variables(constraint, &mut variables);
-    }
     let mut args = Vec::with_capacity(source.args.len());
     for arg in source.args {
-        args.push(canonicalize_type(bump, env, &variables, arg)?);
+        args.push(canonicalize_impl_head_type(bump, env, &variables, arg)?);
+    }
+    let subject = args.first().copied();
+    let type_package = subject.and_then(outer_nominal_package);
+    if trait_.module.package != env.home.package && type_package != Some(env.home.package) {
+        return Err(vec![Error::new(
+            region,
+            ErrorKind::Type(TypeError::OrphanImpl(bump.alloc(
+                crate::error::OrphanImplDetails {
+                    trait_name: trait_.name,
+                    subject: bump.alloc_str(&subject.map_or_else(
+                        || "()".to_owned(),
+                        |subject| render_canonical_type(&subject.value),
+                    )),
+                    trait_package: trait_.module.package,
+                    type_package,
+                },
+            ))),
+        )]);
     }
     let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
-    let mut items = Vec::with_capacity(source.items.len());
-    for item in source.items {
-        items.push(match item {
-            alder_source::ImplItem::AssocType { name, typ } => ImplItem::AssocType {
-                name: *name,
-                typ: canonicalize_type(bump, env, &variables, typ)?,
-            },
-            alder_source::ImplItem::Fn(function) => {
-                ImplItem::Fn(canonicalize_impl_fn(bump, env, function, &variables)?)
-            }
-        });
+    let trait_predicates = trait_refs_from_constraints(bump, constraints);
+    let projection_equalities = projection_equalities_from_constraints(bump, constraints);
+    let mut arities = BTreeMap::new();
+    for variable in &variables {
+        arities.insert(*variable, 0);
     }
-    Ok(bump.alloc(ImplDecl {
-        trait_,
+    for argument in source.args {
+        collect_type_variable_arities(argument, &mut arities);
+    }
+    let params = bump.alloc_slice_fill_iter(variables.iter().map(|name| alder_ast::TypeParam {
+        name: Located::at(region, *name),
+        kind: kind_from_arity(bump, arities.get(name).copied().unwrap_or(0)),
+    }));
+    let trait_ref = alder_ast::TraitRef {
+        trait_: alder_ast::TraitId(trait_),
         args: bump.alloc_slice_copy(&args),
+    };
+    env.push_associated_types(
+        trait_binding
+            .associated_types
+            .iter()
+            .map(|associated| {
+                (
+                    associated.name,
+                    alder_ast::ProjectionType {
+                        trait_ref,
+                        assoc: *associated,
+                    },
+                )
+            })
+            .collect(),
+    );
+    let members = (|| {
+        let mut items = Vec::with_capacity(source.items.len());
+        let mut assoc_bindings = Vec::new();
+        let mut seen_associated = BTreeMap::new();
+        let mut seen_methods = BTreeMap::new();
+        for item in source.items {
+            items.push(match item {
+                alder_source::ImplItem::AssocType { name, typ } => {
+                    if let Some(first) = seen_associated.insert(name.value, name.region) {
+                        return Err(vec![duplicate(
+                            name.value,
+                            name.region,
+                            first,
+                            alder_ast::Namespace::AssociatedItem,
+                        )]);
+                    }
+                    let Some(assoc) = trait_binding
+                        .associated_types
+                        .iter()
+                        .find(|associated| associated.name == name.value)
+                        .copied()
+                    else {
+                        return Err(vec![Error::new(
+                            name.region,
+                            ErrorKind::Type(TypeError::UnknownImplItem {
+                                trait_name: trait_.name,
+                                name: name.value,
+                                item_kind: "associated type",
+                            }),
+                        )]);
+                    };
+                    let typ = canonicalize_type(bump, env, &variables, typ)?;
+                    assoc_bindings.push(alder_ast::AssocBinding {
+                        assoc,
+                        typ,
+                        region: name.region,
+                    });
+                    ImplItem::AssocType { name: *name, typ }
+                }
+                alder_source::ImplItem::Fn(function) => {
+                    if let Some(first) =
+                        seen_methods.insert(function.name.value, function.name.region)
+                    {
+                        return Err(vec![duplicate(
+                            function.name.value,
+                            function.name.region,
+                            first,
+                            alder_ast::Namespace::Value,
+                        )]);
+                    }
+                    let Some(method) = trait_binding
+                        .methods
+                        .iter()
+                        .find(|method| method.id.name == function.name.value)
+                        .copied()
+                    else {
+                        return Err(vec![Error::new(
+                            function.name.region,
+                            ErrorKind::Type(TypeError::UnknownImplItem {
+                                trait_name: trait_.name,
+                                name: function.name.value,
+                                item_kind: "method",
+                            }),
+                        )]);
+                    };
+                    ImplItem::Fn(canonicalize_impl_fn(
+                        bump,
+                        env,
+                        function,
+                        &variables,
+                        method,
+                        include_bodies,
+                    )?)
+                }
+            });
+        }
+        for associated in trait_binding.associated_types {
+            if !seen_associated.contains_key(associated.name) {
+                return Err(vec![Error::new(
+                    region,
+                    ErrorKind::Type(TypeError::MissingImplItem {
+                        trait_name: trait_.name,
+                        name: associated.name,
+                        item_kind: "associated type",
+                    }),
+                )]);
+            }
+        }
+        for method in trait_binding.methods {
+            if !method.has_default && !seen_methods.contains_key(method.id.name) {
+                return Err(vec![Error::new(
+                    region,
+                    ErrorKind::Type(TypeError::MissingImplItem {
+                        trait_name: trait_.name,
+                        name: method.id.name,
+                        item_kind: "method",
+                    }),
+                )]);
+            }
+        }
+        Ok::<_, Vec<Error<'a>>>((items, assoc_bindings))
+    })();
+    env.pop_associated_types();
+    let (items, assoc_bindings) = members?;
+    let args = bump.alloc_slice_copy(&args);
+    Ok(bump.alloc(ImplDecl {
+        id: alder_ast::ImplId {
+            module: env.home,
+            origin: alder_ast::ImplOrigin::Source { item_ordinal },
+        },
+        trait_,
+        args,
+        trait_ref: alder_ast::TraitRef {
+            trait_: trait_ref.trait_,
+            args,
+        },
+        params,
         constraints,
+        trait_predicates,
+        projection_equalities,
+        assoc_bindings: bump.alloc_slice_copy(&assoc_bindings),
         items: bump.alloc_slice_copy(&items),
+        synthetic: None,
+        region,
     }))
+}
+
+fn outer_nominal_package<'a>(typ: &'a Located<Type<'a>>) -> Option<alder_ast::PackageId<'a>> {
+    match &typ.value {
+        Type::Named { reference, .. } => Some(reference.module.package),
+        Type::Partial { constructor, .. } => Some(constructor.module.package),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                outer_nominal_package(target)
+            }
+        },
+        Type::Var { .. }
+        | Type::Projection(_)
+        | Type::Fn { .. }
+        | Type::Unit
+        | Type::Tuple(_)
+        | Type::Record { .. }
+        | Type::ErrorRow { .. } => None,
+    }
+}
+
+fn render_canonical_type(typ: &Type<'_>) -> String {
+    match typ {
+        Type::Var { name, args: [] } => (*name).to_owned(),
+        Type::Var { name, args } => format!(
+            "{name}[{}]",
+            args.iter()
+                .map(|arg| render_canonical_type(&arg.value))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Named {
+            reference,
+            args: [],
+        } => reference.name.to_owned(),
+        Type::Named { reference, args } => format!(
+            "{}[{}]",
+            reference.name,
+            args.iter()
+                .map(|arg| render_canonical_type(&arg.value))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Partial { constructor, slots } => format!(
+            "{}[{}]",
+            constructor.name,
+            slots
+                .iter()
+                .map(|slot| match slot {
+                    alder_ast::TypeSlot::Hole(_) => "_".to_owned(),
+                    alder_ast::TypeSlot::Fixed(typ) => render_canonical_type(&typ.value),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Projection(projection) => projection.assoc.name.to_owned(),
+        Type::Fn { .. } => "fn".to_owned(),
+        Type::Unit => "()".to_owned(),
+        Type::Tuple(_) => "tuple".to_owned(),
+        Type::Record { .. } => "record".to_owned(),
+        Type::ErrorRow { .. } => "error row".to_owned(),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                render_canonical_type(&target.value)
+            }
+        },
+    }
 }
 
 fn canonicalize_impl_fn<'a>(
@@ -895,6 +1983,8 @@ fn canonicalize_impl_fn<'a>(
     env: &mut Env<'a>,
     source: &'a alder_source::FnDecl<'a>,
     impl_variables: &BTreeSet<&'a str>,
+    method: MethodBinding<'a>,
+    include_body: bool,
 ) -> Result<&'a ImplFn<'a>, Vec<Error<'a>>> {
     let mut variables = impl_variables.clone();
     variables.extend(signature_variables(source));
@@ -911,20 +2001,31 @@ fn canonicalize_impl_fn<'a>(
             .transpose()?;
         env.control.task_return = ret.is_some_and(is_task_type);
         let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
-        let Some(body) = source.body else {
-            return Err(vec![Error::new(
-                source.name.region,
-                ErrorKind::Attribute(AttributeError::InvalidExtern {
-                    reason: "implementation methods require a body",
-                }),
-            )]);
+        let body = match (include_body, source.body) {
+            (true, Some(body)) => canonicalize_block(bump, env, body)?,
+            (true, None) => {
+                return Err(vec![Error::new(
+                    source.name.region,
+                    ErrorKind::Attribute(AttributeError::InvalidExtern {
+                        reason: "implementation methods require a body",
+                    }),
+                )]);
+            }
+            (false, body) => bump.alloc(Located::at(
+                body.map_or(source.name.region, |body| body.region),
+                alder_ast::Block {
+                    statements: &[],
+                    tail: None,
+                },
+            )),
         };
-        let body = canonicalize_block(bump, env, body)?;
         Ok(bump.alloc(ImplFn {
+            method: method.id,
             name: source.name,
             params,
             ret,
             constraints,
+            scheme: method.annotation,
             body,
         }) as &'a ImplFn<'a>)
     })();
@@ -940,33 +2041,112 @@ fn canonicalize_constraints<'a>(
     variables: &BTreeSet<&'a str>,
 ) -> Result<&'a [TypeConstraint<'a>], Vec<Error<'a>>> {
     let mut constraints = Vec::with_capacity(source.len());
+    let mut resolved_bounds: BTreeMap<&'a str, Vec<alder_ast::QualifiedName<'a>>> = BTreeMap::new();
+    for constraint in source {
+        if let alder_source::Constraint::Bound { var, bounds } = constraint {
+            if !variables.contains(var.value) {
+                return Err(vec![Error::new(
+                    var.region,
+                    ErrorKind::Type(TypeError::UnboundVariable { name: var.value }),
+                )]);
+            }
+            for path in *bounds {
+                let name = path.segments.last().expect("trait path is nonempty");
+                let binding = env
+                    .find_trait(
+                        bump,
+                        path.region(),
+                        (path.segments.len() > 1).then(|| path.segments[0].value),
+                        name.value,
+                    )
+                    .map_err(|error| vec![error])?;
+                if binding.arity != 1 {
+                    return Err(vec![Error::new(
+                        path.region(),
+                        ErrorKind::Type(TypeError::BadArity {
+                            name: binding.reference.name,
+                            expected: binding.arity,
+                            actual: 1,
+                        }),
+                    )]);
+                }
+                resolved_bounds
+                    .entry(var.value)
+                    .or_default()
+                    .push(binding.reference);
+            }
+        }
+    }
     for constraint in source {
         constraints.push(match constraint {
             alder_source::Constraint::Bound { var, bounds } => {
-                let mut traits = Vec::with_capacity(bounds.len());
-                for path in *bounds {
-                    let name = path.segments.last().expect("trait path is nonempty");
-                    traits.push(
-                        env.find_trait(
-                            bump,
-                            path.region(),
-                            (path.segments.len() > 1).then(|| path.segments[0].value),
-                            name.value,
-                        )
-                        .map_err(|error| vec![error])?
-                        .reference,
-                    );
-                }
+                let traits = resolved_bounds
+                    .get(var.value)
+                    .expect("bounds were resolved in the first pass");
+                debug_assert_eq!(traits.len(), bounds.len());
                 TypeConstraint::Bound {
                     var: *var,
-                    traits: bump.alloc_slice_copy(&traits),
+                    traits: bump.alloc_slice_copy(traits),
                 }
             }
-            alder_source::Constraint::AssocEq { var, assoc, typ } => TypeConstraint::AssocEq {
-                var: *var,
-                assoc: *assoc,
-                typ: canonicalize_type(bump, env, variables, typ)?,
-            },
+            alder_source::Constraint::AssocEq { var, assoc, typ } => {
+                if !variables.contains(var.value) {
+                    return Err(vec![Error::new(
+                        var.region,
+                        ErrorKind::Type(TypeError::UnboundVariable { name: var.value }),
+                    )]);
+                }
+                let mut candidates = resolved_bounds
+                    .get(var.value)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|trait_| {
+                        env.associated_type(*trait_, assoc.value)
+                            .map(|associated| (*trait_, associated))
+                    })
+                    .collect::<Vec<_>>();
+                if candidates.is_empty()
+                    && let Some(projection) = env.find_associated_type(assoc.value)
+                    && matches!(
+                        projection.trait_ref.args,
+                        [argument]
+                            if matches!(argument.value, Type::Var { name, args: [] } if name == var.value)
+                    )
+                {
+                    candidates.push((projection.trait_ref.trait_.0, projection.assoc));
+                }
+                let [(trait_, associated)] = candidates.as_slice() else {
+                    let kind = if candidates.is_empty() {
+                        TypeError::UnknownAssocType { name: assoc.value }
+                    } else {
+                        TypeError::AmbiguousAssocType {
+                            name: assoc.value,
+                            traits: bump.alloc_slice_fill_iter(
+                                candidates.iter().map(|(trait_, _)| alder_ast::TraitId(*trait_)),
+                            ),
+                        }
+                    };
+                    return Err(vec![Error::new(assoc.region, ErrorKind::Type(kind))]);
+                };
+                let argument = bump.alloc(Located::at(
+                    var.region,
+                    Type::Var {
+                        name: var.value,
+                        args: &[],
+                    },
+                ));
+                TypeConstraint::AssocEq {
+                    projection: alder_ast::ProjectionType {
+                        trait_ref: alder_ast::TraitRef {
+                            trait_: alder_ast::TraitId(*trait_),
+                            args: bump.alloc_slice_copy(&[argument as &Located<Type<'a>>]),
+                        },
+                        assoc: *associated,
+                    },
+                    typ: canonicalize_type(bump, env, variables, typ)?,
+                    region: Region::span_across(&var.region, &typ.region),
+                }
+            }
         });
     }
     Ok(bump.alloc_slice_copy(&constraints))
@@ -1131,6 +2311,7 @@ fn canonicalize_fn<'a>(
         Some(ret) => Some(canonicalize_type(bump, env, &variables, ret)?),
         None => None,
     };
+    let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
     env.control.task_return = ret.is_some_and(is_task_type);
     let body = canonicalize_block(bump, env, source.body.expect("body checked by caller"))?;
     env.control = saved_control;
@@ -1139,7 +2320,7 @@ fn canonicalize_fn<'a>(
         name: top_level_name(env, source.name.value),
         params,
         ret,
-        constraints: &[],
+        constraints,
         body,
     }))
 }
@@ -1202,10 +2383,61 @@ fn canonicalize_attributes<'a>(
                 });
             }
             "derive" => {
-                return Err(vec![Error::new(
-                    attribute.region,
-                    ErrorKind::Attribute(AttributeError::DeriveUnavailable),
-                )]);
+                let mut names = Vec::with_capacity(attribute.value.args.len());
+                let mut seen = BTreeMap::new();
+                for argument in attribute.value.args {
+                    let alder_source::Expr::Path(path) = argument.value else {
+                        return Err(vec![Error::new(
+                            argument.region,
+                            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                reason: "derive arguments must be trait names",
+                            }),
+                        )]);
+                    };
+                    let [name] = path.segments else {
+                        return Err(vec![Error::new(
+                            argument.region,
+                            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                reason: "derive names cannot be qualified",
+                            }),
+                        )]);
+                    };
+                    if !matches!(name.value, "Show" | "Eq" | "Ord" | "Hash" | "Json") {
+                        return Err(vec![Error::new(
+                            name.region,
+                            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                reason: "unknown built-in derive",
+                            }),
+                        )]);
+                    }
+                    if seen.insert(name.value, name.region).is_some() {
+                        return Err(vec![Error::new(
+                            name.region,
+                            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                reason: "a derive may only be listed once",
+                            }),
+                        )]);
+                    }
+                    names.push(QualifiedName {
+                        module: ModuleId {
+                            package: alder_ast::PackageId::Builtin,
+                            path: &[],
+                        },
+                        name: name.value,
+                    });
+                }
+                if names.is_empty() {
+                    return Err(vec![Error::new(
+                        attribute.region,
+                        ErrorKind::Attribute(AttributeError::InvalidDerive {
+                            reason: "derive requires at least one trait name",
+                        }),
+                    )]);
+                }
+                attributes.push(Attribute::Derive {
+                    region: attribute.region,
+                    names: bump.alloc_slice_copy(&names),
+                });
             }
             _ => attributes.push(Attribute::Other {
                 name: attribute.value.name,
@@ -1279,6 +2511,83 @@ fn signature_variables<'a>(source: &'a alder_source::FnDecl<'a>) -> BTreeSet<&'a
     variables
 }
 
+fn collect_signature_variable_arities<'a>(
+    source: &'a alder_source::FnDecl<'a>,
+    arities: &mut BTreeMap<&'a str, usize>,
+) {
+    for parameter in source.params {
+        if let Some(annotation) = parameter.annotation {
+            collect_type_variable_arities(annotation, arities);
+        }
+    }
+    if let Some(ret) = source.ret {
+        collect_type_variable_arities(ret, arities);
+    }
+}
+
+fn collect_type_variable_arities<'a>(
+    source: &'a Located<alder_source::Type<'a>>,
+    arities: &mut BTreeMap<&'a str, usize>,
+) {
+    match source.value {
+        alder_source::Type::Var { name, args } => {
+            arities
+                .entry(name)
+                .and_modify(|arity| *arity = (*arity).max(args.len()))
+                .or_insert(args.len());
+            for argument in args {
+                collect_type_variable_arities(argument, arities);
+            }
+        }
+        alder_source::Type::Named { args, .. } => {
+            for argument in args {
+                collect_type_variable_arities(argument, arities);
+            }
+        }
+        alder_source::Type::Fn { params, ret } => {
+            for parameter in params {
+                collect_type_variable_arities(parameter, arities);
+            }
+            collect_type_variable_arities(ret, arities);
+        }
+        alder_source::Type::Tuple {
+            first,
+            second,
+            rest,
+        } => {
+            collect_type_variable_arities(first, arities);
+            collect_type_variable_arities(second, arities);
+            for item in rest {
+                collect_type_variable_arities(item, arities);
+            }
+        }
+        alder_source::Type::Record { fields, .. } => {
+            for field in fields {
+                collect_type_variable_arities(field.typ, arities);
+            }
+        }
+        alder_source::Type::ErrorRow { tags, .. } => {
+            for tag in tags {
+                for argument in tag.args {
+                    collect_type_variable_arities(argument, arities);
+                }
+            }
+        }
+        alder_source::Type::Hole | alder_source::Type::Unit => {}
+    }
+}
+
+fn kind_from_arity<'a>(bump: &'a Bump, arity: usize) -> alder_ast::Kind<'a> {
+    let mut kind = alder_ast::Kind::Type;
+    for _ in 0..arity {
+        kind = alder_ast::Kind::Arrow {
+            param: bump.alloc(alder_ast::Kind::Type),
+            result: bump.alloc(kind),
+        };
+    }
+    kind
+}
+
 fn type_variables<'a>(source: &'a Located<alder_source::Type<'a>>) -> BTreeSet<&'a str> {
     let mut variables = BTreeSet::new();
     collect_type_variables(source, &mut variables);
@@ -1290,6 +2599,7 @@ fn collect_type_variables<'a>(
     variables: &mut BTreeSet<&'a str>,
 ) {
     match source.value {
+        alder_source::Type::Hole => {}
         alder_source::Type::Var { name, args } => {
             variables.insert(name);
             for arg in args {
@@ -1337,21 +2647,6 @@ fn collect_type_variables<'a>(
             }
         }
         alder_source::Type::Unit => {}
-    }
-}
-
-fn collect_constraint_variables<'a>(
-    constraint: &'a alder_source::Constraint<'a>,
-    variables: &mut BTreeSet<&'a str>,
-) {
-    match constraint {
-        alder_source::Constraint::Bound { var, .. } => {
-            variables.insert(var.value);
-        }
-        alder_source::Constraint::AssocEq { var, typ, .. } => {
-            variables.insert(var.value);
-            collect_type_variables(typ, variables);
-        }
     }
 }
 
@@ -1413,7 +2708,19 @@ mod tests {
     use std::fs;
 
     use super::*;
-    use alder_ast::{Expr, PackageId};
+    use alder_ast::{Expr, PackageId, Pattern, Stmt, UseId};
+
+    macro_rules! assert_can_error_snapshot {
+        ($source:expr) => {{
+            let source = indoc::indoc!($source);
+            insta::with_settings!({
+                description => source,
+                omit_expression => true,
+            }, {
+                insta::assert_snapshot!(can_error(source));
+            });
+        }};
+    }
 
     fn context() -> Context<'static> {
         Context {
@@ -1443,6 +2750,34 @@ mod tests {
     }
 
     #[test]
+    fn header_canonicalization_skips_value_and_method_bodies() {
+        let bump = Bump::new();
+        let source_text = bump.alloc_str(indoc::indoc! {r#"
+            trait Show[a] {
+                fn show(value: a) String { missing_default }
+            }
+            impl Show[Number] {
+                fn show(value: Number) String { missing_impl }
+            }
+            fn broken() { missing_value }
+        "#});
+        let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
+        let result = canonicalize_headers(&bump, context(), &source)
+            .expect("valid headers do not depend on body name resolution");
+
+        assert_eq!(result.module.items.len(), 2);
+        assert!(matches!(
+            result.module.items[0].value.kind,
+            ItemKind::Trait(_)
+        ));
+        assert!(matches!(
+            result.module.items[1].value.kind,
+            ItemKind::Impl(_)
+        ));
+        assert!(canonicalize(&bump, context(), &source).is_err());
+    }
+
+    #[test]
     fn empty_module() {
         let bump = Bump::new();
         let result = can(&bump, "");
@@ -1452,7 +2787,7 @@ mod tests {
     #[test]
     fn function_body_resolves_parameter() {
         let bump = Bump::new();
-        let result = can(&bump, "fn identity(value: a) -> a { value }");
+        let result = can(&bump, "fn identity(value: a) a { value }");
         let ItemKind::Fn(function) = &result.module.items[0].value.kind else {
             panic!("expected function")
         };
@@ -1461,8 +2796,315 @@ mod tests {
         };
         assert!(matches!(
             body.value,
-            Expr::Var(alder_ast::ValueRef::Local(_))
+            Expr::Var {
+                reference: alder_ast::ValueRef::Local(_),
+                ..
+            }
         ));
+    }
+
+    #[test]
+    fn trait_methods_are_registered_before_bodies() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                trait Show[a] { fn show(value: a) String }
+                fn bare(value: a) String where a: Show { show(value) }
+                fn qualified(value: a) String where a: Show { Show::show(value) }
+            "#},
+        );
+        let ItemKind::Trait(trait_) = &result.module.items[0].value.kind else {
+            panic!("expected trait")
+        };
+        let TraitItem::Fn(trait_method) = trait_.items[0] else {
+            panic!("expected trait method")
+        };
+        assert_eq!(trait_method.id.index, 0);
+        assert_eq!(trait_method.id.name, "show");
+        assert_eq!(trait_method.scheme.params.len(), 1);
+
+        for item in &result.module.items[1..] {
+            let ItemKind::Fn(function) = &item.value.kind else {
+                panic!("expected function")
+            };
+            let Some(tail) = function.body.value.tail else {
+                panic!("expected tail")
+            };
+            let Expr::Call { function, .. } = tail.value else {
+                panic!("expected call")
+            };
+            assert!(matches!(
+                function.value,
+                Expr::Var {
+                    reference: alder_ast::ValueRef::TraitMethod { method, .. },
+                    ..
+                } if method == trait_method.id && method.name == "show"
+            ));
+        }
+    }
+
+    #[test]
+    fn trait_method_schemes_preserve_higher_kinded_parameters() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            "trait Functor[f] { fn map(apply: fn(a) b, value: f[a]) f[b] }",
+        );
+        let ItemKind::Trait(trait_) = &result.module.items[0].value.kind else {
+            panic!("expected trait")
+        };
+        let TraitItem::Fn(method) = trait_.items[0] else {
+            panic!("expected method")
+        };
+        let constructor = method
+            .scheme
+            .params
+            .iter()
+            .find(|parameter| parameter.name.value == "f")
+            .expect("constructor parameter");
+        assert!(matches!(constructor.kind, alder_ast::Kind::Arrow { .. }));
+    }
+
+    #[test]
+    fn public_trait_methods_survive_interfaces_and_trait_only_imports() {
+        let bump = Bump::new();
+        let producer_home = ModuleId {
+            package: PackageId::Application,
+            path: bump.alloc_slice_copy(&["Producer"]),
+        };
+        let producer_text = bump.alloc_str("pub trait Show[a] { fn show(value: a) String }");
+        let producer_source =
+            alder_parse::parse_module(&bump, producer_text).expect("producer parses");
+        let producer = canonicalize(
+            &bump,
+            Context {
+                home: producer_home,
+                imports: &[],
+                interfaces: &[],
+            },
+            &producer_source,
+        )
+        .expect("producer canonicalizes");
+        let annotations = crate::Annotations::new();
+        let interface = crate::from_module(&bump, producer.module, &annotations);
+        assert_eq!(interface.traits[0].methods.len(), 1);
+        assert!(matches!(
+            interface.values[0].identity,
+            alder_ast::InterfaceValueIdentity::TraitMethod(method) if method.name == "show"
+        ));
+
+        let consumer_home = ModuleId {
+            package: PackageId::Application,
+            path: bump.alloc_slice_copy(&["Consumer"]),
+        };
+        let imports = bump.alloc_slice_copy(&[ResolvedImport {
+            module: producer_home,
+            region: Region::zero(),
+            visibility: Visibility::Private,
+            kind: ResolvedImportKind::Names(bump.alloc_slice_copy(&[
+                alder_ast::ResolvedImportName {
+                    source: Located::at(Region::zero(), "Show"),
+                    binding: Located::at(Region::zero(), "Show"),
+                },
+            ])),
+        }]);
+        let interfaces = bump.alloc_slice_copy(&[interface]);
+        let consumer_text =
+            bump.alloc_str("fn render(value: a) String where a: Show { Show::show(value) }");
+        let consumer_source =
+            alder_parse::parse_module(&bump, consumer_text).expect("consumer parses");
+        canonicalize(
+            &bump,
+            Context {
+                home: consumer_home,
+                imports,
+                interfaces,
+            },
+            &consumer_source,
+        )
+        .expect("consumer canonicalizes against trait interface");
+    }
+
+    #[test]
+    fn trait_method_parameters_require_annotations() {
+        assert_can_error_snapshot!("trait Show[a] { fn show(value) String }");
+    }
+
+    #[test]
+    fn trait_parameters_must_be_unique() {
+        assert_can_error_snapshot!("trait Convert[a, a] { fn convert(value: a) a }");
+    }
+
+    #[test]
+    fn trait_method_returns_require_annotations() {
+        assert_can_error_snapshot!("trait Show[a] { fn show(value: a) }");
+    }
+
+    #[test]
+    fn evidence_sites_receive_stable_lexical_use_ids() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                fn evidence(mut x, y, f) {
+                    x = y
+                    x += f(-y)
+                    match x { ^y => x + y, _ => x }
+                }
+            "#},
+        );
+        let ItemKind::Fn(function) = &result.module.items[0].value.kind else {
+            panic!("expected function")
+        };
+
+        let Stmt::Assign {
+            use_id: None,
+            value: set_value,
+            ..
+        } = function.body.value.statements[0].value
+        else {
+            panic!("expected plain assignment")
+        };
+        assert!(matches!(
+            set_value.value,
+            Expr::Var {
+                use_id: UseId(0),
+                ..
+            }
+        ));
+
+        let Stmt::Assign {
+            use_id: Some(UseId(1)),
+            value: add_value,
+            ..
+        } = function.body.value.statements[1].value
+        else {
+            panic!("expected compound assignment")
+        };
+        let Expr::Call {
+            use_id: UseId(3),
+            function: callee,
+            arguments,
+        } = add_value.value
+        else {
+            panic!("expected call")
+        };
+        assert!(matches!(
+            callee.value,
+            Expr::Var {
+                use_id: UseId(2),
+                ..
+            }
+        ));
+        assert!(matches!(
+            arguments[0].value,
+            Expr::Negate {
+                use_id: UseId(4),
+                expr: Located {
+                    value: Expr::Var {
+                        use_id: UseId(5),
+                        ..
+                    },
+                    ..
+                },
+            }
+        ));
+
+        let Some(tail) = function.body.value.tail else {
+            panic!("expected match tail")
+        };
+        let Expr::Match { scrutinee, arms } = tail.value else {
+            panic!("expected match")
+        };
+        assert!(matches!(
+            scrutinee.value,
+            Expr::Var {
+                use_id: UseId(6),
+                ..
+            }
+        ));
+        assert!(matches!(
+            arms[0].patterns[0].value,
+            Pattern::Pin {
+                use_id: UseId(7),
+                value: Located {
+                    value: Expr::Var {
+                        use_id: UseId(8),
+                        ..
+                    },
+                    ..
+                },
+            }
+        ));
+        assert!(matches!(
+            arms[0].body.value,
+            Expr::Binop {
+                use_id: UseId(10),
+                left: Located {
+                    value: Expr::Var {
+                        use_id: UseId(9),
+                        ..
+                    },
+                    ..
+                },
+                right: Located {
+                    value: Expr::Var {
+                        use_id: UseId(11),
+                        ..
+                    },
+                    ..
+                },
+                ..
+            }
+        ));
+        assert!(matches!(
+            arms[1].body.value,
+            Expr::Var {
+                use_id: UseId(12),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn value_sccs_are_complete_dependency_ordered_and_recursive() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                fn dependent() { base() }
+                fn base() { 1 }
+                fn even(n) { odd(n) }
+                fn odd(n) { even(n) }
+                fn self_recursive() { self_recursive() }
+            "#},
+        );
+        let groups = result
+            .module
+            .value_sccs
+            .iter()
+            .map(|group| {
+                (
+                    group.recursive,
+                    group
+                        .members
+                        .iter()
+                        .map(|member| member.name)
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            groups,
+            vec![
+                (true, vec!["self_recursive"]),
+                (true, vec!["even", "odd"]),
+                (false, vec!["base"]),
+                (false, vec!["dependent"]),
+            ]
+        );
     }
 
     #[test]
@@ -1519,8 +3161,173 @@ mod tests {
 
     #[test]
     fn unavailable_feature_errors() {
-        insta::assert_snapshot!(can_error("#[derive(Eq)]\ntype Id = Number"));
-        insta::assert_snapshot!(can_error("fn expand() { generated!() }"));
+        assert_can_error_snapshot! {r#"
+            #[derive(Eq)]
+            type Id = Number
+        "#};
+        assert_can_error_snapshot!("fn expand() { generated!() }");
+    }
+
+    #[test]
+    fn enum_derives_generate_stable_semantic_impls() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            "#[derive(Show, Eq, Ord, Hash, Json)]\nenum Status { Ready }",
+        );
+        let implementations = result
+            .module
+            .items
+            .iter()
+            .filter_map(|item| match item.value.kind {
+                ItemKind::Impl(implementation) => Some(implementation),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(implementations.len(), 5);
+        assert_eq!(
+            implementations[0].synthetic,
+            Some(alder_ast::DeriveKind::Eq)
+        );
+        assert_eq!(
+            implementations[1].synthetic,
+            Some(alder_ast::DeriveKind::Show)
+        );
+        assert_eq!(
+            implementations[2].synthetic,
+            Some(alder_ast::DeriveKind::Ord)
+        );
+        assert_eq!(
+            implementations[3].synthetic,
+            Some(alder_ast::DeriveKind::Hash)
+        );
+        assert_eq!(
+            implementations[4].synthetic,
+            Some(alder_ast::DeriveKind::Json)
+        );
+        assert!(matches!(
+            implementations[1].id.origin,
+            alder_ast::ImplOrigin::Derived {
+                type_ordinal: 0,
+                derive_index: 0
+            }
+        ));
+    }
+
+    #[test]
+    fn enum_derives_only_require_payload_type_parameters() {
+        let bump = Bump::new();
+        let result = can(&bump, "#[derive(Show)]\nenum Phantom[a, b] { Phantom(a) }");
+        let implementations = result
+            .module
+            .items
+            .iter()
+            .filter_map(|item| match item.value.kind {
+                ItemKind::Impl(implementation) => Some(implementation),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(implementations.len(), 2);
+        for implementation in implementations {
+            assert_eq!(implementation.trait_predicates.len(), 1);
+            let Type::Var { name, args: [] } = implementation.trait_predicates[0].args[0].value
+            else {
+                panic!("derive prerequisite should target a type parameter")
+            };
+            assert_eq!(name, "a");
+        }
+    }
+
+    #[test]
+    fn enum_record_payload_preserves_optional_fields() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                enum Config {
+                    Config { name: String, note?: String },
+                }
+            "#},
+        );
+        let ItemKind::Enum(enum_) = &result.module.items[0].value.kind else {
+            panic!("expected enum");
+        };
+        let alder_ast::VariantPayload::Record(fields) = enum_.variants[0].payload else {
+            panic!("expected record payload");
+        };
+        assert_eq!(fields[0].presence, alder_ast::FieldPresence::Required);
+        assert_eq!(fields[1].presence, alder_ast::FieldPresence::Optional);
+    }
+
+    #[test]
+    fn error_groups_receive_automatic_and_explicit_derives() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            "#[derive(Show, Eq, Ord, Hash, Json)]\nerror Failure { :later, :first(Number) }",
+        );
+        let implementations = result
+            .module
+            .items
+            .iter()
+            .filter_map(|item| match item.value.kind {
+                ItemKind::Impl(implementation) => Some(implementation),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(implementations.len(), 5);
+        assert_eq!(
+            implementations
+                .iter()
+                .map(|implementation| implementation.synthetic.unwrap())
+                .collect::<Vec<_>>(),
+            vec![
+                alder_ast::DeriveKind::Eq,
+                alder_ast::DeriveKind::Show,
+                alder_ast::DeriveKind::Ord,
+                alder_ast::DeriveKind::Hash,
+                alder_ast::DeriveKind::Json,
+            ]
+        );
+        assert!(implementations.iter().all(|implementation| {
+            matches!(
+                implementation.trait_ref.args[0].value,
+                Type::Named { reference, args: [] } if reference.name == "Failure"
+            )
+        }));
+    }
+
+    #[test]
+    fn invalid_derive_arguments_are_structured() {
+        assert_can_error_snapshot! {r#"
+            #[derive(Missing)]
+            enum Status { Ready }
+        "#};
+        assert_can_error_snapshot! {r#"
+            #[derive("Eq")]
+            enum Status { Ready }
+        "#};
+        assert_can_error_snapshot! {r#"
+            #[derive(Eq, Eq)]
+            enum Status { Ready }
+        "#};
+        assert_can_error_snapshot! {r#"
+            #[derive(Eq)]
+            enum Callback { Callback(fn() ()) }
+        "#};
+    }
+
+    #[test]
+    fn function_fields_do_not_receive_automatic_equality() {
+        let bump = Bump::new();
+        let result = can(&bump, "enum Callback { Callback(fn() ()) }");
+        assert!(
+            !result
+                .module
+                .items
+                .iter()
+                .any(|item| matches!(item.value.kind, ItemKind::Impl(_)))
+        );
     }
 
     #[test]
@@ -1535,11 +3342,284 @@ mod tests {
     }
 
     #[test]
+    fn function_where_bounds_are_preserved() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                trait Show[a] { fn show(value: a) String }
+                fn keep(value: a) a where a: Show { value }
+            "#},
+        );
+        let ItemKind::Fn(function) = &result.module.items[1].value.kind else {
+            panic!("expected function")
+        };
+        assert!(matches!(
+            function.constraints,
+            [alder_ast::TypeConstraint::Bound { var, traits }]
+                if var.value == "a" && traits.len() == 1 && traits[0].name == "Show"
+        ));
+    }
+
+    #[test]
+    fn associated_equality_resolves_to_semantic_projection() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                trait Iterator[i] {
+                    type Item
+                    fn next(value: i) Item
+                }
+                fn count(value: i) Number where i: Iterator, i.Item == Number { 0 }
+            "#},
+        );
+        let ItemKind::Fn(function) = &result.module.items[1].value.kind else {
+            panic!("expected function")
+        };
+        let [
+            _,
+            alder_ast::TypeConstraint::AssocEq {
+                projection, typ, ..
+            },
+        ] = function.constraints
+        else {
+            panic!("expected an associated equality")
+        };
+        assert_eq!(projection.trait_ref.trait_.0.name, "Iterator");
+        assert_eq!(projection.assoc.name, "Item");
+        assert!(matches!(typ.value, Type::Named { reference, .. } if reference.name == "Number"));
+    }
+
+    #[test]
+    fn associated_equality_requires_a_matching_bound() {
+        assert_can_error_snapshot! {r#"
+            trait Iterator[i] { type Item }
+            trait Show[a] { fn show(value: a) String }
+            fn bad(value: i) where i: Show, i.Item == Number { value }
+        "#};
+    }
+
+    #[test]
+    fn associated_equality_rejects_ambiguous_associated_names() {
+        assert_can_error_snapshot! {r#"
+            trait First[a] { type Item }
+            trait Second[a] { type Item }
+            fn bad(value: a) where a: First + Second, a.Item == Number { value }
+        "#};
+    }
+
+    #[test]
+    fn function_where_bound_variable_must_occur_in_signature() {
+        assert_can_error_snapshot! {r#"
+            trait Show[a] { fn show(value: a) String }
+            fn bad(value: Number) where a: Show { value }
+        "#};
+    }
+
+    #[test]
+    fn colon_bound_requires_a_unary_trait() {
+        assert_can_error_snapshot! {r#"
+            trait Convert[a, b] { fn convert(value: a) b }
+            fn bad(value: a) where a: Convert { value }
+        "#};
+    }
+
+    #[test]
+    fn impl_where_variable_must_occur_in_the_impl_head() {
+        assert_can_error_snapshot! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Array[a]] where b: Show {
+                fn show(value: Array[a]) String { "array" }
+            }
+        "#};
+    }
+
+    #[test]
+    fn impl_headers_have_stable_identity_and_semantic_members() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                trait Iterator[i] {
+                    type Item
+                    fn next(value: i) Item
+                }
+                impl Iterator[Array[a]] where a: Show {
+                    type Item = a
+                    fn next(value: Array[a]) a { value[0] }
+                }
+                trait Show[a] { fn show(value: a) String }
+            "#},
+        );
+        let ItemKind::Impl(implementation) = &result.module.items[1].value.kind else {
+            panic!("expected impl")
+        };
+        assert_eq!(
+            implementation.id.origin,
+            alder_ast::ImplOrigin::Source { item_ordinal: 1 }
+        );
+        assert_eq!(implementation.trait_ref.trait_.0.name, "Iterator");
+        assert_eq!(implementation.params.len(), 1);
+        assert_eq!(implementation.trait_predicates.len(), 1);
+        assert_eq!(implementation.assoc_bindings[0].assoc.name, "Item");
+        let ImplItem::Fn(method) = implementation.items[1] else {
+            panic!("expected method")
+        };
+        assert_eq!(method.method.name, "next");
+        let interface = crate::headers_from_module(&bump, result.module);
+        assert_eq!(interface.instances.len(), 1);
+        assert_eq!(interface.instances[0].id, implementation.id);
+        assert_eq!(
+            interface.instances[0].dictionary_kind,
+            alder_ast::DictionaryKind::Factory
+        );
+        assert_eq!(interface.instances[0].methods.len(), 1);
+    }
+
+    #[test]
+    fn solved_interfaces_only_publish_externally_nameable_impls() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                enum Private { Private }
+                pub enum Public { Public }
+
+                trait PrivateTrait[a] {}
+                pub trait PublicTrait[a] {}
+
+                impl Show[Private] {
+                    fn show(value: Private) String { "private" }
+                }
+                impl Show[Public] {
+                    fn show(value: Public) String { "public" }
+                }
+                impl PrivateTrait[Number] {}
+                impl PublicTrait[Number] {}
+            "#},
+        );
+        let headers = crate::headers_from_module(&bump, result.module);
+        let published = crate::from_module(&bump, result.module, &crate::Annotations::new());
+
+        assert!(headers.instances.len() > published.instances.len());
+        assert!(published.instances.iter().all(|implementation| {
+            let trait_name = implementation.trait_ref.trait_.0.name;
+            let subject_name =
+                implementation
+                    .trait_ref
+                    .args
+                    .first()
+                    .and_then(|subject| match &subject.value {
+                        Type::Named { reference, .. } => Some(reference.name),
+                        _ => None,
+                    });
+            trait_name != "PrivateTrait" && subject_name != Some("Private")
+        }));
+        assert!(published.instances.iter().any(|implementation| {
+            implementation.trait_ref.trait_.0.name == "Show"
+                && matches!(
+                    &implementation.trait_ref.args[0].value,
+                    Type::Named { reference, .. } if reference.name == "Public"
+                )
+        }));
+        assert!(
+            published
+                .instances
+                .iter()
+                .any(|implementation| { implementation.trait_ref.trait_.0.name == "PublicTrait" })
+        );
+    }
+
+    #[test]
+    fn impl_trait_head_arity_is_checked() {
+        assert_can_error_snapshot! {r#"
+            trait Convert[a, b] { fn convert(value: a) b }
+            impl Convert[Number] { fn convert(value: Number) Number { value } }
+        "#};
+    }
+
+    #[test]
+    fn foreign_trait_for_foreign_type_is_rejected_during_canonicalization() {
+        assert_can_error_snapshot! {r#"
+            impl Show[Number] {
+                fn show(value: Number) String { "number" }
+            }
+        "#};
+    }
+
+    #[test]
+    fn owning_either_the_trait_or_subject_permits_an_impl() {
+        let bump = Bump::new();
+        can(
+            &bump,
+            indoc::indoc! {r#"
+                enum Local { Local }
+
+                impl Show[Local] {
+                    fn show(value: Local) String { "local" }
+                }
+
+                trait LocalShow[a] {
+                    fn local_show(value: a) String
+                }
+
+                impl LocalShow[Number] {
+                    fn local_show(value: Number) String { "number" }
+                }
+            "#},
+        );
+    }
+
+    #[test]
+    fn impl_unknown_method_is_rejected() {
+        assert_can_error_snapshot! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] {
+                fn display(value: Number) String { "number" }
+            }
+        "#};
+    }
+
+    #[test]
+    fn impl_missing_required_method_is_rejected() {
+        assert_can_error_snapshot! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] {}
+        "#};
+    }
+
+    #[test]
+    fn impl_missing_associated_type_is_rejected() {
+        assert_can_error_snapshot! {r#"
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) Item
+            }
+            impl Iterator[Number] {
+                fn next(value: Number) Number { value }
+            }
+        "#};
+    }
+
+    #[test]
+    fn impl_may_use_a_default_method() {
+        let bump = Bump::new();
+        can(
+            &bump,
+            indoc::indoc! {r#"
+                trait Named[a] { fn name(value: a) String { "default" } }
+                impl Named[Number] {}
+            "#},
+        );
+    }
+
+    #[test]
     fn await_requires_explicit_task_return_in_m2() {
         insta::assert_snapshot!(can_error("fn wait() { Task.sleep(1).await }"));
 
         let bump = Bump::new();
-        can(&bump, "fn wait() -> Task[()] { Task.sleep(1).await }");
+        can(&bump, "fn wait() Task[()] { Task.sleep(1).await }");
     }
 
     #[test]
@@ -1555,7 +3635,25 @@ mod tests {
         for path in paths {
             let source = fs::read_to_string(&path).unwrap();
             let bump = Bump::new();
-            can(&bump, &source);
+            if path.file_name().is_some_and(|name| name == "Traits.ald") {
+                let source_text = bump.alloc_str(&source);
+                let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
+                canonicalize_headers(
+                    &bump,
+                    Context {
+                        home: ModuleId {
+                            package: PackageId::Builtin,
+                            path: &[],
+                        },
+                        imports: &[],
+                        interfaces: &[],
+                    },
+                    &source,
+                )
+                .expect("trait header source canonicalizes");
+            } else {
+                can(&bump, &source);
+            }
         }
     }
 }

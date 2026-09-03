@@ -1,0 +1,23 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "trait Iterator[i] { type Item }\ntrait Show[a] { fn show(value: a) -> String }\nfn bad(value: i) where i: Show, i.Item == Number { value }\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 35,
+            },
+            end: Position {
+                line: 3,
+                column: 39,
+            },
+        },
+        kind: Type(
+            UnknownAssocType {
+                name: "Item",
+            },
+        ),
+    },
+]

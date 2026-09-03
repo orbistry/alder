@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/impl_.rs
-description: "impl Show[User] {\n    fn show(user: User) -> String { user.name }\n}\n"
+description: "impl Show[User] {\n    fn show(user: User) String { user.name }\n}\n"
 ---
 ImplDecl {
     trait_: Path {
@@ -130,11 +130,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 28,
+                                column: 25,
                             },
                             end: Position {
                                 line: 2,
-                                column: 34,
+                                column: 31,
                             },
                         },
                         value: Named {
@@ -144,11 +144,11 @@ ImplDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 28,
+                                                column: 25,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 34,
+                                                column: 31,
                                             },
                                         },
                                         value: "String",
@@ -165,11 +165,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 35,
+                                column: 32,
                             },
                             end: Position {
                                 line: 2,
-                                column: 48,
+                                column: 45,
                             },
                         },
                         value: Block {
@@ -179,11 +179,11 @@ ImplDecl {
                                     region: Region {
                                         start: Position {
                                             line: 2,
-                                            column: 37,
+                                            column: 34,
                                         },
                                         end: Position {
                                             line: 2,
-                                            column: 46,
+                                            column: 43,
                                         },
                                     },
                                     value: Access {
@@ -191,11 +191,11 @@ ImplDecl {
                                             region: Region {
                                                 start: Position {
                                                     line: 2,
-                                                    column: 37,
+                                                    column: 34,
                                                 },
                                                 end: Position {
                                                     line: 2,
-                                                    column: 41,
+                                                    column: 38,
                                                 },
                                             },
                                             value: Var(
@@ -206,11 +206,11 @@ ImplDecl {
                                             region: Region {
                                                 start: Position {
                                                     line: 2,
-                                                    column: 42,
+                                                    column: 39,
                                                 },
                                                 end: Position {
                                                     line: 2,
-                                                    column: 46,
+                                                    column: 43,
                                                 },
                                             },
                                             value: "name",

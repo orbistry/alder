@@ -15,8 +15,8 @@ description: "enum Maybe[a] { Just(a) }\nfn invalid() { Maybe::Just(1, 2) }"
             },
         },
         kind: Mismatch {
-            actual: "fn(a) -> Maybe[a]",
-            expected: "fn(Number, Number) -> a",
+            actual: "fn(a) Maybe[a]",
+            expected: "fn(Number, Number) a",
         },
     },
 ]

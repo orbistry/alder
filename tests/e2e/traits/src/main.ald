@@ -1,0 +1,253 @@
+#[derive(Show, Ord, Hash, Json)]
+enum Status {
+    Ready,
+    Failed(String),
+    Meta { code: Number, note: String },
+}
+
+#[derive(Json)]
+enum Config {
+    Config { name: String, note?: String },
+}
+
+#[derive(Ord)]
+enum OrderProbe {
+    Value { zed: Number, alpha: Number },
+}
+
+#[derive(Hash)]
+enum FirstHashProbe {
+    Value { payload: Number },
+}
+
+#[derive(Hash)]
+enum SecondHashProbe {
+    Value { payload: Number },
+}
+
+enum Secret { Secret }
+
+impl Show[Secret] {
+    fn show(value: Secret) String { "redacted" }
+}
+
+impl Hash[Secret] {
+    fn hash(value: Secret) BigInt { 23n }
+}
+
+impl Json[Secret] {
+    fn encode(value: Secret) String { "\"secret\"" }
+    fn decode(value: String) Result[Secret, String] { Result.ok(Secret::Secret) }
+}
+
+#[derive(Show)]
+enum SecretBox { SecretBox(Secret) }
+
+#[derive(Show, Hash, Json)]
+enum NestedSecretBox { NestedSecretBox(Array[Option[Secret]]) }
+
+enum Reverse { Low, High }
+
+impl Ord[Reverse] {
+    fn compare(left: Reverse, right: Reverse) Ordering {
+        if left == right {
+            Ordering::Equal
+        } else if left == Reverse::High {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
+    }
+}
+
+#[derive(Ord)]
+enum ReverseBox { ReverseBox(Reverse) }
+
+enum HashSecret { First, Second }
+
+impl Hash[HashSecret] {
+    fn hash(value: HashSecret) BigInt { 7n }
+}
+
+#[derive(Hash)]
+enum HashSecretBox { HashSecretBox(HashSecret) }
+
+enum JsonSecret { JsonSecret }
+
+impl Json[JsonSecret] {
+    fn encode(value: JsonSecret) String { "\"secret\"" }
+    fn decode(value: String) Result[JsonSecret, String] { Result.ok(JsonSecret::JsonSecret) }
+}
+
+#[derive(Json)]
+enum JsonSecretBox { JsonSecretBox(JsonSecret) }
+
+#[derive(Show, Ord, Hash, Json)]
+error Failure {
+    :later,
+    :first(Number),
+}
+
+#[derive(Show, Ord, Hash, Json)]
+enum Chain {
+    End,
+    Link(Number, Chain),
+}
+
+trait Describe[a] {
+    fn describe(value: a) String
+}
+
+impl Describe[Number] {
+    fn describe(value: Number) String { "number" }
+}
+
+impl Describe[String] {
+    fn describe(value: String) String { value }
+}
+
+impl Describe[Array[a]] where a: Describe {
+    fn describe(value: Array[a]) String { "array" }
+}
+
+fn describe_generic(value: a) String where a: Describe {
+    describe(value)
+}
+
+fn invoke(renderer: fn(a) String, value: a) String {
+    renderer(value)
+}
+
+fn describe_indirect(value: a) String where a: Describe {
+    invoke(describe, value)
+}
+
+fn lift(value: a) f[a] where f: Applicative {
+    pure(value)
+}
+
+fn apply_generic(function: f[fn(a) b], value: f[a]) f[b] where f: Applicative {
+    apply(function, value)
+}
+
+fn less_than(left: a, right: a) Bool where a: Ord {
+    left < right
+}
+
+fn verify_error_group_derives() Result[(), String] {
+    let failure: Failure = decode("{\"tag\":\":first\",\"fields\":[42]}")?
+    let same_failure: Failure = decode("{\"tag\":\":first\",\"fields\":[42]}")?
+    let later: Failure = decode("{\"tag\":\":later\",\"fields\":[]}")?
+    assert(failure == same_failure)
+    assert(later < failure)
+    assert(show(failure) == ":first(42)")
+    assert(hash(failure) == hash(same_failure))
+    assert(encode(failure) == "{\"tag\":\":first\",\"fields\":[42]}")
+    let decoded_failure: Result[Failure, String] = decode(encode(failure))
+    assert(decoded_failure == Result.ok(failure))
+    Result.ok(())
+}
+
+pub fn main() {
+    let identity = { value: 1 }
+    let equal_but_distinct = { value: 1 }
+    assert(Ref.same(identity, identity))
+    assert(!Ref.same(identity, equal_but_distinct))
+
+    assert(describe_generic(1) == "number")
+    assert(describe_generic("text") == "text")
+    assert(describe_generic([1, 2]) == "array")
+    assert(describe_indirect(1) == "number")
+
+    assert(show(Status::Failed("oops")) == "Failed(\"oops\")")
+    assert(show(Status::Meta { code: 7, note: "same" }) == "Meta { code: 7, note: \"same\" }")
+    assert(Status::Ready < Status::Failed("later"))
+    assert(match compare(1, 2) {
+        Ordering::Less => true,
+        _ => false,
+    })
+    assert(compare(2, 2) == Ordering::Equal)
+    assert(less_than(1, 2))
+    assert(less_than(Reverse::High, Reverse::Low))
+    assert(OrderProbe::Value { zed: 0, alpha: 9 } < OrderProbe::Value { zed: 1, alpha: 0 })
+    assert(hash(Status::Meta { code: 7, note: "same" }) == hash(Status::Meta { code: 7, note: "same" }))
+    assert(hash(Status::Meta { code: 7, note: "same" }) != hash(Status::Meta { code: 8, note: "same" }))
+    assert(hash(FirstHashProbe::Value { payload: 1 }) != hash(SecondHashProbe::Value { payload: 1 }))
+    assert(show(SecretBox::SecretBox(Secret::Secret)) == "SecretBox(redacted)")
+    let nested_secret = NestedSecretBox::NestedSecretBox([Option.some(Secret::Secret), Option.none()])
+    assert(show(nested_secret) == "NestedSecretBox([Some(redacted), None])")
+    assert(encode(nested_secret) == "{\"tag\":\"NestedSecretBox\",\"fields\":[[\"secret\",null]]}")
+    let decoded_nested_secret: Result[NestedSecretBox, String] = decode(encode(nested_secret))
+    assert(decoded_nested_secret == Result.ok(nested_secret))
+    assert(hash(nested_secret) == hash(NestedSecretBox::NestedSecretBox([Option.some(Secret::Secret), Option.none()])))
+    assert(ReverseBox::ReverseBox(Reverse::High) < ReverseBox::ReverseBox(Reverse::Low))
+    assert(hash(HashSecretBox::HashSecretBox(HashSecret::First)) == hash(HashSecretBox::HashSecretBox(HashSecret::Second)))
+
+    let secret_json = encode(JsonSecretBox::JsonSecretBox(JsonSecret::JsonSecret))
+    assert(secret_json == "{\"tag\":\"JsonSecretBox\",\"fields\":[\"secret\"]}")
+    let decoded_secret: Result[JsonSecretBox, String] = decode(secret_json)
+    assert(decoded_secret == Result.ok(JsonSecretBox::JsonSecretBox(JsonSecret::JsonSecret)))
+
+    assert(verify_error_group_derives() == Result.ok(()))
+
+    let chain = Chain::Link(1, Chain::Link(2, Chain::End))
+    let same_chain = Chain::Link(1, Chain::Link(2, Chain::End))
+    assert(chain == same_chain)
+    assert(show(chain) == "Link(1, Link(2, End))")
+    assert(chain > Chain::End)
+    assert(hash(chain) == hash(same_chain))
+    let decoded_chain: Result[Chain, String] = decode(encode(chain))
+    assert(decoded_chain == Result.ok(chain))
+
+    let encoded = encode(Status::Meta { code: 42, note: "answer" })
+    let decoded: Result[Status, String] = decode(encoded)
+    assert(decoded == Result.ok(Status::Meta { code: 42, note: "answer" }))
+
+    let config = Config::Config { name: "alder" }
+    let config_json = encode(config)
+    assert(config_json == "{\"tag\":\"Config\",\"value\":{\"name\":\"alder\"}}")
+    let decoded_config: Result[Config, String] = decode(config_json)
+    assert(decoded_config == Result.ok(config))
+    let extra_config_field: Result[Config, String] = decode("{\"tag\":\"Config\",\"value\":{\"name\":\"alder\",\"extra\":true}}")
+    assert(extra_config_field == Result.err("$.value.extra: unexpected field"))
+    let extra_config_envelope: Result[Config, String] = decode("{\"tag\":\"Config\",\"value\":{\"name\":\"alder\"},\"extra\":true}")
+    assert(extra_config_envelope == Result.err("$: expected only `tag` and `value`"))
+
+    let mapped: Option[Number] = map(Option.some(1), (value) -> { value + 1 })
+    assert(mapped == Option.some(2))
+
+    let mapped_array: Array[Number] = map([1, 2], (value) -> { value + 1 })
+    assert(mapped_array == [2, 3])
+
+    let result: Result[Number, String] = Result.ok(1)
+    let mapped_result: Result[Number, String] = map(result, (value) -> { value + 1 })
+    assert(mapped_result == Result.ok(2))
+
+    let pure_option: Option[Number] = lift(4)
+    assert(pure_option == Option.some(4))
+
+    let array_functions: Array[fn(Number) Number] = [
+        (value) -> { value + 1 },
+        (value) -> { value * 2 },
+    ]
+    let applied_array: Array[Number] = apply(array_functions, [2, 3])
+    assert(applied_array == [3, 4, 4, 6])
+
+    let option_function: Option[fn(Number) Number] = Option.some((value) -> { value + 1 })
+    let applied_option: Option[Number] = apply_generic(option_function, Option.some(2))
+    assert(applied_option == Option.some(3))
+
+    let bound_array: Array[Number] = flat_map([1, 2], (value) -> { [value, value + 10] })
+    assert(bound_array == [1, 11, 2, 12])
+
+    let traversed_array: Option[Array[Number]] = traverse(
+        [1, 2],
+        (value) -> { Option.some(value + 1) },
+    )
+    assert(traversed_array == Option.some([2, 3]))
+
+    let first: Option[Number] = next([7, 8])
+    let empty: Option[Number] = next([])
+    assert(first == Option.some(7))
+    assert(empty == Option.none())
+}

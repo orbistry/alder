@@ -3,7 +3,8 @@ use std::{path::PathBuf, sync::Arc};
 use alder_bundle::EntryKind;
 use alder_config::{Config, Target};
 use alder_driver::{
-    BuildMode, BuildResult, Database, FileSystemSource, Project, build_graph, build_with_mode,
+    BuildMode, BuildResult, Database, FileSystemSource, InterfaceCache, Project, build_graph,
+    build_with_dependencies,
 };
 use miette::{IntoDiagnostic, Result, miette};
 use tokio::sync::Mutex;
@@ -47,37 +48,83 @@ pub(super) struct Compiled {
 }
 
 pub(super) async fn compile(path: &PathBuf, mode: BuildMode) -> Result<Compiled> {
+    compile_inner(path, mode, true).await
+}
+
+#[cfg(test)]
+pub(super) async fn compile_ephemeral(path: &PathBuf, mode: BuildMode) -> Result<Compiled> {
+    compile_inner(path, mode, false).await
+}
+
+async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result<Compiled> {
     let project = Project::load(path).await.into_diagnostic()?;
     let target = project_target(&project.config)?;
     let db = Arc::new(Mutex::new(Database::new(FileSystemSource::new())));
-    let modules = project
+    let mut modules = project
         .discover_modules(&*db.lock().await)
         .await
         .into_diagnostic()?;
     if modules.is_empty() {
         return Err(miette!("no Alder source files found"));
     }
+    let dependencies = project
+        .build_dependencies(&mut *db.lock().await, &modules, mode == BuildMode::Test)
+        .await
+        .into_diagnostic()?;
+    modules.extend(dependencies.source_modules.iter().cloned());
+    modules.sort();
+    modules.dedup();
     let graph = build_graph(db.clone(), &modules).await.into_diagnostic()?;
-    let result = build_with_mode(db, &graph, mode).await;
+    let result = build_with_dependencies(db, &graph, mode, dependencies).await;
+    for warning in &result.warnings {
+        eprintln!("{:?}", miette::Report::new(warning.clone()));
+    }
     if !result.is_success() {
-        let errors = result
+        let mut errors = result
             .modules
-            .iter()
-            .filter_map(|(uri, result)| match result {
-                alder_driver::ModuleResult::Failed { message } => {
-                    Some(format!("{}: {message}", uri.path()))
-                }
+            .values()
+            .filter_map(|result| match result {
+                alder_driver::ModuleResult::Failed { diagnostics } => Some(diagnostics.clone()),
                 alder_driver::ModuleResult::Success { .. } => None,
             })
-            .collect::<Vec<_>>()
-            .join("\n");
-        return Err(miette!("compilation failed:\n{errors}"));
+            .flatten()
+            .collect::<Vec<_>>();
+        errors.sort_by(|left, right| {
+            left.source()
+                .name()
+                .cmp(right.source().name())
+                .then_with(|| left.message().cmp(right.message()))
+        });
+        let Some(primary) = errors.pop() else {
+            return Err(miette!("compilation failed without a diagnostic"));
+        };
+        let primary = errors
+            .into_iter()
+            .fold(primary, |primary, related| primary.with_related(related));
+        return Err(miette::Report::new(primary));
+    }
+    if persist {
+        persist_semantic_artifacts(&project.root, &result)?;
     }
     Ok(Compiled {
         root: project.root,
         target,
         result,
     })
+}
+
+pub(super) fn persist_semantic_artifacts(
+    root: &std::path::Path,
+    result: &BuildResult,
+) -> Result<()> {
+    let cache = InterfaceCache::new(root);
+    for interface in &result.interfaces {
+        cache.save(interface).into_diagnostic()?;
+    }
+    for index in &result.package_instance_indexes {
+        cache.save_package_index(index).into_diagnostic()?;
+    }
+    Ok(())
 }
 
 pub(super) async fn bundle(result: &BuildResult, kind: EntryKind) -> Result<String> {

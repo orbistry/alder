@@ -5,6 +5,9 @@
 
 use alder_region::{Located, Region};
 
+mod interface_copy;
+pub use interface_copy::copy_interface;
+
 pub use alder_source::{AssignOp, BinOp, JoinKind, OrderDir};
 
 pub type Node<'a, T> = &'a Located<T>;
@@ -25,6 +28,7 @@ pub struct PackageName<'a> {
 pub enum PackageId<'a> {
     Named(PackageName<'a>),
     Application,
+    ApplicationMember(&'a str),
     Builtin,
 }
 
@@ -48,6 +52,98 @@ pub struct ConstructorName<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalId(pub u32);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct UseId(pub u32);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TraitId<'a>(pub QualifiedName<'a>);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MethodId<'a> {
+    pub trait_: TraitId<'a>,
+    pub index: u16,
+    pub name: &'a str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AssocTypeId<'a> {
+    pub trait_: TraitId<'a>,
+    pub index: u16,
+    pub name: &'a str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ImplOrigin {
+    Source {
+        item_ordinal: u32,
+    },
+    Derived {
+        type_ordinal: u32,
+        derive_index: u16,
+    },
+    AutomaticEq {
+        type_ordinal: u32,
+    },
+    Builtin {
+        index: u16,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ImplId<'a> {
+    pub module: ModuleId<'a>,
+    pub origin: ImplOrigin,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Kind<'a> {
+    Type,
+    Arrow {
+        param: &'a Kind<'a>,
+        result: &'a Kind<'a>,
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TypeParam<'a> {
+    pub name: Name<'a>,
+    pub kind: Kind<'a>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TraitRef<'a> {
+    pub trait_: TraitId<'a>,
+    pub args: &'a [Node<'a, Type<'a>>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProjectionType<'a> {
+    pub trait_ref: TraitRef<'a>,
+    pub assoc: AssocTypeId<'a>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProjectionEquality<'a> {
+    pub projection: ProjectionType<'a>,
+    pub typ: Node<'a, Type<'a>>,
+    pub region: Region,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DeriveKind {
+    Show,
+    Eq,
+    Ord,
+    Hash,
+    Json,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DictionaryKind {
+    Singleton,
+    Factory,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalName<'a> {
@@ -224,10 +320,21 @@ pub enum VariantPayload<'a> {
 
 #[derive(Debug)]
 pub struct TraitDecl<'a> {
+    pub id: TraitId<'a>,
     pub name: QualifiedName<'a>,
     pub params: &'a [Name<'a>],
+    pub type_params: &'a [TypeParam<'a>],
     pub constraints: &'a [TypeConstraint<'a>],
+    pub superclasses: &'a [TraitRef<'a>],
+    pub associated_types: &'a [AssocTypeDecl<'a>],
     pub items: &'a [TraitItem<'a>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AssocTypeDecl<'a> {
+    pub id: AssocTypeId<'a>,
+    pub kind: Kind<'a>,
+    pub region: Region,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -238,19 +345,29 @@ pub enum TraitItem<'a> {
 
 #[derive(Debug)]
 pub struct TraitFn<'a> {
+    pub id: MethodId<'a>,
     pub name: Name<'a>,
     pub params: &'a [Param<'a>],
     pub ret: Option<Node<'a, Type<'a>>>,
     pub constraints: &'a [TypeConstraint<'a>],
+    pub scheme: &'a Annotation<'a>,
     pub body: Option<Node<'a, Block<'a>>>,
 }
 
 #[derive(Debug)]
 pub struct ImplDecl<'a> {
+    pub id: ImplId<'a>,
     pub trait_: QualifiedName<'a>,
     pub args: &'a [Node<'a, Type<'a>>],
+    pub trait_ref: TraitRef<'a>,
+    pub params: &'a [TypeParam<'a>],
     pub constraints: &'a [TypeConstraint<'a>],
+    pub trait_predicates: &'a [TraitRef<'a>],
+    pub projection_equalities: &'a [ProjectionEquality<'a>],
+    pub assoc_bindings: &'a [AssocBinding<'a>],
     pub items: &'a [ImplItem<'a>],
+    pub synthetic: Option<DeriveKind>,
+    pub region: Region,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -264,10 +381,12 @@ pub enum ImplItem<'a> {
 
 #[derive(Debug)]
 pub struct ImplFn<'a> {
+    pub method: MethodId<'a>,
     pub name: Name<'a>,
     pub params: &'a [Param<'a>],
     pub ret: Option<Node<'a, Type<'a>>>,
     pub constraints: &'a [TypeConstraint<'a>],
+    pub scheme: &'a Annotation<'a>,
     pub body: Node<'a, Block<'a>>,
 }
 
@@ -278,9 +397,9 @@ pub enum TypeConstraint<'a> {
         traits: &'a [QualifiedName<'a>],
     },
     AssocEq {
-        var: Name<'a>,
-        assoc: Name<'a>,
+        projection: ProjectionType<'a>,
         typ: Node<'a, Type<'a>>,
+        region: Region,
     },
 }
 
@@ -371,6 +490,7 @@ pub enum Stmt<'a> {
         provider: QualifiedName<'a>,
     },
     Assign {
+        use_id: Option<UseId>,
         place: &'a Place<'a>,
         op: Located<AssignOp>,
         value: Node<'a, Expr<'a>>,
@@ -414,6 +534,10 @@ pub enum ValueRef<'a> {
         reference: QualifiedName<'a>,
         annotation: &'a Annotation<'a>,
     },
+    TraitMethod {
+        method: MethodId<'a>,
+        annotation: &'a Annotation<'a>,
+    },
     /// A value exported by an embedded first-party stdlib module. Its
     /// signature is opaque until stdlib interfaces are loaded by the driver.
     Builtin(QualifiedName<'a>),
@@ -448,7 +572,10 @@ pub enum Expr<'a> {
         parts: &'a [TemplatePart<'a>],
     },
     Unit,
-    Var(ValueRef<'a>),
+    Var {
+        use_id: UseId,
+        reference: ValueRef<'a>,
+    },
     Constructor(ConstructorRef<'a>),
     Tag {
         group: Option<QualifiedName<'a>>,
@@ -463,6 +590,7 @@ pub enum Expr<'a> {
         fields: &'a [RecordField<'a>],
     },
     Call {
+        use_id: UseId,
         function: Node<'a, Expr<'a>>,
         arguments: &'a [Node<'a, Expr<'a>>],
     },
@@ -481,9 +609,13 @@ pub enum Expr<'a> {
     Await(Node<'a, Expr<'a>>),
     Try(Node<'a, Expr<'a>>),
     Pin(Node<'a, Expr<'a>>),
-    Negate(Node<'a, Expr<'a>>),
+    Negate {
+        use_id: UseId,
+        expr: Node<'a, Expr<'a>>,
+    },
     Not(Node<'a, Expr<'a>>),
     Binop {
+        use_id: UseId,
         op: Located<BinOp>,
         left: Node<'a, Expr<'a>>,
         right: Node<'a, Expr<'a>>,
@@ -554,7 +686,10 @@ pub struct MatchArm<'a> {
 pub enum Pattern<'a> {
     Anything,
     Bind(BindingName<'a>),
-    Pin(Node<'a, Expr<'a>>),
+    Pin {
+        use_id: UseId,
+        value: Node<'a, Expr<'a>>,
+    },
     Number {
         value: f64,
         text: &'a str,
@@ -610,7 +745,9 @@ pub struct ArrayRest<'a> {
 
 #[derive(Debug)]
 pub struct Annotation<'a> {
-    pub free_vars: FreeVars<'a>,
+    pub params: &'a [TypeParam<'a>],
+    pub trait_predicates: &'a [TraitRef<'a>],
+    pub projection_equalities: &'a [ProjectionEquality<'a>],
     pub typ: Node<'a, Type<'a>>,
 }
 
@@ -624,6 +761,11 @@ pub enum Type<'a> {
         reference: QualifiedName<'a>,
         args: &'a [Node<'a, Type<'a>>],
     },
+    Partial {
+        constructor: QualifiedName<'a>,
+        slots: &'a [TypeSlot<'a>],
+    },
+    Projection(ProjectionType<'a>),
     Fn {
         params: &'a [Node<'a, Type<'a>>],
         ret: Node<'a, Type<'a>>,
@@ -643,6 +785,12 @@ pub enum Type<'a> {
         arguments: &'a [AliasArgument<'a>],
         target: AliasType<'a>,
     },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum TypeSlot<'a> {
+    Hole(u16),
+    Fixed(Node<'a, Type<'a>>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -861,6 +1009,7 @@ pub struct Interface<'a> {
     pub types: &'a [InterfaceType<'a>],
     pub enums: &'a [InterfaceEnum<'a>],
     pub traits: &'a [InterfaceTrait<'a>],
+    pub instances: &'a [InterfaceImpl<'a>],
     pub modules: &'a [InterfaceModule<'a>],
     pub private_names: &'a [PrivateName<'a>],
 }
@@ -873,12 +1022,19 @@ pub enum ValueKind {
     Table,
     Schema,
     Extern,
+    TraitMethod,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum InterfaceValueIdentity<'a> {
+    Binding(QualifiedName<'a>),
+    TraitMethod(MethodId<'a>),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct InterfaceValue<'a> {
     pub exported_as: &'a str,
-    pub reference: QualifiedName<'a>,
+    pub identity: InterfaceValueIdentity<'a>,
     pub annotation: &'a Annotation<'a>,
     pub kind: ValueKind,
 }
@@ -887,7 +1043,8 @@ pub struct InterfaceValue<'a> {
 pub struct InterfaceType<'a> {
     pub exported_as: &'a str,
     pub reference: QualifiedName<'a>,
-    pub params: &'a [&'a str],
+    pub params: &'a [TypeParam<'a>],
+    pub result_kind: Kind<'a>,
     pub body: PublicTypeBody<'a>,
 }
 
@@ -909,17 +1066,56 @@ pub enum OpaqueKind {
 pub struct InterfaceEnum<'a> {
     pub exported_as: &'a str,
     pub reference: QualifiedName<'a>,
-    pub params: &'a [&'a str],
+    pub params: &'a [TypeParam<'a>],
+    pub result_kind: Kind<'a>,
     pub variants: &'a [Variant<'a>],
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct InterfaceTrait<'a> {
     pub exported_as: &'a str,
-    pub reference: QualifiedName<'a>,
-    pub params: &'a [&'a str],
-    pub assoc_types: &'a [&'a str],
-    pub methods: &'a [InterfaceValue<'a>],
+    pub id: TraitId<'a>,
+    pub params: &'a [TypeParam<'a>],
+    pub superclasses: &'a [TraitRef<'a>],
+    pub associated_types: &'a [AssocTypeDecl<'a>],
+    pub methods: &'a [InterfaceMethod<'a>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct InterfaceMethod<'a> {
+    pub id: MethodId<'a>,
+    pub exported_as: &'a str,
+    pub scheme: &'a Annotation<'a>,
+    pub has_default: bool,
+    pub default_symbol: Option<&'a str>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MethodImplementation<'a> {
+    Provided { symbol: &'a str },
+    Default { symbol: &'a str },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct InterfaceImpl<'a> {
+    pub id: ImplId<'a>,
+    pub source_uri: Option<&'a str>,
+    pub region: Option<Region>,
+    pub params: &'a [TypeParam<'a>],
+    pub trait_ref: TraitRef<'a>,
+    pub trait_predicates: &'a [TraitRef<'a>],
+    pub projection_equalities: &'a [ProjectionEquality<'a>],
+    pub assoc_bindings: &'a [AssocBinding<'a>],
+    pub dictionary_symbol: &'a str,
+    pub dictionary_kind: DictionaryKind,
+    pub methods: &'a [(MethodId<'a>, MethodImplementation<'a>)],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AssocBinding<'a> {
+    pub assoc: AssocTypeId<'a>,
+    pub typ: Node<'a, Type<'a>>,
+    pub region: Region,
 }
 
 #[derive(Clone, Copy, Debug)]

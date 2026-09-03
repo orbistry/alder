@@ -10,3 +10,4 @@ license.workspace = true
 [dependencies]
 alder-region = { path = "../alder-region", version = "0.1.0" }
 alder-source = { path = "../alder-source", version = "0.1.0" }
+bumpalo.workspace = true

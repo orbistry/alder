@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "fn traverse(xs: t[f[a]], g: fn(a) -> f[b]) -> f[t[b]]\n    where\n        t: Traversable,\n        f: Applicative,\n"
+description: "fn traverse(xs: t[f[a]], g: fn(a) f[b]) f[t[b]]\n    where\n        t: Traversable,\n        f: Applicative,\n"
 ---
 FnDecl {
     name: Located {
@@ -113,7 +113,7 @@ FnDecl {
                         },
                         end: Position {
                             line: 1,
-                            column: 42,
+                            column: 39,
                         },
                     },
                     value: Fn {
@@ -139,11 +139,11 @@ FnDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 38,
+                                    column: 35,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 42,
+                                    column: 39,
                                 },
                             },
                             value: Var {
@@ -153,11 +153,11 @@ FnDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 1,
-                                                column: 40,
+                                                column: 37,
                                             },
                                             end: Position {
                                                 line: 1,
-                                                column: 41,
+                                                column: 38,
                                             },
                                         },
                                         value: Var {
@@ -178,11 +178,11 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 47,
+                    column: 41,
                 },
                 end: Position {
                     line: 1,
-                    column: 54,
+                    column: 48,
                 },
             },
             value: Var {
@@ -192,11 +192,11 @@ FnDecl {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 49,
+                                column: 43,
                             },
                             end: Position {
                                 line: 1,
-                                column: 53,
+                                column: 47,
                             },
                         },
                         value: Var {
@@ -206,11 +206,11 @@ FnDecl {
                                     region: Region {
                                         start: Position {
                                             line: 1,
-                                            column: 51,
+                                            column: 45,
                                         },
                                         end: Position {
                                             line: 1,
-                                            column: 52,
+                                            column: 46,
                                         },
                                     },
                                     value: Var {

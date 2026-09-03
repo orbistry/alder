@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: fn(mut x) x
+description: (mut x) -> x
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 12,
+            column: 13,
         },
     },
     value: Lambda(
@@ -21,11 +21,11 @@ Located {
                         Region {
                             start: Position {
                                 line: 1,
-                                column: 4,
+                                column: 2,
                             },
                             end: Position {
                                 line: 1,
-                                column: 7,
+                                column: 5,
                             },
                         },
                     ),
@@ -33,11 +33,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 8,
+                                column: 6,
                             },
                             end: Position {
                                 line: 1,
-                                column: 9,
+                                column: 7,
                             },
                         },
                         value: Var(
@@ -52,11 +52,11 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 11,
+                        column: 12,
                     },
                     end: Position {
                         line: 1,
-                        column: 12,
+                        column: 13,
                     },
                 },
                 value: Var(

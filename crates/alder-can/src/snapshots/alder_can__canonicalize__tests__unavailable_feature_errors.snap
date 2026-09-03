@@ -1,6 +1,6 @@
 ---
 source: crates/alder-can/src/canonicalize.rs
-expression: "can_error(\"#[derive(Eq)]\\ntype Id = Number\")"
+description: "#[derive(Eq)]\ntype Id = Number\n"
 ---
 [
     Error {
@@ -10,12 +10,14 @@ expression: "can_error(\"#[derive(Eq)]\\ntype Id = Number\")"
                 column: 1,
             },
             end: Position {
-                line: 1,
-                column: 14,
+                line: 2,
+                column: 17,
             },
         },
         kind: Attribute(
-            DeriveUnavailable,
+            InvalidDerive {
+                reason: "built-in derives are only available on enums and error groups",
+            },
         ),
     },
 ]

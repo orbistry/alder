@@ -64,7 +64,7 @@ protocol. The registry service itself is explicitly deferred past M9.
    `PUT` for publish with a token; adapters implement the same trait
    locally.**
 3. Property testing. **`Gen[a]` trait with derives for records and
-   enums, `forall(gen, fn(a) -> Bool)`, integrated shrinking (Hedgehog
+   enums, `forall(gen, fn(a) Bool)`, integrated shrinking (Hedgehog
    style), seed printed on failure.**
 4. Playground execution. **Run the compiled JS in the browser via an
    iframe with the kernel; no deno_core in WASM.**

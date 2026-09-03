@@ -1,0 +1,33 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "trait Convert[a, a] { fn convert(value: a) -> a }"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 18,
+            },
+            end: Position {
+                line: 1,
+                column: 19,
+            },
+        },
+        kind: Type(
+            DuplicateParameter {
+                name: "a",
+                first: Region {
+                    start: Position {
+                        line: 1,
+                        column: 15,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 16,
+                    },
+                },
+            },
+        ),
+    },
+]

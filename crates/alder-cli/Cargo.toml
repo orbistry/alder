@@ -35,3 +35,6 @@ tokio-util = { version = "0.7.18", features = ["compat"] }
 tower-lsp-server.workspace = true
 xz2.workspace = true
 zip.workspace = true
+
+[dev-dependencies]
+indoc.workspace = true

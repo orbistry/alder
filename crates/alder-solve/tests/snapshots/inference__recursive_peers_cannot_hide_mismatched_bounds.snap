@@ -1,0 +1,92 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "trait Display[a] { fn display(value: a) String }\ntrait Hashable[a] { fn hash(value: a) BigInt }\n\nfn first(value: a) String where a: Display { second(value) }\nfn second(value: a) String where a: Hashable { first(value) }\n"
+---
+[
+    Trait(
+        UnsatisfiedBound {
+            trait_: TraitId(
+                QualifiedName {
+                    module: ModuleId {
+                        package: Application,
+                        path: [
+                            "Main",
+                        ],
+                    },
+                    name: "Hashable",
+                },
+            ),
+            subject: "a",
+            origin: Region {
+                start: Position {
+                    line: 4,
+                    column: 46,
+                },
+                end: Position {
+                    line: 4,
+                    column: 52,
+                },
+            },
+            chain: [
+                ObligationFrame {
+                    trait_: TraitId(
+                        QualifiedName {
+                            module: ModuleId {
+                                package: Application,
+                                path: [
+                                    "Main",
+                                ],
+                            },
+                            name: "Hashable",
+                        },
+                    ),
+                    subject: "a",
+                    required_by: None,
+                },
+            ],
+        },
+    ),
+    Trait(
+        UnsatisfiedBound {
+            trait_: TraitId(
+                QualifiedName {
+                    module: ModuleId {
+                        package: Application,
+                        path: [
+                            "Main",
+                        ],
+                    },
+                    name: "Display",
+                },
+            ),
+            subject: "a",
+            origin: Region {
+                start: Position {
+                    line: 5,
+                    column: 48,
+                },
+                end: Position {
+                    line: 5,
+                    column: 53,
+                },
+            },
+            chain: [
+                ObligationFrame {
+                    trait_: TraitId(
+                        QualifiedName {
+                            module: ModuleId {
+                                package: Application,
+                                path: [
+                                    "Main",
+                                ],
+                            },
+                            name: "Display",
+                        },
+                    ),
+                    subject: "a",
+                    required_by: None,
+                },
+            ],
+        },
+    ),
+]

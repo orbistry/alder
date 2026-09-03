@@ -29,7 +29,10 @@ pub fn canonicalize_pattern<'a>(
                     ErrorKind::Pattern(PatternError::PinOutsideMatch),
                 )]);
             }
-            CanPattern::Pin(canonicalize_expr(bump, env, expr)?)
+            CanPattern::Pin {
+                use_id: env.fresh_use(),
+                value: canonicalize_expr(bump, env, expr)?,
+            }
         }
         SourcePattern::Number(number) => CanPattern::Number {
             value: number.value,

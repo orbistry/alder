@@ -1,16 +1,9 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: fn x
+description: "fn(x) { x }"
 ---
-Lambda(
-    Params(
-        Open(
-            1,
-            4,
-        ),
-        1,
-        4,
-    ),
+Reserved(
+    Fn,
     1,
     1,
 )

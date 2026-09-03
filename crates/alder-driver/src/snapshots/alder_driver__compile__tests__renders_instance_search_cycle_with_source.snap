@@ -1,0 +1,18 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] {\n    fn display(value: a) -> String\n}\nfn main() { 42 }\n"
+---
+alder::trait::instance_cycle
+
+  × resolving `Display[Number]` forms an instance cycle
+   ╭─[/project/src/main.ald:4:1]
+ 3 │ }
+ 4 │ fn main() { 42 }
+   · ────────┬───────
+   ·         ╰── instance resolution returns to this requirement
+   ╰────
+  help: make the instance prerequisites structurally decrease
+        
+        obligation chain:
+          Display[Number]
+          -> Display[Number]

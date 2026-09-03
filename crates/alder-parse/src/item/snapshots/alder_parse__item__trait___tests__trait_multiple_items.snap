@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/trait_.rs
-description: "trait Monoid[a] {\n    fn empty() -> a\n    fn append(x: a, y: a) -> a\n    fn concat(xs: Array[a]) -> a { Array.fold(xs, empty(), append) }\n}\n"
+description: "trait Monoid[a] {\n    fn empty() a\n    fn append(x: a, y: a) a\n    fn concat(xs: Array[a]) a { Array.fold(xs, empty(), append) }\n}\n"
 ---
 TraitDecl {
     name: Located {
@@ -54,11 +54,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 19,
+                                column: 16,
                             },
                             end: Position {
                                 line: 2,
-                                column: 20,
+                                column: 17,
                             },
                         },
                         value: Var {
@@ -165,11 +165,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 3,
-                                column: 30,
+                                column: 27,
                             },
                             end: Position {
                                 line: 3,
-                                column: 31,
+                                column: 28,
                             },
                         },
                         value: Var {
@@ -273,11 +273,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 4,
-                                column: 32,
+                                column: 29,
                             },
                             end: Position {
                                 line: 4,
-                                column: 33,
+                                column: 30,
                             },
                         },
                         value: Var {
@@ -292,11 +292,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 4,
-                                column: 34,
+                                column: 31,
                             },
                             end: Position {
                                 line: 4,
-                                column: 69,
+                                column: 66,
                             },
                         },
                         value: Block {
@@ -306,11 +306,11 @@ TraitDecl {
                                     region: Region {
                                         start: Position {
                                             line: 4,
-                                            column: 36,
+                                            column: 33,
                                         },
                                         end: Position {
                                             line: 4,
-                                            column: 67,
+                                            column: 64,
                                         },
                                     },
                                     value: Call {
@@ -318,11 +318,11 @@ TraitDecl {
                                             region: Region {
                                                 start: Position {
                                                     line: 4,
-                                                    column: 36,
+                                                    column: 33,
                                                 },
                                                 end: Position {
                                                     line: 4,
-                                                    column: 46,
+                                                    column: 43,
                                                 },
                                             },
                                             value: Access {
@@ -330,11 +330,11 @@ TraitDecl {
                                                     region: Region {
                                                         start: Position {
                                                             line: 4,
-                                                            column: 36,
+                                                            column: 33,
                                                         },
                                                         end: Position {
                                                             line: 4,
-                                                            column: 41,
+                                                            column: 38,
                                                         },
                                                     },
                                                     value: Path(
@@ -344,11 +344,11 @@ TraitDecl {
                                                                     region: Region {
                                                                         start: Position {
                                                                             line: 4,
-                                                                            column: 36,
+                                                                            column: 33,
                                                                         },
                                                                         end: Position {
                                                                             line: 4,
-                                                                            column: 41,
+                                                                            column: 38,
                                                                         },
                                                                     },
                                                                     value: "Array",
@@ -361,11 +361,11 @@ TraitDecl {
                                                     region: Region {
                                                         start: Position {
                                                             line: 4,
-                                                            column: 42,
+                                                            column: 39,
                                                         },
                                                         end: Position {
                                                             line: 4,
-                                                            column: 46,
+                                                            column: 43,
                                                         },
                                                     },
                                                     value: "fold",
@@ -377,11 +377,11 @@ TraitDecl {
                                                 region: Region {
                                                     start: Position {
                                                         line: 4,
-                                                        column: 47,
+                                                        column: 44,
                                                     },
                                                     end: Position {
                                                         line: 4,
-                                                        column: 49,
+                                                        column: 46,
                                                     },
                                                 },
                                                 value: Var(
@@ -392,11 +392,11 @@ TraitDecl {
                                                 region: Region {
                                                     start: Position {
                                                         line: 4,
-                                                        column: 51,
+                                                        column: 48,
                                                     },
                                                     end: Position {
                                                         line: 4,
-                                                        column: 58,
+                                                        column: 55,
                                                     },
                                                 },
                                                 value: Call {
@@ -404,11 +404,11 @@ TraitDecl {
                                                         region: Region {
                                                             start: Position {
                                                                 line: 4,
-                                                                column: 51,
+                                                                column: 48,
                                                             },
                                                             end: Position {
                                                                 line: 4,
-                                                                column: 56,
+                                                                column: 53,
                                                             },
                                                         },
                                                         value: Var(
@@ -422,11 +422,11 @@ TraitDecl {
                                                 region: Region {
                                                     start: Position {
                                                         line: 4,
-                                                        column: 60,
+                                                        column: 57,
                                                     },
                                                     end: Position {
                                                         line: 4,
-                                                        column: 66,
+                                                        column: 63,
                                                     },
                                                 },
                                                 value: Var(

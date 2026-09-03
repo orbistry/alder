@@ -1,8 +1,11 @@
+use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use alder_ast::{
-    Annotation, ConstructorRef, Interface, InterfaceEnum, LocalId, LocalName, ModuleId, Namespace,
-    PackageId, QualifiedName, Type, ValueRef, Variant, VariantPayload,
+    Annotation, AssocTypeId, ConstructorName, ConstructorRef, Interface, InterfaceEnum, LocalId,
+    LocalName, MethodId, ModuleId, Namespace, PackageId, ProjectionType, QualifiedName, Type,
+    UseId, ValueRef, Variant, VariantPayload,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -42,6 +45,16 @@ pub struct TraitBinding<'a> {
     pub reference: QualifiedName<'a>,
     pub arity: usize,
     pub region: Region,
+    pub associated_types: &'a [AssocTypeId<'a>],
+    pub methods: &'a [MethodBinding<'a>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MethodBinding<'a> {
+    pub id: MethodId<'a>,
+    pub annotation: &'a Annotation<'a>,
+    pub region: Region,
+    pub has_default: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -75,12 +88,14 @@ pub struct Env<'a> {
     pub traits: BTreeMap<&'a str, Candidate<'a, TraitBinding<'a>>>,
     pub modules: BTreeMap<&'a str, Candidate<'a, ModuleBinding<'a>>>,
     pub providers: Vec<BTreeMap<&'a str, QualifiedName<'a>>>,
+    pub associated_types: Vec<BTreeMap<&'a str, ProjectionType<'a>>>,
     pub control: ControlContext,
-    next_local: u32,
+    next_local: Rc<Cell<u32>>,
+    next_use: Rc<Cell<u32>>,
 }
 
 impl<'a> Env<'a> {
-    pub fn new(home: ModuleId<'a>) -> Self {
+    pub fn new(bump: &'a Bump, home: ModuleId<'a>) -> Self {
         let mut env = Self {
             home,
             scopes: vec![Scope::default()],
@@ -89,10 +104,14 @@ impl<'a> Env<'a> {
             traits: BTreeMap::new(),
             modules: BTreeMap::new(),
             providers: Vec::new(),
+            associated_types: Vec::new(),
             control: ControlContext::default(),
-            next_local: 0,
+            next_local: Rc::new(Cell::new(0)),
+            next_use: Rc::new(Cell::new(0)),
         };
         env.add_builtin_types();
+        env.add_builtin_ordering(bump);
+        env.add_builtin_traits(bump);
         env.add_builtin_modules();
         env
     }
@@ -109,6 +128,7 @@ impl<'a> Env<'a> {
             ("Task", 1),
             ("Option", 1),
             ("Result", 2),
+            ("Ordering", 0),
             ("Html", 0),
             ("Style", 0),
             ("Query", 1),
@@ -130,10 +150,43 @@ impl<'a> Env<'a> {
         }
     }
 
+    fn add_builtin_ordering(&mut self, bump: &'a Bump) {
+        let reference = QualifiedName {
+            module: ModuleId {
+                package: PackageId::Builtin,
+                path: &[],
+            },
+            name: "Ordering",
+        };
+        let annotation = bump.alloc(Annotation {
+            params: &[],
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Named {
+                reference,
+                args: &[],
+            })),
+        });
+        let variants =
+            bump.alloc_slice_fill_iter(["Less", "Equal", "Greater"].into_iter().enumerate().map(
+                |(index, variant)| ConstructorRef {
+                    name: ConstructorName {
+                        enum_: reference,
+                        variant,
+                    },
+                    index: index as u16,
+                    alternatives: 3,
+                    payload: VariantPayload::Unit,
+                    annotation,
+                },
+            ));
+        self.register_enum(reference, variants);
+    }
+
     fn add_builtin_modules(&mut self) {
         for name in [
             "Array", "String", "Number", "BigInt", "Map", "Set", "Task", "Fiber", "Http", "Io",
-            "Cli", "Json", "Option", "Result",
+            "Cli", "Json", "Option", "Ref", "Result",
         ] {
             self.modules.insert(
                 name,
@@ -149,6 +202,487 @@ impl<'a> Env<'a> {
         }
     }
 
+    fn add_builtin_traits(&mut self, bump: &'a Bump) {
+        for name in ["Show", "Eq", "Ord", "Hash", "Json", "Num"] {
+            let trait_id = alder_ast::TraitId(QualifiedName {
+                module: ModuleId {
+                    package: PackageId::Builtin,
+                    path: &[],
+                },
+                name,
+            });
+            let specifications: &[(&str, &[&str], &str)] = match name {
+                "Show" => &[("show", &["a"], "String")],
+                "Eq" => &[("eq", &["a", "a"], "Bool")],
+                "Ord" => &[("compare", &["a", "a"], "Ordering")],
+                "Hash" => &[("hash", &["a"], "BigInt")],
+                "Json" => &[("encode", &["a"], "String"), ("decode", &["String"], "a")],
+                "Num" => &[
+                    ("add", &["a", "a"], "a"),
+                    ("sub", &["a", "a"], "a"),
+                    ("mul", &["a", "a"], "a"),
+                    ("div", &["a", "a"], "a"),
+                    ("rem", &["a", "a"], "a"),
+                    ("negate", &["a"], "a"),
+                ],
+                _ => unreachable!(),
+            };
+            let methods = specifications
+                .iter()
+                .enumerate()
+                .map(|(index, (method_name, params, ret))| {
+                    let type_node = |name: &'a str| {
+                        bump.alloc(Located::at_zero(if name == "a" {
+                            Type::Var { name, args: &[] }
+                        } else {
+                            Type::Named {
+                                reference: QualifiedName {
+                                    module: ModuleId {
+                                        package: PackageId::Builtin,
+                                        path: &[],
+                                    },
+                                    name,
+                                },
+                                args: &[],
+                            }
+                        })) as &'a Located<Type<'a>>
+                    };
+                    let annotation = bump.alloc(Annotation {
+                        params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
+                            name: Located::at_zero("a"),
+                            kind: alder_ast::Kind::Type,
+                        }]),
+                        trait_predicates: &[],
+                        projection_equalities: &[],
+                        typ: bump.alloc(Located::at_zero(Type::Fn {
+                            params: bump.alloc_slice_fill_iter(
+                                params.iter().map(|parameter| type_node(parameter)),
+                            ),
+                            ret: if name == "Json" && *method_name == "decode" {
+                                bump.alloc(Located::at_zero(Type::Named {
+                                    reference: QualifiedName {
+                                        module: ModuleId {
+                                            package: PackageId::Builtin,
+                                            path: &[],
+                                        },
+                                        name: "Result",
+                                    },
+                                    args: bump
+                                        .alloc_slice_copy(&[type_node("a"), type_node("String")]),
+                                }))
+                            } else {
+                                type_node(ret)
+                            },
+                        })),
+                    });
+                    MethodBinding {
+                        id: MethodId {
+                            trait_: trait_id,
+                            index: index as u16,
+                            name: method_name,
+                        },
+                        annotation,
+                        region: Region::zero(),
+                        has_default: false,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let methods = bump.alloc_slice_copy(&methods);
+            self.traits.insert(
+                name,
+                Candidate::Unique(TraitBinding {
+                    reference: trait_id.0,
+                    arity: 1,
+                    region: Region::zero(),
+                    associated_types: &[],
+                    methods,
+                }),
+            );
+            for method in methods.iter() {
+                self.scopes[0].values.insert(
+                    method.id.name,
+                    ValueBinding {
+                        reference: ValueRef::TraitMethod {
+                            method: method.id,
+                            annotation: method.annotation,
+                        },
+                        region: Region::zero(),
+                        mutable: false,
+                        annotation: Some(method.annotation),
+                    },
+                );
+            }
+        }
+        self.add_builtin_functor(bump);
+        self.add_builtin_applicative(bump);
+        self.add_builtin_monad(bump);
+        self.add_builtin_traversable(bump);
+        self.add_builtin_iterator(bump);
+    }
+
+    fn add_builtin_functor(&mut self, bump: &'a Bump) {
+        let trait_id = alder_ast::TraitId(QualifiedName {
+            module: ModuleId {
+                package: PackageId::Builtin,
+                path: &[],
+            },
+            name: "Functor",
+        });
+        let type_kind = bump.alloc(alder_ast::Kind::Type);
+        let constructor_kind = alder_ast::Kind::Arrow {
+            param: type_kind,
+            result: type_kind,
+        };
+        let variable = |name: &'a str| {
+            bump.alloc(Located::at_zero(Type::Var { name, args: &[] })) as &'a Located<Type<'a>>
+        };
+        let applied = |name: &'a str, argument: &'a Located<Type<'a>>| {
+            bump.alloc(Located::at_zero(Type::Var {
+                name,
+                args: bump.alloc_slice_copy(&[argument]),
+            })) as &'a Located<Type<'a>>
+        };
+        let a = variable("a");
+        let b = variable("b");
+        let transform = bump.alloc(Located::at_zero(Type::Fn {
+            params: bump.alloc_slice_copy(&[a]),
+            ret: b,
+        }));
+        let annotation = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                alder_ast::TypeParam {
+                    name: Located::at_zero("f"),
+                    kind: constructor_kind,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("a"),
+                    kind: alder_ast::Kind::Type,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("b"),
+                    kind: alder_ast::Kind::Type,
+                },
+            ]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[applied("f", a), transform]),
+                ret: applied("f", b),
+            })),
+        });
+        let method = MethodBinding {
+            id: MethodId {
+                trait_: trait_id,
+                index: 0,
+                name: "map",
+            },
+            annotation,
+            region: Region::zero(),
+            has_default: false,
+        };
+        let methods = bump.alloc_slice_copy(&[method]);
+        self.traits.insert(
+            "Functor",
+            Candidate::Unique(TraitBinding {
+                reference: trait_id.0,
+                arity: 1,
+                region: Region::zero(),
+                associated_types: &[],
+                methods,
+            }),
+        );
+        self.scopes[0].values.insert(
+            "map",
+            ValueBinding {
+                reference: ValueRef::TraitMethod {
+                    method: method.id,
+                    annotation,
+                },
+                region: Region::zero(),
+                mutable: false,
+                annotation: Some(annotation),
+            },
+        );
+    }
+
+    fn add_builtin_applicative(&mut self, bump: &'a Bump) {
+        let trait_id = builtin_trait_id("Applicative");
+        let constructor_kind = unary_constructor_kind(bump);
+        let variable = |name: &'a str| type_variable(bump, name);
+        let applied = |name: &'a str, argument| applied_variable(bump, name, argument);
+        let a = variable("a");
+        let b = variable("b");
+        let function = bump.alloc(Located::at_zero(Type::Fn {
+            params: bump.alloc_slice_copy(&[a]),
+            ret: b,
+        }));
+        let type_param = |name, kind| alder_ast::TypeParam {
+            name: Located::at_zero(name),
+            kind,
+        };
+        let pure = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                type_param("f", constructor_kind),
+                type_param("a", alder_ast::Kind::Type),
+            ]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[a]),
+                ret: applied("f", a),
+            })),
+        });
+        let apply = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                type_param("f", constructor_kind),
+                type_param("a", alder_ast::Kind::Type),
+                type_param("b", alder_ast::Kind::Type),
+            ]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[applied("f", function), applied("f", a)]),
+                ret: applied("f", b),
+            })),
+        });
+        self.install_builtin_trait(
+            "Applicative",
+            trait_id,
+            bump.alloc_slice_copy(&[
+                MethodBinding {
+                    id: MethodId {
+                        trait_: trait_id,
+                        index: 0,
+                        name: "pure",
+                    },
+                    annotation: pure,
+                    region: Region::zero(),
+                    has_default: false,
+                },
+                MethodBinding {
+                    id: MethodId {
+                        trait_: trait_id,
+                        index: 1,
+                        name: "apply",
+                    },
+                    annotation: apply,
+                    region: Region::zero(),
+                    has_default: false,
+                },
+            ]),
+        );
+    }
+
+    fn add_builtin_monad(&mut self, bump: &'a Bump) {
+        let trait_id = builtin_trait_id("Monad");
+        let constructor_kind = unary_constructor_kind(bump);
+        let a = type_variable(bump, "a");
+        let b = type_variable(bump, "b");
+        let result = applied_variable(bump, "f", b);
+        let transform = bump.alloc(Located::at_zero(Type::Fn {
+            params: bump.alloc_slice_copy(&[a]),
+            ret: result,
+        }));
+        let annotation = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                alder_ast::TypeParam {
+                    name: Located::at_zero("f"),
+                    kind: constructor_kind,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("a"),
+                    kind: alder_ast::Kind::Type,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("b"),
+                    kind: alder_ast::Kind::Type,
+                },
+            ]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[applied_variable(bump, "f", a), transform]),
+                ret: result,
+            })),
+        });
+        self.install_builtin_trait(
+            "Monad",
+            trait_id,
+            bump.alloc_slice_copy(&[MethodBinding {
+                id: MethodId {
+                    trait_: trait_id,
+                    index: 0,
+                    name: "flat_map",
+                },
+                annotation,
+                region: Region::zero(),
+                has_default: false,
+            }]),
+        );
+    }
+
+    fn add_builtin_traversable(&mut self, bump: &'a Bump) {
+        let trait_id = builtin_trait_id("Traversable");
+        let applicative = builtin_trait_id("Applicative");
+        let constructor_kind = unary_constructor_kind(bump);
+        let a = type_variable(bump, "a");
+        let b = type_variable(bump, "b");
+        let f_of_b = applied_variable(bump, "f", b);
+        let transform = bump.alloc(Located::at_zero(Type::Fn {
+            params: bump.alloc_slice_copy(&[a]),
+            ret: f_of_b,
+        }));
+        let t_of_b = applied_variable(bump, "t", b);
+        let annotation = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                alder_ast::TypeParam {
+                    name: Located::at_zero("t"),
+                    kind: constructor_kind,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("a"),
+                    kind: alder_ast::Kind::Type,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("f"),
+                    kind: constructor_kind,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("b"),
+                    kind: alder_ast::Kind::Type,
+                },
+            ]),
+            trait_predicates: bump.alloc_slice_copy(&[alder_ast::TraitRef {
+                trait_: applicative,
+                args: bump.alloc_slice_copy(&[type_variable(bump, "f")]),
+            }]),
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[applied_variable(bump, "t", a), transform]),
+                ret: applied_variable(bump, "f", t_of_b),
+            })),
+        });
+        self.install_builtin_trait(
+            "Traversable",
+            trait_id,
+            bump.alloc_slice_copy(&[MethodBinding {
+                id: MethodId {
+                    trait_: trait_id,
+                    index: 0,
+                    name: "traverse",
+                },
+                annotation,
+                region: Region::zero(),
+                has_default: false,
+            }]),
+        );
+    }
+
+    fn add_builtin_iterator(&mut self, bump: &'a Bump) {
+        let trait_id = builtin_trait_id("Iterator");
+        let associated = alder_ast::AssocTypeId {
+            trait_: trait_id,
+            index: 0,
+            name: "Item",
+        };
+        let i = type_variable(bump, "i");
+        let projection = bump.alloc(Located::at_zero(Type::Projection(
+            alder_ast::ProjectionType {
+                trait_ref: alder_ast::TraitRef {
+                    trait_: trait_id,
+                    args: bump.alloc_slice_copy(&[i]),
+                },
+                assoc: associated,
+            },
+        ))) as &'a Located<Type<'a>>;
+        let annotation = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
+                name: Located::at_zero("i"),
+                kind: alder_ast::Kind::Type,
+            }]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[i]),
+                ret: bump.alloc(Located::at_zero(Type::Named {
+                    reference: QualifiedName {
+                        module: ModuleId {
+                            package: PackageId::Builtin,
+                            path: &[],
+                        },
+                        name: "Option",
+                    },
+                    args: bump.alloc_slice_copy(&[projection]),
+                })),
+            })),
+        });
+        let method = MethodBinding {
+            id: MethodId {
+                trait_: trait_id,
+                index: 0,
+                name: "next",
+            },
+            annotation,
+            region: Region::zero(),
+            has_default: false,
+        };
+        let methods = bump.alloc_slice_copy(&[method]);
+        self.traits.insert(
+            "Iterator",
+            Candidate::Unique(TraitBinding {
+                reference: trait_id.0,
+                arity: 1,
+                region: Region::zero(),
+                associated_types: bump.alloc_slice_copy(&[associated]),
+                methods,
+            }),
+        );
+        self.scopes[0].values.insert(
+            "next",
+            ValueBinding {
+                reference: ValueRef::TraitMethod {
+                    method: method.id,
+                    annotation,
+                },
+                region: Region::zero(),
+                mutable: false,
+                annotation: Some(annotation),
+            },
+        );
+    }
+
+    fn install_builtin_trait(
+        &mut self,
+        name: &'a str,
+        trait_id: alder_ast::TraitId<'a>,
+        methods: &'a [MethodBinding<'a>],
+    ) {
+        self.traits.insert(
+            name,
+            Candidate::Unique(TraitBinding {
+                reference: trait_id.0,
+                arity: 1,
+                region: Region::zero(),
+                associated_types: &[],
+                methods,
+            }),
+        );
+        for method in methods {
+            self.scopes[0].values.insert(
+                method.id.name,
+                ValueBinding {
+                    reference: ValueRef::TraitMethod {
+                        method: method.id,
+                        annotation: method.annotation,
+                    },
+                    region: Region::zero(),
+                    mutable: false,
+                    annotation: Some(method.annotation),
+                },
+            );
+        }
+    }
+
     pub fn push_scope(&mut self) {
         self.scopes.push(Scope::default());
     }
@@ -159,12 +693,21 @@ impl<'a> Env<'a> {
     }
 
     pub fn fresh_local(&mut self, text: &'a str) -> LocalName<'a> {
+        let id = self.next_local.get();
         let local = LocalName {
-            id: LocalId(self.next_local),
+            id: LocalId(id),
             text,
         };
-        self.next_local += 1;
+        self.next_local
+            .set(id.checked_add(1).expect("local ID overflow"));
         local
+    }
+
+    pub fn fresh_use(&self) -> UseId {
+        let id = self.next_use.get();
+        self.next_use
+            .set(id.checked_add(1).expect("use ID overflow"));
+        UseId(id)
     }
 
     pub fn insert_local(
@@ -196,7 +739,14 @@ impl<'a> Env<'a> {
         mutable: bool,
     ) -> Result<QualifiedName<'a>, Region> {
         if let Some(existing) = self.scopes[0].values.get(text) {
-            return Err(existing.region);
+            let shadows_builtin = matches!(
+                existing.reference,
+                ValueRef::TraitMethod { method, .. }
+                    if method.trait_.0.module.package == PackageId::Builtin
+            );
+            if !shadows_builtin {
+                return Err(existing.region);
+            }
         }
         let reference = QualifiedName {
             module: self.home,
@@ -316,8 +866,12 @@ impl<'a> Env<'a> {
         region: Region,
         reference: QualifiedName<'a>,
         arity: usize,
+        associated_types: &'a [AssocTypeId<'a>],
+        methods: &'a [MethodBinding<'a>],
     ) -> Result<(), Region> {
-        if let Some(Candidate::Unique(existing)) = self.traits.get(text) {
+        if let Some(Candidate::Unique(existing)) = self.traits.get(text)
+            && existing.reference.module.package != PackageId::Builtin
+        {
             return Err(existing.region);
         }
         self.traits.insert(
@@ -326,6 +880,8 @@ impl<'a> Env<'a> {
                 reference,
                 arity,
                 region,
+                associated_types,
+                methods,
             }),
         );
         Ok(())
@@ -336,6 +892,21 @@ impl<'a> Env<'a> {
             Some(Candidate::Unique(binding)) => Some(*binding),
             _ => None,
         }
+    }
+
+    pub fn associated_type(
+        &self,
+        trait_: QualifiedName<'a>,
+        name: &str,
+    ) -> Option<AssocTypeId<'a>> {
+        self.traits.values().find_map(|candidate| match candidate {
+            Candidate::Unique(binding) if binding.reference == trait_ => binding
+                .associated_types
+                .iter()
+                .find(|associated| associated.name == name)
+                .copied(),
+            Candidate::Unique(_) | Candidate::Ambiguous(_) | Candidate::Private { .. } => None,
+        })
     }
 
     pub fn find_provider(&self, text: &str) -> Option<QualifiedName<'a>> {
@@ -439,6 +1010,18 @@ impl<'a> Env<'a> {
         arity: usize,
     ) -> Result<QualifiedName<'a>, Region> {
         if let Some(Candidate::Unique(existing)) = self.types.get(text) {
+            if self.home.package == PackageId::Builtin && existing.reference.module == self.home {
+                let reference = existing.reference;
+                self.types.insert(
+                    text,
+                    Candidate::Unique(TypeBinding {
+                        reference,
+                        arity,
+                        region,
+                    }),
+                );
+                return Ok(reference);
+            }
             return Err(existing.region);
         }
         if self.enums.contains_key(text) || self.traits.contains_key(text) {
@@ -457,6 +1040,80 @@ impl<'a> Env<'a> {
             }),
         );
         Ok(reference)
+    }
+
+    pub fn register_trait_members(
+        &mut self,
+        trait_name: &'a str,
+        associated_types: &'a [AssocTypeId<'a>],
+        methods: &'a [MethodBinding<'a>],
+    ) {
+        let Some(Candidate::Unique(binding)) = self.traits.get_mut(trait_name) else {
+            unreachable!("local trait was predeclared")
+        };
+        binding.associated_types = associated_types;
+        binding.methods = methods;
+    }
+
+    pub fn insert_trait_method(&mut self, binding: MethodBinding<'a>) -> Result<(), Region> {
+        if let Some(existing) = self.scopes[0].values.get(binding.id.name) {
+            let shadows_builtin = matches!(
+                existing.reference,
+                ValueRef::TraitMethod { method, .. }
+                    if method.trait_.0.module.package == PackageId::Builtin
+            );
+            if !shadows_builtin {
+                return Err(existing.region);
+            }
+        }
+        self.scopes[0].values.insert(
+            binding.id.name,
+            ValueBinding {
+                reference: ValueRef::TraitMethod {
+                    method: binding.id,
+                    annotation: binding.annotation,
+                },
+                region: binding.region,
+                mutable: false,
+                annotation: Some(binding.annotation),
+            },
+        );
+        Ok(())
+    }
+
+    pub fn find_trait_method(
+        &self,
+        trait_name: &str,
+        method_name: &str,
+    ) -> Option<MethodBinding<'a>> {
+        let Candidate::Unique(trait_) = self.traits.get(trait_name)? else {
+            return None;
+        };
+        trait_
+            .methods
+            .iter()
+            .find(|method| method.id.name == method_name)
+            .copied()
+    }
+
+    pub fn push_associated_types(
+        &mut self,
+        associated_types: BTreeMap<&'a str, ProjectionType<'a>>,
+    ) {
+        self.associated_types.push(associated_types);
+    }
+
+    pub fn pop_associated_types(&mut self) {
+        self.associated_types
+            .pop()
+            .expect("associated type scope exists");
+    }
+
+    pub fn find_associated_type(&self, name: &str) -> Option<ProjectionType<'a>> {
+        self.associated_types
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name).copied())
     }
 
     pub fn register_enum(
@@ -479,7 +1136,9 @@ impl<'a> Env<'a> {
         region: Region,
         arity: usize,
     ) -> Result<QualifiedName<'a>, Region> {
-        if let Some(Candidate::Unique(existing)) = self.traits.get(text) {
+        if let Some(Candidate::Unique(existing)) = self.traits.get(text)
+            && existing.reference.module.package != PackageId::Builtin
+        {
             return Err(existing.region);
         }
         if let Some(Candidate::Unique(existing)) = self.types.get(text) {
@@ -495,6 +1154,8 @@ impl<'a> Env<'a> {
                 reference,
                 arity,
                 region,
+                associated_types: &[],
+                methods: &[],
             }),
         );
         Ok(reference)
@@ -516,9 +1177,23 @@ impl<'a> Env<'a> {
                     .find(|trait_| trait_.exported_as == name)
             {
                 return Ok(TraitBinding {
-                    reference: trait_.reference,
+                    reference: trait_.id.0,
                     arity: trait_.params.len(),
                     region,
+                    associated_types: bump.alloc_slice_fill_iter(
+                        trait_
+                            .associated_types
+                            .iter()
+                            .map(|associated| associated.id),
+                    ),
+                    methods: bump.alloc_slice_fill_iter(trait_.methods.iter().map(|method| {
+                        MethodBinding {
+                            id: method.id,
+                            annotation: method.scheme,
+                            region,
+                            has_default: method.has_default,
+                        }
+                    })),
                 });
             }
             return Err(self.unknown_name(
@@ -666,7 +1341,7 @@ fn interface_constructor_annotation<'a>(
         bump.alloc(Located::at(
             Region::zero(),
             Type::Var {
-                name: param,
+                name: param.name.value,
                 args: &[],
             },
         )) as &Located<Type<'a>>
@@ -697,7 +1372,9 @@ fn interface_constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
-        free_vars: enum_.params,
+        params: enum_.params,
+        trait_predicates: &[],
+        projection_equalities: &[],
         typ,
     })
 }
@@ -717,9 +1394,43 @@ fn builtin_module_path(name: &str) -> &'static [&'static str] {
         "Cli" => &["Cli"],
         "Json" => &["Json"],
         "Option" => &["Option"],
+        "Ref" => &["Ref"],
         "Result" => &["Result"],
         _ => unreachable!("all builtin module names are listed"),
     }
+}
+
+fn builtin_trait_id(name: &'static str) -> alder_ast::TraitId<'static> {
+    alder_ast::TraitId(QualifiedName {
+        module: ModuleId {
+            package: PackageId::Builtin,
+            path: &[],
+        },
+        name,
+    })
+}
+
+fn unary_constructor_kind<'a>(bump: &'a Bump) -> alder_ast::Kind<'a> {
+    let typ = bump.alloc(alder_ast::Kind::Type);
+    alder_ast::Kind::Arrow {
+        param: typ,
+        result: typ,
+    }
+}
+
+fn type_variable<'a>(bump: &'a Bump, name: &'a str) -> &'a Located<Type<'a>> {
+    bump.alloc(Located::at_zero(Type::Var { name, args: &[] }))
+}
+
+fn applied_variable<'a>(
+    bump: &'a Bump,
+    name: &'a str,
+    argument: &'a Located<Type<'a>>,
+) -> &'a Located<Type<'a>> {
+    bump.alloc(Located::at_zero(Type::Var {
+        name,
+        args: bump.alloc_slice_copy(&[argument]),
+    }))
 }
 
 fn suggestions<'a>(
@@ -784,14 +1495,99 @@ mod tests {
 
     #[test]
     fn local_ids_are_stable_and_unique() {
-        let mut env = Env::new(ModuleId {
-            package: PackageId::Application,
-            path: &[],
-        });
+        let bump = Bump::new();
+        let mut env = Env::new(
+            &bump,
+            ModuleId {
+                package: PackageId::Application,
+                path: &[],
+            },
+        );
         let x = env.insert_local("x", Region::one(), false).unwrap();
         env.push_scope();
         let inner_x = env.insert_local("x", Region::zero(), true).unwrap();
         assert_ne!(x.id, inner_x.id);
         assert!(env.find_value("x").unwrap().mutable);
+    }
+
+    #[test]
+    fn cloned_environments_share_id_allocators() {
+        let bump = Bump::new();
+        let mut env = Env::new(
+            &bump,
+            ModuleId {
+                package: PackageId::Application,
+                path: &[],
+            },
+        );
+        let mut branch = env.clone();
+
+        assert_eq!(env.fresh_use(), UseId(0));
+        assert_eq!(branch.fresh_use(), UseId(1));
+        assert_eq!(env.fresh_local("left").id, LocalId(0));
+        assert_eq!(branch.fresh_local("right").id, LocalId(1));
+    }
+
+    #[test]
+    fn bootstrap_trait_bindings_match_the_audited_stdlib_headers() {
+        let bump = Bump::new();
+        let env = Env::new(
+            &bump,
+            ModuleId {
+                package: PackageId::Application,
+                path: &[],
+            },
+        );
+        let interface = crate::builtin_trait_interface(&bump);
+
+        let ordering = interface
+            .enums
+            .iter()
+            .find(|enum_| enum_.reference.name == "Ordering")
+            .expect("the audited stdlib defines Ordering");
+        let Candidate::Unique(binding) = env
+            .enums
+            .get("Ordering")
+            .expect("Ordering has a bootstrap enum binding")
+        else {
+            panic!("builtin Ordering binding must be unambiguous");
+        };
+        assert_eq!(binding.reference, ordering.reference);
+        assert_eq!(
+            binding
+                .variants
+                .iter()
+                .map(|variant| variant.name.variant)
+                .collect::<Vec<_>>(),
+            ordering
+                .variants
+                .iter()
+                .map(|variant| variant.name.variant)
+                .collect::<Vec<_>>()
+        );
+
+        for trait_ in interface.traits {
+            let Candidate::Unique(binding) = env
+                .traits
+                .get(trait_.id.0.name)
+                .expect("every audited builtin trait has a bootstrap binding")
+            else {
+                panic!("builtin trait binding must be unambiguous");
+            };
+            assert_eq!(binding.reference, trait_.id.0);
+            assert_eq!(binding.arity, trait_.params.len());
+            assert_eq!(
+                binding
+                    .methods
+                    .iter()
+                    .map(|method| method.id)
+                    .collect::<Vec<_>>(),
+                trait_
+                    .methods
+                    .iter()
+                    .map(|method| method.id)
+                    .collect::<Vec<_>>()
+            );
+        }
     }
 }

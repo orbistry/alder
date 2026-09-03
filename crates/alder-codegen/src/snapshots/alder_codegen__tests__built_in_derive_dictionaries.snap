@@ -1,0 +1,121 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "#[derive(Show, Ord, Hash, Json)]\npub enum Status { Ready, Failed(String) }\n"
+---
+import { $compareDerived, $equalDerived, $hashDerived, $jsonDecodeDerived, $jsonEncodeDerived, $showDerived } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, {
+		"Ready": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		"Failed": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [undefined]
+		}
+	});
+};
+Object["freeze"]($dict$Eq$0);
+const $c_Status_Ready = Object["freeze"]({ "$": "Ready" });
+function $c_Status_Failed($a0) {
+	return {
+		"$": "Failed",
+		"_0": $a0
+	};
+}
+const $dict$Show$0 = {};
+$dict$Show$0["show"] = ($a0) => {
+	return $showDerived($a0, {
+		"Ready": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		"Failed": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [undefined]
+		}
+	});
+};
+Object["freeze"]($dict$Show$0);
+const $dict$Ord$0 = {};
+$dict$Ord$0["$super0"] = $dict$Eq$0;
+$dict$Ord$0["compare"] = ($a0, $a1) => {
+	const $ordering = $compareDerived($a0, $a1, {
+		"Ready": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		"Failed": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [undefined]
+		}
+	});
+	return $ordering < 0 ? { "$": "Less" } : $ordering > 0 ? { "$": "Greater" } : { "$": "Equal" };
+};
+Object["freeze"]($dict$Ord$0);
+const $dict$Hash$0 = {};
+$dict$Hash$0["hash"] = ($a0) => {
+	return $hashDerived($a0, "alder://app/main.mjs::Status", {
+		"Ready": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		"Failed": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [undefined]
+		}
+	});
+};
+Object["freeze"]($dict$Hash$0);
+const $dict$Json$0 = {};
+$dict$Json$0["encode"] = ($a0) => {
+	return $jsonEncodeDerived($a0, {
+		"Ready": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		"Failed": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [undefined]
+		}
+	});
+};
+$dict$Json$0["decode"] = ($a0) => {
+	return $jsonDecodeDerived($a0, {
+		"Ready": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		"Failed": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [undefined]
+		}
+	});
+};
+Object["freeze"]($dict$Json$0);
+export { $c_Status_Failed, $c_Status_Ready, $dict$Eq$0, $dict$Hash$0, $dict$Json$0, $dict$Ord$0, $dict$Show$0 };

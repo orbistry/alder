@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/markup/mod.rs
-description: "<button onClick={fn() deleteUser(props.id)}>Delete</button>"
+description: "<button onClick={() -> deleteUser(props.id)}>Delete</button>"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 60,
+            column: 61,
         },
     },
     value: Markup(
@@ -56,7 +56,7 @@ Located {
                                         },
                                         end: Position {
                                             line: 1,
-                                            column: 43,
+                                            column: 44,
                                         },
                                     },
                                     value: Lambda(
@@ -67,11 +67,11 @@ Located {
                                                 region: Region {
                                                     start: Position {
                                                         line: 1,
-                                                        column: 23,
+                                                        column: 24,
                                                     },
                                                     end: Position {
                                                         line: 1,
-                                                        column: 43,
+                                                        column: 44,
                                                     },
                                                 },
                                                 value: Call {
@@ -79,11 +79,11 @@ Located {
                                                         region: Region {
                                                             start: Position {
                                                                 line: 1,
-                                                                column: 23,
+                                                                column: 24,
                                                             },
                                                             end: Position {
                                                                 line: 1,
-                                                                column: 33,
+                                                                column: 34,
                                                             },
                                                         },
                                                         value: Var(
@@ -95,11 +95,11 @@ Located {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 1,
-                                                                    column: 34,
+                                                                    column: 35,
                                                                 },
                                                                 end: Position {
                                                                     line: 1,
-                                                                    column: 42,
+                                                                    column: 43,
                                                                 },
                                                             },
                                                             value: Access {
@@ -107,11 +107,11 @@ Located {
                                                                     region: Region {
                                                                         start: Position {
                                                                             line: 1,
-                                                                            column: 34,
+                                                                            column: 35,
                                                                         },
                                                                         end: Position {
                                                                             line: 1,
-                                                                            column: 39,
+                                                                            column: 40,
                                                                         },
                                                                     },
                                                                     value: Var(
@@ -122,11 +122,11 @@ Located {
                                                                     region: Region {
                                                                         start: Position {
                                                                             line: 1,
-                                                                            column: 40,
+                                                                            column: 41,
                                                                         },
                                                                         end: Position {
                                                                             line: 1,
-                                                                            column: 42,
+                                                                            column: 43,
                                                                         },
                                                                     },
                                                                     value: "id",
@@ -148,11 +148,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 45,
+                                column: 46,
                             },
                             end: Position {
                                 line: 1,
-                                column: 51,
+                                column: 52,
                             },
                         },
                         value: Text(

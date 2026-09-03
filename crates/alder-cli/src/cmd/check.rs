@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use alder_driver::{Database, FileSystemSource, Project, build, build_graph};
+use alder_driver::{
+    BuildMode, Database, FileSystemSource, Project, build_graph, build_with_dependencies,
+};
 use miette::{IntoDiagnostic, Result};
 use tokio::sync::Mutex;
 
@@ -36,22 +38,27 @@ impl Args {
         }
 
         eprintln!("Building dependency graph...");
+        let dependencies = project
+            .build_dependencies(&mut *db.lock().await, &modules, false)
+            .await
+            .into_diagnostic()?;
         let graph = build_graph(db.clone(), &modules).await.into_diagnostic()?;
 
         eprintln!("Dependency order: {} modules", graph.order.len());
 
         eprintln!("Compiling...");
-        let result = build(db, &graph).await;
+        let result = build_with_dependencies(db, &graph, BuildMode::Check, dependencies).await;
 
         eprintln!();
         if !result.warnings.is_empty() {
             for warning in &result.warnings {
-                eprintln!("Warning: {}", warning);
+                eprintln!("{:?}", miette::Report::new(warning.clone()));
             }
             eprintln!();
         }
 
         if result.is_success() {
+            super::build::persist_semantic_artifacts(&project.root, &result)?;
             eprintln!(
                 "Success! Compiled {} modules ({} declarations)",
                 result.total,
@@ -70,12 +77,24 @@ impl Args {
             eprintln!("  {} succeeded", result.success);
             eprintln!("  {} failed", result.failed);
 
-            for (uri, module_result) in &result.modules {
-                if let alder_driver::ModuleResult::Failed { message } = module_result {
-                    eprintln!();
-                    eprintln!("Error in {}:", uri.path());
-                    eprintln!("  {}", message);
-                }
+            let mut diagnostics = result
+                .modules
+                .values()
+                .filter_map(|module_result| match module_result {
+                    alder_driver::ModuleResult::Failed { diagnostics } => Some(diagnostics.iter()),
+                    alder_driver::ModuleResult::Success { .. } => None,
+                })
+                .flatten()
+                .collect::<Vec<_>>();
+            diagnostics.sort_by(|left, right| {
+                left.source()
+                    .name()
+                    .cmp(right.source().name())
+                    .then_with(|| left.message().cmp(right.message()))
+            });
+            for diagnostic in diagnostics {
+                eprintln!();
+                eprintln!("{:?}", miette::Report::new(diagnostic.clone()));
             }
 
             std::process::exit(1);

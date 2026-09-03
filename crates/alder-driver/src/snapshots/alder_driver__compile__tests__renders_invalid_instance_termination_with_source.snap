@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] {\n    fn display(value: a) String\n}\nimpl Display[a] where a: Display {\n    fn display(value: a) String { \"recursive\" }\n}\n"
+---
+alder::trait::invalid_termination
+
+  × instance prerequisite `Display` does not structurally decrease
+   ╭─[/project/src/main.ald:4:1]
+ 3 │     }
+ 4 │ ╭─▶ impl Display[a] where a: Display {
+ 5 │ │       fn display(value: a) String { "recursive" }
+ 6 │ ├─▶ }
+   · ╰──── this prerequisite does not get structurally smaller
+   ╰────
+  help: make every recursive instance prerequisite structurally smaller than
+        its impl head

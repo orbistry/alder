@@ -1,7 +1,263 @@
 pub fn main() {}
 
+trait Display[a] {
+    fn display(value: a) String
+
+    fn render(value: a) String {
+        display(value)
+    }
+}
+
+impl Display[Number] {
+    fn display(value: Number) String {
+        "number"
+    }
+}
+
+fn describe(value: a) String where a: Display {
+    display(value)
+}
+
+fn invoke_display(function: fn(Number) String) String {
+    function(42)
+}
+
+fn recursive_left(value: a) String where a: Display {
+    recursive_right(value)
+}
+
+fn recursive_right(value: a) String where a: Display {
+    if true { display(value) } else { recursive_left(value) }
+}
+
+fn generic_equal(left: a, right: a) Bool where a: Eq {
+    left == right
+}
+
+fn generic_add(left: a, right: a) a where a: Num {
+    left + right
+}
+
+fn generic_sub(left: a, right: a) a where a: Num {
+    left - right
+}
+
+fn generic_mul(left: a, right: a) a where a: Num {
+    left * right
+}
+
+fn generic_div(left: a, right: a) a where a: Num {
+    left / right
+}
+
+fn generic_rem(left: a, right: a) a where a: Num {
+    left % right
+}
+
+fn generic_negate(value: a) a where a: Num {
+    -value
+}
+
+fn numeric_equal(left: a, right: a) Bool where a: Num {
+    left == right
+}
+
+fn generic_greater(left: a, right: a) Bool where a: Ord {
+    left > right
+}
+
+fn generic_less(left: a, right: a) Bool where a: Ord {
+    left < right
+}
+
+fn generic_less_equal(left: a, right: a) Bool where a: Ord {
+    left <= right
+}
+
+fn generic_greater_equal(left: a, right: a) Bool where a: Ord {
+    left >= right
+}
+
+fn ordered_equal(left: a, right: a) Bool where a: Ord {
+    left == right
+}
+
+fn ordered_not_equal(left: a, right: a) Bool where a: Ord {
+    left != right
+}
+
+trait Same[a] {
+    fn same(left: a, right: a) Bool
+}
+
+trait Ranked[a] where a: Same {
+    fn ranked(left: a, right: a) Bool
+}
+
+trait Scored[a] where a: Ranked {
+    fn score(value: a) Number
+}
+
+impl Same[Number] {
+    fn same(left: Number, right: Number) Bool { left == right }
+}
+
+impl Ranked[Number] {
+    fn ranked(left: Number, right: Number) Bool { left < right }
+}
+
+impl Scored[Number] {
+    fn score(value: Number) Number { value }
+}
+
+fn ranked_same(left: a, right: a) Bool where a: Ranked {
+    same(left, right)
+}
+
+fn scored_same(left: a, right: a) Bool where a: Scored {
+    same(left, right)
+}
+
+enum Maybe[a] {
+    None,
+    Some(a),
+}
+
+#[derive(Show, Ord, Hash, Json)]
+enum Phase {
+    Beta,
+    Alpha,
+}
+
+#[derive(Show, Hash, Json)]
+enum Phantom[a, b] {
+    Present(a),
+}
+
+#[derive(Json)]
+enum Event {
+    Data { count: Number, label: String },
+}
+
+impl Functor[Maybe] {
+    fn map(value: Maybe[a], transform: fn(a) b) Maybe[b] {
+        match value {
+            Maybe::None => Maybe::None,
+            Maybe::Some(item) => Maybe::Some(transform(item)),
+        }
+    }
+}
+
+fn mapped_result() Result[Number, String] {
+    let initial: Result[Number, String] = Result.ok(41)
+    map(initial, (value) -> { value + 1 })
+}
+
 test "arithmetic works" {
     assert 1 + 1 == 2
+    assert generic_equal(1, 1)
+    assert generic_add(20, 22) == 42
+    assert generic_sub(44, 2) == 42
+    assert generic_mul(6, 7) == 42
+    assert generic_div(84, 2) == 42
+    assert generic_rem(86, 44) == 42
+    assert generic_negate(42) == -42
+    assert numeric_equal(42, 42)
+    assert generic_greater(2, 1)
+    assert generic_less(1, 2)
+    assert generic_less_equal(1, 1)
+    assert generic_less_equal(1, 2)
+    assert generic_greater_equal(2, 2)
+    assert generic_greater_equal(2, 1)
+    assert ordered_equal(1, 1)
+    assert ordered_not_equal(1, 2)
+    assert ranked_same(42, 42)
+    assert scored_same(42, 42)
+    assert [1, 2, 3] == [1, 2, 3]
+    let some: Option[Number] = Option.some(42)
+    let also_some: Option[Number] = Option.some(42)
+    assert some == also_some
+    let ok: Result[Number, String] = Result.ok(42)
+    let also_ok: Result[Number, String] = Result.ok(42)
+    assert ok == also_ok
+    let record = { name: "Alder", scores: [40, 2] }
+    let same_record = { name: "Alder", scores: [40, 2] }
+    let different_record = { name: "Elm", scores: [40, 2] }
+    assert record == same_record
+    assert record != different_record
+}
+
+test "trait dictionaries dispatch" {
+    assert describe(1) == "number"
+    assert invoke_display(describe) == "number"
+    assert invoke_display(display) == "number"
+    assert render(1) == "number"
+    assert recursive_left(1) == "number"
+}
+
+test "higher-kinded trait dictionaries dispatch" {
+    assert Maybe::Some(1) == Maybe::Some(1)
+    let mapped = map(Maybe::Some(41), (value) -> { value + 1 })
+    assert match mapped {
+        Maybe::Some(value) => value == 42,
+        Maybe::None => false,
+    }
+    let mapped_array = map([40, 41], (value) -> { value + 1 })
+    assert mapped_array == [41, 42]
+    let option: Option[Number] = Option.some(41)
+    let mapped_option: Option[Number] = map(option, (value) -> { value + 1 })
+    assert mapped_option == Option.some(42)
+    let pure_option: Option[Number] = pure(42)
+    assert pure_option == Option.some(42)
+    let option_function: Option[fn(Number) Number] = Option.some((value) -> { value + 1 })
+    let applied_option: Option[Number] = apply(option_function, option)
+    assert applied_option == Option.some(42)
+    let bound_option: Option[Number] = flat_map(option, (value) -> { Option.some(value + 1) })
+    assert bound_option == Option.some(42)
+    let traversed: Option[Array[Number]] = traverse([40, 41], (value) -> {
+        Option.some(value + 1)
+    })
+    assert traversed == Option.some([41, 42])
+    let first: Option[Number] = next([42])
+    assert first == Option.some(42)
+    let result = mapped_result()?
+    assert result == 42
+}
+
+test "derived dictionaries execute" {
+    assert Phase::Alpha == Phase::Alpha
+    assert Phase::Beta < Phase::Alpha
+    assert show(Phase::Alpha) == "Alpha"
+    let phase_hash: BigInt = hash(Phase::Alpha)
+    assert phase_hash == hash(Phase::Alpha)
+    let phantom: Phantom[Number, fn(Number) Number] = Phantom::Present(42)
+    assert show(phantom) == "Present(42)"
+    let phantom_hash: BigInt = hash(phantom)
+    assert phantom_hash == hash(phantom)
+    assert encode(phantom) == "{\"tag\":\"Present\",\"fields\":[42]}"
+    let decoded_phantom: Phantom[Number, fn(Number) Number] = decode(encode(phantom))?
+    assert decoded_phantom == phantom
+    assert encode(Phase::Beta) == "{\"tag\":\"Beta\",\"fields\":[]}"
+    let decoded = decode(encode(Phase::Beta))?
+    assert decoded == Phase::Beta
+    let event = Event::Data { count: 2, label: "ok" }
+    assert encode(event) == "{\"tag\":\"Data\",\"value\":{\"count\":2,\"label\":\"ok\"}}"
+    let decoded_event: Event = decode(encode(event))?
+    assert encode(decoded_event) == encode(event)
+    let expected = Phase::Alpha
+    assert match Phase::Alpha {
+        ^expected => true,
+        _ => false,
+    }
+}
+
+test "hash uses stable typed byte streams" {
+    assert hash(0) == 925820630484784613n
+    assert hash(-0) == hash(0)
+    assert hash(1n) == 10135776685960610562n
+    assert hash(-1n) == 9113591822692154507n
+    assert hash("") == 10978417736201556339n
+    assert hash("A") == 8346277732176037193n
 }
 
 tests {

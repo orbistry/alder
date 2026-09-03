@@ -1,0 +1,11 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn less_than(left: a, right: a) -> Bool where a: Ord {\n    left < right\n}\n"
+---
+function $v_less_than($dict0, $a0, $a1) {
+	let $l0_left = $a0;
+	let $l1_right = $a1;
+	const $t0 = $l0_left;
+	return $dict0["compare"]($t0, $l1_right)["$"] === "Less";
+}
+export { $v_less_than as less_than };

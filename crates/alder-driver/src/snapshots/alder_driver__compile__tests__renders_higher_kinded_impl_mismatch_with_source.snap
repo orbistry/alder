@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Mapper[f] {\n    fn map(value: f[a], transform: fn(a) b) f[b]\n}\n\nimpl Mapper[Number] {\n    fn map(value: Number, transform: fn(a) b) Number { value }\n}\n"
+---
+alder::trait::kind_mismatch
+
+  × trait argument 1 must be a one-argument type constructor, but this is a
+  │ concrete type
+   ╭─[/project/src/main.ald:5:1]
+ 4 │     
+ 5 │ ╭─▶ impl Mapper[Number] {
+ 6 │ │       fn map(value: Number, transform: fn(a) b) Number { value }
+ 7 │ ├─▶ }
+   · ╰──── this trait argument has the wrong kind
+   ╰────
+  help: use a type constructor with the arity required by the trait

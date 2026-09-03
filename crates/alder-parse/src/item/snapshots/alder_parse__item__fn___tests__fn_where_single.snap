@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "fn describe(xs: Array[a]) -> String where a: Show {\n    xs |> Array.map(show) |> String.join(\", \")\n}\n"
+description: "fn describe(xs: Array[a]) String where a: Show {\n    xs |> Array.map(show) |> String.join(\", \")\n}\n"
 ---
 FnDecl {
     name: Located {
@@ -92,11 +92,11 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 30,
+                    column: 27,
                 },
                 end: Position {
                     line: 1,
-                    column: 36,
+                    column: 33,
                 },
             },
             value: Named {
@@ -106,11 +106,11 @@ FnDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 30,
+                                    column: 27,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 36,
+                                    column: 33,
                                 },
                             },
                             value: "String",
@@ -127,11 +127,11 @@ FnDecl {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 43,
+                        column: 40,
                     },
                     end: Position {
                         line: 1,
-                        column: 44,
+                        column: 41,
                     },
                 },
                 value: "a",
@@ -143,11 +143,11 @@ FnDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 46,
+                                    column: 43,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 50,
+                                    column: 47,
                                 },
                             },
                             value: "Show",
@@ -162,7 +162,7 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 51,
+                    column: 48,
                 },
                 end: Position {
                     line: 3,

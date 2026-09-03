@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "fn load(id: Id) -> Result[Profile] {           // inferred: [:not_found(Id) | :timeout | r]\n    let user = find(id)?          // rows merge through ?\n    let prefs = fetchPrefs(user).await?\n    Ok({ user, prefs })\n}\n"
+description: "fn load(id: Id) Result[Profile] {           // inferred: [:not_found(Id) | :timeout | r]\n    let user = find(id)?          // rows merge through ?\n    let prefs = fetchPrefs(user).await?\n    Ok({ user, prefs })\n}\n"
 ---
 Module {
     items: [
@@ -92,11 +92,11 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 20,
+                                        column: 17,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 35,
+                                        column: 32,
                                     },
                                 },
                                 value: Named {
@@ -106,11 +106,11 @@ Module {
                                                 region: Region {
                                                     start: Position {
                                                         line: 1,
-                                                        column: 20,
+                                                        column: 17,
                                                     },
                                                     end: Position {
                                                         line: 1,
-                                                        column: 26,
+                                                        column: 23,
                                                     },
                                                 },
                                                 value: "Result",
@@ -122,11 +122,11 @@ Module {
                                             region: Region {
                                                 start: Position {
                                                     line: 1,
-                                                    column: 27,
+                                                    column: 24,
                                                 },
                                                 end: Position {
                                                     line: 1,
-                                                    column: 34,
+                                                    column: 31,
                                                 },
                                             },
                                             value: Named {
@@ -136,11 +136,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 1,
-                                                                    column: 27,
+                                                                    column: 24,
                                                                 },
                                                                 end: Position {
                                                                     line: 1,
-                                                                    column: 34,
+                                                                    column: 31,
                                                                 },
                                                             },
                                                             value: "Profile",
@@ -160,7 +160,7 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 36,
+                                        column: 33,
                                     },
                                     end: Position {
                                         line: 5,
@@ -480,11 +480,11 @@ Module {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 48,
+                    column: 45,
                 },
                 end: Position {
                     line: 1,
-                    column: 92,
+                    column: 89,
                 },
             },
             text: "// inferred: [:not_found(Id) | :timeout | r]",

@@ -1,0 +1,41 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "#[derive(Json)]\npub enum Config {\n    Config { name: String, note?: String },\n}\n"
+---
+import { $equalDerived, $jsonDecodeDerived, $jsonEncodeDerived } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, { "Config": {
+		"record": true,
+		"fields": ["name", "note"],
+		"optional": ["note"],
+		"dictionaries": [undefined, undefined]
+	} });
+};
+Object["freeze"]($dict$Eq$0);
+function $c_Config_Config(name, note) {
+	return {
+		"$": "Config",
+		"name": name,
+		"note": note
+	};
+}
+const $dict$Json$0 = {};
+$dict$Json$0["encode"] = ($a0) => {
+	return $jsonEncodeDerived($a0, { "Config": {
+		"record": true,
+		"fields": ["name", "note"],
+		"optional": ["note"],
+		"dictionaries": [undefined, undefined]
+	} });
+};
+$dict$Json$0["decode"] = ($a0) => {
+	return $jsonDecodeDerived($a0, { "Config": {
+		"record": true,
+		"fields": ["name", "note"],
+		"optional": ["note"],
+		"dictionaries": [undefined, undefined]
+	} });
+};
+Object["freeze"]($dict$Json$0);
+export { $c_Config_Config, $dict$Eq$0, $dict$Json$0 };

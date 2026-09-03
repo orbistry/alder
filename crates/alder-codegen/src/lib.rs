@@ -94,7 +94,23 @@ enum Import {
 }
 
 pub fn emit_module(module: &Module<'_>, options: EmitOptions) -> Result<EmittedModule, Error> {
-    let generated = oxc_backend::emit_module_ast(module, options)?;
+    emit_module_with_solution(module, None, options)
+}
+
+pub fn emit_solved_module(
+    module: &Module<'_>,
+    solved: &alder_solve::SolveOutput<'_>,
+    options: EmitOptions,
+) -> Result<EmittedModule, Error> {
+    emit_module_with_solution(module, Some(solved), options)
+}
+
+fn emit_module_with_solution(
+    module: &Module<'_>,
+    solved: Option<&alder_solve::SolveOutput<'_>>,
+    options: EmitOptions,
+) -> Result<EmittedModule, Error> {
+    let generated = oxc_backend::emit_module_ast(module, solved, options)?;
     Ok(EmittedModule {
         module_id: generated.module_id,
         ast: generated.ast,
@@ -128,10 +144,15 @@ fn contains_await_expr(expression: &Located<Expr<'_>>) -> bool {
     match &expression.value {
         Expr::Await(_) => true,
         Expr::Array(items) | Expr::Tuple(items) => items.iter().any(|item| contains_await_expr(item)),
-        Expr::Call { function, arguments } => contains_await_expr(function) || arguments.iter().any(|arg| contains_await_expr(arg)),
+        Expr::Call {
+            function,
+            arguments,
+            ..
+        } => contains_await_expr(function) || arguments.iter().any(|arg| contains_await_expr(arg)),
         Expr::Access { record, .. } => contains_await_expr(record),
         Expr::Index { target, index } => contains_await_expr(target) || contains_await_expr(index),
-        Expr::Try(expr) | Expr::Pin(expr) | Expr::Negate(expr) | Expr::Not(expr) | Expr::State(expr) => contains_await_expr(expr),
+        Expr::Try(expr) | Expr::Pin(expr) | Expr::Not(expr) | Expr::State(expr) => contains_await_expr(expr),
+        Expr::Negate { expr, .. } => contains_await_expr(expr),
         Expr::Binop { left, right, .. } => contains_await_expr(left) || contains_await_expr(right),
         Expr::Block(block) | Expr::Loop(block) => contains_await_block(block),
         Expr::If { branches, final_else } => branches.iter().any(|branch| contains_await_expr(branch.condition) || contains_await_block(branch.body)) || final_else.is_some_and(contains_await_block),
@@ -140,13 +161,16 @@ fn contains_await_expr(expression: &Located<Expr<'_>>) -> bool {
         Expr::Record(fields) | Expr::RecordConstructor { fields, .. } => fields.iter().any(|field| match field { RecordField::Field { value, .. } | RecordField::Spread(value) => contains_await_expr(value) }),
         Expr::TaggedTemplate { tag, parts } => contains_await_expr(tag) || parts.iter().any(|part| matches!(part, alder_ast::TemplatePart::Expr(expr) if contains_await_expr(expr))),
         Expr::Template(parts) => parts.iter().any(|part| matches!(part, alder_ast::TemplatePart::Expr(expr) if contains_await_expr(expr))),
-        Expr::Lambda { .. } | Expr::Number { .. } | Expr::BigInt(_) | Expr::Str(_) | Expr::Bool(_) | Expr::Unit | Expr::Var(_) | Expr::Constructor(_) | Expr::Tag { .. } | Expr::TupleAccess { .. } | Expr::Style(_) | Expr::Query(_) | Expr::Markup(_) | Expr::MacroCall { .. } => false,
+        Expr::Lambda { .. } | Expr::Number { .. } | Expr::BigInt(_) | Expr::Str(_) | Expr::Bool(_) | Expr::Unit | Expr::Var { .. } | Expr::Constructor(_) | Expr::Tag { .. } | Expr::TupleAccess { .. } | Expr::Style(_) | Expr::Query(_) | Expr::Markup(_) | Expr::MacroCall { .. } => false,
     }
 }
 
 fn module_specifier(module: ModuleId<'_>) -> String {
     let mut result = match module.package {
         PackageId::Application => "alder://app".to_owned(),
+        PackageId::ApplicationMember(member) => {
+            format!("alder://app/{}", escaped(member))
+        }
         PackageId::Builtin => "alder://std".to_owned(),
         PackageId::Named(package) => format!(
             "alder://pkg/{}/{}",
@@ -216,6 +240,34 @@ fn escaped(value: &str) -> String {
 }
 
 #[cfg(test)]
+macro_rules! assert_emit_snapshot {
+    ($source:literal) => {{
+        let source = indoc::indoc!($source);
+        let generated = emit(source);
+        insta::with_settings!({
+            description => source,
+            omit_expression => true,
+        }, {
+            insta::assert_snapshot!(generated);
+        });
+    }};
+}
+
+#[cfg(test)]
+macro_rules! assert_solved_emit_snapshot {
+    ($source:literal) => {{
+        let source = indoc::indoc!($source);
+        let generated = emit_solved(source);
+        insta::with_settings!({
+            description => source,
+            omit_expression => true,
+        }, {
+            insta::assert_snapshot!(generated);
+        });
+    }};
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use alder_ast::{PackageId, ResolvedImport};
@@ -243,50 +295,338 @@ mod tests {
             .code()
     }
 
+    fn emit_solved(source: &str) -> String {
+        let bump = Bump::new();
+        let source = bump.alloc_str(source);
+        let parsed = alder_parse::parse_module(&bump, source).expect("source parses");
+        let canonical = alder_can::canonicalize(
+            &bump,
+            alder_can::Context {
+                home: ModuleId {
+                    package: PackageId::Application,
+                    path: &["main"],
+                },
+                imports: &[] as &[ResolvedImport<'_>],
+                interfaces: &[],
+            },
+            &parsed,
+        )
+        .expect("source canonicalizes");
+        let constraints = alder_constrain::constrain(&bump, canonical.module);
+        let traits = alder_solve::TraitDatabase::build(&bump, canonical.module, &[]);
+        let solved = alder_solve::solve(&bump, &constraints, &traits).expect("module solves");
+        emit_solved_module(canonical.module, &solved, EmitOptions::default())
+            .expect("module emits")
+            .code()
+    }
+
     #[test]
     fn function_and_block_lifting() {
-        insta::assert_snapshot!(emit("pub fn answer() { let x = 40\n x + 2 }"));
+        assert_emit_snapshot! {r#"
+            pub fn answer() {
+                let x = 40
+                x + 2
+            }
+        "#};
     }
     #[test]
     fn enum_representation() {
-        insta::assert_snapshot!(emit(
+        assert_emit_snapshot!(
             "pub enum Shape { Point, Circle(Number), Rect { width: Number, height: Number } }"
-        ));
+        );
     }
     #[test]
     fn match_emission() {
-        insta::assert_snapshot!(emit(
-            "enum Maybe[a] { Nothing, Just(a) }\npub fn unwrap(value) { match value { Maybe::Just(x) => x, Maybe::Nothing => 0 } }"
-        ));
+        assert_emit_snapshot! {r#"
+            enum Maybe[a] { Nothing, Just(a) }
+            pub fn unwrap(value) { match value { Maybe::Just(x) => x, Maybe::Nothing => 0 } }
+        "#};
     }
     #[test]
     fn pin_pattern_evaluates_once() {
-        insta::assert_snapshot!(emit(
-            "fn expected() { 1 }\npub fn same(value) { match value { ^expected() => true, _ => false } }"
-        ));
+        assert_emit_snapshot! {r#"
+            fn expected() { 1 }
+            pub fn same(value) { match value { ^expected() => true, _ => false } }
+        "#};
     }
     #[test]
     fn if_and_short_circuit_lifting() {
-        insta::assert_snapshot!(emit(
+        assert_emit_snapshot!(
             "pub fn choose(flag, fallback) { if flag && fallback() { 1 } else { 2 } }"
-        ));
+        );
     }
     #[test]
     fn records_arrays_and_indexing() {
-        insta::assert_snapshot!(emit(
-            "pub fn first(name) { let value = { name: name, scores: [10, 20] }\n value.scores[0] }"
-        ));
+        assert_emit_snapshot! {r#"
+            pub fn first(name) {
+                let value = { name: name, scores: [10, 20] }
+                value.scores[0]
+            }
+        "#};
     }
     #[test]
     fn mutable_loop_emission() {
-        insta::assert_snapshot!(emit(
-            "pub fn sum() { let mut total = 0\n for value in [1, 2] { total += value }\n total }"
-        ));
+        assert_emit_snapshot! {r#"
+            pub fn sum() {
+                let mut total = 0
+                for value in [1, 2] { total += value }
+                total
+            }
+        "#};
     }
     #[test]
     fn result_extern_is_guarded() {
-        insta::assert_snapshot!(emit(
-            "#[extern(\"library\", \"parse\")]\npub fn parse(value: String) -> Result[Number, String]"
-        ));
+        assert_emit_snapshot! {r#"
+            #[extern("library", "parse")]
+            pub fn parse(value: String) Result[Number, String]
+        "#};
+    }
+
+    #[test]
+    fn pipe_forwards_into_first_call_argument() {
+        assert_solved_emit_snapshot! {r#"
+            fn subtract(left: Number, right: Number) Number { left - right }
+            pub fn answer() Number { 44 |> subtract(2) }
+        "#};
+    }
+
+    #[test]
+    fn pipe_placeholder_controls_call_argument() {
+        assert_solved_emit_snapshot! {r#"
+            fn subtract(left: Number, right: Number) Number { left - right }
+            pub fn answer() Number { 2 |> subtract(44, _) }
+        "#};
+    }
+
+    #[test]
+    fn pipe_evaluates_left_before_callee_and_existing_arguments() {
+        assert_solved_emit_snapshot! {r#"
+            fn left() Number { 40 }
+            fn right() Number { 2 }
+            fn factory() fn(Number, Number) Number {
+                (a: Number, b: Number) Number -> a + b
+            }
+            pub fn answer() Number { left() |> factory()(right()) }
+        "#};
+    }
+
+    #[test]
+    fn trait_dictionary_passing() {
+        assert_solved_emit_snapshot! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            fn describe(value: a) String where a: Show { show(value) }
+            pub fn main() String { describe(1) }
+        "#};
+    }
+
+    #[test]
+    fn solved_primitive_equality_is_strict() {
+        assert_solved_emit_snapshot!("pub fn same() Bool { 1 == 2 }");
+    }
+
+    #[test]
+    fn solved_record_equality_uses_field_dictionaries() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn same(
+                left: { name: String, score: Number },
+                right: { name: String, score: Number },
+            ) Bool {
+                left == right
+            }
+        "#};
+    }
+
+    #[test]
+    fn generic_ordering_uses_the_compare_result_tag() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn less_than(left: a, right: a) Bool where a: Ord {
+                left < right
+            }
+        "#};
+    }
+
+    #[test]
+    fn prerequisite_dictionary_factory() {
+        assert_solved_emit_snapshot! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            impl Show[Array[a]] where a: Show {
+                fn show(value: Array[a]) String { "array" }
+            }
+            pub fn main() String { show([1]) }
+        "#};
+    }
+
+    #[test]
+    fn default_method_dictionary_entry() {
+        assert_solved_emit_snapshot! {r#"
+            trait Show[a] {
+                fn show(value: a) String
+                fn render(value: a) String { show(value) }
+            }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            pub fn main() String { render(1) }
+        "#};
+    }
+
+    #[test]
+    fn mutually_recursive_defaults_use_the_selected_dictionary() {
+        assert_solved_emit_snapshot! {r#"
+            trait Alternate[a] {
+                fn first(value: a) String { second(value) }
+                fn second(value: a) String { first(value) }
+            }
+            impl Alternate[Number] {}
+            pub fn render(value: Number) String { first(value) }
+        "#};
+    }
+
+    #[test]
+    fn method_local_dictionaries_follow_predicate_order() {
+        assert_solved_emit_snapshot! {r#"
+            trait Render[a] {
+                fn render(value: a, first: b, second: c) String
+                    where b: Show, c: Eq + Show
+            }
+            impl Render[Number] {
+                fn render(value: Number, first: b, second: c) String
+                    where b: Show, c: Eq + Show
+                {
+                    show(first)
+                }
+            }
+            pub fn main() String { render(0, "first", true) }
+        "#};
+    }
+
+    #[test]
+    fn projection_equalities_do_not_add_dictionary_arguments() {
+        assert_solved_emit_snapshot! {r#"
+            trait Source[a] {
+                type Item
+                fn next(value: a) Option[Item]
+            }
+            fn take(value: a) Option[Number]
+                where a: Source, a.Item == Number
+            {
+                next(value)
+            }
+        "#};
+    }
+
+    #[test]
+    fn built_in_derive_dictionaries() {
+        assert_emit_snapshot! {r#"
+            #[derive(Show, Ord, Hash, Json)]
+            pub enum Status { Ready, Failed(String) }
+        "#};
+    }
+
+    #[test]
+    fn derived_json_marks_optional_record_fields() {
+        assert_emit_snapshot! {r#"
+            #[derive(Json)]
+            pub enum Config {
+                Config { name: String, note?: String },
+            }
+        "#};
+    }
+
+    #[test]
+    fn derived_show_uses_record_payload_source_order() {
+        assert_emit_snapshot! {r#"
+            #[derive(Show)]
+            pub enum Status {
+                Meta { code: Number, note: String },
+            }
+        "#};
+    }
+
+    #[test]
+    fn derived_show_uses_resolved_payload_dictionary() {
+        assert_solved_emit_snapshot! {r#"
+            enum Secret { Secret }
+            impl Show[Secret] {
+                fn show(value: Secret) String { "redacted" }
+            }
+            #[derive(Show)]
+            enum Wrapped { Wrapped(Secret) }
+            pub fn main() String { show(Wrapped::Wrapped(Secret::Secret)) }
+        "#};
+    }
+
+    #[test]
+    fn derived_generic_payload_uses_prerequisite_dictionary() {
+        assert_solved_emit_snapshot! {r#"
+            #[derive(Show)]
+            enum Box[a] { Box(a) }
+            pub fn render(value: Box[String]) String { show(value) }
+        "#};
+    }
+
+    #[test]
+    fn error_group_ord_preserves_declaration_order() {
+        assert_solved_emit_snapshot! {r#"
+            #[derive(Ord)]
+            pub error Failure { :later, :first(Number) }
+        "#};
+    }
+
+    #[test]
+    fn recursive_derived_dictionary_references_its_emitted_binding() {
+        assert_solved_emit_snapshot! {r#"
+            #[derive(Show)]
+            pub enum Chain { End, Link(Number, Chain) }
+
+            pub fn render(value: Chain) String { show(value) }
+        "#};
+    }
+
+    #[test]
+    fn compound_assignment_uses_the_selected_num_dictionary() {
+        assert_solved_emit_snapshot! {r#"
+            enum Token { Token }
+            impl Ord[Token] {
+                fn compare(left: Token, right: Token) Ordering { Ordering::Equal }
+            }
+            impl Num[Token] {
+                fn add(left: Token, right: Token) Token { right }
+                fn sub(left: Token, right: Token) Token { right }
+                fn mul(left: Token, right: Token) Token { right }
+                fn div(left: Token, right: Token) Token { right }
+                fn rem(left: Token, right: Token) Token { right }
+                fn negate(value: Token) Token { value }
+            }
+            pub fn update() Token {
+                let mut value = Token::Token
+                value += Token::Token
+                value
+            }
+        "#};
+    }
+
+    #[test]
+    fn indexed_dictionary_assignment_evaluates_its_place_once() {
+        assert_solved_emit_snapshot! {r#"
+            enum Token { Token }
+            impl Ord[Token] {
+                fn compare(left: Token, right: Token) Ordering { Ordering::Equal }
+            }
+            impl Num[Token] {
+                fn add(left: Token, right: Token) Token { right }
+                fn sub(left: Token, right: Token) Token { right }
+                fn mul(left: Token, right: Token) Token { right }
+                fn div(left: Token, right: Token) Token { right }
+                fn rem(left: Token, right: Token) Token { right }
+                fn negate(value: Token) Token { value }
+            }
+            fn next_index() Number { 0 }
+            pub fn update() Token {
+                let mut values = [Token::Token]
+                values[next_index()] += Token::Token
+                values[0]
+            }
+        "#};
     }
 }

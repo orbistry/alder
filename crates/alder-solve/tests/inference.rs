@@ -1,11 +1,35 @@
 //! End-to-end Alder inference tests: parse → canonicalize → constrain → solve.
 
-use alder_ast::{Annotation, FieldPresence, ModuleId, PackageId, RowExtension, Type};
+use alder_ast::{Annotation, FieldPresence, Kind, ModuleId, PackageId, RowExtension, Type};
 use alder_can::{Annotations, Context};
-use alder_constrain::{Error, UnionFind};
+use alder_constrain::{Error, ErrorKind};
 use alder_region::Located;
 use bumpalo::Bump;
 use indoc::indoc;
+
+fn solve_input<'a>(
+    bump: &'a Bump,
+    input: &str,
+) -> Result<alder_solve::SolveOutput<'a>, Vec<alder_solve::SolveError<'a>>> {
+    let src = bump.alloc_str(input);
+    let parsed = alder_parse::parse_module(bump, src).expect("source parses");
+    let canonical = alder_can::canonicalize(
+        bump,
+        Context {
+            home: ModuleId {
+                package: PackageId::Application,
+                path: &["Main"],
+            },
+            imports: &[],
+            interfaces: &[],
+        },
+        &parsed,
+    )
+    .expect("source canonicalizes");
+    let constraints = alder_constrain::constrain(bump, canonical.module);
+    let database = alder_solve::TraitDatabase::build(bump, canonical.module, &[]);
+    alder_solve::solve(bump, &constraints, &database)
+}
 
 fn infer<'a>(bump: &'a Bump, input: &str) -> Result<Annotations<'a>, Vec<Error>> {
     let src = bump.alloc_str(input);
@@ -23,9 +47,8 @@ fn infer<'a>(bump: &'a Bump, input: &str) -> Result<Annotations<'a>, Vec<Error>>
         &module,
     )
     .expect("source canonicalizes");
-    let mut uf = UnionFind::new();
-    let constraints = alder_constrain::constrain(bump, &mut uf, can_result.module);
-    alder_solve::run(bump, &mut uf, &constraints)
+    let constraints = alder_constrain::constrain(bump, can_result.module);
+    alder_solve::run(bump, &constraints)
 }
 
 fn render_annotations(annotations: &Annotations<'_>) -> String {
@@ -38,10 +61,18 @@ fn render_annotations(annotations: &Annotations<'_>) -> String {
 
 fn render_annotation(annotation: &Annotation<'_>) -> String {
     let typ = render_type(annotation.typ);
-    if annotation.free_vars.is_empty() {
+    if annotation.params.is_empty() {
         typ
     } else {
-        format!("forall {}. {typ}", annotation.free_vars.join(", "))
+        format!(
+            "forall {}. {typ}",
+            annotation
+                .params
+                .iter()
+                .map(|param| param.name.value)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
@@ -68,8 +99,32 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
+        Type::Partial { constructor, slots } => format!(
+            "{}[{}]",
+            constructor.name,
+            slots
+                .iter()
+                .map(|slot| match slot {
+                    alder_ast::TypeSlot::Hole(_) => "_".to_owned(),
+                    alder_ast::TypeSlot::Fixed(typ) => render_type(typ),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Projection(projection) => format!(
+            "{}[{}]::{}",
+            projection.trait_ref.trait_.0.name,
+            projection
+                .trait_ref
+                .args
+                .iter()
+                .map(|arg| render_type(arg))
+                .collect::<Vec<_>>()
+                .join(", "),
+            projection.assoc.name
+        ),
         Type::Fn { params, ret } => format!(
-            "fn({}) -> {}",
+            "fn({}) {}",
             params
                 .iter()
                 .map(|param| render_type(param))
@@ -113,6 +168,879 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
     }
 }
 
+#[test]
+fn direct_trait_method_selects_the_unique_impl() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            fn render() String { show(1) }
+        "#},
+    )
+    .expect("trait obligation resolves");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(method),
+        } if method.name == "show"
+            && matches!(dictionaries.as_slice(), [alder_solve::Evidence::Impl { .. }])
+    )));
+}
+
+#[test]
+fn declared_bound_supplies_trait_method_evidence() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            fn describe(value: a) String where a: Show { show(value) }
+        "#},
+    )
+    .expect("declared bound resolves");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, .. }
+            if matches!(dictionaries.as_slice(), [alder_solve::Evidence::Param(0)])
+    )));
+}
+
+#[test]
+fn implementation_body_uses_its_current_dictionary() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] {
+                fn show(value: Number) String { show(value) }
+            }
+        "#},
+    )
+    .expect("recursive method dispatch uses the current dictionary");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(_),
+        } if matches!(dictionaries.as_slice(), [alder_solve::Evidence::SelfDictionary])
+    )));
+}
+
+#[test]
+fn implementation_prerequisite_is_available_to_method_bodies() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Array[a]] where a: Show {
+                fn show(values: Array[a]) String { show(values[0]) }
+            }
+        "#},
+    )
+    .expect("the factory prerequisite is in the method evidence scope");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(_),
+        } if matches!(dictionaries.as_slice(), [alder_solve::Evidence::Param(0)])
+    )));
+}
+
+#[test]
+fn default_body_can_dispatch_through_its_current_dictionary() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] {
+                fn show(value: a) String
+                fn render(value: a) String { show(value) }
+            }
+        "#},
+    )
+    .expect("default methods receive the current dictionary");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(method),
+        } if method.name == "show"
+            && matches!(dictionaries.as_slice(), [alder_solve::Evidence::SelfDictionary])
+    )));
+}
+
+#[test]
+fn default_body_can_use_a_superclass_dictionary() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Equal[a] { fn equal(left: a, right: a) Bool }
+            trait Ordered[a] where a: Equal {
+                fn compare(left: a, right: a) Number
+                fn same(left: a, right: a) Bool { equal(left, right) }
+            }
+        "#},
+    )
+    .expect("default methods receive direct superclass slots");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(method),
+        } if method.name == "equal"
+            && matches!(dictionaries.as_slice(), [alder_solve::Evidence::Super(0)])
+    )));
+}
+
+#[test]
+fn generic_bounds_expose_transitive_superclass_dictionaries() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Equal[a] { fn equal(left: a, right: a) Bool }
+            trait Ordered[a] where a: Equal { fn less(left: a, right: a) Bool }
+            trait Ranked[a] where a: Ordered { fn rank(value: a) Number }
+            fn same(left: a, right: a) Bool where a: Ranked { equal(left, right) }
+        "#},
+    )
+    .expect("Ranked exposes Equal through its Ordered superclass");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference {
+            dictionaries,
+            method: Some(method),
+        } if method.name == "equal"
+            && matches!(
+                dictionaries.as_slice(),
+                [alder_solve::Evidence::ParamSuperPath { param: 0, path }]
+                    if path == &[0, 0]
+            )
+    )));
+}
+
+#[test]
+fn implementation_must_supply_each_superclass_dictionary() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Equal[a] { fn equal(left: a, right: a) Bool }
+            trait Ordered[a] where a: Equal {
+                fn less(left: a, right: a) Bool
+            }
+            impl Ordered[Number] {
+                fn less(left: Number, right: Number) Bool { left < right }
+            }
+        "#},
+    )
+    .expect_err("an Ordered implementation without Equal cannot construct its dictionary");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+            trait_, subject, ..
+        }) if trait_.0.name == "Equal" && *subject == "Number"
+    )));
+}
+
+#[test]
+fn implementation_records_resolved_superclass_evidence() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Equal[a] { fn equal(left: a, right: a) Bool }
+            trait Ordered[a] where a: Equal {
+                fn less(left: a, right: a) Bool
+            }
+            impl Equal[Number] {
+                fn equal(left: Number, right: Number) Bool { left == right }
+            }
+            impl Ordered[Number] {
+                fn less(left: Number, right: Number) Bool { left < right }
+            }
+        "#},
+    )
+    .expect("the sibling Equal implementation satisfies Ordered's superclass");
+    assert!(
+        solved
+            .impl_superclasses
+            .iter()
+            .any(|((implementation, slot), evidence)| {
+                *slot == 0
+                    && matches!(
+                        evidence,
+                        alder_solve::Evidence::Impl { impl_id, .. }
+                            if impl_id != implementation
+                    )
+            })
+    );
+}
+
+#[test]
+fn declared_bounds_are_preserved_in_the_binding_abi() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            fn describe(value: a) String where a: Show { show(value) }
+        "#},
+    )
+    .expect("declared bound resolves");
+    let (name, binding) = solved
+        .bindings
+        .iter()
+        .find(|(name, _)| name.name == "describe")
+        .expect("describe has elaboration metadata");
+    assert_eq!(binding.abi, alder_solve::BindingAbi::DirectFunction);
+    assert_eq!(binding.dictionary_params.len(), 1);
+    assert_eq!(binding.dictionary_params[0].trait_.0.name, "Show");
+    assert_eq!(solved.schemes[name].trait_predicates.len(), 1);
+}
+
+#[test]
+fn constrained_binding_references_instantiate_their_predicates() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            fn describe(value: a) String where a: Show { show(value) }
+            fn render() String { describe(1) }
+        "#},
+    )
+    .expect("the constrained callee selects its dictionary");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::DirectCall {
+            dictionaries,
+            target: Some(alder_solve::DirectTarget::Binding(name)),
+            ..
+        } if matches!(dictionaries.as_slice(), [alder_solve::Evidence::Impl { .. }])
+            && name.name == "describe"
+    )));
+}
+
+#[test]
+fn missing_trait_instance_is_structured() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            fn render() String { show("nope") }
+        "#},
+    )
+    .expect_err("missing instance must fail");
+    assert!(matches!(
+        &errors[0],
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+            trait_, subject, ..
+        }) if trait_.0.name == "Show" && *subject == "String"
+    ));
+}
+
+#[test]
+fn associated_equality_normalizes_a_generic_method_result() {
+    let bump = Bump::new();
+    let output = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) Item
+            }
+            fn increment(value: i) Number
+                where i: Iterator, i.Item == Number
+            {
+                next(value) + 1
+            }
+        "#},
+    )
+    .expect("the declared projection equality should normalize Item to Number");
+    let increment = output
+        .schemes
+        .iter()
+        .find(|(name, _)| name.name == "increment")
+        .expect("increment has an inferred scheme")
+        .1;
+    assert_eq!(increment.projection_equalities.len(), 1);
+    assert_eq!(
+        increment.projection_equalities[0].projection.assoc.name,
+        "Item"
+    );
+}
+
+#[test]
+fn conflicting_associated_equalities_are_structured() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) Item
+            }
+            fn impossible(value: i) ()
+                where i: Iterator, i.Item == Number, i.Item == String
+            {}
+        "#},
+    )
+    .expect_err("one associated type cannot equal Number and String");
+    assert!(matches!(
+        &errors[0],
+        alder_solve::SolveError::Core(Error {
+            kind: ErrorKind::AssocTypeMismatch {
+                assoc,
+                expected,
+                actual,
+            },
+            ..
+        }) if assoc == "Item" && expected == "Number" && actual == "String"
+    ));
+}
+
+#[test]
+fn an_impl_binding_normalizes_a_concrete_method_result() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            enum Counter { Counter }
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) Item
+            }
+            impl Iterator[Counter] {
+                type Item = Number
+                fn next(value: Counter) Number { 1 }
+            }
+            fn increment(value: Counter) Number { next(value) + 1 }
+        "#},
+    )
+    .expect("the selected impl should normalize Item to Number");
+}
+
+#[test]
+fn impl_method_must_match_the_substituted_associated_type() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            enum Counter { Counter }
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) Item
+            }
+            impl Iterator[Counter] {
+                type Item = Number
+                fn next(value: Counter) String { "wrong" }
+            }
+        "#},
+    )
+    .expect_err("the method result must equal the impl's Item binding");
+    assert!(matches!(
+        &errors[0],
+        alder_solve::SolveError::Core(Error {
+            kind: ErrorKind::Mismatch { actual, expected },
+            ..
+        }) if (actual == "String" && expected == "Number")
+            || (actual == "Number" && expected == "String")
+    ));
+}
+
+#[test]
+fn cyclic_associated_binding_is_rejected() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            enum Counter { Counter }
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) Item
+            }
+            impl Iterator[Counter] {
+                type Item = Item
+                fn next(value: Counter) Item { next(value) }
+            }
+        "#},
+    )
+    .expect_err("an associated type cannot contain its own projection");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::ProjectionCycle {
+            chain,
+            ..
+        }) if chain.iter().map(|assoc| assoc.name).collect::<Vec<_>>() == ["Item"]
+    )));
+}
+
+#[test]
+fn indirect_associated_binding_cycle_is_rejected() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            enum Counter { Counter }
+            trait Pair[i] {
+                type Left
+                type Right
+            }
+            impl Pair[Counter] {
+                type Left = Right
+                type Right = Left
+            }
+        "#},
+    )
+    .expect_err("associated bindings cannot form an indirect cycle");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::ProjectionCycle {
+            chain,
+            ..
+        }) if chain.iter().map(|assoc| assoc.name).collect::<Vec<_>>() == ["Left", "Right"]
+    )));
+}
+
+#[test]
+fn trait_method_projection_equalities_are_instantiated_at_use_sites() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            trait NumericIterator[i] {
+                type Item
+                fn next(value: i) Item where i.Item == Number
+            }
+            fn increment(value: i) Number where i: NumericIterator {
+                next(value) + 1
+            }
+        "#},
+    )
+    .expect("method scheme equalities should remain active after instantiation");
+}
+
+#[test]
+fn overlapping_trait_instances_are_rejected_before_search() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "one" } }
+            impl Show[Number] { fn show(value: Number) String { "two" } }
+            fn render() String { show(1) }
+        "#},
+    )
+    .expect_err("overlapping candidates must fail coherence");
+    assert!(matches!(
+        &errors[0],
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl {
+            trait_, ..
+        }) if trait_.0.name == "Show"
+    ));
+}
+
+#[test]
+fn foreign_trait_for_foreign_subject_is_an_orphan() {
+    let bump = Bump::new();
+    let foreign_module = ModuleId {
+        package: PackageId::Named(alder_ast::PackageName {
+            author: "vendor",
+            project: "traits",
+        }),
+        path: &["Foreign"],
+    };
+    let trait_id = alder_ast::TraitId(alder_ast::QualifiedName {
+        module: foreign_module,
+        name: "ForeignEq",
+    });
+    let implementation_module = ModuleId {
+        package: PackageId::Application,
+        path: &["Main"],
+    };
+    let number = bump.alloc(Located::at_zero(Type::Named {
+        reference: alder_ast::QualifiedName {
+            module: ModuleId {
+                package: PackageId::Builtin,
+                path: &[],
+            },
+            name: "Number",
+        },
+        args: &[],
+    }));
+    let trait_ref = alder_ast::TraitRef {
+        trait_: trait_id,
+        args: bump.alloc_slice_copy(&[number as alder_ast::Node<'_, Type<'_>>]),
+    };
+    let interface = alder_ast::Interface {
+        home: foreign_module,
+        values: &[],
+        types: &[],
+        enums: &[],
+        traits: bump.alloc_slice_copy(&[alder_ast::InterfaceTrait {
+            exported_as: "ForeignEq",
+            id: trait_id,
+            params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
+                name: Located::at_zero("a"),
+                kind: Kind::Type,
+            }]),
+            superclasses: &[],
+            associated_types: &[],
+            methods: &[],
+        }]),
+        instances: bump.alloc_slice_copy(&[alder_ast::InterfaceImpl {
+            id: alder_ast::ImplId {
+                module: implementation_module,
+                origin: alder_ast::ImplOrigin::Source { item_ordinal: 0 },
+            },
+            source_uri: Some("file:///dependency/Foreign.ald"),
+            region: Some(alder_region::Region::one()),
+            params: &[],
+            trait_ref,
+            trait_predicates: &[],
+            projection_equalities: &[],
+            assoc_bindings: &[],
+            dictionary_symbol: "$dict$ForeignEq$0",
+            dictionary_kind: alder_ast::DictionaryKind::Singleton,
+            methods: &[],
+        }]),
+        modules: &[],
+        private_names: &[],
+    };
+    let module = alder_ast::Module {
+        id: implementation_module,
+        imports: &[],
+        items: &[],
+        value_sccs: &[],
+    };
+    let interfaces = bump.alloc_slice_copy(&[interface]);
+    let database = alder_solve::TraitDatabase::build(&bump, &module, interfaces);
+    let errors = database.validate(&bump);
+    assert!(matches!(
+        &errors[0],
+        alder_solve::CoherenceError::OrphanImpl {
+            trait_, subject, ..
+        } if trait_.0.name == "ForeignEq" && *subject == "Number"
+    ));
+}
+
+#[test]
+fn generic_and_concrete_heads_overlap() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[a] { fn show(value: a) String { "any" } }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+        "#},
+    )
+    .expect_err("generic and concrete heads overlap");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl {
+            trait_, ..
+        }) if trait_.0.name == "Show"
+    )));
+}
+
+#[test]
+fn non_decreasing_instance_prerequisite_is_rejected() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[a] where a: Show { fn show(value: a) String { "loop" } }
+        "#},
+    )
+    .expect_err("the prerequisite must be structurally smaller than the head");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::InvalidTermination {
+            prerequisite, ..
+        }) if prerequisite.0.name == "Show"
+    )));
+}
+
+#[test]
+fn structurally_decreasing_container_instance_is_accepted() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Array[a]] where a: Show {
+                fn show(value: Array[a]) String { "array" }
+            }
+        "#},
+    )
+    .expect("the element prerequisite is smaller than the container head");
+}
+
+#[test]
+fn superclass_cycles_are_rejected() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait A[a] where a: B { fn a(value: a) a }
+            trait B[a] where a: A { fn b(value: a) a }
+        "#},
+    )
+    .expect_err("superclass graphs must be acyclic");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::SuperclassCycle {
+            traits,
+        }) if traits.len() == 2
+            && traits.iter().any(|trait_| trait_.0.name == "A")
+            && traits.iter().any(|trait_| trait_.0.name == "B")
+    )));
+}
+
+#[test]
+fn numeric_operators_select_number_and_bigint_intrinsics() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn number() Number { 1 + 2 }
+            fn bigint() BigInt { 1n + 2n }
+        "#},
+    )
+    .expect("numeric instances resolve");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Operator {
+            dictionary: alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::NumNumber)
+        }
+    )));
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Operator {
+            dictionary: alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::NumBigInt)
+        }
+    )));
+}
+
+#[test]
+fn builtin_hash_and_num_bounds_expose_their_superclasses() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn hash_equal(left: a, right: a) Bool where a: Hash { left == right }
+            fn num_equal(left: a, right: a) Bool where a: Num { left == right }
+            fn num_greater(left: a, right: a) Bool where a: Num { left > right }
+        "#},
+    )
+    .expect("Hash and Num dictionaries expose their declared superclasses");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Operator {
+            dictionary: alder_solve::Evidence::ParamSuper { param: 0, slot: 0 },
+        }
+    )));
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Operator {
+            dictionary: alder_solve::Evidence::ParamSuper { param: 0, slot: 1 },
+        }
+    )));
+}
+
+#[test]
+fn functions_have_no_structural_eq_instance() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            fn identity(value: a) a { value }
+            fn bad() Bool { identity == identity }
+        "#},
+    )
+    .expect_err("function equality must fail");
+    assert!(matches!(
+        &errors[0],
+        alder_solve::SolveError::Trait(
+            alder_solve::SolveTraitError::MissingInstance { trait_, .. }
+                | alder_solve::SolveTraitError::UnsatisfiedBound { trait_, .. }
+        ) if trait_.0.name == "Eq"
+    ));
+}
+
+#[test]
+fn closed_records_have_fieldwise_structural_eq_evidence() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn same(
+                left: { name: String, score: Number },
+                right: { name: String, score: Number },
+            ) Bool {
+                left == right
+            }
+        "#},
+    )
+    .expect("closed records have structural equality when every field does");
+
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Operator {
+            dictionary: alder_solve::Evidence::StructuralEq {
+                shape: alder_solve::StructuralEqShape::Record(fields),
+                fields: dictionaries,
+            },
+        } if fields == &["name", "score"] && dictionaries.len() == 2
+    )));
+}
+
+#[test]
+fn open_record_rows_have_no_structural_eq_instance() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            fn same(left: { r | name: String }, right: { r | name: String }) Bool {
+                left == right
+            }
+        "#},
+    )
+    .expect_err("an open row can hide fields without Eq instances");
+
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(
+            alder_solve::SolveTraitError::MissingInstance { trait_, .. }
+                | alder_solve::SolveTraitError::UnsatisfiedBound { trait_, .. }
+        ) if trait_.0.name == "Eq"
+    )));
+}
+
+#[test]
+fn trait_errors_preserve_structured_missing_evidence() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Display[a] { fn display(value: a) String }
+            fn missing(value: Number) String { display(value) }
+            fn generic(value: a) String { display(value) }
+        "#},
+    )
+    .expect_err("both calls require unavailable Display evidence");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+            trait_,
+            subject: "Number",
+            ..
+        }) if trait_.0.name == "Display"
+    )));
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::UnsatisfiedBound {
+            trait_,
+            ..
+        }) if trait_.0.name == "Display"
+    )));
+}
+
+#[test]
+fn nested_instance_failure_retains_the_obligation_chain() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            fn missing() String {
+                show([(value: Number) Number -> value])
+            }
+        "#},
+    )
+    .expect_err("Show cannot be derived for an array of functions");
+    let chain = errors
+        .iter()
+        .find_map(|error| match error {
+            alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+                chain,
+                ..
+            }) => Some(*chain),
+            _ => None,
+        })
+        .expect("the nested missing instance is retained");
+    assert_eq!(chain.len(), 2);
+    assert_eq!(chain[0].trait_.0.name, "Show");
+    assert_eq!(chain[0].subject, "Array[fn(Number) Number]");
+    assert!(chain[0].required_by.is_none());
+    assert_eq!(chain[1].trait_.0.name, "Show");
+    assert_eq!(chain[1].subject, "fn(Number) Number");
+    assert!(chain[1].required_by.is_some());
+}
+
+#[test]
+fn builtin_containers_require_equality_for_every_type_argument() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn same_arrays(left: Array[a], right: Array[a]) Bool where a: Eq {
+                left == right
+            }
+            fn same_options(left: Option[a], right: Option[a]) Bool where a: Eq {
+                left == right
+            }
+            fn same_results(left: Result[a, e], right: Result[a, e]) Bool
+                where a: Eq, e: Eq {
+                left == right
+            }
+        "#},
+    )
+    .expect("container equality is structural when all contained types implement Eq");
+    assert_eq!(
+        solved
+            .uses
+            .values()
+            .filter(|action| matches!(
+                action,
+                alder_solve::UseAction::Operator {
+                    dictionary: alder_solve::Evidence::StructuralEq { .. },
+                }
+            ))
+            .count(),
+        3
+    );
+
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            fn invalid(left: Array[fn(Number) Number], right: Array[fn(Number) Number]) Bool {
+                left == right
+            }
+        "#},
+    )
+    .expect_err("container equality cannot hide a function-valued element");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+            trait_, subject, ..
+        }) if trait_.0.name == "Eq" && subject.starts_with("fn(")
+    )));
+}
+
 macro_rules! assert_inference_snapshot {
     ($source:expr) => {{
         let source = indoc!($source);
@@ -135,9 +1063,496 @@ macro_rules! assert_inference_error_snapshot {
     }};
 }
 
+macro_rules! assert_solve_error_snapshot {
+    ($source:expr) => {{
+        let source = indoc!($source);
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source).expect_err("solving fails");
+        insta::with_settings!({ description => source, omit_expression => true }, {
+            insta::assert_debug_snapshot!(errors);
+        });
+    }};
+}
+
+#[test]
+fn cross_trait_non_decreasing_instance_prerequisite_is_rejected() {
+    assert_solve_error_snapshot! {r#"
+        trait Display[a] { fn display(value: a) String }
+        trait Render[a] { fn render(value: a) String }
+
+        impl Display[a] where a: Render {
+            fn display(value: a) String { "display" }
+        }
+    "#};
+}
+
+#[test]
+fn explicit_equality_overlaps_automatic_enum_equality() {
+    assert_solve_error_snapshot! {r#"
+        enum Token { Token }
+
+        impl Eq[Token] {
+            fn eq(left: Token, right: Token) Bool { true }
+        }
+    "#};
+}
+
+#[test]
+fn opaque_types_may_define_explicit_equality() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            #[extern]
+            type Secret
+
+            impl Eq[Secret] {
+                fn eq(left: Secret, right: Secret) Bool { true }
+            }
+        "#},
+    )
+    .expect("opaque types have no automatic Eq and may define their own implementation");
+}
+
 #[test]
 fn polymorphic_identity() {
     assert_inference_snapshot!("fn identity(value) { value }");
+}
+
+#[test]
+fn partial_annotations_share_variables_with_inferred_positions() {
+    assert_inference_snapshot! {r#"
+        fn apply(value: a, transform) { transform(value) }
+    "#};
+}
+
+#[test]
+fn unresolved_local_trait_obligations_are_not_generalized() {
+    assert_solve_error_snapshot! {r#"
+        fn ambiguous() {
+            let equal = (left, right) -> { left == right }
+            ()
+        }
+    "#};
+}
+
+#[test]
+fn dependency_scc_generalizes_before_earlier_source_use() {
+    let bump = Bump::new();
+    let annotations = infer(
+        &bump,
+        indoc! {r#"
+            fn pair() { (identity(1), identity("x")) }
+            fn identity(value) { value }
+        "#},
+    )
+    .unwrap();
+
+    assert_eq!(
+        render_annotations(&annotations),
+        "identity: forall a. fn(a) a\npair: fn() (Number, String)"
+    );
+}
+
+#[test]
+fn mutable_top_level_bindings_do_not_generalize() {
+    assert_inference_error_snapshot! {r#"
+        let mut identity = (value) -> { value }
+        fn number() { identity(1) }
+        fn text() { identity("text") }
+    "#};
+}
+
+#[test]
+fn generalization_subtracts_mutable_environment_variables() {
+    assert_inference_error_snapshot! {r#"
+        let mut identity = (value) -> { value }
+        fn forward(value) { identity(value) }
+        fn number() { forward(1) }
+        fn text() { forward("text") }
+    "#};
+}
+
+#[test]
+fn local_let_bindings_remain_monomorphic() {
+    assert_inference_error_snapshot! {r#"
+        fn invalid() {
+            let identity = (value) -> { value }
+            let number = identity(1)
+            identity("text")
+        }
+    "#};
+}
+
+#[test]
+fn mutually_recursive_scc_is_unified_before_generalization() {
+    let bump = Bump::new();
+    let annotations = infer(
+        &bump,
+        indoc! {r#"
+            fn first(value) { second(value) }
+            fn second(value) { first(value) }
+        "#},
+    )
+    .unwrap();
+
+    assert_eq!(
+        render_annotations(&annotations),
+        "first: forall a, b. fn(a) b\nsecond: forall a, b. fn(a) b"
+    );
+}
+
+#[test]
+fn mutually_recursive_calls_receive_preseeded_dictionary_arguments() {
+    let bump = Bump::new();
+    let output = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Display[a] { fn display(value: a) String }
+            impl Display[Number] {
+                fn display(value: Number) String { "number" }
+            }
+            fn first(value: a) String where a: Display { second(value) }
+            fn second(value: a) String where a: Display {
+                if true { display(value) } else { first(value) }
+            }
+            fn main() String { first(1) }
+        "#},
+    )
+    .expect("recursive peers should see each other's declared predicates");
+    assert!(output.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::DirectCall {
+            dictionaries,
+            target: Some(alder_solve::DirectTarget::Binding(name)),
+            ..
+        } if name.name == "second" && dictionaries.len() == 1
+    )));
+}
+
+#[test]
+fn three_member_predicate_fixpoint_is_source_order_independent() {
+    fn solve_order(source: &str) {
+        let bump = Bump::new();
+        let output = solve_input(&bump, source).expect("all recursive peers share the bound ABI");
+        let calls = output
+            .uses
+            .values()
+            .filter_map(|action| match action {
+                alder_solve::UseAction::DirectCall {
+                    dictionaries,
+                    target: Some(alder_solve::DirectTarget::Binding(name)),
+                    ..
+                } if matches!(name.name, "first" | "second" | "third") => {
+                    Some((name.name, dictionaries.len()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(calls.len(), 3);
+        assert!(calls.iter().all(|(_, dictionaries)| *dictionaries == 1));
+    }
+
+    solve_order(indoc! {r#"
+        trait Display[a] { fn display(value: a) String }
+        fn first(value: a) String where a: Display { second(value) }
+        fn second(value: a) String where a: Display { third(value) }
+        fn third(value: a) String where a: Display {
+            if true { display(value) } else { first(value) }
+        }
+    "#});
+    solve_order(indoc! {r#"
+        trait Display[a] { fn display(value: a) String }
+        fn third(value: a) String where a: Display {
+            if true { display(value) } else { first(value) }
+        }
+        fn first(value: a) String where a: Display { second(value) }
+        fn second(value: a) String where a: Display { third(value) }
+    "#});
+}
+
+#[test]
+fn recursive_peers_cannot_hide_mismatched_bounds() {
+    assert_solve_error_snapshot! {r#"
+        trait Display[a] { fn display(value: a) String }
+        trait Hashable[a] { fn hash(value: a) BigInt }
+
+        fn first(value: a) String where a: Display { second(value) }
+        fn second(value: a) String where a: Hashable { first(value) }
+    "#};
+}
+
+#[test]
+fn higher_kinded_application_is_preserved_and_specialized() {
+    let bump = Bump::new();
+    let annotations = infer(
+        &bump,
+        indoc! {r#"
+            fn adapt(value: f[a]) f[a] { value }
+            fn specialize(value: Result[Number, String]) { adapt(value) }
+        "#},
+    )
+    .unwrap();
+
+    assert_eq!(
+        render_annotations(&annotations),
+        concat!(
+            "adapt: forall a, b. fn(a[b]) a[b]\n",
+            "specialize: fn(Result[Number, String]) Result[Number, String]"
+        )
+    );
+    let adapt = annotations
+        .iter()
+        .find_map(|(name, annotation)| (name.name == "adapt").then_some(*annotation))
+        .unwrap();
+    assert!(matches!(adapt.params[0].kind, Kind::Arrow { .. }));
+    assert!(matches!(adapt.params[1].kind, Kind::Type));
+}
+
+#[test]
+fn higher_kinded_unification_recovers_partial_result() {
+    assert_inference_snapshot! {r#"
+        fn adapt(value: f[a]) f[a] { value }
+        fn specialize(value: Result[Number, String]) { adapt(value) }
+    "#};
+}
+
+#[test]
+fn higher_kinded_unification_preserves_two_hole_order() {
+    assert_inference_snapshot! {r#"
+        fn adapt(value: f[a, b], first: a, second: b) f[a, b] { value }
+        fn specialize(value: Result[Number, String]) {
+            adapt(value, 1, "second")
+        }
+    "#};
+}
+
+#[test]
+fn higher_kinded_unification_rejects_inconsistent_partial_sections() {
+    assert_inference_error_snapshot! {r#"
+        fn combine(left: f[a], right: f[b]) f[a] { left }
+        fn invalid(
+            left: Result[Number, String],
+            right: Result[Bool, Bool],
+        ) {
+            combine(left, right)
+        }
+    "#};
+}
+
+#[test]
+fn higher_kinded_unification_rejects_an_occurs_cycle() {
+    assert_inference_error_snapshot! {r#"
+        fn impossible(value: f[a]) a { value }
+    "#};
+}
+
+#[test]
+fn higher_kinded_unification_expands_transparent_aliases() {
+    assert_inference_snapshot! {r#"
+        type Wrapped[a, e] = Result[a, e]
+
+        fn adapt(value: f[a]) f[a] { value }
+        fn specialize(value: Wrapped[Number, String]) { adapt(value) }
+    "#};
+}
+
+#[test]
+fn builtin_functor_instances_cover_array_option_and_partial_result() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn array(value: Array[Number]) Array[Number] {
+                map(value, (item) -> { item + 1 })
+            }
+            fn option(value: Option[Number]) Option[Number] {
+                map(value, (item) -> { item + 1 })
+            }
+            fn result(value: Result[Number, String]) Result[Number, String] {
+                map(value, (item) -> { item + 1 })
+            }
+        "#},
+    )
+    .expect("all three first-party Functor instances resolve");
+    let mut found = [false; 3];
+    for action in solved.uses.values() {
+        let alder_solve::UseAction::Reference { dictionaries, .. } = action else {
+            continue;
+        };
+        match dictionaries.first() {
+            Some(alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::FunctorArray)) => {
+                found[0] = true;
+            }
+            Some(alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::FunctorOption)) => {
+                found[1] = true;
+            }
+            Some(alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::FunctorResult)) => {
+                found[2] = true;
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(found, [true, true, true]);
+}
+
+#[test]
+fn builtin_applicative_and_monad_instances_preserve_the_hkt_hierarchy() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn option_pure(value: Number) Option[Number] { pure(value) }
+            fn array_apply(
+                functions: Array[fn(Number) String],
+                values: Array[Number],
+            ) Array[String] { apply(functions, values) }
+            fn result_bind(value: Result[Number, String]) Result[String, String] {
+                flat_map(value, (item) -> { Result.ok("done") })
+            }
+            fn monad_map(value: f[Number]) f[Number] where f: Monad {
+                map(value, (item) -> { item + 1 })
+            }
+        "#},
+    )
+    .expect("Applicative and Monad instances resolve with transitive Functor evidence");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, .. }
+            if matches!(
+                dictionaries.first(),
+                Some(alder_solve::Evidence::Intrinsic(
+                    alder_solve::Intrinsic::ApplicativeOption
+                ))
+            )
+    )));
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, .. }
+            if matches!(
+                dictionaries.first(),
+                Some(alder_solve::Evidence::Intrinsic(
+                    alder_solve::Intrinsic::MonadResult
+                ))
+            )
+    )));
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, method: Some(method) }
+            if method.name == "map"
+                && matches!(
+                    dictionaries.as_slice(),
+                    [alder_solve::Evidence::ParamSuperPath { path, .. }]
+                        if path == &[0, 0]
+                )
+    )));
+}
+
+#[test]
+fn builtin_traversable_passes_method_level_applicative_evidence() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn traverse_array(value: Array[Number]) Option[Array[String]] {
+                traverse(value, (item) -> { Option.some("item") })
+            }
+            fn traverse_option(value: Option[Number]) Array[Option[String]] {
+                traverse(value, (item) -> { ["item"] })
+            }
+            fn traverse_result(value: Result[Number, String]) Option[Result[String, String]] {
+                traverse(value, (item) -> { Option.some("item") })
+            }
+        "#},
+    )
+    .expect("Traversable resolves both its subject and method-level Applicative instance");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, method: Some(method) }
+            if method.name == "traverse"
+                && dictionaries.len() == 2
+                && matches!(
+                    dictionaries[0],
+                    alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::TraversableArray)
+                )
+                && matches!(
+                    dictionaries[1],
+                    alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::ApplicativeOption)
+                )
+    )));
+}
+
+#[test]
+fn builtin_array_iterator_normalizes_its_item_projection() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn first(values: Array[Number]) Option[Number] { next(values) }
+            fn generic(value: i) Option[Number]
+                where i: Iterator, i.Item == Number
+            {
+                next(value)
+            }
+        "#},
+    )
+    .expect("Array's Iterator Item projection normalizes to its element type");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Reference { dictionaries, method: Some(method) }
+            if method.name == "next"
+                && matches!(
+                    dictionaries.as_slice(),
+                    [alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::IteratorArray)]
+                )
+    )));
+}
+
+#[test]
+fn repeated_higher_kinded_pattern_argument_is_rejected() {
+    let bump = Bump::new();
+    let errors = infer(
+        &bump,
+        indoc! {r#"
+            fn adapt(value: f[a, a]) f[a, a] { value }
+            fn specialize(value: Result[Number, Number]) { adapt(value) }
+        "#},
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        errors.as_slice(),
+        [Error {
+            kind: ErrorKind::UnsupportedHigherKindedUnification,
+            ..
+        }]
+    ));
+}
+
+#[test]
+fn concrete_type_cannot_fill_a_higher_kinded_trait_parameter() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Mapper[f] {
+                fn map(value: f[a], transform: fn(a) b) f[b]
+            }
+            impl Mapper[Number] {
+                fn map(value: Number, transform: fn(a) b) Number { value }
+            }
+        "#},
+    )
+    .expect_err("Number has kind Type, not Type -> Type");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::KindMismatch {
+            parameter: 0,
+            expected_arity: 1,
+            actual_arity: 0,
+            ..
+        })
+    )));
 }
 
 #[test]
@@ -163,20 +1578,27 @@ fn placeholder_lambda() {
 }
 
 #[test]
+fn pipe_forwards_into_first_call_argument() {
+    assert_inference_snapshot!(
+        "fn subtract(left: Number, right: Number) Number { left - right }\nlet answer = 44 |> subtract(2)"
+    );
+}
+
+#[test]
 fn optional_record_field_annotation() {
     assert_inference_snapshot!("fn name(user: { name?: String }) { user.name }");
 }
 
 #[test]
 fn mismatch_reports_new_type_syntax() {
-    assert_inference_error_snapshot!("fn bad() -> Number { \"nope\" }");
+    assert_inference_error_snapshot!("fn bad() Number { \"nope\" }");
 }
 
 #[test]
 fn mutable_loop_and_assignment() {
     assert_inference_snapshot!(
         r#"
-        fn sum(values: Array[Number]) -> Number {
+        fn sum(values: Array[Number]) Number {
             let mut total = 0
             for value in values {
                 total += value
@@ -191,7 +1613,7 @@ fn mutable_loop_and_assignment() {
 fn explicit_return_unifies_with_declared_result() {
     assert_inference_snapshot!(
         r#"
-        fn choose(flag: Bool) -> Number {
+        fn choose(flag: Bool) Number {
             if flag { return 1 }
             return 2
         }
@@ -214,7 +1636,7 @@ fn nested_optional_record_rows() {
 fn try_unwraps_result_value() {
     assert_inference_snapshot!(
         r#"
-        fn unwrap(value: Result[Number, String]) -> Result[Number, String] {
+        fn unwrap(value: Result[Number, String]) Result[Number, String] {
             Result.ok(value? + 1)
         }
     "#
@@ -225,7 +1647,7 @@ fn try_unwraps_result_value() {
 fn await_unwraps_task_inside_task_function() {
     assert_inference_snapshot!(
         r#"
-        fn wait() -> Task[()] {
+        fn wait() Task[()] {
             Task.sleep(1).await
         }
     "#
@@ -237,4 +1659,25 @@ fn constructor_call_arity_is_checked() {
     assert_inference_error_snapshot!(
         "enum Maybe[a] { Just(a) }\nfn invalid() { Maybe::Just(1, 2) }"
     );
+}
+
+#[test]
+fn derive_rejects_a_payload_without_the_required_instance() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            enum Payload { Payload }
+            #[derive(Show)]
+            enum Wrapper { Wrapper(Payload) }
+        "#},
+    )
+    .expect_err("Payload does not have a Show instance");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+            trait_,
+            ..
+        }) if trait_.0.name == "Show"
+    )));
 }

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] { fn display(value: a) String }\nimpl Display[Number] {\n    fn render(value: Number) String { \"number\" }\n}\n"
+---
+alder::canonicalize::unknown_impl_item
+
+  × method `render` is not a member of trait `Display`
+   ╭─[/project/src/main.ald:3:8]
+ 2 │ impl Display[Number] {
+ 3 │     fn render(value: Number) String { "number" }
+   ·        ───┬──
+   ·           ╰── reported here
+ 4 │ }
+   ╰────

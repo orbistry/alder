@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/trait_.rs
-description: "pub trait Show[a] {\n    fn show(value: a) -> String\n}\n"
+description: "pub trait Show[a] {\n    fn show(value: a) String\n}\n"
 ---
 Located {
     region: Region {
@@ -117,11 +117,11 @@ Located {
                                     region: Region {
                                         start: Position {
                                             line: 2,
-                                            column: 26,
+                                            column: 23,
                                         },
                                         end: Position {
                                             line: 2,
-                                            column: 32,
+                                            column: 29,
                                         },
                                     },
                                     value: Named {
@@ -131,11 +131,11 @@ Located {
                                                     region: Region {
                                                         start: Position {
                                                             line: 2,
-                                                            column: 26,
+                                                            column: 23,
                                                         },
                                                         end: Position {
                                                             line: 2,
-                                                            column: 32,
+                                                            column: 29,
                                                         },
                                                     },
                                                     value: "String",

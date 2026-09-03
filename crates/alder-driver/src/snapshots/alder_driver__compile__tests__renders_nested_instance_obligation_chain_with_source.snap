@@ -1,0 +1,21 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn main() String {\n    show([(value: Number) Number -> value])\n}\n"
+---
+alder::trait::missing_instance
+
+  × no implementation of `Show[fn(Number) Number]` was found
+   ╭─[/project/src/main.ald:2:5]
+ 1 │ fn main() String {
+ 2 │     show([(value: Number) Number -> value])
+   ·     ──┬─
+   ·       ╰── this use needs trait evidence
+ 3 │ }
+   ╰────
+  help: define an implementation of `Show[fn(Number) Number]`, or use a type
+        that already has one
+        
+        obligation chain:
+          Show[Array[fn(Number) Number]]
+          -> Show[fn(Number) Number], required by a standard-library
+        implementation

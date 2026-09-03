@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Convert[a, a] {\n    fn convert(value: a) a\n}\n"
+---
+alder::canonicalize::duplicate
+
+  × duplicate type parameter `a`
+   ╭─[/project/src/main.ald:1:18]
+ 1 │ trait Convert[a, a] {
+   ·               ┬  ┬
+   ·               │  ╰── reported here
+   ·               ╰── first declared here
+ 2 │     fn convert(value: a) a
+   ╰────

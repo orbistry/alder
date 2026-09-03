@@ -2,18 +2,31 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{
     Annotation, BinOp, BindingName, Block, Child, ChildBlock, ChildItem, Expr, FieldPresence,
-    ItemKind, Module, ModuleId, PackageId, Pattern, QualifiedName, RecordField, RowExtension, Stmt,
-    Type, ValueRef,
+    ImplId, ItemKind, MethodId, Module, ModuleId, PackageId, Pattern, QualifiedName, RecordField,
+    RowExtension, Stmt, TraitId, Type, TypeSlot, UseId, ValueRef,
 };
 use alder_can::Annotations;
-use alder_constrain::{Constraints, Error, ErrorKind, UnionFind};
+use alder_constrain::{Constraints, Error, ErrorKind, RequirementKind, RequirementSeed};
 use alder_region::{Located, Region};
 use bumpalo::Bump;
 
-#[derive(Clone, Debug)]
+use crate::{
+    BindingAbi, BindingEvidence, DerivedFieldKey, DirectTarget, Evidence, Intrinsic,
+    IntrinsicContainer, SolveError, SolveOutput, SolveTraitError, StructuralEqShape, TraitDatabase,
+    UseAction, builtin_trait_id,
+};
+
+#[derive(Clone, Debug, PartialEq)]
 enum Ty<'a> {
     Var(usize),
-    Named(QualifiedName<'a>, Vec<Ty<'a>>),
+    Con(QualifiedName<'a>),
+    App(Box<Ty<'a>>, Vec<Ty<'a>>),
+    Partial(QualifiedName<'a>, Vec<TySlot<'a>>),
+    Projection(
+        alder_ast::TraitId<'a>,
+        Vec<Ty<'a>>,
+        alder_ast::AssocTypeId<'a>,
+    ),
     Fn(Vec<Ty<'a>>, Box<Ty<'a>>),
     Unit,
     Tuple(Vec<Ty<'a>>),
@@ -22,10 +35,963 @@ enum Ty<'a> {
     Any,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+enum TySlot<'a> {
+    Hole(u16),
+    Fixed(Ty<'a>),
+}
+
+fn resolve_obligations<'a>(
+    bump: &'a Bump,
+    module: &'a Module<'a>,
+    database: &TraitDatabase<'a>,
+    result: InferenceResult<'a>,
+) -> Result<SolveOutput<'a>, Vec<SolveError<'a>>> {
+    let variable_names = result.variable_names;
+    let generalized_variables = result.generalized_variables;
+    let mut uses = BTreeMap::new();
+    let mut impl_superclasses = BTreeMap::new();
+    let mut errors = Vec::new();
+    for obligation in result.obligations {
+        let mut stack = Vec::new();
+        match resolve_predicate(
+            bump,
+            database,
+            &obligation.predicate,
+            &obligation.givens,
+            obligation.region,
+            &mut stack,
+            ResolutionStep {
+                variable_names: &variable_names,
+                generalized_variables: &generalized_variables,
+                required_by: None,
+            },
+        ) {
+            Ok(evidence) => match obligation.action {
+                ObligationAction::Reference(method) => match uses.entry(
+                    obligation
+                        .use_id
+                        .expect("reference obligations carry a use id"),
+                ) {
+                    std::collections::btree_map::Entry::Vacant(entry) => {
+                        entry.insert(UseAction::Reference {
+                            dictionaries: vec![evidence],
+                            method,
+                        });
+                    }
+                    std::collections::btree_map::Entry::Occupied(mut entry) => {
+                        if let UseAction::Reference { dictionaries, .. } = entry.get_mut() {
+                            dictionaries.push(evidence);
+                        }
+                    }
+                },
+                ObligationAction::Operator => {
+                    uses.insert(
+                        obligation
+                            .use_id
+                            .expect("operator obligations carry a use id"),
+                        UseAction::Operator {
+                            dictionary: evidence,
+                        },
+                    );
+                }
+                ObligationAction::Pin => {
+                    uses.insert(
+                        obligation.use_id.expect("pin obligations carry a use id"),
+                        UseAction::Pin {
+                            dictionary: evidence,
+                        },
+                    );
+                }
+                ObligationAction::CompoundAssign => {
+                    uses.insert(
+                        obligation
+                            .use_id
+                            .expect("compound assignment obligations carry a use id"),
+                        UseAction::CompoundAssign {
+                            dictionary: evidence,
+                        },
+                    );
+                }
+                ObligationAction::ImplSuperclass {
+                    implementation,
+                    slot,
+                } => {
+                    impl_superclasses.insert((implementation, slot), evidence);
+                }
+            },
+            Err(error) => errors.push(SolveError::Trait(error)),
+        }
+    }
+    for call in result.calls {
+        let action = match (call.callee_use, call.target) {
+            (Some(callee_use), target @ Some(_)) => {
+                let dictionaries = match uses.get(&callee_use) {
+                    Some(UseAction::Reference { dictionaries, .. }) => dictionaries.clone(),
+                    _ => Vec::new(),
+                };
+                UseAction::DirectCall {
+                    callee_use,
+                    dictionaries,
+                    target,
+                }
+            }
+            _ => UseAction::IndirectCall,
+        };
+        uses.insert(call.use_id, action);
+    }
+    let derived_fields = match resolve_derived_fields(bump, module, database) {
+        Ok(fields) => fields,
+        Err(mut derived_errors) => {
+            errors.append(&mut derived_errors);
+            BTreeMap::new()
+        }
+    };
+    if errors.is_empty() {
+        let schemes = result.annotations.clone();
+        Ok(SolveOutput {
+            annotations: result.annotations,
+            schemes,
+            bindings: result.bindings,
+            uses,
+            impl_superclasses,
+            derived_fields,
+        })
+    } else {
+        Err(errors)
+    }
+}
+
+fn resolve_derived_fields<'a>(
+    bump: &'a Bump,
+    module: &'a Module<'a>,
+    database: &TraitDatabase<'a>,
+) -> Result<BTreeMap<DerivedFieldKey<'a>, Evidence<'a>>, Vec<SolveError<'a>>> {
+    let mut resolved = BTreeMap::new();
+    let mut errors = Vec::new();
+    for item in module.items {
+        let ItemKind::Impl(implementation) = &item.value.kind else {
+            continue;
+        };
+        if implementation.synthetic.is_none() {
+            continue;
+        }
+        let mut vars = implementation
+            .params
+            .iter()
+            .enumerate()
+            .map(|(index, parameter)| (parameter.name.value, Ty::Var(index)))
+            .collect::<BTreeMap<_, _>>();
+        let self_predicate = predicate_from_ast_ref(implementation.trait_ref, &mut vars);
+        let mut givens = implementation
+            .trait_predicates
+            .iter()
+            .enumerate()
+            .map(|(index, predicate)| Given {
+                predicate: predicate_from_ast_ref(*predicate, &mut vars),
+                evidence: Evidence::Param(index as u16),
+            })
+            .collect::<Vec<_>>();
+        givens.push(Given {
+            predicate: self_predicate.clone(),
+            evidence: Evidence::SelfDictionary,
+        });
+        let Some(subject) = implementation
+            .trait_ref
+            .args
+            .first()
+            .and_then(|subject| match subject.value {
+                Type::Named { reference, .. } => Some(reference),
+                _ => None,
+            })
+        else {
+            continue;
+        };
+        for item in module.items {
+            match &item.value.kind {
+                ItemKind::Enum(enum_) if enum_.name == subject => {
+                    for variant in enum_.variants {
+                        let fields: Vec<alder_ast::Node<'a, Type<'a>>> = match variant.payload {
+                            alder_ast::VariantPayload::Unit => Vec::new(),
+                            alder_ast::VariantPayload::Tuple(fields) => fields.to_vec(),
+                            alder_ast::VariantPayload::Record(fields) => {
+                                fields.iter().map(|field| field.typ).collect()
+                            }
+                        };
+                        resolve_derived_variant_fields(
+                            bump,
+                            database,
+                            implementation,
+                            &self_predicate,
+                            &givens,
+                            variant.index,
+                            fields.into_iter(),
+                            &mut vars,
+                            &mut resolved,
+                            &mut errors,
+                        );
+                    }
+                }
+                ItemKind::ErrorGroup(group) if group.name == subject => {
+                    for tag in group.tags {
+                        resolve_derived_variant_fields(
+                            bump,
+                            database,
+                            implementation,
+                            &self_predicate,
+                            &givens,
+                            tag.index,
+                            tag.args.iter().copied(),
+                            &mut vars,
+                            &mut resolved,
+                            &mut errors,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if errors.is_empty() {
+        Ok(resolved)
+    } else {
+        Err(errors)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_derived_variant_fields<'a, 'field>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    implementation: &'a alder_ast::ImplDecl<'a>,
+    self_predicate: &Predicate<'a>,
+    givens: &[Given<'a>],
+    variant: u16,
+    fields: impl Iterator<Item = &'field Located<Type<'a>>>,
+    vars: &mut BTreeMap<&'a str, Ty<'a>>,
+    resolved: &mut BTreeMap<DerivedFieldKey<'a>, Evidence<'a>>,
+    errors: &mut Vec<SolveError<'a>>,
+) where
+    'a: 'field,
+{
+    for (field, typ) in fields.enumerate() {
+        let predicate = Predicate {
+            trait_: self_predicate.trait_,
+            args: vec![ty_from_ast(typ, vars)],
+        };
+        let mut stack = Vec::new();
+        let variable_names = vars
+            .iter()
+            .filter_map(|(name, typ)| match typ {
+                Ty::Var(id) => Some((*id, *name)),
+                _ => None,
+            })
+            .collect::<BTreeMap<_, _>>();
+        let generalized_variables = variable_names.keys().copied().collect();
+        match resolve_predicate(
+            bump,
+            database,
+            &predicate,
+            givens,
+            typ.region,
+            &mut stack,
+            ResolutionStep {
+                variable_names: &variable_names,
+                generalized_variables: &generalized_variables,
+                required_by: None,
+            },
+        ) {
+            Ok(evidence) => {
+                resolved.insert(
+                    DerivedFieldKey {
+                        implementation: implementation.id,
+                        variant,
+                        field: field as u16,
+                    },
+                    evidence,
+                );
+            }
+            Err(error) => errors.push(SolveError::Trait(error)),
+        }
+    }
+}
+
+fn predicate_from_ast_ref<'a>(
+    predicate: alder_ast::TraitRef<'a>,
+    vars: &mut BTreeMap<&'a str, Ty<'a>>,
+) -> Predicate<'a> {
+    Predicate {
+        trait_: predicate.trait_,
+        args: predicate
+            .args
+            .iter()
+            .map(|argument| ty_from_ast(argument, vars))
+            .collect(),
+    }
+}
+
+fn ty_from_ast<'a>(typ: &Located<Type<'a>>, vars: &mut BTreeMap<&'a str, Ty<'a>>) -> Ty<'a> {
+    let apply = |head, args: Vec<_>| {
+        if args.is_empty() {
+            head
+        } else {
+            Ty::App(Box::new(head), args)
+        }
+    };
+    match &typ.value {
+        Type::Var { name, args } => {
+            let next = vars.len();
+            let head = vars.entry(name).or_insert(Ty::Var(next)).clone();
+            apply(
+                head,
+                args.iter()
+                    .map(|argument| ty_from_ast(argument, vars))
+                    .collect(),
+            )
+        }
+        Type::Named { reference, args } => apply(
+            Ty::Con(*reference),
+            args.iter()
+                .map(|argument| ty_from_ast(argument, vars))
+                .collect(),
+        ),
+        Type::Partial { constructor, slots } => Ty::Partial(
+            *constructor,
+            slots
+                .iter()
+                .map(|slot| match slot {
+                    TypeSlot::Hole(index) => TySlot::Hole(*index),
+                    TypeSlot::Fixed(typ) => TySlot::Fixed(ty_from_ast(typ, vars)),
+                })
+                .collect(),
+        ),
+        Type::Projection(projection) => Ty::Projection(
+            projection.trait_ref.trait_,
+            projection
+                .trait_ref
+                .args
+                .iter()
+                .map(|argument| ty_from_ast(argument, vars))
+                .collect(),
+            projection.assoc,
+        ),
+        Type::Fn { params, ret } => Ty::Fn(
+            params
+                .iter()
+                .map(|param| ty_from_ast(param, vars))
+                .collect(),
+            Box::new(ty_from_ast(ret, vars)),
+        ),
+        Type::Unit => Ty::Unit,
+        Type::Tuple(items) => Ty::Tuple(items.iter().map(|item| ty_from_ast(item, vars)).collect()),
+        Type::Record { fields, ext } => Ty::Record(
+            fields
+                .iter()
+                .map(|field| (field.name, (field.presence, ty_from_ast(field.typ, vars))))
+                .collect(),
+            matches!(ext, RowExtension::Open(_)),
+        ),
+        Type::ErrorRow { .. } => Ty::ErrorRow,
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(real) | alder_ast::AliasType::Filled(real) => {
+                ty_from_ast(real, vars)
+            }
+        },
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ResolutionStep<'a, 'names> {
+    variable_names: &'names BTreeMap<usize, &'a str>,
+    generalized_variables: &'names BTreeSet<usize>,
+    required_by: Option<ImplId<'a>>,
+}
+
+fn resolve_predicate<'a>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    predicate: &Predicate<'a>,
+    givens: &[Given<'a>],
+    origin: Region,
+    stack: &mut Vec<crate::ObligationFrame<'a>>,
+    step: ResolutionStep<'a, '_>,
+) -> Result<Evidence<'a>, SolveTraitError<'a>> {
+    let subject = predicate.args.first().cloned().unwrap_or(Ty::Unit);
+    let rendered = render_ty(&subject, step.variable_names);
+    if let Some(given) = givens.iter().find(|given| {
+        given.predicate.trait_ == predicate.trait_ && given.predicate.args == predicate.args
+    }) {
+        return Ok(given.evidence.clone());
+    }
+    if let Some(cycle_start) = stack
+        .iter()
+        .position(|frame| frame.trait_ == predicate.trait_ && frame.subject == rendered)
+    {
+        let current = crate::ObligationFrame {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            required_by: step.required_by,
+        };
+        let mut cycle = stack[cycle_start..].to_vec();
+        cycle.push(current);
+        let chain = bump.alloc_slice_copy(&cycle);
+        return Err(SolveTraitError::InstanceCycle {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            origin,
+            chain,
+        });
+    }
+    stack.push(crate::ObligationFrame {
+        trait_: predicate.trait_,
+        subject: bump.alloc_str(&rendered),
+        required_by: step.required_by,
+    });
+    match resolve_structural_eq(bump, database, predicate, givens, origin, stack, step) {
+        Ok(Some(evidence)) => {
+            stack.pop();
+            return Ok(evidence);
+        }
+        Ok(None) => {}
+        Err(error) => {
+            stack.pop();
+            return Err(error);
+        }
+    }
+    let mut successes = Vec::new();
+    let mut nested_error = None;
+    for implementation in database.instances(predicate.trait_) {
+        let template = implementation.trait_ref();
+        if template.args.len() != predicate.args.len() {
+            continue;
+        }
+        let mut bindings = BTreeMap::new();
+        if !template
+            .args
+            .iter()
+            .zip(&predicate.args)
+            .all(|(template, goal)| match_type(template, goal, &mut bindings))
+        {
+            continue;
+        }
+        let mut arguments = Vec::new();
+        let mut failed = None;
+        for prerequisite in implementation.predicates() {
+            let prerequisite = Predicate {
+                trait_: prerequisite.trait_,
+                args: prerequisite
+                    .args
+                    .iter()
+                    .map(|argument| substitute_type(argument, &bindings))
+                    .collect(),
+            };
+            match resolve_predicate(
+                bump,
+                database,
+                &prerequisite,
+                givens,
+                origin,
+                stack,
+                ResolutionStep {
+                    required_by: Some(implementation.id()),
+                    ..step
+                },
+            ) {
+                Ok(evidence) => arguments.push(evidence),
+                Err(error) => {
+                    failed = Some(error);
+                    break;
+                }
+            }
+        }
+        if let Some(error) = failed {
+            nested_error = Some(error);
+        } else {
+            let impl_id = implementation.id();
+            let evidence = builtin_instance_evidence(impl_id, predicate, &arguments).unwrap_or(
+                Evidence::Impl {
+                    impl_id,
+                    module: impl_id.module,
+                    symbol: implementation.dictionary_symbol(bump),
+                    kind: implementation.dictionary_kind(),
+                    arguments,
+                },
+            );
+            successes.push((impl_id, evidence));
+        }
+    }
+    let chain = bump.alloc_slice_copy(stack);
+    stack.pop();
+    match successes.len() {
+        1 => Ok(successes.pop().expect("one success").1),
+        count if count > 1 => Err(SolveTraitError::AmbiguousInstance {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            origin,
+            details: bump.alloc(crate::AmbiguousInstanceDetails {
+                candidates: bump
+                    .alloc_slice_fill_iter(successes.into_iter().map(|(impl_id, _)| impl_id)),
+                chain,
+            }),
+        }),
+        _ if nested_error.is_some() => Err(nested_error.expect("checked above")),
+        _ if has_variable_head(&subject) => {
+            let mut variables = BTreeSet::new();
+            collect_variables(&subject, &mut variables);
+            if variables
+                .iter()
+                .all(|variable| step.generalized_variables.contains(variable))
+            {
+                Err(SolveTraitError::UnsatisfiedBound {
+                    trait_: predicate.trait_,
+                    subject: bump.alloc_str(&rendered),
+                    origin,
+                    chain,
+                })
+            } else {
+                Err(SolveTraitError::AmbiguousTypeVariable {
+                    trait_: predicate.trait_,
+                    subject: bump.alloc_str(&rendered),
+                    origin,
+                    chain,
+                })
+            }
+        }
+        _ => Err(SolveTraitError::MissingInstance {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            origin,
+            chain,
+        }),
+    }
+}
+
+fn resolve_structural_eq<'a>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    predicate: &Predicate<'a>,
+    givens: &[Given<'a>],
+    origin: Region,
+    stack: &mut Vec<crate::ObligationFrame<'a>>,
+    step: ResolutionStep<'a, '_>,
+) -> Result<Option<Evidence<'a>>, SolveTraitError<'a>> {
+    if predicate.trait_ != builtin_trait_id("Eq") {
+        return Ok(None);
+    }
+    let Some(subject) = predicate.args.first() else {
+        return Ok(None);
+    };
+    let structural = match subject {
+        Ty::Tuple(items) => Some((StructuralEqShape::Tuple, items.clone())),
+        Ty::Record(fields, false) => Some((
+            StructuralEqShape::Record(fields.keys().copied().collect()),
+            fields.values().map(|(_, typ)| typ.clone()).collect(),
+        )),
+        _ => None,
+    };
+    if let Some((shape, children)) = structural {
+        let mut evidence = Vec::new();
+        for child in children {
+            evidence.push(resolve_predicate(
+                bump,
+                database,
+                &Predicate {
+                    trait_: predicate.trait_,
+                    args: vec![child],
+                },
+                givens,
+                origin,
+                stack,
+                step,
+            )?);
+        }
+        return Ok(Some(Evidence::StructuralEq {
+            shape,
+            fields: evidence,
+        }));
+    }
+    Ok(None)
+}
+
+fn builtin_instance_evidence<'a>(
+    implementation: alder_ast::ImplId<'a>,
+    predicate: &Predicate<'a>,
+    arguments: &[Evidence<'a>],
+) -> Option<Evidence<'a>> {
+    if implementation.module.package != PackageId::Builtin {
+        return None;
+    }
+    let subject = predicate.args.first()?;
+    let trait_name = predicate.trait_.0.name;
+    let nominal = match subject {
+        Ty::Partial(reference, _) => Some(reference.name),
+        _ => nominal_name(subject),
+    };
+    let container = match nominal {
+        Some("Array") => Some(IntrinsicContainer::Array),
+        Some("Option") => Some(IntrinsicContainer::Option),
+        Some("Result") => Some(IntrinsicContainer::Result),
+        _ => None,
+    };
+    if let Some(container) = container {
+        if let Some(intrinsic) = match trait_name {
+            "Show" => Some(Intrinsic::ShowKernel),
+            "Hash" => Some(Intrinsic::HashKernel),
+            "Json" => Some(Intrinsic::JsonKernel),
+            _ => None,
+        } {
+            return Some(Evidence::IntrinsicContainer {
+                intrinsic,
+                container,
+                arguments: arguments.to_vec(),
+            });
+        }
+        if trait_name == "Eq" {
+            let shape = match container {
+                IntrinsicContainer::Array => StructuralEqShape::Array,
+                IntrinsicContainer::Option => StructuralEqShape::Option,
+                IntrinsicContainer::Result => StructuralEqShape::Result,
+            };
+            return Some(Evidence::StructuralEq {
+                shape,
+                fields: arguments.to_vec(),
+            });
+        }
+    }
+    let intrinsic = match (trait_name, nominal) {
+        ("Show", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::ShowKernel,
+        ("Hash", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::HashKernel,
+        ("Json", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::JsonKernel,
+        ("Eq", Some("Number")) => Intrinsic::EqNumber,
+        ("Eq", Some("String")) => Intrinsic::EqString,
+        ("Eq", Some("Bool")) => Intrinsic::EqBool,
+        ("Eq", Some("BigInt")) => Intrinsic::EqBigInt,
+        ("Eq", Some("Ordering")) => Intrinsic::EqOrdering,
+        ("Ord", Some("Number")) => Intrinsic::OrdNumber,
+        ("Ord", Some("String")) => Intrinsic::OrdString,
+        ("Ord", Some("BigInt")) => Intrinsic::OrdBigInt,
+        ("Num", Some("Number")) => Intrinsic::NumNumber,
+        ("Num", Some("BigInt")) => Intrinsic::NumBigInt,
+        ("Functor", Some("Array")) => Intrinsic::FunctorArray,
+        ("Functor", Some("Option")) => Intrinsic::FunctorOption,
+        ("Functor", Some("Result")) => Intrinsic::FunctorResult,
+        ("Applicative", Some("Array")) => Intrinsic::ApplicativeArray,
+        ("Applicative", Some("Option")) => Intrinsic::ApplicativeOption,
+        ("Applicative", Some("Result")) => Intrinsic::ApplicativeResult,
+        ("Monad", Some("Array")) => Intrinsic::MonadArray,
+        ("Monad", Some("Option")) => Intrinsic::MonadOption,
+        ("Monad", Some("Result")) => Intrinsic::MonadResult,
+        ("Traversable", Some("Array")) => Intrinsic::TraversableArray,
+        ("Traversable", Some("Option")) => Intrinsic::TraversableOption,
+        ("Traversable", Some("Result")) => Intrinsic::TraversableResult,
+        ("Iterator", Some("Array")) => Intrinsic::IteratorArray,
+        ("Show", None) if matches!(subject, Ty::Unit) => Intrinsic::ShowKernel,
+        ("Hash", None) if matches!(subject, Ty::Unit) => Intrinsic::HashKernel,
+        ("Json", None) if matches!(subject, Ty::Unit) => Intrinsic::JsonKernel,
+        ("Eq", None) if matches!(subject, Ty::Unit) => Intrinsic::EqUnit,
+        _ => return None,
+    };
+    Some(Evidence::Intrinsic(intrinsic))
+}
+
+fn match_type<'a>(
+    template: &'a Located<Type<'a>>,
+    goal: &Ty<'a>,
+    bindings: &mut BTreeMap<&'a str, Ty<'a>>,
+) -> bool {
+    match &template.value {
+        Type::Var { name, args: [] } => match bindings.get(name) {
+            Some(bound) => bound == goal,
+            None => {
+                bindings.insert(name, goal.clone());
+                true
+            }
+        },
+        Type::Named { reference, args } => match nominal_parts(goal) {
+            Some((actual, actual_args))
+                if actual == *reference && actual_args.len() == args.len() =>
+            {
+                args.iter()
+                    .zip(actual_args)
+                    .all(|(template, actual)| match_type(template, actual, bindings))
+            }
+            _ => false,
+        },
+        Type::Partial { constructor, slots } => match goal {
+            Ty::Partial(actual, actual_slots) => {
+                constructor == actual
+                    && slots.len() == actual_slots.len()
+                    && slots
+                        .iter()
+                        .zip(actual_slots)
+                        .all(|(left, right)| match (left, right) {
+                            (TypeSlot::Hole(_), TySlot::Hole(_)) => true,
+                            (TypeSlot::Fixed(left), TySlot::Fixed(right)) => {
+                                match_type(left, right, bindings)
+                            }
+                            _ => false,
+                        })
+            }
+            _ => false,
+        },
+        Type::Unit => matches!(goal, Ty::Unit),
+        Type::Tuple(items) => match goal {
+            Ty::Tuple(actual) if actual.len() == items.len() => items
+                .iter()
+                .zip(actual)
+                .all(|(template, actual)| match_type(template, actual, bindings)),
+            _ => false,
+        },
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(real) | alder_ast::AliasType::Filled(real) => {
+                match_type(real, goal, bindings)
+            }
+        },
+        Type::Fn { .. }
+        | Type::Record { .. }
+        | Type::ErrorRow { .. }
+        | Type::Projection(_)
+        | Type::Var { .. } => false,
+    }
+}
+
+fn substitute_type<'a>(typ: &'a Located<Type<'a>>, bindings: &BTreeMap<&'a str, Ty<'a>>) -> Ty<'a> {
+    match &typ.value {
+        Type::Var { name, args: [] } => bindings.get(name).cloned().unwrap_or(Ty::Any),
+        Type::Named { reference, args } => {
+            let arguments = args
+                .iter()
+                .map(|argument| substitute_type(argument, bindings))
+                .collect::<Vec<_>>();
+            if arguments.is_empty() {
+                Ty::Con(*reference)
+            } else {
+                Ty::App(Box::new(Ty::Con(*reference)), arguments)
+            }
+        }
+        Type::Unit => Ty::Unit,
+        Type::Tuple(items) => Ty::Tuple(
+            items
+                .iter()
+                .map(|item| substitute_type(item, bindings))
+                .collect(),
+        ),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(real) | alder_ast::AliasType::Filled(real) => {
+                substitute_type(real, bindings)
+            }
+        },
+        _ => Ty::Any,
+    }
+}
+
+fn nominal_parts<'t, 'a>(typ: &'t Ty<'a>) -> Option<(QualifiedName<'a>, &'t [Ty<'a>])> {
+    match typ {
+        Ty::Con(name) => Some((*name, &[])),
+        Ty::App(head, args) => match head.as_ref() {
+            Ty::Con(name) => Some((*name, args)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn nominal_name<'a>(typ: &Ty<'a>) -> Option<&'a str> {
+    nominal_parts(typ).map(|(name, _)| name.name)
+}
+
+fn has_variable_head(typ: &Ty<'_>) -> bool {
+    match typ {
+        Ty::Var(_) => true,
+        Ty::App(head, _) => has_variable_head(head),
+        _ => false,
+    }
+}
+
+fn collect_variables(typ: &Ty<'_>, variables: &mut BTreeSet<usize>) {
+    match typ {
+        Ty::Var(variable) => {
+            variables.insert(*variable);
+        }
+        Ty::App(head, arguments) => {
+            collect_variables(head, variables);
+            for argument in arguments {
+                collect_variables(argument, variables);
+            }
+        }
+        Ty::Partial(_, slots) => {
+            for slot in slots {
+                if let TySlot::Fixed(typ) = slot {
+                    collect_variables(typ, variables);
+                }
+            }
+        }
+        Ty::Projection(_, arguments, _) | Ty::Tuple(arguments) => {
+            for argument in arguments {
+                collect_variables(argument, variables);
+            }
+        }
+        Ty::Fn(arguments, result) => {
+            for argument in arguments {
+                collect_variables(argument, variables);
+            }
+            collect_variables(result, variables);
+        }
+        Ty::Record(fields, _) => {
+            for (_, typ) in fields.values() {
+                collect_variables(typ, variables);
+            }
+        }
+        Ty::Con(_) | Ty::Unit | Ty::ErrorRow | Ty::Any => {}
+    }
+}
+
+fn render_ty(typ: &Ty<'_>, variable_names: &BTreeMap<usize, &str>) -> String {
+    match typ {
+        Ty::Var(id) => variable_names.get(id).copied().unwrap_or("a").to_owned(),
+        Ty::Con(name) => name.name.to_owned(),
+        Ty::App(head, args) => format!(
+            "{}[{}]",
+            render_ty(head, variable_names),
+            args.iter()
+                .map(|arg| render_ty(arg, variable_names))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Ty::Partial(name, slots) => format!(
+            "{}[{}]",
+            name.name,
+            slots
+                .iter()
+                .map(|slot| match slot {
+                    TySlot::Hole(_) => "_".to_owned(),
+                    TySlot::Fixed(typ) => render_ty(typ, variable_names),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Ty::Projection(trait_, args, assoc) => format!(
+            "{}[{}]::{}",
+            trait_.0.name,
+            args.iter()
+                .map(|arg| render_ty(arg, variable_names))
+                .collect::<Vec<_>>()
+                .join(", "),
+            assoc.name
+        ),
+        Ty::Fn(params, ret) => format!(
+            "fn({}) {}",
+            params
+                .iter()
+                .map(|param| render_ty(param, variable_names))
+                .collect::<Vec<_>>()
+                .join(", "),
+            render_ty(ret, variable_names)
+        ),
+        Ty::Unit => "()".to_owned(),
+        Ty::Tuple(items) => format!(
+            "({})",
+            items
+                .iter()
+                .map(|item| render_ty(item, variable_names))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Ty::Record(_, _) => "{ .. }".to_owned(),
+        Ty::ErrorRow => "[:_ | e]".to_owned(),
+        Ty::Any => "_".to_owned(),
+    }
+}
+
 #[derive(Clone, Debug)]
 struct Scheme<'a> {
     quantified: Vec<usize>,
+    predicates: Vec<Predicate<'a>>,
+    projection_eqs: Vec<ProjectionEquation<'a>>,
     typ: Ty<'a>,
+}
+
+#[derive(Clone, Debug)]
+struct Predicate<'a> {
+    trait_: TraitId<'a>,
+    args: Vec<Ty<'a>>,
+}
+
+#[derive(Clone, Debug)]
+struct ProjectionEquation<'a> {
+    projection: Ty<'a>,
+    typ: Ty<'a>,
+}
+
+#[derive(Clone, Debug)]
+struct Given<'a> {
+    predicate: Predicate<'a>,
+    evidence: Evidence<'a>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ObligationAction<'a> {
+    Reference(Option<MethodId<'a>>),
+    Operator,
+    Pin,
+    CompoundAssign,
+    ImplSuperclass {
+        implementation: alder_ast::ImplId<'a>,
+        slot: u16,
+    },
+}
+
+#[derive(Clone, Debug)]
+struct Obligation<'a> {
+    use_id: Option<UseId>,
+    predicate: Predicate<'a>,
+    region: Region,
+    action: ObligationAction<'a>,
+    givens: Vec<Given<'a>>,
+}
+
+struct InferenceResult<'a> {
+    annotations: Annotations<'a>,
+    bindings: BTreeMap<QualifiedName<'a>, BindingEvidence<'a>>,
+    obligations: Vec<Obligation<'a>>,
+    calls: Vec<CallSite<'a>>,
+    variable_names: BTreeMap<usize, &'a str>,
+    generalized_variables: BTreeSet<usize>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CallSite<'a> {
+    use_id: UseId,
+    callee_use: Option<UseId>,
+    target: Option<DirectTarget<'a>>,
+}
+
+struct CallInput<'a> {
+    region: Region,
+    use_id: UseId,
+    function: &'a Located<Expr<'a>>,
+    arguments: &'a [&'a Located<Expr<'a>>],
+    leading: Option<(Ty<'a>, Region)>,
+}
+
+#[derive(Clone, Copy)]
+enum FunctionContext<'a> {
+    Ordinary,
+    Impl {
+        implementation: &'a alder_ast::ImplDecl<'a>,
+        method: &'a alder_ast::ImplFn<'a>,
+    },
+    Default(&'a alder_ast::TraitDecl<'a>),
+}
+
+#[derive(Clone, Copy)]
+struct FunctionInput<'a> {
+    params: &'a [alder_ast::Param<'a>],
+    ret: Option<&'a Located<Type<'a>>>,
+    constraints: &'a [alder_ast::TypeConstraint<'a>],
+    context: FunctionContext<'a>,
+    body: &'a Located<Block<'a>>,
+    region: Region,
 }
 
 #[derive(Clone, Default)]
@@ -34,26 +1000,69 @@ struct Env<'a> {
     globals: BTreeMap<QualifiedName<'a>, Scheme<'a>>,
 }
 
-struct Infer<'a> {
+struct Infer<'a, 'db> {
     bump: &'a Bump,
+    database: &'db TraitDatabase<'a>,
     substitutions: Vec<Option<Ty<'a>>>,
+    obligations: Vec<Obligation<'a>>,
+    givens: Vec<Given<'a>>,
+    projection_equations: Vec<ProjectionEquation<'a>>,
+    calls: Vec<CallSite<'a>>,
+    requirement_seeds: BTreeMap<UseId, RequirementSeed<'a>>,
+    variable_names: BTreeMap<usize, &'a str>,
+    generalized_variables: BTreeSet<usize>,
 }
 
 pub fn run<'a>(
     bump: &'a Bump,
-    _uf: &mut UnionFind,
     constraints: &Constraints<'a>,
 ) -> Result<Annotations<'a>, Vec<Error>> {
-    Infer::new(bump)
+    let database = TraitDatabase::build(bump, constraints.module, &[]);
+    Infer::new(bump, &database, constraints.requirement_seeds)
         .infer_module(constraints.module)
+        .map(|result| result.annotations)
         .map_err(|error| vec![error])
 }
 
-impl<'a> Infer<'a> {
-    fn new(bump: &'a Bump) -> Self {
+pub fn solve<'a>(
+    bump: &'a Bump,
+    constraints: &Constraints<'a>,
+    database: &TraitDatabase<'a>,
+) -> Result<SolveOutput<'a>, Vec<SolveError<'a>>> {
+    let coherence_errors = database
+        .validate(bump)
+        .into_iter()
+        .map(SolveError::Coherence)
+        .collect::<Vec<_>>();
+    if !coherence_errors.is_empty() {
+        return Err(coherence_errors);
+    }
+    let result = Infer::new(bump, database, constraints.requirement_seeds)
+        .infer_module(constraints.module)
+        .map_err(|error| vec![SolveError::Core(error)])?;
+    resolve_obligations(bump, constraints.module, database, result)
+}
+
+impl<'a, 'db> Infer<'a, 'db> {
+    fn new(
+        bump: &'a Bump,
+        database: &'db TraitDatabase<'a>,
+        requirement_seeds: &'a [RequirementSeed<'a>],
+    ) -> Self {
         Self {
             bump,
+            database,
             substitutions: Vec::new(),
+            obligations: Vec::new(),
+            givens: Vec::new(),
+            projection_equations: Vec::new(),
+            calls: Vec::new(),
+            requirement_seeds: requirement_seeds
+                .iter()
+                .map(|seed| (seed.use_id, *seed))
+                .collect(),
+            variable_names: BTreeMap::new(),
+            generalized_variables: BTreeSet::new(),
         }
     }
 
@@ -63,33 +1072,108 @@ impl<'a> Infer<'a> {
         Ty::Var(id)
     }
 
-    fn infer_module(&mut self, module: &'a Module<'a>) -> Result<Annotations<'a>, Error> {
+    fn infer_module(&mut self, module: &'a Module<'a>) -> Result<InferenceResult<'a>, Error> {
         let mut env = Env::default();
+        let mut value_items = BTreeMap::new();
         for item in module.items {
             match &item.value.kind {
-                ItemKind::Fn(function) => self.predeclare(&mut env, function.name),
+                ItemKind::Fn(function) => {
+                    self.predeclare(&mut env, function.name);
+                    value_items.insert(function.name, *item);
+                }
                 ItemKind::Extern(alder_ast::ExternDecl::Fn { name, .. }) => {
-                    self.predeclare(&mut env, *name)
+                    self.predeclare(&mut env, *name);
+                    value_items.insert(*name, *item);
                 }
                 ItemKind::Let(decl) => {
                     for binding in decl.bindings {
                         self.predeclare(&mut env, *binding);
+                        value_items.insert(*binding, *item);
                     }
                 }
-                ItemKind::Component(component) => self.predeclare(&mut env, component.name),
+                ItemKind::Component(component) => {
+                    self.predeclare(&mut env, component.name);
+                    value_items.insert(component.name, *item);
+                }
                 _ => {}
             }
         }
 
+        for group in module.value_sccs {
+            let mut seeded_items = BTreeSet::new();
+            for member in group.members {
+                let item = value_items
+                    .get(member)
+                    .expect("each value SCC member has a declaration");
+                let identity: *const Located<alder_ast::Item<'a>> = *item;
+                if seeded_items.insert(identity) {
+                    self.seed_value_item(&mut env, &item.value.kind, item.region)?;
+                }
+            }
+            let mut inferred_items = BTreeSet::new();
+            for member in group.members {
+                let item = value_items
+                    .get(member)
+                    .expect("each value SCC member has a declaration");
+                let identity: *const Located<alder_ast::Item<'a>> = *item;
+                if inferred_items.insert(identity) {
+                    self.infer_value_item(&mut env, &item.value.kind, item.region)?;
+                }
+            }
+            for member in group.members {
+                let outer_free =
+                    self.environment_free_vars(&env, &group.members.iter().copied().collect());
+                let generalizable = !matches!(
+                    value_items[member].value.kind,
+                    ItemKind::Let(decl) if decl.mutable
+                );
+                self.generalize_global(&mut env, *member, &outer_free, generalizable);
+            }
+        }
+
         for item in module.items {
-            self.infer_item(&mut env, &item.value.kind, item.region)?;
+            if !is_value_item(&item.value.kind) {
+                self.infer_item(&mut env, &item.value.kind, item.region)?;
+            }
         }
 
         let mut annotations = BTreeMap::new();
+        let mut bindings = BTreeMap::new();
         for (name, scheme) in env.globals {
-            annotations.insert(name, self.annotation(&scheme.typ));
+            let abi = match self.prune(scheme.typ.clone()) {
+                Ty::Fn(_, _) => BindingAbi::DirectFunction,
+                _ if scheme.predicates.is_empty() => BindingAbi::PlainValue,
+                _ => BindingAbi::EvidenceFactory,
+            };
+            let annotation = self.annotation(&scheme);
+            annotations.insert(name, annotation);
+            bindings.insert(
+                name,
+                BindingEvidence {
+                    dictionary_params: annotation.trait_predicates,
+                    abi,
+                },
+            );
         }
-        Ok(annotations)
+        let mut obligations = std::mem::take(&mut self.obligations);
+        for obligation in &mut obligations {
+            for argument in &mut obligation.predicate.args {
+                *argument = self.normalize_type(argument.clone());
+            }
+            for given in &mut obligation.givens {
+                for argument in &mut given.predicate.args {
+                    *argument = self.normalize_type(argument.clone());
+                }
+            }
+        }
+        Ok(InferenceResult {
+            annotations,
+            bindings,
+            obligations,
+            calls: std::mem::take(&mut self.calls),
+            variable_names: std::mem::take(&mut self.variable_names),
+            generalized_variables: std::mem::take(&mut self.generalized_variables),
+        })
     }
 
     fn predeclare(&mut self, env: &mut Env<'a>, name: QualifiedName<'a>) {
@@ -98,9 +1182,61 @@ impl<'a> Infer<'a> {
             name,
             Scheme {
                 quantified: Vec::new(),
+                predicates: Vec::new(),
+                projection_eqs: Vec::new(),
                 typ,
             },
         );
+    }
+
+    fn seed_value_item(
+        &mut self,
+        env: &mut Env<'a>,
+        item: &'a ItemKind<'a>,
+        region: Region,
+    ) -> Result<(), Error> {
+        let (name, params, ret, constraints) = match item {
+            ItemKind::Fn(function) => (
+                function.name,
+                function.params,
+                function.ret,
+                function.constraints,
+            ),
+            ItemKind::Extern(alder_ast::ExternDecl::Fn {
+                name,
+                params,
+                ret,
+                constraints,
+                ..
+            }) => (*name, *params, Some(*ret), *constraints),
+            ItemKind::Let(_) | ItemKind::Component(_) => return Ok(()),
+            _ => unreachable!("only value items belong to value SCCs"),
+        };
+        let mut vars = BTreeMap::new();
+        let mut args = Vec::with_capacity(params.len());
+        for parameter in params {
+            args.push(match parameter.annotation {
+                Some(typ) => self.from_ast(typ, &mut vars),
+                None => self.fresh(),
+            });
+        }
+        let ret = match ret {
+            Some(typ) => self.from_ast(typ, &mut vars),
+            None => self.fresh(),
+        };
+        let predicates = self.predicates_from_constraints(constraints, &vars);
+        let projection_eqs = self.projection_equations_from_constraints(constraints, &vars)?;
+        let placeholder = env
+            .globals
+            .get(&name)
+            .expect("value was predeclared")
+            .typ
+            .clone();
+        self.unify(placeholder, Ty::Fn(args, Box::new(ret)), region)?;
+        let scheme = env.globals.get_mut(&name).expect("value was predeclared");
+        scheme.predicates = predicates;
+        scheme.projection_eqs = projection_eqs;
+        Ok(())
     }
 
     fn infer_item(
@@ -111,62 +1247,48 @@ impl<'a> Infer<'a> {
     ) -> Result<(), Error> {
         match item {
             ItemKind::Fn(function) => {
-                let typ =
-                    self.infer_function(env, function.params, function.ret, function.body, region)?;
-                self.unify_global(env, function.name, typ, region)?;
-                self.generalize_global(env, function.name);
+                self.infer_value_item(env, item, region)?;
+                let excluded = BTreeSet::from([function.name]);
+                let outer_free = self.environment_free_vars(env, &excluded);
+                self.generalize_global(env, function.name, &outer_free, true);
             }
-            ItemKind::Extern(alder_ast::ExternDecl::Fn {
-                name, params, ret, ..
-            }) => {
-                let mut vars = BTreeMap::new();
-                let mut args = Vec::with_capacity(params.len());
-                for param in *params {
-                    args.push(match param.annotation {
-                        Some(typ) => self.from_ast(typ, &mut vars),
-                        None => self.fresh(),
-                    });
-                }
-                let ret = self.from_ast(ret, &mut vars);
-                self.unify_global(env, *name, Ty::Fn(args, Box::new(ret)), region)?;
-                self.generalize_global(env, *name);
+            ItemKind::Extern(alder_ast::ExternDecl::Fn { name, .. }) => {
+                self.infer_value_item(env, item, region)?;
+                let excluded = BTreeSet::from([*name]);
+                let outer_free = self.environment_free_vars(env, &excluded);
+                self.generalize_global(env, *name, &outer_free, true);
             }
             ItemKind::Let(decl) => {
-                let mut value = self.infer_expr(env, decl.value, None)?;
-                if let Some(annotation) = decl.annotation {
-                    let annotated = self.from_ast(annotation, &mut BTreeMap::new());
-                    self.unify(value.clone(), annotated, annotation.region)?;
-                    value = self.prune(value);
-                }
-                self.infer_pattern(env, decl.pattern, value, true)?;
+                self.infer_value_item(env, item, region)?;
+                let excluded = decl.bindings.iter().copied().collect();
+                let outer_free = self.environment_free_vars(env, &excluded);
                 for binding in decl.bindings {
-                    self.generalize_global(env, *binding);
+                    self.generalize_global(env, *binding, &outer_free, !decl.mutable);
                 }
             }
             ItemKind::Component(component) => {
-                let typ =
-                    self.infer_function(env, component.params, None, component.body, region)?;
-                let Ty::Fn(args, inferred) = typ else {
-                    unreachable!()
-                };
-                self.unify(*inferred, self.named("Html", Vec::new()), region)?;
-                self.unify_global(
-                    env,
-                    component.name,
-                    Ty::Fn(args, Box::new(self.named("Html", Vec::new()))),
-                    region,
-                )?;
-                self.generalize_global(env, component.name);
+                self.infer_value_item(env, item, region)?;
+                let excluded = BTreeSet::from([component.name]);
+                let outer_free = self.environment_free_vars(env, &excluded);
+                self.generalize_global(env, component.name, &outer_free, true);
             }
             ItemKind::Impl(impl_) => {
+                self.require_impl_superclasses(impl_, region);
                 for item in impl_.items {
                     if let alder_ast::ImplItem::Fn(function) = item {
                         self.infer_function(
                             env,
-                            function.params,
-                            function.ret,
-                            function.body,
-                            region,
+                            FunctionInput {
+                                params: function.params,
+                                ret: function.ret,
+                                constraints: function.constraints,
+                                context: FunctionContext::Impl {
+                                    implementation: impl_,
+                                    method: function,
+                                },
+                                body: function.body,
+                                region,
+                            },
                         )?;
                     }
                 }
@@ -176,7 +1298,17 @@ impl<'a> Infer<'a> {
                     if let alder_ast::TraitItem::Fn(function) = item
                         && let Some(body) = function.body
                     {
-                        self.infer_function(env, function.params, function.ret, body, region)?;
+                        self.infer_function(
+                            env,
+                            FunctionInput {
+                                params: function.params,
+                                ret: function.ret,
+                                constraints: function.constraints,
+                                context: FunctionContext::Default(trait_),
+                                body,
+                                region,
+                            },
+                        )?;
                     }
                 }
             }
@@ -201,14 +1333,111 @@ impl<'a> Infer<'a> {
         Ok(())
     }
 
+    fn infer_value_item(
+        &mut self,
+        env: &mut Env<'a>,
+        item: &'a ItemKind<'a>,
+        region: Region,
+    ) -> Result<(), Error> {
+        match item {
+            ItemKind::Fn(function) => {
+                let (typ, predicates, projection_eqs) = self.infer_function(
+                    env,
+                    FunctionInput {
+                        params: function.params,
+                        ret: function.ret,
+                        constraints: function.constraints,
+                        context: FunctionContext::Ordinary,
+                        body: function.body,
+                        region,
+                    },
+                )?;
+                let scheme = env
+                    .globals
+                    .get_mut(&function.name)
+                    .expect("function was predeclared");
+                scheme.predicates = predicates;
+                scheme.projection_eqs = projection_eqs;
+                self.unify_global(env, function.name, typ, region)
+            }
+            ItemKind::Extern(alder_ast::ExternDecl::Fn {
+                name,
+                params,
+                ret,
+                constraints,
+                ..
+            }) => {
+                let mut vars = BTreeMap::new();
+                let mut args = Vec::with_capacity(params.len());
+                for param in *params {
+                    args.push(match param.annotation {
+                        Some(typ) => self.from_ast(typ, &mut vars),
+                        None => self.fresh(),
+                    });
+                }
+                let ret = self.from_ast(ret, &mut vars);
+                let predicates = self.predicates_from_constraints(constraints, &vars);
+                let projection_eqs =
+                    self.projection_equations_from_constraints(constraints, &vars)?;
+                let scheme = env
+                    .globals
+                    .get_mut(name)
+                    .expect("extern function was predeclared");
+                scheme.predicates = predicates;
+                scheme.projection_eqs = projection_eqs;
+                self.unify_global(env, *name, Ty::Fn(args, Box::new(ret)), region)
+            }
+            ItemKind::Let(decl) => {
+                let mut value = self.infer_expr(env, decl.value, None)?;
+                if let Some(annotation) = decl.annotation {
+                    let annotated = self.from_ast(annotation, &mut BTreeMap::new());
+                    self.unify(value.clone(), annotated, annotation.region)?;
+                    value = self.prune(value);
+                }
+                self.infer_pattern(env, decl.pattern, value, true)
+            }
+            ItemKind::Component(component) => {
+                let (typ, predicates, projection_eqs) = self.infer_function(
+                    env,
+                    FunctionInput {
+                        params: component.params,
+                        ret: None,
+                        constraints: &[],
+                        context: FunctionContext::Ordinary,
+                        body: component.body,
+                        region,
+                    },
+                )?;
+                debug_assert!(predicates.is_empty());
+                debug_assert!(projection_eqs.is_empty());
+                let Ty::Fn(args, inferred) = typ else {
+                    unreachable!()
+                };
+                self.unify(*inferred, self.named("Html", Vec::new()), region)?;
+                self.unify_global(
+                    env,
+                    component.name,
+                    Ty::Fn(args, Box::new(self.named("Html", Vec::new()))),
+                    region,
+                )
+            }
+            _ => unreachable!("only value items are inferred by value SCCs"),
+        }
+    }
+
     fn infer_function(
         &mut self,
         env: &Env<'a>,
-        params: &'a [alder_ast::Param<'a>],
-        ret: Option<&'a Located<Type<'a>>>,
-        body: &'a Located<Block<'a>>,
-        region: Region,
-    ) -> Result<Ty<'a>, Error> {
+        input: FunctionInput<'a>,
+    ) -> Result<(Ty<'a>, Vec<Predicate<'a>>, Vec<ProjectionEquation<'a>>), Error> {
+        let FunctionInput {
+            params,
+            ret,
+            constraints,
+            context,
+            body,
+            region,
+        } = input;
         let mut local = env.clone();
         let mut vars = BTreeMap::new();
         let mut args = Vec::with_capacity(params.len());
@@ -224,17 +1453,112 @@ impl<'a> Infer<'a> {
             Some(ret) => self.from_ast(ret, &mut vars),
             None => self.fresh(),
         };
+        let predicates = self.predicates_from_constraints(constraints, &vars);
+        let local_projection_equations =
+            self.projection_equations_from_constraints(constraints, &vars)?;
+        for (name, typ) in &vars {
+            if let Ty::Var(id) = typ {
+                self.variable_names.entry(*id).or_insert(name);
+            }
+        }
+        let outer_givens = std::mem::take(&mut self.givens);
+        let outer_projection_equations = std::mem::take(&mut self.projection_equations);
+        self.givens = outer_givens.clone();
+        self.projection_equations = outer_projection_equations.clone();
+        self.projection_equations
+            .extend(local_projection_equations.clone());
+        match context {
+            FunctionContext::Ordinary => {
+                self.add_parameter_givens(&predicates, 0);
+                self.add_parameter_superclass_givens(&predicates, 0);
+            }
+            FunctionContext::Impl { implementation, .. } => {
+                for binding in implementation.assoc_bindings {
+                    let projection = alder_ast::ProjectionType {
+                        trait_ref: implementation.trait_ref,
+                        assoc: binding.assoc,
+                    };
+                    let projection = self.projection_from_ast(projection, &mut vars);
+                    let typ = self.from_ast(binding.typ, &mut vars);
+                    self.projection_equations
+                        .push(ProjectionEquation { projection, typ });
+                }
+                let self_predicate =
+                    self.predicate_from_trait_ref(implementation.trait_ref, &mut vars);
+                self.givens.push(Given {
+                    predicate: self_predicate.clone(),
+                    evidence: Evidence::SelfDictionary,
+                });
+                self.add_superclass_givens(&self_predicate);
+                let prerequisites = implementation
+                    .trait_predicates
+                    .iter()
+                    .map(|predicate| self.predicate_from_trait_ref(*predicate, &mut vars))
+                    .collect::<Vec<_>>();
+                self.add_parameter_givens(&prerequisites, 0);
+                self.add_parameter_superclass_givens(&prerequisites, 0);
+                self.add_parameter_givens(&predicates, prerequisites.len());
+                self.add_parameter_superclass_givens(&predicates, prerequisites.len());
+            }
+            FunctionContext::Default(trait_) => {
+                let self_predicate = Predicate {
+                    trait_: trait_.id,
+                    args: trait_
+                        .type_params
+                        .iter()
+                        .map(|parameter| {
+                            vars.get(parameter.name.value)
+                                .cloned()
+                                .unwrap_or_else(|| self.fresh())
+                        })
+                        .collect(),
+                };
+                self.givens.push(Given {
+                    predicate: self_predicate.clone(),
+                    evidence: Evidence::SelfDictionary,
+                });
+                self.add_superclass_givens(&self_predicate);
+                self.add_parameter_givens(&predicates, 0);
+                self.add_parameter_superclass_givens(&predicates, 0);
+            }
+        }
         let body_result = match self.prune(result.clone()) {
-            Ty::Named(reference, args) if reference.name == "Task" && args.len() == 1 => {
+            Ty::App(head, args)
+                if matches!(*head, Ty::Con(reference) if reference.name == "Task")
+                    && args.len() == 1 =>
+            {
                 args.into_iter().next().expect("length checked")
             }
             _ => result.clone(),
         };
-        let body_type = self.infer_block(&mut local, body, Some(body_result.clone()))?;
-        if body.value.tail.is_some() || !block_contains_return(body) {
-            self.unify(body_type, body_result, region)?;
-        }
-        Ok(Ty::Fn(args, Box::new(self.prune(result))))
+        let inferred = (|| {
+            let body_type = self.infer_block(&mut local, body, Some(body_result.clone()))?;
+            if body.value.tail.is_some() || !block_contains_return(body) {
+                self.unify(body_type, body_result, region)?;
+            }
+            let function_type = Ty::Fn(args, Box::new(self.prune(result)));
+            if let FunctionContext::Impl {
+                implementation,
+                method,
+            } = context
+            {
+                let mut expected_vars = BTreeMap::new();
+                if let Some(header) = self.database.trait_(implementation.trait_ref.trait_) {
+                    for (parameter, argument) in
+                        header.params.iter().zip(implementation.trait_ref.args)
+                    {
+                        expected_vars
+                            .insert(parameter.name.value, self.from_ast(argument, &mut vars));
+                    }
+                }
+                let expected = self.from_ast(method.scheme.typ, &mut expected_vars);
+                self.unify(function_type.clone(), expected, method.name.region)?;
+            }
+            Ok((function_type, predicates, local_projection_equations))
+        })();
+        self.givens = outer_givens;
+        self.projection_equations = outer_projection_equations;
+        inferred
     }
 
     fn infer_block(
@@ -268,10 +1592,23 @@ impl<'a> Infer<'a> {
                 self.infer_pattern(env, decl.pattern, value, false)?;
             }
             Stmt::Use { .. } => {}
-            Stmt::Assign { place, value, .. } => {
+            Stmt::Assign {
+                use_id,
+                place,
+                value,
+                ..
+            } => {
                 let expected = self.place_type(env, place, statement.region)?;
                 let actual = self.infer_expr(env, value, return_type.clone())?;
-                self.unify(actual, expected, statement.region)?;
+                self.unify(actual, expected.clone(), statement.region)?;
+                if let Some(use_id) = use_id {
+                    self.record_builtin_obligation(
+                        *use_id,
+                        expected,
+                        statement.region,
+                        ObligationAction::CompoundAssign,
+                    );
+                }
             }
             Stmt::For {
                 pattern,
@@ -347,7 +1684,9 @@ impl<'a> Infer<'a> {
             }
             Expr::Bool(_) => Ok(self.named("Bool", Vec::new())),
             Expr::Unit => Ok(Ty::Unit),
-            Expr::Var(reference) => self.infer_reference(env, *reference, region),
+            Expr::Var { use_id, reference } => {
+                self.infer_reference(env, *use_id, *reference, region)
+            }
             Expr::Constructor(constructor) => {
                 Ok(self.instantiate_annotation(constructor.annotation))
             }
@@ -373,26 +1712,60 @@ impl<'a> Infer<'a> {
                 }
                 Ok(Ty::Tuple(types))
             }
-            Expr::Record(fields) | Expr::RecordConstructor { fields, .. } => {
-                self.infer_record(env, fields, return_type)
+            Expr::Record(fields) => self.infer_record(env, fields, return_type),
+            Expr::RecordConstructor {
+                constructor,
+                fields,
+            } => {
+                let actual = self.infer_record(env, fields, return_type)?;
+                let Ty::Record(actual_fields, _) = actual else {
+                    unreachable!("record inference always returns a record")
+                };
+                let constructor_type = self.instantiate_annotation(constructor.annotation);
+                let alder_ast::VariantPayload::Record(expected_fields) = constructor.payload else {
+                    unreachable!("record constructor carries a record payload")
+                };
+                match constructor_type {
+                    Ty::Fn(expected_types, result)
+                        if expected_types.len() == expected_fields.len() =>
+                    {
+                        for (field, expected) in expected_fields.iter().zip(expected_types) {
+                            let Some((_, actual)) = actual_fields.get(field.name) else {
+                                if field.presence == FieldPresence::Optional {
+                                    continue;
+                                }
+                                return Err(Error {
+                                    region,
+                                    kind: ErrorKind::MissingField {
+                                        field: field.name.to_owned(),
+                                    },
+                                });
+                            };
+                            self.unify(actual.clone(), expected, field.typ.region)?;
+                        }
+                        Ok(self.prune(*result))
+                    }
+                    result if expected_fields.is_empty() => Ok(result),
+                    actual => {
+                        Err(self.mismatch(region, actual, Ty::Fn(Vec::new(), Box::new(Ty::Any))))
+                    }
+                }
             }
             Expr::Call {
+                use_id,
                 function,
                 arguments,
-            } => {
-                let function_type = self.infer_expr(env, function, return_type.clone())?;
-                let mut args = Vec::with_capacity(arguments.len());
-                for argument in *arguments {
-                    args.push(self.infer_expr(env, argument, return_type.clone())?);
-                }
-                let result = self.fresh();
-                self.unify(
-                    function_type,
-                    Ty::Fn(args, Box::new(result.clone())),
+            } => self.infer_call(
+                env,
+                CallInput {
                     region,
-                )?;
-                Ok(self.prune(result))
-            }
+                    use_id: *use_id,
+                    function,
+                    arguments,
+                    leading: None,
+                },
+                return_type,
+            ),
             Expr::Access { record, field } => {
                 let record_type = self.infer_expr(env, record, return_type)?;
                 self.access_field(record_type, field.value, field.region)
@@ -446,19 +1819,27 @@ impl<'a> Infer<'a> {
                 Ok(self.prune(value))
             }
             Expr::Pin(expr) | Expr::State(expr) => self.infer_expr(env, expr, return_type),
-            Expr::Negate(expr) => {
+            Expr::Negate { use_id, expr } => {
                 let actual = self.infer_expr(env, expr, return_type)?;
-                self.unify(actual, self.named("Number", Vec::new()), region)?;
-                Ok(self.named("Number", Vec::new()))
+                self.record_builtin_obligation(
+                    *use_id,
+                    actual.clone(),
+                    region,
+                    ObligationAction::Operator,
+                );
+                Ok(self.prune(actual))
             }
             Expr::Not(expr) => {
                 let actual = self.infer_expr(env, expr, return_type)?;
                 self.unify(actual, self.named("Bool", Vec::new()), region)?;
                 Ok(self.named("Bool", Vec::new()))
             }
-            Expr::Binop { op, left, right } => {
-                self.infer_binop(env, op.value, left, right, return_type)
-            }
+            Expr::Binop {
+                use_id,
+                op,
+                left,
+                right,
+            } => self.infer_binop(env, *use_id, op.value, left, right, return_type),
             Expr::Block(block) => self.infer_block(&mut env.clone(), block, return_type),
             Expr::Lambda { params, ret, body } => {
                 let mut local = env.clone();
@@ -559,13 +1940,76 @@ impl<'a> Infer<'a> {
     fn infer_reference(
         &mut self,
         env: &Env<'a>,
+        use_id: UseId,
         reference: ValueRef<'a>,
-        _region: Region,
+        region: Region,
     ) -> Result<Ty<'a>, Error> {
         match reference {
             ValueRef::Local(local) => Ok(self.instantiate(&env.locals[&local.id.0])),
-            ValueRef::TopLevel(name) => Ok(self.instantiate(&env.globals[&name])),
-            ValueRef::Foreign { annotation, .. } => Ok(self.instantiate_annotation(annotation)),
+            ValueRef::TopLevel(name) => {
+                let (typ, predicates) = self.instantiate_scheme(&env.globals[&name]);
+                self.record_predicates(
+                    use_id,
+                    predicates,
+                    region,
+                    ObligationAction::Reference(None),
+                );
+                Ok(typ)
+            }
+            ValueRef::Foreign { annotation, .. } => {
+                let (typ, vars) = self.instantiate_annotation_with_vars(annotation);
+                self.record_annotation_predicates(
+                    use_id,
+                    annotation,
+                    &vars,
+                    region,
+                    ObligationAction::Reference(None),
+                );
+                Ok(typ)
+            }
+            ValueRef::TraitMethod { method, annotation } => {
+                let seed = self
+                    .requirement_seeds
+                    .get(&use_id)
+                    .copied()
+                    .expect("constraint generation must seed every trait method reference");
+                assert_eq!(seed.kind, RequirementKind::TraitMethod(method));
+                let origin = if seed.region == Region::zero() {
+                    region
+                } else {
+                    seed.region
+                };
+                let (typ, vars) = self.instantiate_annotation_with_vars(annotation);
+                if let Some(header) = self.database.trait_(method.trait_) {
+                    let args = header
+                        .params
+                        .iter()
+                        .map(|parameter| {
+                            vars.get(parameter.name.value)
+                                .cloned()
+                                .unwrap_or_else(|| self.fresh())
+                        })
+                        .collect();
+                    self.obligations.push(Obligation {
+                        use_id: Some(use_id),
+                        predicate: Predicate {
+                            trait_: method.trait_,
+                            args,
+                        },
+                        region: origin,
+                        action: ObligationAction::Reference(Some(method)),
+                        givens: self.givens.clone(),
+                    });
+                }
+                self.record_annotation_predicates(
+                    use_id,
+                    annotation,
+                    &vars,
+                    origin,
+                    ObligationAction::Reference(Some(method)),
+                );
+                Ok(typ)
+            }
             ValueRef::Module(_)
             | ValueRef::Builtin(_)
             | ValueRef::Provider(_)
@@ -613,6 +2057,8 @@ impl<'a> Infer<'a> {
                         local.id.0,
                         Scheme {
                             quantified: Vec::new(),
+                            predicates: Vec::new(),
+                            projection_eqs: Vec::new(),
                             typ: expected,
                         },
                     );
@@ -623,9 +2069,18 @@ impl<'a> Infer<'a> {
                     }
                 }
             },
-            Pattern::Pin(expr) => {
+            Pattern::Pin {
+                use_id,
+                value: expr,
+            } => {
                 let actual = self.infer_expr(env, expr, None)?;
-                self.unify(actual, expected, pattern.region)?;
+                self.unify(actual, expected.clone(), pattern.region)?;
+                self.record_builtin_obligation(
+                    *use_id,
+                    expected,
+                    pattern.region,
+                    ObligationAction::Pin,
+                );
             }
             Pattern::Number { .. } => {
                 self.unify(expected, self.named("Number", Vec::new()), pattern.region)?;
@@ -724,6 +2179,8 @@ impl<'a> Infer<'a> {
                         local.id.0,
                         Scheme {
                             quantified: Vec::new(),
+                            predicates: Vec::new(),
+                            projection_eqs: Vec::new(),
                             typ: self.named("Array", vec![item.clone()]),
                         },
                     );
@@ -737,6 +2194,8 @@ impl<'a> Infer<'a> {
                         local.id.0,
                         Scheme {
                             quantified: Vec::new(),
+                            predicates: Vec::new(),
+                            projection_eqs: Vec::new(),
                             typ: expected,
                         },
                     );
@@ -749,22 +2208,73 @@ impl<'a> Infer<'a> {
     fn infer_binop(
         &mut self,
         env: &Env<'a>,
+        use_id: UseId,
         op: BinOp,
         left: &'a Located<Expr<'a>>,
         right: &'a Located<Expr<'a>>,
         return_type: Option<Ty<'a>>,
     ) -> Result<Ty<'a>, Error> {
         let left_type = self.infer_expr(env, left, return_type.clone())?;
+        if op == BinOp::Pipe {
+            if let Expr::Call {
+                use_id,
+                function,
+                arguments,
+            } = right.value
+            {
+                return self.infer_call(
+                    env,
+                    CallInput {
+                        region: right.region,
+                        use_id,
+                        function,
+                        arguments,
+                        leading: Some((left_type, left.region)),
+                    },
+                    return_type,
+                );
+            }
+
+            let right_type = self.infer_expr(env, right, return_type)?;
+            let result = self.fresh();
+            self.unify(
+                right_type,
+                Ty::Fn(vec![left_type], Box::new(result.clone())),
+                right.region,
+            )?;
+            return Ok(self.prune(result));
+        }
+
         let right_type = self.infer_expr(env, right, return_type)?;
         match op {
             BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Rem => {
-                let number = self.named("Number", Vec::new());
-                self.unify(left_type, number.clone(), left.region)?;
-                self.unify(right_type, number.clone(), right.region)?;
-                Ok(number)
+                self.unify(left_type.clone(), right_type, right.region)?;
+                self.record_builtin_obligation(
+                    use_id,
+                    left_type.clone(),
+                    left.region,
+                    ObligationAction::Operator,
+                );
+                Ok(self.prune(left_type))
             }
-            BinOp::Eq | BinOp::NotEq | BinOp::Lt | BinOp::LtEq | BinOp::Gt | BinOp::GtEq => {
-                self.unify(left_type, right_type, right.region)?;
+            BinOp::Eq | BinOp::NotEq => {
+                self.unify(left_type.clone(), right_type, right.region)?;
+                self.record_builtin_obligation(
+                    use_id,
+                    left_type,
+                    left.region,
+                    ObligationAction::Operator,
+                );
+                Ok(self.named("Bool", Vec::new()))
+            }
+            BinOp::Lt | BinOp::LtEq | BinOp::Gt | BinOp::GtEq => {
+                self.unify(left_type.clone(), right_type, right.region)?;
+                self.record_builtin_obligation(
+                    use_id,
+                    left_type,
+                    left.region,
+                    ObligationAction::Operator,
+                );
                 Ok(self.named("Bool", Vec::new()))
             }
             BinOp::And | BinOp::Or => {
@@ -777,17 +2287,103 @@ impl<'a> Infer<'a> {
                 self.unify(left_type.clone(), right_type, right.region)?;
                 Ok(self.prune(left_type))
             }
-            BinOp::Pipe => {
-                let result = self.fresh();
-                self.unify(
-                    right_type,
-                    Ty::Fn(vec![left_type], Box::new(result.clone())),
-                    right.region,
-                )?;
-                Ok(self.prune(result))
-            }
+            BinOp::Pipe => unreachable!("pipe expressions return before ordinary binop inference"),
             BinOp::In => Ok(self.named("Bool", Vec::new())),
         }
+    }
+
+    fn infer_call(
+        &mut self,
+        env: &Env<'a>,
+        call: CallInput<'a>,
+        return_type: Option<Ty<'a>>,
+    ) -> Result<Ty<'a>, Error> {
+        let CallInput {
+            region,
+            use_id,
+            function,
+            arguments,
+            leading,
+        } = call;
+        let (callee_use, target) = match function.value {
+            Expr::Var {
+                use_id,
+                reference: ValueRef::TopLevel(name),
+            }
+            | Expr::Var {
+                use_id,
+                reference:
+                    ValueRef::Foreign {
+                        reference: name, ..
+                    },
+            }
+            | Expr::Var {
+                use_id,
+                reference: ValueRef::Builtin(name),
+            } => (Some(use_id), Some(DirectTarget::Binding(name))),
+            Expr::Var {
+                use_id,
+                reference: ValueRef::TraitMethod { method, .. },
+            } => (Some(use_id), Some(DirectTarget::TraitMethod(method))),
+            Expr::Var { use_id, .. } => (Some(use_id), None),
+            _ => (None, None),
+        };
+        let function_type = self.infer_expr(env, function, return_type.clone())?;
+        let mut args = Vec::with_capacity(arguments.len() + usize::from(leading.is_some()));
+        if let Some((typ, _)) = &leading {
+            args.push(typ.clone());
+        }
+        for argument in arguments {
+            args.push(self.infer_expr(env, argument, return_type.clone())?);
+        }
+        let result = self.fresh();
+        self.unify(
+            function_type,
+            Ty::Fn(args, Box::new(result.clone())),
+            leading.map_or(region, |(_, region)| region),
+        )?;
+        self.calls.push(CallSite {
+            use_id,
+            callee_use,
+            target,
+        });
+        Ok(self.prune(result))
+    }
+
+    fn record_builtin_obligation(
+        &mut self,
+        use_id: UseId,
+        subject: Ty<'a>,
+        fallback_region: Region,
+        action: ObligationAction<'a>,
+    ) {
+        let seed = self
+            .requirement_seeds
+            .get(&use_id)
+            .copied()
+            .expect("constraint generation must seed every built-in evidence site");
+        let trait_name = match seed.kind {
+            RequirementKind::Eq => "Eq",
+            RequirementKind::Ord => "Ord",
+            RequirementKind::Num => "Num",
+            RequirementKind::TraitMethod(_) => {
+                panic!("trait method seed used for a built-in operator")
+            }
+        };
+        self.obligations.push(Obligation {
+            use_id: Some(use_id),
+            predicate: Predicate {
+                trait_: builtin_trait_id(trait_name),
+                args: vec![subject],
+            },
+            region: if seed.region == Region::zero() {
+                fallback_region
+            } else {
+                seed.region
+            },
+            action,
+            givens: self.givens.clone(),
+        });
     }
 
     fn place_type(
@@ -1047,30 +2643,435 @@ impl<'a> Infer<'a> {
         self.unify(env.globals[&name].typ.clone(), typ, region)
     }
 
-    fn generalize_global(&mut self, env: &mut Env<'a>, name: QualifiedName<'a>) {
+    fn generalize_global(
+        &mut self,
+        env: &mut Env<'a>,
+        name: QualifiedName<'a>,
+        outer_free: &BTreeSet<usize>,
+        generalizable: bool,
+    ) {
         let typ = self.prune(env.globals[&name].typ.clone());
+        let mut predicates = env.globals[&name].predicates.clone();
+        for predicate in &mut predicates {
+            for argument in &mut predicate.args {
+                *argument = self.prune(argument.clone());
+            }
+        }
+        let mut projection_eqs = env.globals[&name].projection_eqs.clone();
+        for equation in &mut projection_eqs {
+            equation.projection = self.prune(equation.projection.clone());
+            equation.typ = self.prune(equation.typ.clone());
+        }
         let mut vars = BTreeSet::new();
         self.free_vars(&typ, &mut vars);
+        for equation in &projection_eqs {
+            self.free_vars(&equation.projection, &mut vars);
+            self.free_vars(&equation.typ, &mut vars);
+        }
+        if generalizable {
+            vars.retain(|variable| !outer_free.contains(variable));
+        } else {
+            vars.clear();
+        }
+        self.generalized_variables.extend(vars.iter().copied());
         env.globals.insert(
             name,
             Scheme {
                 quantified: vars.into_iter().collect(),
+                predicates,
+                projection_eqs,
                 typ,
             },
         );
     }
 
+    fn environment_free_vars(
+        &mut self,
+        env: &Env<'a>,
+        excluded: &BTreeSet<QualifiedName<'a>>,
+    ) -> BTreeSet<usize> {
+        let schemes = env
+            .globals
+            .iter()
+            .filter(|(name, _)| !excluded.contains(name))
+            .map(|(_, scheme)| scheme.clone())
+            .chain(env.locals.values().cloned())
+            .collect::<Vec<_>>();
+        let mut result = BTreeSet::new();
+        for scheme in schemes {
+            let mut free = BTreeSet::new();
+            self.free_vars(&scheme.typ, &mut free);
+            for predicate in &scheme.predicates {
+                for argument in &predicate.args {
+                    self.free_vars(argument, &mut free);
+                }
+            }
+            for equation in &scheme.projection_eqs {
+                self.free_vars(&equation.projection, &mut free);
+                self.free_vars(&equation.typ, &mut free);
+            }
+            free.retain(|variable| !scheme.quantified.contains(variable));
+            result.extend(free);
+        }
+        result
+    }
+
     fn instantiate(&mut self, scheme: &Scheme<'a>) -> Ty<'a> {
+        self.instantiate_scheme(scheme).0
+    }
+
+    fn instantiate_scheme(&mut self, scheme: &Scheme<'a>) -> (Ty<'a>, Vec<Predicate<'a>>) {
         let replacements: BTreeMap<_, _> = scheme
             .quantified
             .iter()
             .map(|id| (*id, self.fresh()))
             .collect();
-        self.replace_vars(&scheme.typ, &replacements)
+        let typ = self.replace_vars(&scheme.typ, &replacements);
+        let predicates = scheme
+            .predicates
+            .iter()
+            .map(|predicate| Predicate {
+                trait_: predicate.trait_,
+                args: predicate
+                    .args
+                    .iter()
+                    .map(|argument| self.replace_vars(argument, &replacements))
+                    .collect(),
+            })
+            .collect();
+        let projection_eqs = scheme
+            .projection_eqs
+            .iter()
+            .map(|equation| ProjectionEquation {
+                projection: self.replace_vars(&equation.projection, &replacements),
+                typ: self.replace_vars(&equation.typ, &replacements),
+            })
+            .collect::<Vec<_>>();
+        self.projection_equations.extend(projection_eqs);
+        (typ, predicates)
     }
 
     fn instantiate_annotation(&mut self, annotation: &'a Annotation<'a>) -> Ty<'a> {
-        self.from_ast(annotation.typ, &mut BTreeMap::new())
+        self.instantiate_annotation_with_vars(annotation).0
+    }
+
+    fn instantiate_annotation_with_vars(
+        &mut self,
+        annotation: &'a Annotation<'a>,
+    ) -> (Ty<'a>, BTreeMap<&'a str, Ty<'a>>) {
+        let mut vars = BTreeMap::new();
+        let typ = self.from_ast(annotation.typ, &mut vars);
+        for equality in annotation.projection_equalities {
+            let projection = self.projection_from_ast(equality.projection, &mut vars);
+            let typ = self.from_ast(equality.typ, &mut vars);
+            self.projection_equations
+                .push(ProjectionEquation { projection, typ });
+        }
+        (typ, vars)
+    }
+
+    fn record_annotation_predicates(
+        &mut self,
+        use_id: UseId,
+        annotation: &'a Annotation<'a>,
+        vars: &BTreeMap<&'a str, Ty<'a>>,
+        region: Region,
+        action: ObligationAction<'a>,
+    ) {
+        let predicates = annotation
+            .trait_predicates
+            .iter()
+            .map(|predicate| {
+                let mut vars = vars.clone();
+                Predicate {
+                    trait_: predicate.trait_,
+                    args: predicate
+                        .args
+                        .iter()
+                        .map(|argument| self.from_ast(argument, &mut vars))
+                        .collect(),
+                }
+            })
+            .collect();
+        self.record_predicates(use_id, predicates, region, action);
+    }
+
+    fn record_predicates(
+        &mut self,
+        use_id: UseId,
+        predicates: Vec<Predicate<'a>>,
+        region: Region,
+        action: ObligationAction<'a>,
+    ) {
+        for predicate in predicates {
+            self.obligations.push(Obligation {
+                use_id: Some(use_id),
+                predicate,
+                region,
+                action,
+                givens: self.givens.clone(),
+            });
+        }
+    }
+
+    fn predicates_from_constraints(
+        &mut self,
+        constraints: &'a [alder_ast::TypeConstraint<'a>],
+        vars: &BTreeMap<&'a str, Ty<'a>>,
+    ) -> Vec<Predicate<'a>> {
+        let mut predicates = Vec::new();
+        for constraint in constraints {
+            if let alder_ast::TypeConstraint::Bound {
+                var,
+                traits: trait_names,
+            } = constraint
+                && let Some(subject) = vars.get(var.value).cloned()
+            {
+                for trait_name in *trait_names {
+                    predicates.push(Predicate {
+                        trait_: TraitId(*trait_name),
+                        args: vec![subject.clone()],
+                    });
+                }
+            }
+        }
+        predicates
+    }
+
+    fn projection_equations_from_constraints(
+        &mut self,
+        constraints: &'a [alder_ast::TypeConstraint<'a>],
+        vars: &BTreeMap<&'a str, Ty<'a>>,
+    ) -> Result<Vec<ProjectionEquation<'a>>, Error> {
+        let mut equations: Vec<ProjectionEquation<'a>> = Vec::new();
+        for constraint in constraints {
+            let alder_ast::TypeConstraint::AssocEq {
+                projection,
+                typ,
+                region,
+            } = constraint
+            else {
+                continue;
+            };
+            let mut vars = vars.clone();
+            let equation = ProjectionEquation {
+                projection: self.projection_from_ast(*projection, &mut vars),
+                typ: self.from_ast(typ, &mut vars),
+            };
+            for previous in &equations {
+                if previous.projection == equation.projection {
+                    let expected = render_ty(&previous.typ, &self.variable_names);
+                    let actual = render_ty(&equation.typ, &self.variable_names);
+                    if self
+                        .unify(previous.typ.clone(), equation.typ.clone(), *region)
+                        .is_err()
+                    {
+                        return Err(Error {
+                            region: *region,
+                            kind: ErrorKind::AssocTypeMismatch {
+                                assoc: projection.assoc.name.to_owned(),
+                                expected,
+                                actual,
+                            },
+                        });
+                    }
+                }
+            }
+            equations.push(equation);
+        }
+        Ok(equations)
+    }
+
+    fn projection_from_ast(
+        &mut self,
+        projection: alder_ast::ProjectionType<'a>,
+        vars: &mut BTreeMap<&'a str, Ty<'a>>,
+    ) -> Ty<'a> {
+        Ty::Projection(
+            projection.trait_ref.trait_,
+            projection
+                .trait_ref
+                .args
+                .iter()
+                .map(|argument| self.from_ast(argument, vars))
+                .collect(),
+            projection.assoc,
+        )
+    }
+
+    fn predicate_from_trait_ref(
+        &mut self,
+        predicate: alder_ast::TraitRef<'a>,
+        vars: &mut BTreeMap<&'a str, Ty<'a>>,
+    ) -> Predicate<'a> {
+        Predicate {
+            trait_: predicate.trait_,
+            args: predicate
+                .args
+                .iter()
+                .map(|argument| self.from_ast(argument, vars))
+                .collect(),
+        }
+    }
+
+    fn add_parameter_givens(&mut self, predicates: &[Predicate<'a>], offset: usize) {
+        self.givens.extend(
+            predicates
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(index, predicate)| Given {
+                    predicate,
+                    evidence: Evidence::Param((offset + index) as u16),
+                }),
+        );
+    }
+
+    fn add_superclass_givens(&mut self, predicate: &Predicate<'a>) {
+        let mut superclasses = Vec::new();
+        self.collect_superclasses(
+            predicate,
+            &mut Vec::new(),
+            &mut BTreeSet::new(),
+            &mut superclasses,
+        );
+        for (path, predicate) in superclasses {
+            let evidence = if path.len() == 1 {
+                Evidence::Super(path[0])
+            } else {
+                Evidence::SuperPath(path)
+            };
+            self.givens.push(Given {
+                predicate,
+                evidence,
+            });
+        }
+    }
+
+    fn add_parameter_superclass_givens(&mut self, predicates: &[Predicate<'a>], offset: usize) {
+        for (parameter_index, predicate) in predicates.iter().enumerate() {
+            let mut superclasses = Vec::new();
+            self.collect_superclasses(
+                predicate,
+                &mut Vec::new(),
+                &mut BTreeSet::new(),
+                &mut superclasses,
+            );
+            for (path, predicate) in superclasses {
+                let param = (offset + parameter_index) as u16;
+                let evidence = if path.len() == 1 {
+                    Evidence::ParamSuper {
+                        param,
+                        slot: path[0],
+                    }
+                } else {
+                    Evidence::ParamSuperPath { param, path }
+                };
+                self.givens.push(Given {
+                    predicate,
+                    evidence,
+                });
+            }
+        }
+    }
+
+    fn collect_superclasses(
+        &mut self,
+        predicate: &Predicate<'a>,
+        path: &mut Vec<u16>,
+        active: &mut BTreeSet<TraitId<'a>>,
+        output: &mut Vec<(Vec<u16>, Predicate<'a>)>,
+    ) {
+        if !active.insert(predicate.trait_) {
+            return;
+        }
+        let Some(header) = self.database.trait_(predicate.trait_) else {
+            active.remove(&predicate.trait_);
+            return;
+        };
+        let mut vars = header
+            .params
+            .iter()
+            .zip(&predicate.args)
+            .map(|(parameter, argument)| (parameter.name.value, argument.clone()))
+            .collect::<BTreeMap<_, _>>();
+        for (slot, superclass) in header.superclasses.iter().enumerate() {
+            let superclass = self.predicate_from_trait_ref(*superclass, &mut vars);
+            path.push(slot as u16);
+            output.push((path.clone(), superclass.clone()));
+            self.collect_superclasses(&superclass, path, active, output);
+            path.pop();
+        }
+        active.remove(&predicate.trait_);
+    }
+
+    fn require_impl_superclasses(
+        &mut self,
+        implementation: &'a alder_ast::ImplDecl<'a>,
+        region: Region,
+    ) {
+        let Some(header) = self.database.trait_(implementation.trait_ref.trait_) else {
+            return;
+        };
+        let mut vars = BTreeMap::new();
+        let self_predicate = self.predicate_from_trait_ref(implementation.trait_ref, &mut vars);
+        let prerequisites = implementation
+            .trait_predicates
+            .iter()
+            .map(|predicate| self.predicate_from_trait_ref(*predicate, &mut vars))
+            .collect::<Vec<_>>();
+        let mut givens = prerequisites
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(index, predicate)| Given {
+                predicate,
+                evidence: Evidence::Param(index as u16),
+            })
+            .collect::<Vec<_>>();
+        for (parameter_index, prerequisite) in prerequisites.iter().enumerate() {
+            let mut superclasses = Vec::new();
+            self.collect_superclasses(
+                prerequisite,
+                &mut Vec::new(),
+                &mut BTreeSet::new(),
+                &mut superclasses,
+            );
+            for (path, predicate) in superclasses {
+                let param = parameter_index as u16;
+                let evidence = if path.len() == 1 {
+                    Evidence::ParamSuper {
+                        param,
+                        slot: path[0],
+                    }
+                } else {
+                    Evidence::ParamSuperPath { param, path }
+                };
+                givens.push(Given {
+                    predicate,
+                    evidence,
+                });
+            }
+        }
+        let mut superclass_vars = header
+            .params
+            .iter()
+            .zip(&self_predicate.args)
+            .map(|(parameter, argument)| (parameter.name.value, argument.clone()))
+            .collect::<BTreeMap<_, _>>();
+        for (slot, superclass) in header.superclasses.iter().enumerate() {
+            let predicate = self.predicate_from_trait_ref(*superclass, &mut superclass_vars);
+            self.obligations.push(Obligation {
+                use_id: None,
+                predicate,
+                region,
+                action: ObligationAction::ImplSuperclass {
+                    implementation: implementation.id,
+                    slot: slot as u16,
+                },
+                givens: givens.clone(),
+            });
+        }
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -1082,11 +3083,32 @@ impl<'a> Infer<'a> {
         match &typ.value {
             Type::Var { name, args } => {
                 let base = vars.entry(name).or_insert_with(|| self.fresh()).clone();
-                if args.is_empty() { base } else { Ty::Any }
+                let args = args.iter().map(|arg| self.from_ast(arg, vars)).collect();
+                self.apply(base, args)
             }
-            Type::Named { reference, args } => Ty::Named(
-                *reference,
-                args.iter().map(|arg| self.from_ast(arg, vars)).collect(),
+            Type::Named { reference, args } => {
+                let args = args.iter().map(|arg| self.from_ast(arg, vars)).collect();
+                self.apply(Ty::Con(*reference), args)
+            }
+            Type::Partial { constructor, slots } => Ty::Partial(
+                *constructor,
+                slots
+                    .iter()
+                    .map(|slot| match slot {
+                        TypeSlot::Hole(index) => TySlot::Hole(*index),
+                        TypeSlot::Fixed(typ) => TySlot::Fixed(self.from_ast(typ, vars)),
+                    })
+                    .collect(),
+            ),
+            Type::Projection(projection) => Ty::Projection(
+                projection.trait_ref.trait_,
+                projection
+                    .trait_ref
+                    .args
+                    .iter()
+                    .map(|arg| self.from_ast(arg, vars))
+                    .collect(),
+                projection.assoc,
             ),
             Type::Fn { params, ret } => Ty::Fn(
                 params
@@ -1116,15 +3138,51 @@ impl<'a> Infer<'a> {
     }
 
     fn unify(&mut self, left: Ty<'a>, right: Ty<'a>, region: Region) -> Result<(), Error> {
-        let left = self.prune(left);
-        let right = self.prune(right);
+        let left = self.normalize_projection_root(left);
+        let right = self.normalize_projection_root(right);
+        if let Some(result) = self.unify_higher_kinded_pattern(&left, &right, region) {
+            return result;
+        }
+        if let Some(result) = self.unify_higher_kinded_pattern(&right, &left, region) {
+            return result;
+        }
         match (left, right) {
             (Ty::Any, _) | (_, Ty::Any) | (Ty::ErrorRow, Ty::ErrorRow) => Ok(()),
             (Ty::Var(left), Ty::Var(right)) if left == right => Ok(()),
             (Ty::Var(id), typ) | (typ, Ty::Var(id)) => self.bind(id, typ, region),
             (Ty::Unit, Ty::Unit) => Ok(()),
-            (Ty::Named(left, left_args), Ty::Named(right, right_args))
-                if left == right && left_args.len() == right_args.len() =>
+            (Ty::Con(left), Ty::Con(right)) if left == right => Ok(()),
+            (Ty::App(left_head, left_args), Ty::App(right_head, right_args))
+                if left_args.len() == right_args.len() =>
+            {
+                self.unify(*left_head, *right_head, region)?;
+                for (left, right) in left_args.into_iter().zip(right_args) {
+                    self.unify(left, right, region)?;
+                }
+                Ok(())
+            }
+            (Ty::Partial(left, left_slots), Ty::Partial(right, right_slots))
+                if left == right && left_slots.len() == right_slots.len() =>
+            {
+                let actual = Ty::Partial(left, left_slots.clone());
+                let expected = Ty::Partial(right, right_slots.clone());
+                for (left_slot, right_slot) in left_slots.into_iter().zip(right_slots) {
+                    match (left_slot, right_slot) {
+                        (TySlot::Hole(left), TySlot::Hole(right)) if left == right => {}
+                        (TySlot::Fixed(left), TySlot::Fixed(right)) => {
+                            self.unify(left, right, region)?;
+                        }
+                        _ => return Err(self.mismatch(region, actual, expected)),
+                    }
+                }
+                Ok(())
+            }
+            (
+                Ty::Projection(left_trait, left_args, left_assoc),
+                Ty::Projection(right_trait, right_args, right_assoc),
+            ) if left_trait == right_trait
+                && left_assoc == right_assoc
+                && left_args.len() == right_args.len() =>
             {
                 for (left, right) in left_args.into_iter().zip(right_args) {
                     self.unify(left, right, region)?;
@@ -1150,6 +3208,218 @@ impl<'a> Infer<'a> {
             }
             (left, right) => Err(self.mismatch(region, left, right)),
         }
+    }
+
+    fn normalize_projection_root(&mut self, typ: Ty<'a>) -> Ty<'a> {
+        let mut current = self.prune(typ);
+        let mut seen = Vec::new();
+        loop {
+            let Ty::Projection(trait_, args, assoc) = current.clone() else {
+                return current;
+            };
+            let args = args
+                .into_iter()
+                .map(|argument| self.prune(argument))
+                .collect::<Vec<_>>();
+            current = Ty::Projection(trait_, args.clone(), assoc);
+            if seen.contains(&current) {
+                return current;
+            }
+            seen.push(current.clone());
+
+            let equations = self.projection_equations.clone();
+            let mut assumed = None;
+            for equation in equations {
+                let projection = match self.prune(equation.projection) {
+                    Ty::Projection(trait_, args, assoc) => Ty::Projection(
+                        trait_,
+                        args.into_iter()
+                            .map(|argument| self.prune(argument))
+                            .collect(),
+                        assoc,
+                    ),
+                    other => other,
+                };
+                if projection == current {
+                    assumed = Some(self.prune(equation.typ));
+                    break;
+                }
+            }
+            if let Some(typ) = assumed {
+                current = typ;
+                continue;
+            }
+
+            let mut matches = Vec::new();
+            for implementation in self.database.instances(trait_) {
+                let template = implementation.trait_ref();
+                if template.args.len() != args.len() {
+                    continue;
+                }
+                let mut bindings = BTreeMap::new();
+                if !template
+                    .args
+                    .iter()
+                    .zip(&args)
+                    .all(|(template, goal)| match_type(template, goal, &mut bindings))
+                {
+                    continue;
+                }
+                if let Some(binding) = implementation
+                    .assoc_bindings()
+                    .iter()
+                    .find(|binding| binding.assoc == assoc)
+                {
+                    matches.push((binding.typ, bindings));
+                }
+            }
+            if matches.len() != 1 {
+                return current;
+            }
+            let (typ, mut bindings) = matches.pop().expect("one match");
+            current = self.from_ast(typ, &mut bindings);
+        }
+    }
+
+    fn normalize_type(&mut self, typ: Ty<'a>) -> Ty<'a> {
+        match self.normalize_projection_root(typ) {
+            Ty::App(head, args) => {
+                let head = self.normalize_type(*head);
+                let args = args
+                    .into_iter()
+                    .map(|argument| self.normalize_type(argument))
+                    .collect();
+                self.apply(head, args)
+            }
+            Ty::Partial(constructor, slots) => Ty::Partial(
+                constructor,
+                slots
+                    .into_iter()
+                    .map(|slot| match slot {
+                        TySlot::Hole(index) => TySlot::Hole(index),
+                        TySlot::Fixed(typ) => TySlot::Fixed(self.normalize_type(typ)),
+                    })
+                    .collect(),
+            ),
+            Ty::Projection(trait_, args, assoc) => {
+                let args = args
+                    .into_iter()
+                    .map(|argument| self.normalize_type(argument))
+                    .collect::<Vec<_>>();
+                let projection = Ty::Projection(trait_, args, assoc);
+                let normalized = self.normalize_projection_root(projection.clone());
+                if normalized == projection {
+                    projection
+                } else {
+                    self.normalize_type(normalized)
+                }
+            }
+            Ty::Fn(params, ret) => Ty::Fn(
+                params
+                    .into_iter()
+                    .map(|param| self.normalize_type(param))
+                    .collect(),
+                Box::new(self.normalize_type(*ret)),
+            ),
+            Ty::Tuple(items) => Ty::Tuple(
+                items
+                    .into_iter()
+                    .map(|item| self.normalize_type(item))
+                    .collect(),
+            ),
+            Ty::Record(fields, open) => Ty::Record(
+                fields
+                    .into_iter()
+                    .map(|(name, (presence, typ))| (name, (presence, self.normalize_type(typ))))
+                    .collect(),
+                open,
+            ),
+            other => other,
+        }
+    }
+
+    fn unify_higher_kinded_pattern(
+        &mut self,
+        pattern: &Ty<'a>,
+        rigid: &Ty<'a>,
+        region: Region,
+    ) -> Option<Result<(), Error>> {
+        let Ty::App(head, pattern_args) = pattern else {
+            return None;
+        };
+        let Ty::Var(head_var) = self.prune((**head).clone()) else {
+            return None;
+        };
+        let (constructor, rigid_args) = match self.prune(rigid.clone()) {
+            Ty::Con(constructor) => (constructor, Vec::new()),
+            Ty::App(head, args) => match *head {
+                Ty::Con(constructor) => (constructor, args),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        if pattern_args.is_empty() || rigid_args.len() < pattern_args.len() {
+            return None;
+        }
+
+        let concrete_arguments = pattern_args
+            .iter()
+            .all(|argument| !matches!(self.prune(argument.clone()), Ty::Var(_)));
+        if concrete_arguments {
+            for (pattern_arg, rigid_arg) in pattern_args.iter().zip(&rigid_args) {
+                if let Err(error) = self.unify(pattern_arg.clone(), rigid_arg.clone(), region) {
+                    return Some(Err(error));
+                }
+            }
+            let slots = rigid_args
+                .into_iter()
+                .enumerate()
+                .map(|(index, typ)| {
+                    if index < pattern_args.len() {
+                        TySlot::Hole(index as u16)
+                    } else {
+                        TySlot::Fixed(typ)
+                    }
+                })
+                .collect();
+            return Some(self.bind(head_var, Ty::Partial(constructor, slots), region));
+        }
+
+        let mut variables = Vec::with_capacity(pattern_args.len());
+        let mut seen = BTreeSet::new();
+        for argument in pattern_args {
+            let Ty::Var(variable) = self.prune(argument.clone()) else {
+                return Some(Err(Error {
+                    region,
+                    kind: ErrorKind::UnsupportedHigherKindedUnification,
+                }));
+            };
+            if variable == head_var || !seen.insert(variable) {
+                return Some(Err(Error {
+                    region,
+                    kind: ErrorKind::UnsupportedHigherKindedUnification,
+                }));
+            }
+            variables.push(variable);
+        }
+
+        for (variable, rigid_arg) in variables.iter().zip(&rigid_args) {
+            if let Err(error) = self.unify(Ty::Var(*variable), rigid_arg.clone(), region) {
+                return Some(Err(error));
+            }
+        }
+        let slots = rigid_args
+            .into_iter()
+            .enumerate()
+            .map(|(index, typ)| {
+                if index < variables.len() {
+                    TySlot::Hole(index as u16)
+                } else {
+                    TySlot::Fixed(typ)
+                }
+            })
+            .collect();
+        Some(self.bind(head_var, Ty::Partial(constructor, slots), region))
     }
 
     fn unify_records(
@@ -1223,14 +3493,81 @@ impl<'a> Infer<'a> {
                 }
                 None => Ty::Var(id),
             },
+            Ty::App(head, args) => {
+                let head = self.prune(*head);
+                let args = args.into_iter().map(|arg| self.prune(arg)).collect();
+                self.apply(head, args)
+            }
             other => other,
+        }
+    }
+
+    fn apply(&self, head: Ty<'a>, mut arguments: Vec<Ty<'a>>) -> Ty<'a> {
+        if arguments.is_empty() {
+            return head;
+        }
+        match head {
+            Ty::App(head, mut existing) => {
+                existing.append(&mut arguments);
+                Ty::App(head, existing)
+            }
+            Ty::Partial(constructor, slots) => {
+                let mut supplied = arguments.into_iter();
+                let mut remaining_hole = 0;
+                let mut filled = Vec::with_capacity(slots.len());
+                let mut complete = true;
+                for slot in slots {
+                    match slot {
+                        TySlot::Fixed(typ) => filled.push(TySlot::Fixed(typ)),
+                        TySlot::Hole(_) => match supplied.next() {
+                            Some(typ) => filled.push(TySlot::Fixed(typ)),
+                            None => {
+                                filled.push(TySlot::Hole(remaining_hole));
+                                remaining_hole += 1;
+                                complete = false;
+                            }
+                        },
+                    }
+                }
+                let rest = supplied.collect::<Vec<_>>();
+                if complete {
+                    let base = Ty::App(
+                        Box::new(Ty::Con(constructor)),
+                        filled
+                            .into_iter()
+                            .map(|slot| match slot {
+                                TySlot::Fixed(typ) => typ,
+                                TySlot::Hole(_) => unreachable!("complete partial has no holes"),
+                            })
+                            .collect(),
+                    );
+                    if rest.is_empty() {
+                        base
+                    } else {
+                        Ty::App(Box::new(base), rest)
+                    }
+                } else {
+                    debug_assert!(rest.is_empty());
+                    Ty::Partial(constructor, filled)
+                }
+            }
+            other => Ty::App(Box::new(other), arguments),
         }
     }
 
     fn occurs(&mut self, needle: usize, typ: &Ty<'a>) -> bool {
         match self.prune(typ.clone()) {
             Ty::Var(id) => id == needle,
-            Ty::Named(_, args) | Ty::Tuple(args) => args.iter().any(|arg| self.occurs(needle, arg)),
+            Ty::Con(_) => false,
+            Ty::App(head, args) => {
+                self.occurs(needle, &head) || args.iter().any(|arg| self.occurs(needle, arg))
+            }
+            Ty::Tuple(args) => args.iter().any(|arg| self.occurs(needle, arg)),
+            Ty::Partial(_, slots) => slots.iter().any(|slot| match slot {
+                TySlot::Hole(_) => false,
+                TySlot::Fixed(typ) => self.occurs(needle, typ),
+            }),
+            Ty::Projection(_, args, _) => args.iter().any(|arg| self.occurs(needle, arg)),
             Ty::Fn(args, ret) => {
                 args.iter().any(|arg| self.occurs(needle, arg)) || self.occurs(needle, &ret)
             }
@@ -1244,7 +3581,26 @@ impl<'a> Infer<'a> {
             Ty::Var(id) => {
                 result.insert(id);
             }
-            Ty::Named(_, args) | Ty::Tuple(args) => {
+            Ty::Con(_) => {}
+            Ty::App(head, args) => {
+                self.free_vars(&head, result);
+                for arg in &args {
+                    self.free_vars(arg, result);
+                }
+            }
+            Ty::Tuple(args) => {
+                for arg in &args {
+                    self.free_vars(arg, result);
+                }
+            }
+            Ty::Partial(_, slots) => {
+                for slot in &slots {
+                    if let TySlot::Fixed(typ) = slot {
+                        self.free_vars(typ, result);
+                    }
+                }
+            }
+            Ty::Projection(_, args, _) => {
                 for arg in &args {
                     self.free_vars(arg, result);
                 }
@@ -1267,11 +3623,29 @@ impl<'a> Infer<'a> {
     fn replace_vars(&mut self, typ: &Ty<'a>, replacements: &BTreeMap<usize, Ty<'a>>) -> Ty<'a> {
         match self.prune(typ.clone()) {
             Ty::Var(id) => replacements.get(&id).cloned().unwrap_or(Ty::Var(id)),
-            Ty::Named(name, args) => Ty::Named(
-                name,
+            Ty::Con(name) => Ty::Con(name),
+            Ty::App(head, args) => Ty::App(
+                Box::new(self.replace_vars(&head, replacements)),
                 args.iter()
                     .map(|arg| self.replace_vars(arg, replacements))
                     .collect(),
+            ),
+            Ty::Partial(name, slots) => Ty::Partial(
+                name,
+                slots
+                    .iter()
+                    .map(|slot| match slot {
+                        TySlot::Hole(index) => TySlot::Hole(*index),
+                        TySlot::Fixed(typ) => TySlot::Fixed(self.replace_vars(typ, replacements)),
+                    })
+                    .collect(),
+            ),
+            Ty::Projection(trait_, args, assoc) => Ty::Projection(
+                trait_,
+                args.iter()
+                    .map(|arg| self.replace_vars(arg, replacements))
+                    .collect(),
+                assoc,
             ),
             Ty::Fn(args, ret) => Ty::Fn(
                 args.iter()
@@ -1298,15 +3672,116 @@ impl<'a> Infer<'a> {
         }
     }
 
-    fn annotation(&mut self, typ: &Ty<'a>) -> &'a Annotation<'a> {
+    fn annotation(&mut self, scheme: &Scheme<'a>) -> &'a Annotation<'a> {
+        let typ = self.prune(scheme.typ.clone());
+        let mut arities = BTreeMap::new();
+        self.collect_kind_arities(&typ, &mut arities);
+        for predicate in &scheme.predicates {
+            for argument in &predicate.args {
+                self.collect_kind_arities(argument, &mut arities);
+            }
+        }
+        for equation in &scheme.projection_eqs {
+            self.collect_kind_arities(&equation.projection, &mut arities);
+            self.collect_kind_arities(&equation.typ, &mut arities);
+        }
         let mut names = BTreeMap::new();
-        let typ = self.to_ast(typ, &mut names);
+        let typ = self.to_ast(&typ, &mut names);
+        let trait_predicates = self
+            .bump
+            .alloc_slice_fill_iter(scheme.predicates.iter().map(|predicate| {
+                alder_ast::TraitRef {
+                    trait_: predicate.trait_,
+                    args: self.bump.alloc_slice_fill_iter(
+                        predicate
+                            .args
+                            .iter()
+                            .map(|argument| self.to_ast(argument, &mut names)),
+                    ),
+                }
+            }));
+        let mut projection_equalities = Vec::with_capacity(scheme.projection_eqs.len());
+        for equation in &scheme.projection_eqs {
+            let projection_type = self.to_ast(&equation.projection, &mut names);
+            let Type::Projection(projection) = projection_type.value else {
+                unreachable!("scheme projection equations have projection left sides")
+            };
+            projection_equalities.push(alder_ast::ProjectionEquality {
+                projection,
+                typ: self.to_ast(&equation.typ, &mut names),
+                region: Region::zero(),
+            });
+        }
+        let mut params = names.into_iter().collect::<Vec<_>>();
+        params.sort_by_key(|(_, name)| generated_type_name_rank(name));
         self.bump.alloc(Annotation {
-            free_vars: self
+            params: self
                 .bump
-                .alloc_slice_copy(&names.values().copied().collect::<Vec<_>>()),
+                .alloc_slice_fill_iter(params.into_iter().map(|(id, name)| alder_ast::TypeParam {
+                    name: Located::at(Region::zero(), name),
+                    kind: self.kind_from_arity(arities.get(&id).copied().unwrap_or(0)),
+                })),
+            trait_predicates,
+            projection_equalities: self.bump.alloc_slice_copy(&projection_equalities),
             typ,
         })
+    }
+
+    fn collect_kind_arities(&mut self, typ: &Ty<'a>, arities: &mut BTreeMap<usize, usize>) {
+        match self.prune(typ.clone()) {
+            Ty::Var(id) => {
+                arities.entry(id).or_insert(0);
+            }
+            Ty::Con(_) | Ty::Unit | Ty::ErrorRow | Ty::Any => {}
+            Ty::App(head, args) => {
+                match self.prune(*head) {
+                    Ty::Var(id) => {
+                        arities
+                            .entry(id)
+                            .and_modify(|arity| *arity = (*arity).max(args.len()))
+                            .or_insert(args.len());
+                    }
+                    other => self.collect_kind_arities(&other, arities),
+                }
+                for arg in &args {
+                    self.collect_kind_arities(arg, arities);
+                }
+            }
+            Ty::Partial(_, slots) => {
+                for slot in &slots {
+                    if let TySlot::Fixed(typ) = slot {
+                        self.collect_kind_arities(typ, arities);
+                    }
+                }
+            }
+            Ty::Projection(_, args, _) | Ty::Tuple(args) => {
+                for arg in &args {
+                    self.collect_kind_arities(arg, arities);
+                }
+            }
+            Ty::Fn(args, ret) => {
+                for arg in &args {
+                    self.collect_kind_arities(arg, arities);
+                }
+                self.collect_kind_arities(&ret, arities);
+            }
+            Ty::Record(fields, _) => {
+                for (_, typ) in fields.values() {
+                    self.collect_kind_arities(typ, arities);
+                }
+            }
+        }
+    }
+
+    fn kind_from_arity(&self, arity: usize) -> alder_ast::Kind<'a> {
+        let mut kind = alder_ast::Kind::Type;
+        for _ in 0..arity {
+            kind = alder_ast::Kind::Arrow {
+                param: self.bump.alloc(alder_ast::Kind::Type),
+                result: self.bump.alloc(kind),
+            };
+        }
+        kind
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -1317,23 +3792,49 @@ impl<'a> Infer<'a> {
     ) -> &'a Located<Type<'a>> {
         let typ = match self.prune(typ.clone()) {
             Ty::Var(id) => {
-                let next = names.len();
-                let name = *names.entry(id).or_insert_with(|| {
-                    let generated = if next < 26 {
-                        ((b'a' + next as u8) as char).to_string()
-                    } else {
-                        format!("t{next}")
-                    };
-                    self.bump.alloc_str(&generated)
-                });
+                let name = self.type_var_name(id, names);
                 Type::Var { name, args: &[] }
             }
-            Ty::Named(reference, args) => Type::Named {
+            Ty::Con(reference) => Type::Named {
                 reference,
-                args: self
-                    .bump
-                    .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+                args: &[],
             },
+            Ty::App(head, args) => match self.prune(*head) {
+                Ty::Con(reference) => Type::Named {
+                    reference,
+                    args: self
+                        .bump
+                        .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+                },
+                Ty::Var(id) => {
+                    let name = self.type_var_name(id, names);
+                    Type::Var {
+                        name,
+                        args: self
+                            .bump
+                            .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+                    }
+                }
+                other => panic!("unsupported public type application head: {other:?}"),
+            },
+            Ty::Partial(constructor, slots) => Type::Partial {
+                constructor,
+                slots: self
+                    .bump
+                    .alloc_slice_fill_iter(slots.iter().map(|slot| match slot {
+                        TySlot::Hole(index) => TypeSlot::Hole(*index),
+                        TySlot::Fixed(typ) => TypeSlot::Fixed(self.to_ast(typ, names)),
+                    })),
+            },
+            Ty::Projection(trait_, args, assoc) => Type::Projection(alder_ast::ProjectionType {
+                trait_ref: alder_ast::TraitRef {
+                    trait_,
+                    args: self
+                        .bump
+                        .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+                },
+                assoc,
+            }),
             Ty::Fn(params, ret) => Type::Fn {
                 params: self
                     .bump
@@ -1370,15 +3871,27 @@ impl<'a> Infer<'a> {
         self.bump.alloc(Located::at_zero(typ))
     }
 
+    fn type_var_name(&self, id: usize, names: &mut BTreeMap<usize, &'a str>) -> &'a str {
+        let next = names.len();
+        names.entry(id).or_insert_with(|| {
+            let generated = if next < 26 {
+                ((b'a' + next as u8) as char).to_string()
+            } else {
+                format!("t{next}")
+            };
+            self.bump.alloc_str(&generated)
+        })
+    }
+
     fn named(&self, name: &'a str, args: Vec<Ty<'a>>) -> Ty<'a> {
-        Ty::Named(
-            QualifiedName {
+        self.apply(
+            Ty::Con(QualifiedName {
                 module: ModuleId {
                     package: PackageId::Builtin,
                     path: &[],
                 },
                 name,
-            },
+            }),
             args,
         )
     }
@@ -1396,17 +3909,17 @@ impl<'a> Infer<'a> {
     fn render(&mut self, typ: Ty<'a>) -> String {
         match self.prune(typ) {
             Ty::Var(_) => "a".to_owned(),
-            Ty::Named(name, args) if args.is_empty() => name.name.to_owned(),
-            Ty::Named(name, args) => format!(
+            Ty::Con(name) => name.name.to_owned(),
+            Ty::App(head, args) => format!(
                 "{}[{}]",
-                name.name,
+                self.render(*head),
                 args.into_iter()
                     .map(|arg| self.render(arg))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
             Ty::Fn(args, ret) => format!(
-                "fn({}) -> {}",
+                "fn({}) {}",
                 args.into_iter()
                     .map(|arg| self.render(arg))
                     .collect::<Vec<_>>()
@@ -1439,6 +3952,27 @@ impl<'a> Infer<'a> {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Ty::Partial(reference, slots) => format!(
+                "{}[{}]",
+                reference.name,
+                slots
+                    .into_iter()
+                    .map(|slot| match slot {
+                        TySlot::Hole(_) => "_".to_owned(),
+                        TySlot::Fixed(typ) => self.render(typ),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Ty::Projection(trait_, args, assoc) => format!(
+                "{}[{}]::{}",
+                trait_.0.name,
+                args.into_iter()
+                    .map(|arg| self.render(arg))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                assoc.name
+            ),
             Ty::ErrorRow => "[:_ | e]".to_owned(),
             Ty::Any => "_".to_owned(),
         }
@@ -1461,4 +3995,24 @@ fn block_contains_return(block: &Located<Block<'_>>) -> bool {
             | Stmt::Assert(_)
             | Stmt::Expr(_) => false,
         })
+}
+
+fn is_value_item(item: &ItemKind<'_>) -> bool {
+    matches!(
+        item,
+        ItemKind::Fn(_)
+            | ItemKind::Let(_)
+            | ItemKind::Component(_)
+            | ItemKind::Extern(alder_ast::ExternDecl::Fn { .. })
+    )
+}
+
+fn generated_type_name_rank(name: &str) -> usize {
+    match name.as_bytes() {
+        [letter @ b'a'..=b'z'] => usize::from(*letter - b'a'),
+        _ => name
+            .strip_prefix('t')
+            .and_then(|index| index.parse().ok())
+            .unwrap_or(usize::MAX),
+    }
 }

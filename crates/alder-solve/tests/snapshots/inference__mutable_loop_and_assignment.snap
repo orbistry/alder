@@ -1,5 +1,5 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "fn sum(values: Array[Number]) -> Number {\n    let mut total = 0\n    for value in values {\n        total += value\n    }\n    total\n}\n"
+description: "fn sum(values: Array[Number]) Number {\n    let mut total = 0\n    for value in values {\n        total += value\n    }\n    total\n}\n"
 ---
-sum: fn(Array[Number]) -> Number
+sum: fn(Array[Number]) Number

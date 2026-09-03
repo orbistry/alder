@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/impl_.rs
-description: "impl Convert[Number, String] {\n    fn convert(n: Number) -> String { show(n) }\n}\n"
+description: "impl Convert[Number, String] {\n    fn convert(n: Number) String { show(n) }\n}\n"
 ---
 ImplDecl {
     trait_: Path {
@@ -162,11 +162,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 30,
+                                column: 27,
                             },
                             end: Position {
                                 line: 2,
-                                column: 36,
+                                column: 33,
                             },
                         },
                         value: Named {
@@ -176,11 +176,11 @@ ImplDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 30,
+                                                column: 27,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 36,
+                                                column: 33,
                                             },
                                         },
                                         value: "String",
@@ -197,11 +197,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 37,
+                                column: 34,
                             },
                             end: Position {
                                 line: 2,
-                                column: 48,
+                                column: 45,
                             },
                         },
                         value: Block {
@@ -211,11 +211,11 @@ ImplDecl {
                                     region: Region {
                                         start: Position {
                                             line: 2,
-                                            column: 39,
+                                            column: 36,
                                         },
                                         end: Position {
                                             line: 2,
-                                            column: 46,
+                                            column: 43,
                                         },
                                     },
                                     value: Call {
@@ -223,11 +223,11 @@ ImplDecl {
                                             region: Region {
                                                 start: Position {
                                                     line: 2,
-                                                    column: 39,
+                                                    column: 36,
                                                 },
                                                 end: Position {
                                                     line: 2,
-                                                    column: 43,
+                                                    column: 40,
                                                 },
                                             },
                                             value: Var(
@@ -239,11 +239,11 @@ ImplDecl {
                                                 region: Region {
                                                     start: Position {
                                                         line: 2,
-                                                        column: 44,
+                                                        column: 41,
                                                     },
                                                     end: Position {
                                                         line: 2,
-                                                        column: 45,
+                                                        column: 42,
                                                     },
                                                 },
                                                 value: Var(

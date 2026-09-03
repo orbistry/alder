@@ -160,6 +160,7 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
                 ("$arrayLength", "length"),
                 ("$arrayPush", "push"),
                 ("$arrayMap", "map"),
+                ("$arrayFilter", "filter"),
             ]),
         ),
         (
@@ -180,6 +181,7 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
             "Json",
             exports(&[("$jsonEncode", "encode"), ("$jsonDecode", "decode")]),
         ),
+        ("Ref", exports(&[("$refSame", "same")])),
         ("Io", exports(&[("$ioPrint", "print")])),
         ("Cli", exports(&[("$cliArgs", "args")])),
         ("Task", exports(&[("$taskSleep", "sleep")])),

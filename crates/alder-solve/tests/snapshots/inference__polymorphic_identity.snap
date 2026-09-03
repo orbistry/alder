@@ -2,4 +2,4 @@
 source: crates/alder-solve/tests/inference.rs
 description: "fn identity(value) { value }"
 ---
-identity: forall a. fn(a) -> a
+identity: forall a. fn(a) a

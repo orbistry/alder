@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "let recent = query {\n    select { u.name, p.title, p.created }\n    from users as u\n    join posts as p on p.author == u.id\n    where u.active && p.created > ^since && u.id in ^ids\n    orderBy p.created desc\n    limit ^pageSize\n}\n\nfn run(db: Db) -> Result[()] {\n    let rows = db.run(recent).await?      // Array[{ name: String, title: String, created: Timestamp }]\n    db.run(query { insert into users values ^{ email, name } }).await?\n    db.run(query { update users set { name: ^newName } where users.id == ^user.id }).await?\n    db.run(query { delete from posts where posts.author == ^user.id }).await?\n    Ok(())\n}\n"
+description: "let recent = query {\n    select { u.name, p.title, p.created }\n    from users as u\n    join posts as p on p.author == u.id\n    where u.active && p.created > ^since && u.id in ^ids\n    orderBy p.created desc\n    limit ^pageSize\n}\n\nfn run(db: Db) Result[()] {\n    let rows = db.run(recent).await?      // Array[{ name: String, title: String, created: Timestamp }]\n    db.run(query { insert into users values ^{ email, name } }).await?\n    db.run(query { update users set { name: ^newName } where users.id == ^user.id }).await?\n    db.run(query { delete from posts where posts.author == ^user.id }).await?\n    Ok(())\n}\n"
 ---
 Module {
     items: [
@@ -825,11 +825,11 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 10,
-                                        column: 19,
+                                        column: 16,
                                     },
                                     end: Position {
                                         line: 10,
-                                        column: 29,
+                                        column: 26,
                                     },
                                 },
                                 value: Named {
@@ -839,11 +839,11 @@ Module {
                                                 region: Region {
                                                     start: Position {
                                                         line: 10,
-                                                        column: 19,
+                                                        column: 16,
                                                     },
                                                     end: Position {
                                                         line: 10,
-                                                        column: 25,
+                                                        column: 22,
                                                     },
                                                 },
                                                 value: "Result",
@@ -855,11 +855,11 @@ Module {
                                             region: Region {
                                                 start: Position {
                                                     line: 10,
-                                                    column: 26,
+                                                    column: 23,
                                                 },
                                                 end: Position {
                                                     line: 10,
-                                                    column: 28,
+                                                    column: 25,
                                                 },
                                             },
                                             value: Unit,
@@ -874,7 +874,7 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 10,
-                                        column: 30,
+                                        column: 27,
                                     },
                                     end: Position {
                                         line: 16,

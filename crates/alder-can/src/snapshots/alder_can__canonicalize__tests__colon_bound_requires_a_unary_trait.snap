@@ -1,0 +1,25 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "trait Convert[a, b] { fn convert(value: a) -> b }\nfn bad(value: a) where a: Convert { value }\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 27,
+            },
+            end: Position {
+                line: 2,
+                column: 34,
+            },
+        },
+        kind: Type(
+            BadArity {
+                name: "Convert",
+                expected: 2,
+                actual: 1,
+            },
+        ),
+    },
+]

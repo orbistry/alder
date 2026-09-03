@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "fn lookup(cache: Cache[k, v], key: k) -> Option[v]\n    where k: Eq + Hash\n"
+description: "fn lookup(cache: Cache[k, v], key: k) Option[v]\n    where k: Eq + Hash\n"
 ---
 FnDecl {
     name: Located {
@@ -144,11 +144,11 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 42,
+                    column: 39,
                 },
                 end: Position {
                     line: 1,
-                    column: 51,
+                    column: 48,
                 },
             },
             value: Named {
@@ -158,11 +158,11 @@ FnDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 42,
+                                    column: 39,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 48,
+                                    column: 45,
                                 },
                             },
                             value: "Option",
@@ -174,11 +174,11 @@ FnDecl {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 49,
+                                column: 46,
                             },
                             end: Position {
                                 line: 1,
-                                column: 50,
+                                column: 47,
                             },
                         },
                         value: Var {

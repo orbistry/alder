@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "fn classify(n: Number) -> String {\n    let sign = if n < 0 { \"neg\" } else { \"pos\" }\n    sign\n}\n"
+description: "fn classify(n: Number) String {\n    let sign = if n < 0 { \"neg\" } else { \"pos\" }\n    sign\n}\n"
 ---
 FnDecl {
     name: Located {
@@ -75,11 +75,11 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 27,
+                    column: 24,
                 },
                 end: Position {
                     line: 1,
-                    column: 33,
+                    column: 30,
                 },
             },
             value: Named {
@@ -89,11 +89,11 @@ FnDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 27,
+                                    column: 24,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 33,
+                                    column: 30,
                                 },
                             },
                             value: "String",
@@ -110,7 +110,7 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 34,
+                    column: 31,
                 },
                 end: Position {
                     line: 4,

@@ -1,0 +1,27 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "fn left() Number { 40 }\nfn right() Number { 2 }\nfn factory() fn(Number, Number) Number {\n    (a: Number, b: Number) Number -> a + b\n}\npub fn answer() Number { left() |> factory()(right()) }\n"
+---
+function $v_left() {
+	return 40;
+}
+function $v_right() {
+	return 2;
+}
+function $v_factory() {
+	return ($a0, $a1) => {
+		let $l0_a = $a0;
+		let $l1_b = $a1;
+		const $t0 = $l0_a;
+		return $t0 + $l1_b;
+	};
+}
+function $v_answer() {
+	const $t1 = $v_left;
+	const $t2 = $t1();
+	const $t3 = $v_factory;
+	const $t4 = $t3();
+	const $t5 = $v_right;
+	return $t4($t2, $t5());
+}
+export { $v_answer as answer };

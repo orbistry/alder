@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/impl_.rs
-description: "impl Monoid[String] {\n    fn empty() -> String { \"\" }\n    fn append(x: String, y: String) -> String { x }\n}\n"
+description: "impl Monoid[String] {\n    fn empty() String { \"\" }\n    fn append(x: String, y: String) String { x }\n}\n"
 ---
 ImplDecl {
     trait_: Path {
@@ -77,11 +77,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 19,
+                                column: 16,
                             },
                             end: Position {
                                 line: 2,
-                                column: 25,
+                                column: 22,
                             },
                         },
                         value: Named {
@@ -91,11 +91,11 @@ ImplDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 19,
+                                                column: 16,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 25,
+                                                column: 22,
                                             },
                                         },
                                         value: "String",
@@ -112,11 +112,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 26,
+                                column: 23,
                             },
                             end: Position {
                                 line: 2,
-                                column: 32,
+                                column: 29,
                             },
                         },
                         value: Block {
@@ -126,11 +126,11 @@ ImplDecl {
                                     region: Region {
                                         start: Position {
                                             line: 2,
-                                            column: 28,
+                                            column: 25,
                                         },
                                         end: Position {
                                             line: 2,
-                                            column: 30,
+                                            column: 27,
                                         },
                                     },
                                     value: Str(
@@ -269,11 +269,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 3,
-                                column: 40,
+                                column: 37,
                             },
                             end: Position {
                                 line: 3,
-                                column: 46,
+                                column: 43,
                             },
                         },
                         value: Named {
@@ -283,11 +283,11 @@ ImplDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 3,
-                                                column: 40,
+                                                column: 37,
                                             },
                                             end: Position {
                                                 line: 3,
-                                                column: 46,
+                                                column: 43,
                                             },
                                         },
                                         value: "String",
@@ -304,11 +304,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 3,
-                                column: 47,
+                                column: 44,
                             },
                             end: Position {
                                 line: 3,
-                                column: 52,
+                                column: 49,
                             },
                         },
                         value: Block {
@@ -318,11 +318,11 @@ ImplDecl {
                                     region: Region {
                                         start: Position {
                                             line: 3,
-                                            column: 49,
+                                            column: 46,
                                         },
                                         end: Position {
                                             line: 3,
-                                            column: 50,
+                                            column: 47,
                                         },
                                     },
                                     value: Var(

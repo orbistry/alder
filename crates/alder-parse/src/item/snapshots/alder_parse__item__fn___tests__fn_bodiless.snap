@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: fn randomUUID() -> String
+description: fn randomUUID() String
 ---
 FnDecl {
     name: Located {
@@ -22,11 +22,11 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 20,
+                    column: 17,
                 },
                 end: Position {
                     line: 1,
-                    column: 26,
+                    column: 23,
                 },
             },
             value: Named {
@@ -36,11 +36,11 @@ FnDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 20,
+                                    column: 17,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 26,
+                                    column: 23,
                                 },
                             },
                             value: "String",

@@ -1,0 +1,23 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "#[derive(Missing)]\nenum Status { Ready }\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 10,
+            },
+            end: Position {
+                line: 1,
+                column: 17,
+            },
+        },
+        kind: Attribute(
+            InvalidDerive {
+                reason: "unknown built-in derive",
+            },
+        ),
+    },
+]

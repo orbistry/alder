@@ -1,8 +1,8 @@
 #[extern("alder:kernel", "$setNew")]
-pub fn new() -> Set[a]
+pub fn new() Set[a]
 
 #[extern("alder:kernel", "$setHas")]
-pub fn has(values: Set[a], value: a) -> Bool
+pub fn has(values: Set[a], value: a) Bool
 
 #[extern("alder:kernel", "$setAdd")]
-pub fn add(values: Set[a], value: a) -> ()
+pub fn add(values: Set[a], value: a) ()

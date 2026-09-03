@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "// users/[id]/+page.server.ald\npub fn load(event: LoadEvent) -> Result[{ user: User, posts: Array[Post] }] {\n    use Db\n    let user = db.run(query { select * from users where users.id == ^event.params.id }).await?\n    let posts = loadPosts(user.id).await?\n    Ok({ user, posts })\n}\n\n// users/[id]/+page.ald\npub component page(props: { data: PageData }) {\n    <h1>{props.data.user.name}</h1>\n}\n"
+description: "// users/[id]/+page.server.ald\npub fn load(event: LoadEvent) Result[{ user: User, posts: Array[Post] }] {\n    use Db\n    let user = db.run(query { select * from users where users.id == ^event.params.id }).await?\n    let posts = loadPosts(user.id).await?\n    Ok({ user, posts })\n}\n\n// users/[id]/+page.ald\npub component page(props: { data: PageData }) {\n    <h1>{props.data.user.name}</h1>\n}\n"
 ---
 Module {
     items: [
@@ -103,11 +103,11 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 2,
-                                        column: 34,
+                                        column: 31,
                                     },
                                     end: Position {
                                         line: 2,
-                                        column: 76,
+                                        column: 73,
                                     },
                                 },
                                 value: Named {
@@ -117,11 +117,11 @@ Module {
                                                 region: Region {
                                                     start: Position {
                                                         line: 2,
-                                                        column: 34,
+                                                        column: 31,
                                                     },
                                                     end: Position {
                                                         line: 2,
-                                                        column: 40,
+                                                        column: 37,
                                                     },
                                                 },
                                                 value: "Result",
@@ -133,11 +133,11 @@ Module {
                                             region: Region {
                                                 start: Position {
                                                     line: 2,
-                                                    column: 41,
+                                                    column: 38,
                                                 },
                                                 end: Position {
                                                     line: 2,
-                                                    column: 75,
+                                                    column: 72,
                                                 },
                                             },
                                             value: Record {
@@ -147,11 +147,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 2,
-                                                                    column: 43,
+                                                                    column: 40,
                                                                 },
                                                                 end: Position {
                                                                     line: 2,
-                                                                    column: 47,
+                                                                    column: 44,
                                                                 },
                                                             },
                                                             value: "user",
@@ -161,11 +161,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 2,
-                                                                    column: 49,
+                                                                    column: 46,
                                                                 },
                                                                 end: Position {
                                                                     line: 2,
-                                                                    column: 53,
+                                                                    column: 50,
                                                                 },
                                                             },
                                                             value: Named {
@@ -175,11 +175,11 @@ Module {
                                                                             region: Region {
                                                                                 start: Position {
                                                                                     line: 2,
-                                                                                    column: 49,
+                                                                                    column: 46,
                                                                                 },
                                                                                 end: Position {
                                                                                     line: 2,
-                                                                                    column: 53,
+                                                                                    column: 50,
                                                                                 },
                                                                             },
                                                                             value: "User",
@@ -195,11 +195,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 2,
-                                                                    column: 55,
+                                                                    column: 52,
                                                                 },
                                                                 end: Position {
                                                                     line: 2,
-                                                                    column: 60,
+                                                                    column: 57,
                                                                 },
                                                             },
                                                             value: "posts",
@@ -209,11 +209,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 2,
-                                                                    column: 62,
+                                                                    column: 59,
                                                                 },
                                                                 end: Position {
                                                                     line: 2,
-                                                                    column: 73,
+                                                                    column: 70,
                                                                 },
                                                             },
                                                             value: Named {
@@ -223,11 +223,11 @@ Module {
                                                                             region: Region {
                                                                                 start: Position {
                                                                                     line: 2,
-                                                                                    column: 62,
+                                                                                    column: 59,
                                                                                 },
                                                                                 end: Position {
                                                                                     line: 2,
-                                                                                    column: 67,
+                                                                                    column: 64,
                                                                                 },
                                                                             },
                                                                             value: "Array",
@@ -239,11 +239,11 @@ Module {
                                                                         region: Region {
                                                                             start: Position {
                                                                                 line: 2,
-                                                                                column: 68,
+                                                                                column: 65,
                                                                             },
                                                                             end: Position {
                                                                                 line: 2,
-                                                                                column: 72,
+                                                                                column: 69,
                                                                             },
                                                                         },
                                                                         value: Named {
@@ -253,11 +253,11 @@ Module {
                                                                                         region: Region {
                                                                                             start: Position {
                                                                                                 line: 2,
-                                                                                                column: 68,
+                                                                                                column: 65,
                                                                                             },
                                                                                             end: Position {
                                                                                                 line: 2,
-                                                                                                column: 72,
+                                                                                                column: 69,
                                                                                             },
                                                                                         },
                                                                                         value: "Post",
@@ -285,7 +285,7 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 2,
-                                        column: 77,
+                                        column: 74,
                                     },
                                     end: Position {
                                         line: 7,

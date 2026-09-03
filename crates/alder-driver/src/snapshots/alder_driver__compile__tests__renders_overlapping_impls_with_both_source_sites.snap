@@ -1,0 +1,21 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] {\n    fn display(value: a) String\n}\n\nimpl Display[a] {\n    fn display(value: a) String { \"any\" }\n}\n\nimpl Display[Number] {\n    fn display(value: Number) String { \"number\" }\n}\n"
+---
+alder::trait::overlapping_impl
+
+  × overlapping implementations of `Display` are not allowed
+    ╭─[/project/src/main.ald:9:1]
+  4 │     
+  5 │ ╭─▶ impl Display[a] {
+  6 │ │       fn display(value: a) String { "any" }
+  7 │ ├─▶ }
+    · ╰──── first implementation is here
+  8 │     
+  9 │ ╭─▶ impl Display[Number] {
+ 10 │ │       fn display(value: Number) String { "number" }
+ 11 │ ├─▶ }
+    · ╰──── this implementation overlaps the first
+    ╰────
+  help: remove one impl or introduce a distinct wrapper type; Alder has no
+        specialization

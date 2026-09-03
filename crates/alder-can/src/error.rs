@@ -1,4 +1,4 @@
-use alder_ast::{ModuleId, Namespace, QualifiedName};
+use alder_ast::{ModuleId, Namespace, PackageId, QualifiedName, TraitId};
 use alder_region::Region;
 
 #[derive(Clone, Debug)]
@@ -110,6 +110,37 @@ pub enum TypeError<'a> {
     UnusedParameter {
         name: &'a str,
     },
+    MissingAnnotation {
+        name: &'a str,
+        position: &'static str,
+    },
+    UnknownImplItem {
+        trait_name: &'a str,
+        name: &'a str,
+        item_kind: &'static str,
+    },
+    MissingImplItem {
+        trait_name: &'a str,
+        name: &'a str,
+        item_kind: &'static str,
+    },
+    UnknownAssocType {
+        name: &'a str,
+    },
+    AmbiguousAssocType {
+        name: &'a str,
+        traits: &'a [TraitId<'a>],
+    },
+    OrphanImpl(&'a OrphanImplDetails<'a>),
+    InvalidHole,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct OrphanImplDetails<'a> {
+    pub trait_name: &'a str,
+    pub subject: &'a str,
+    pub trait_package: PackageId<'a>,
+    pub type_package: Option<PackageId<'a>>,
 }
 
 #[derive(Clone, Debug)]
@@ -178,7 +209,7 @@ pub enum StmtError<'a> {
 #[derive(Clone, Debug)]
 pub enum AttributeError<'a> {
     InvalidExtern { reason: &'a str },
-    DeriveUnavailable,
+    InvalidDerive { reason: &'a str },
     Unknown { name: &'a str },
     MacroUnavailable,
 }

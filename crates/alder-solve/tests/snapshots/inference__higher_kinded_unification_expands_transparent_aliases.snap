@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "type Wrapped[a, e] = Result[a, e]\n\nfn adapt(value: f[a]) f[a] { value }\nfn specialize(value: Wrapped[Number, String]) { adapt(value) }\n"
+---
+adapt: forall a, b. fn(a[b]) a[b]
+specialize: fn(Wrapped[Number, String]) Wrapped[Number, String]

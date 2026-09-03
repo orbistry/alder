@@ -520,7 +520,9 @@ carried forward. Pipe remains a binop until constraint/codegen lowering.
 
 `Placeholder` is intentionally absent. A call containing `_` is wrapped in a
 lambda, placeholders are replaced left-to-right with fresh `LocalId`s, and
-nested calls are canonicalized before their enclosing call.
+nested calls are canonicalized before their enclosing call. This means pipe
+lowering can distinguish a direct RHS call (default first-argument forwarding)
+from a placeholder-selected call, whose RHS is already a unary lambda.
 
 Every function/lambda boundary resets the loop stack. Consequently a closure
 cannot `break` or `continue` an enclosing loop. A `provide` value resolves in
@@ -1027,7 +1029,7 @@ The nested enums must cover at least:
 
 Suggestions use edit distance plus prefix matching, are stable-sorted and
 capped, and never expose private names as ordinary suggestions. Diagnostics
-render the new syntax (`Map[String, Number]`, `fn(a) -> b`,
+render the new syntax (`Map[String, Number]`, `fn(a) b`,
 `{ name?: String }`) and retain all declaration/reference regions needed for
 Elm-quality primary and secondary labels.
 

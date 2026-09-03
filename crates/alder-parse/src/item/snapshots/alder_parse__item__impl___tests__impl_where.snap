@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/impl_.rs
-description: "impl Show[Cache[k, v]] where k: Show, v: Show {\n    fn show(cache: Cache[k, v]) -> String { \"cache\" }\n}\n"
+description: "impl Show[Cache[k, v]] where k: Show, v: Show {\n    fn show(cache: Cache[k, v]) String { \"cache\" }\n}\n"
 ---
 ImplDecl {
     trait_: Path {
@@ -265,11 +265,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 36,
+                                column: 33,
                             },
                             end: Position {
                                 line: 2,
-                                column: 42,
+                                column: 39,
                             },
                         },
                         value: Named {
@@ -279,11 +279,11 @@ ImplDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 36,
+                                                column: 33,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 42,
+                                                column: 39,
                                             },
                                         },
                                         value: "String",
@@ -300,11 +300,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 43,
+                                column: 40,
                             },
                             end: Position {
                                 line: 2,
-                                column: 54,
+                                column: 51,
                             },
                         },
                         value: Block {
@@ -314,11 +314,11 @@ ImplDecl {
                                     region: Region {
                                         start: Position {
                                             line: 2,
-                                            column: 45,
+                                            column: 42,
                                         },
                                         end: Position {
                                             line: 2,
-                                            column: 52,
+                                            column: 49,
                                         },
                                     },
                                     value: Str(

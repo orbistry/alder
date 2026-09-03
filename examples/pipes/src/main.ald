@@ -1,0 +1,21 @@
+fn subtract(left: Number, right: Number) Number {
+    left - right
+}
+
+pub fn main() {
+    let result = [1, 2, 3, 4, 5]
+        |> Array.map(x -> x * 2)
+        |> Array.filter(x -> x > 5)
+        |> Array.map((x: Number) Number -> {
+            let adjusted = x + 1
+            adjusted * adjusted
+        })
+
+    assert(result == [49, 81, 121])
+    assert((result |> Array.length) == 3)
+
+    // A placeholder still forwards to any argument position.
+    assert((2 |> subtract(44, _)) == 42)
+
+    Io.print("Pipe showcase passed!")
+}
