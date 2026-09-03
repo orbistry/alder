@@ -1,0 +1,53 @@
+trait Describe[a] {
+    fn describe(value: a) -> String
+}
+
+impl Describe[Number] {
+    fn describe(value: Number) -> String { "number" }
+}
+
+enum Box[a] { Box(a) }
+
+impl Describe[Box[a]] where a: Describe {
+    fn describe(value: Box[a]) -> String {
+        match value { Box::Box(inner) => describe(inner) }
+    }
+}
+
+impl Functor[Box] {
+    fn map(value: Box[a], transform: fn(a) -> b) -> Box[b] {
+        match value { Box::Box(inner) => Box::Box(transform(inner)) }
+    }
+}
+
+fn describe_generic(value: a) -> String where a: Describe {
+    describe(value)
+}
+
+#[derive(Show, Ord, Hash, Json)]
+enum Status {
+    Ready,
+    Failed(String),
+}
+
+pub fn main() {
+    assert(describe_generic(Box::Box(42)) == "number")
+
+    let mapped: Box[Number] = map(Box::Box(41), fn(value) { value + 1 })
+    assert(mapped == Box::Box(42))
+
+    let failed = Status::Failed("network unavailable")
+    assert(show(failed) == "Failed(\"network unavailable\")")
+    assert(Status::Ready < failed)
+    assert(hash(failed) == hash(Status::Failed("network unavailable")))
+
+    let decoded: Result[Status, String] = decode(encode(failed))
+    assert(decoded == Result.ok(failed))
+
+    let identity = { value: 42 }
+    let equal_but_distinct = { value: 42 }
+    assert(Ref.same(identity, identity))
+    assert(!Ref.same(identity, equal_but_distinct))
+
+    Io.print("Trait showcase passed!")
+}
