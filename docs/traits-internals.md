@@ -720,6 +720,11 @@ local, any well-kinded subject is allowed.
 
 Two impls overlap when, after alpha-renaming their parameters and expanding
 aliases, first-order unification can make their complete trait heads equal.
+
+`alder-can` performs this check as soon as an impl head has been canonicalized,
+so ordinary source modules receive the orphan error before body inference. The
+frozen `TraitDatabase` repeats the same check across collected and hydrated
+headers as a defense against stale or corrupt dependency metadata.
 Where predicates are deliberately ignored. Any such pair is an error; M3 has
 no specialization, priorities, negative impls, or local instances.
 

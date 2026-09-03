@@ -45,6 +45,9 @@ static resolution wherever the type is known.
 - Default method bodies allowed in the trait.
 - Orphan rule: an `impl` must live in the package defining the trait or
   the type.
+- `alder-can` rejects a source orphan immediately after canonicalizing its impl
+  head; package-wide solver coherence repeats the check for dependency and
+  persistent-header defense.
 - Higher-kinded variables get their kind inferred from use; `f[a]` in a
   type is `Type::Var { name, args }` in the source AST already.
 - No explicit type arguments at call sites; ambiguity is resolved by

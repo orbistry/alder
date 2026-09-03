@@ -1,0 +1,30 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "impl Show[Number] {\n    fn show(value: Number) -> String { \"number\" }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 1,
+            },
+            end: Position {
+                line: 3,
+                column: 2,
+            },
+        },
+        kind: Type(
+            OrphanImpl(
+                OrphanImplDetails {
+                    trait_name: "Show",
+                    subject: "Number",
+                    trait_package: Builtin,
+                    type_package: Some(
+                        Builtin,
+                    ),
+                },
+            ),
+        ),
+    },
+]

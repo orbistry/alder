@@ -2,10 +2,10 @@
 source: crates/alder-driver/src/compile.rs
 description: "impl Show[Number] {\n    fn show(value: Number) -> String { \"number\" }\n}\n"
 ---
-alder::trait::orphan_impl
+alder::canonicalize::orphan_impl
 
-  × orphan implementation `Show[Number]`: this package defines neither the
-  │ trait (the standard library) nor the subject type (the standard library)
+  × orphan implementation of `Show[Number]`: this package owns neither `Show`
+  │ (the standard library) nor `Number` (the standard library)
    ╭─[/project/src/main.ald:1:1]
  1 │ ╭─▶ impl Show[Number] {
  2 │ │       fn show(value: Number) -> String { "number" }

@@ -1163,9 +1163,14 @@ pub fn canonicalize(source: Source, error: &alder_can::Error<'_>) -> Diagnostic 
         CanErrorKind::Stmt(error) => statement_error(error),
         CanErrorKind::Attribute(error) => attribute_error(error),
     };
+    let primary_label = if matches!(error.kind, CanErrorKind::Type(TypeError::OrphanImpl(_))) {
+        "this package owns neither side of the implementation"
+    } else {
+        "reported here"
+    };
     let mut diagnostic = Diagnostic::error(source, message)
         .with_code(format!("alder::canonicalize::{code}"))
-        .with_primary_label(error.region, "reported here");
+        .with_primary_label(error.region, primary_label);
     if let Some((region, label)) = secondary {
         diagnostic = diagnostic.with_secondary_label(region, label);
     }
@@ -1683,6 +1688,23 @@ fn type_error(error: &TypeError<'_>) -> CanDetails {
                 traits.len()
             ),
             Some("qualify the associated type through its trait".to_owned()),
+            None,
+        ),
+        TypeError::OrphanImpl(details) => (
+            "orphan_impl",
+            format!(
+                "orphan implementation of `{trait_name}[{subject}]`: this package owns neither `{trait_name}` ({}) nor `{subject}` ({})",
+                package_name(details.trait_package),
+                details.type_package
+                    .map(package_name)
+                    .unwrap_or("no owning package"),
+                trait_name = details.trait_name,
+                subject = details.subject,
+            ),
+            Some(
+                "define either the trait or subject type in this package, or move the impl to a package that does"
+                    .to_owned(),
+            ),
             None,
         ),
         TypeError::InvalidHole => (

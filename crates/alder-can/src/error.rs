@@ -1,4 +1,4 @@
-use alder_ast::{ModuleId, Namespace, QualifiedName, TraitId};
+use alder_ast::{ModuleId, Namespace, PackageId, QualifiedName, TraitId};
 use alder_region::Region;
 
 #[derive(Clone, Debug)]
@@ -131,7 +131,16 @@ pub enum TypeError<'a> {
         name: &'a str,
         traits: &'a [TraitId<'a>],
     },
+    OrphanImpl(&'a OrphanImplDetails<'a>),
     InvalidHole,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct OrphanImplDetails<'a> {
+    pub trait_name: &'a str,
+    pub subject: &'a str,
+    pub trait_package: PackageId<'a>,
+    pub type_package: Option<PackageId<'a>>,
 }
 
 #[derive(Clone, Debug)]

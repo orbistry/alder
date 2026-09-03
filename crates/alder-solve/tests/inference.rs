@@ -666,6 +666,24 @@ fn foreign_trait_for_foreign_subject_is_an_orphan() {
         module: foreign_module,
         name: "ForeignEq",
     });
+    let implementation_module = ModuleId {
+        package: PackageId::Application,
+        path: &["Main"],
+    };
+    let number = bump.alloc(Located::at_zero(Type::Named {
+        reference: alder_ast::QualifiedName {
+            module: ModuleId {
+                package: PackageId::Builtin,
+                path: &[],
+            },
+            name: "Number",
+        },
+        args: &[],
+    }));
+    let trait_ref = alder_ast::TraitRef {
+        trait_: trait_id,
+        args: bump.alloc_slice_copy(&[number as alder_ast::Node<'_, Type<'_>>]),
+    };
     let interface = alder_ast::Interface {
         home: foreign_module,
         values: &[],
@@ -682,41 +700,37 @@ fn foreign_trait_for_foreign_subject_is_an_orphan() {
             associated_types: &[],
             methods: &[],
         }]),
-        instances: &[],
+        instances: bump.alloc_slice_copy(&[alder_ast::InterfaceImpl {
+            id: alder_ast::ImplId {
+                module: implementation_module,
+                origin: alder_ast::ImplOrigin::Source { item_ordinal: 0 },
+            },
+            params: &[],
+            trait_ref,
+            trait_predicates: &[],
+            projection_equalities: &[],
+            assoc_bindings: &[],
+            dictionary_symbol: "$dict$ForeignEq$0",
+            dictionary_kind: alder_ast::DictionaryKind::Singleton,
+            methods: &[],
+        }]),
         modules: &[],
         private_names: &[],
     };
-    let resolved_import = alder_ast::ResolvedImport {
-        module: foreign_module,
-        region: alder_region::Region::zero(),
-        visibility: alder_ast::Visibility::Private,
-        kind: alder_ast::ResolvedImportKind::All,
+    let module = alder_ast::Module {
+        id: implementation_module,
+        imports: &[],
+        items: &[],
+        value_sccs: &[],
     };
     let interfaces = bump.alloc_slice_copy(&[interface]);
-    let source = bump.alloc_str("impl ForeignEq[Number] {}");
-    let parsed = alder_parse::parse_module(&bump, source).expect("source parses");
-    let canonical = alder_can::canonicalize(
-        &bump,
-        Context {
-            home: ModuleId {
-                package: PackageId::Application,
-                path: &["Main"],
-            },
-            imports: bump.alloc_slice_copy(&[resolved_import]),
-            interfaces,
-        },
-        &parsed,
-    )
-    .expect("source canonicalizes");
-    let constraints = alder_constrain::constrain(&bump, canonical.module);
-    let database = alder_solve::TraitDatabase::build(&bump, canonical.module, interfaces);
-    let errors = alder_solve::solve(&bump, &constraints, &database)
-        .expect_err("a local module cannot own either side of this implementation");
+    let database = alder_solve::TraitDatabase::build(&bump, &module, interfaces);
+    let errors = database.validate(&bump);
     assert!(matches!(
         &errors[0],
-        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OrphanImpl {
+        alder_solve::CoherenceError::OrphanImpl {
             trait_, subject, ..
-        }) if trait_.0.name == "ForeignEq" && *subject == "Number"
+        } if trait_.0.name == "ForeignEq" && *subject == "Number"
     ));
 }
 

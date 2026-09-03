@@ -1733,6 +1733,24 @@ fn canonicalize_impl<'a>(
     for arg in source.args {
         args.push(canonicalize_impl_head_type(bump, env, &variables, arg)?);
     }
+    let subject = args.first().copied();
+    let type_package = subject.and_then(outer_nominal_package);
+    if trait_.module.package != env.home.package && type_package != Some(env.home.package) {
+        return Err(vec![Error::new(
+            region,
+            ErrorKind::Type(TypeError::OrphanImpl(bump.alloc(
+                crate::error::OrphanImplDetails {
+                    trait_name: trait_.name,
+                    subject: bump.alloc_str(&subject.map_or_else(
+                        || "()".to_owned(),
+                        |subject| render_canonical_type(&subject.value),
+                    )),
+                    trait_package: trait_.module.package,
+                    type_package,
+                },
+            ))),
+        )]);
+    }
     let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
     let trait_predicates = trait_refs_from_constraints(bump, constraints);
     let projection_equalities = projection_equalities_from_constraints(bump, constraints);
@@ -1891,6 +1909,73 @@ fn canonicalize_impl<'a>(
         synthetic: None,
         region,
     }))
+}
+
+fn outer_nominal_package<'a>(typ: &'a Located<Type<'a>>) -> Option<alder_ast::PackageId<'a>> {
+    match &typ.value {
+        Type::Named { reference, .. } => Some(reference.module.package),
+        Type::Partial { constructor, .. } => Some(constructor.module.package),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                outer_nominal_package(target)
+            }
+        },
+        Type::Var { .. }
+        | Type::Projection(_)
+        | Type::Fn { .. }
+        | Type::Unit
+        | Type::Tuple(_)
+        | Type::Record { .. }
+        | Type::ErrorRow { .. } => None,
+    }
+}
+
+fn render_canonical_type(typ: &Type<'_>) -> String {
+    match typ {
+        Type::Var { name, args: [] } => (*name).to_owned(),
+        Type::Var { name, args } => format!(
+            "{name}[{}]",
+            args.iter()
+                .map(|arg| render_canonical_type(&arg.value))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Named {
+            reference,
+            args: [],
+        } => reference.name.to_owned(),
+        Type::Named { reference, args } => format!(
+            "{}[{}]",
+            reference.name,
+            args.iter()
+                .map(|arg| render_canonical_type(&arg.value))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Partial { constructor, slots } => format!(
+            "{}[{}]",
+            constructor.name,
+            slots
+                .iter()
+                .map(|slot| match slot {
+                    alder_ast::TypeSlot::Hole(_) => "_".to_owned(),
+                    alder_ast::TypeSlot::Fixed(typ) => render_canonical_type(&typ.value),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Projection(projection) => projection.assoc.name.to_owned(),
+        Type::Fn { .. } => "fn".to_owned(),
+        Type::Unit => "()".to_owned(),
+        Type::Tuple(_) => "tuple".to_owned(),
+        Type::Record { .. } => "record".to_owned(),
+        Type::ErrorRow { .. } => "error row".to_owned(),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                render_canonical_type(&target.value)
+            }
+        },
+    }
 }
 
 fn canonicalize_impl_fn<'a>(
@@ -2624,6 +2709,18 @@ mod tests {
 
     use super::*;
     use alder_ast::{Expr, PackageId, Pattern, Stmt, UseId};
+
+    macro_rules! assert_can_error_snapshot {
+        ($source:expr) => {{
+            let source = indoc::indoc!($source);
+            insta::with_settings!({
+                description => source,
+                omit_expression => true,
+            }, {
+                insta::assert_snapshot!(can_error(source));
+            });
+        }};
+    }
 
     fn context() -> Context<'static> {
         Context {
@@ -3375,6 +3472,38 @@ mod tests {
             trait Convert[a, b] { fn convert(value: a) -> b }
             impl Convert[Number] { fn convert(value: Number) -> Number { value } }
         "#}));
+    }
+
+    #[test]
+    fn foreign_trait_for_foreign_type_is_rejected_during_canonicalization() {
+        assert_can_error_snapshot! {r#"
+            impl Show[Number] {
+                fn show(value: Number) -> String { "number" }
+            }
+        "#};
+    }
+
+    #[test]
+    fn owning_either_the_trait_or_subject_permits_an_impl() {
+        let bump = Bump::new();
+        can(
+            &bump,
+            indoc::indoc! {r#"
+                enum Local { Local }
+
+                impl Show[Local] {
+                    fn show(value: Local) -> String { "local" }
+                }
+
+                trait LocalShow[a] {
+                    fn local_show(value: a) -> String
+                }
+
+                impl LocalShow[Number] {
+                    fn local_show(value: Number) -> String { "number" }
+                }
+            "#},
+        );
     }
 
     #[test]
