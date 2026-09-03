@@ -430,6 +430,16 @@ mod tests {
     }
 
     #[test]
+    fn derived_json_marks_optional_record_fields() {
+        assert_emit_snapshot! {r#"
+            #[derive(Json)]
+            pub enum Config {
+                Config { name: String, note?: String },
+            }
+        "#};
+    }
+
+    #[test]
     fn error_group_ord_preserves_declaration_order() {
         let generated = emit(indoc::indoc! {r#"
             #[derive(Ord)]

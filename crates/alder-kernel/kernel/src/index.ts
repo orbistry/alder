@@ -309,8 +309,10 @@ export function $jsonDecodeDerived(value, variants) {
             if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
                 return $resultErr("$.value: expected an object");
             }
+            const optional = new Set(shape.optional ?? []);
             for (const field of shape.fields) {
                 if (!Object.hasOwn(parsed.value, field)) {
+                    if (optional.has(field)) continue;
                     return $resultErr(`$.value.${field}: missing field`);
                 }
                 result[field] = parsed.value[field];

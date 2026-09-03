@@ -1,0 +1,61 @@
+#[derive(Show, Ord, Hash, Json)]
+enum Status {
+    Ready,
+    Failed(String),
+    Meta { code: Number, note: String },
+}
+
+#[derive(Json)]
+enum Config {
+    Config { name: String, note?: String },
+}
+
+trait Describe[a] {
+    fn describe(value: a) -> String
+}
+
+impl Describe[Number] {
+    fn describe(value: Number) -> String { "number" }
+}
+
+impl Describe[String] {
+    fn describe(value: String) -> String { value }
+}
+
+impl Describe[Array[a]] where a: Describe {
+    fn describe(value: Array[a]) -> String { "array" }
+}
+
+fn describe_generic(value: a) -> String where a: Describe {
+    describe(value)
+}
+
+pub fn main() {
+    assert(describe_generic(1) == "number")
+    assert(describe_generic("text") == "text")
+    assert(describe_generic([1, 2]) == "array")
+
+    assert(show(Status::Failed("oops")) == "Failed(\"oops\")")
+    assert(Status::Ready < Status::Failed("later"))
+    assert(hash(Status::Meta { code: 7, note: "same" }) == hash(Status::Meta { code: 7, note: "same" }))
+
+    let encoded = encode(Status::Meta { code: 42, note: "answer" })
+    let decoded: Result[Status, String] = decode(encoded)
+    assert(decoded == Result.ok(Status::Meta { code: 42, note: "answer" }))
+
+    let config = Config::Config { name: "alder" }
+    let config_json = encode(config)
+    assert(config_json == "{\"tag\":\"Config\",\"value\":{\"name\":\"alder\"}}")
+    let decoded_config: Result[Config, String] = decode(config_json)
+    assert(decoded_config == Result.ok(config))
+
+    let mapped: Option[Number] = map(Option.some(1), fn(value) { value + 1 })
+    assert(mapped == Option.some(2))
+
+    let mapped_array: Array[Number] = map([1, 2], fn(value) { value + 1 })
+    assert(mapped_array == [2, 3])
+
+    let result: Result[Number, String] = Result.ok(1)
+    let mapped_result: Result[Number, String] = map(result, fn(value) { value + 1 })
+    assert(mapped_result == Result.ok(2))
+}

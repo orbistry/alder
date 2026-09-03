@@ -1346,6 +1346,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                     {
                         for (field, expected) in expected_fields.iter().zip(expected_types) {
                             let Some((_, actual)) = actual_fields.get(field.name) else {
+                                if field.presence == FieldPresence::Optional {
+                                    continue;
+                                }
                                 return Err(Error {
                                     region,
                                     kind: ErrorKind::MissingField {

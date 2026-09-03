@@ -56,7 +56,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn standalone_e2e_projects_execute() {
-        for name in ["hello", "enums", "loops", "modules"] {
+        for name in ["hello", "enums", "loops", "modules", "traits"] {
             assert_eq!(
                 execute(name, BuildMode::Build, EntryKind::Standalone).await,
                 0

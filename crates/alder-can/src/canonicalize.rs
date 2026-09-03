@@ -1138,7 +1138,11 @@ fn canonicalize_enum<'a>(
                     canonical.push(alder_ast::RecordTypeField {
                         index: field_index as u16,
                         name: field.field.value,
-                        presence: alder_ast::FieldPresence::Required,
+                        presence: if field.optional.is_some() {
+                            alder_ast::FieldPresence::Optional
+                        } else {
+                            alder_ast::FieldPresence::Required
+                        },
                         typ: canonicalize_type(bump, env, &variables, field.typ)?,
                     });
                 }
@@ -3023,6 +3027,27 @@ mod tests {
             };
             assert_eq!(name, "a");
         }
+    }
+
+    #[test]
+    fn enum_record_payload_preserves_optional_fields() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                enum Config {
+                    Config { name: String, note?: String },
+                }
+            "#},
+        );
+        let ItemKind::Enum(enum_) = &result.module.items[0].value.kind else {
+            panic!("expected enum");
+        };
+        let alder_ast::VariantPayload::Record(fields) = enum_.variants[0].payload else {
+            panic!("expected record payload");
+        };
+        assert_eq!(fields[0].presence, alder_ast::FieldPresence::Required);
+        assert_eq!(fields[1].presence, alder_ast::FieldPresence::Optional);
     }
 
     #[test]

@@ -808,20 +808,28 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 match &item.value.kind {
                     ItemKind::Enum(enum_) if enum_.name == reference => {
                         for variant in enum_.variants {
-                            let (record, fields) = match variant.payload {
-                                alder_ast::VariantPayload::Unit => (false, Vec::new()),
+                            let (record, fields, optional) = match variant.payload {
+                                alder_ast::VariantPayload::Unit => (false, Vec::new(), Vec::new()),
                                 alder_ast::VariantPayload::Tuple(types) => (
                                     false,
                                     (0..types.len()).map(|index| format!("_{index}")).collect(),
+                                    Vec::new(),
                                 ),
                                 alder_ast::VariantPayload::Record(fields) => (
                                     true,
                                     fields.iter().map(|field| field.name.to_owned()).collect(),
+                                    fields
+                                        .iter()
+                                        .filter(|field| {
+                                            field.presence == alder_ast::FieldPresence::Optional
+                                        })
+                                        .map(|field| field.name.to_owned())
+                                        .collect(),
                                 ),
                             };
                             variants.push(self.js.property(
                                 variant.name.variant,
-                                self.json_variant_shape(record, &fields),
+                                self.json_variant_shape(record, &fields, &optional),
                             ));
                         }
                     }
@@ -831,8 +839,10 @@ impl<'src, 'js> Emitter<'src, 'js> {
                                 .map(|index| format!("_{index}"))
                                 .collect::<Vec<_>>();
                             variants.push(
-                                self.js
-                                    .property(tag.name, self.json_variant_shape(false, &fields)),
+                                self.js.property(
+                                    tag.name,
+                                    self.json_variant_shape(false, &fields, &[]),
+                                ),
                             );
                         }
                     }
@@ -843,7 +853,12 @@ impl<'src, 'js> Emitter<'src, 'js> {
         self.js.object(variants)
     }
 
-    fn json_variant_shape(&self, record: bool, fields: &[String]) -> Expression<'js> {
+    fn json_variant_shape(
+        &self,
+        record: bool,
+        fields: &[String],
+        optional: &[String],
+    ) -> Expression<'js> {
         let mut properties = self.js.vec();
         properties.push(self.js.property("record", self.js.boolean(record)));
         properties.push(
@@ -851,6 +866,13 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 "fields",
                 self.js
                     .array(fields.iter().map(|field| self.js.string(field))),
+            ),
+        );
+        properties.push(
+            self.js.property(
+                "optional",
+                self.js
+                    .array(optional.iter().map(|field| self.js.string(field))),
             ),
         );
         self.js.object(properties)

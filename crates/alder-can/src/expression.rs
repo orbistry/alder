@@ -1171,8 +1171,27 @@ fn canonicalize_binops<'a>(
         reduce_binop(bump, &mut expressions, use_id, operator);
     }
     let expression = expressions.pop().expect("binop has an expression");
-    debug_assert_eq!(expression.region, region);
-    Ok(expression)
+    if expression.region == region {
+        return Ok(expression);
+    }
+    let CanExpr::Binop {
+        use_id,
+        op,
+        left,
+        right,
+    } = expression.value
+    else {
+        unreachable!("binop reduction must produce a binop expression");
+    };
+    Ok(bump.alloc(Located::at(
+        region,
+        CanExpr::Binop {
+            use_id,
+            op,
+            left,
+            right,
+        },
+    )))
 }
 
 fn reduce_binop<'a>(

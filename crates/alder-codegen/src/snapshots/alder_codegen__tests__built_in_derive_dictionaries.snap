@@ -45,11 +45,13 @@ $dict$Json$0["encode"] = ($a0) => {
 	return $jsonEncodeDerived($a0, {
 		"Ready": {
 			"record": false,
-			"fields": []
+			"fields": [],
+			"optional": []
 		},
 		"Failed": {
 			"record": false,
-			"fields": ["_0"]
+			"fields": ["_0"],
+			"optional": []
 		}
 	});
 };
@@ -57,11 +59,13 @@ $dict$Json$0["decode"] = ($a0) => {
 	return $jsonDecodeDerived($a0, {
 		"Ready": {
 			"record": false,
-			"fields": []
+			"fields": [],
+			"optional": []
 		},
 		"Failed": {
 			"record": false,
-			"fields": ["_0"]
+			"fields": ["_0"],
+			"optional": []
 		}
 	});
 };
