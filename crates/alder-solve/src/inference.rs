@@ -6,7 +6,7 @@ use alder_ast::{
     RowExtension, Stmt, TraitId, Type, TypeSlot, UseId, ValueRef,
 };
 use alder_can::Annotations;
-use alder_constrain::{Constraints, Error, ErrorKind};
+use alder_constrain::{Constraints, Error, ErrorKind, RequirementKind, RequirementSeed};
 use alder_region::{Located, Region};
 use bumpalo::Bump;
 
@@ -648,6 +648,7 @@ struct Infer<'a, 'db> {
     givens: Vec<Given<'a>>,
     projection_equations: Vec<ProjectionEquation<'a>>,
     calls: Vec<CallSite<'a>>,
+    requirement_seeds: BTreeMap<UseId, RequirementSeed<'a>>,
 }
 
 pub fn run<'a>(
@@ -655,7 +656,7 @@ pub fn run<'a>(
     constraints: &Constraints<'a>,
 ) -> Result<Annotations<'a>, Vec<Error>> {
     let database = TraitDatabase::build(bump, constraints.module, &[]);
-    Infer::new(bump, &database)
+    Infer::new(bump, &database, constraints.requirement_seeds)
         .infer_module(constraints.module)
         .map(|result| result.annotations)
         .map_err(|error| vec![error])
@@ -674,14 +675,18 @@ pub fn solve<'a>(
     if !coherence_errors.is_empty() {
         return Err(coherence_errors);
     }
-    let result = Infer::new(bump, database)
+    let result = Infer::new(bump, database, constraints.requirement_seeds)
         .infer_module(constraints.module)
         .map_err(|error| vec![SolveError::Core(error)])?;
     resolve_obligations(bump, database, result)
 }
 
 impl<'a, 'db> Infer<'a, 'db> {
-    fn new(bump: &'a Bump, database: &'db TraitDatabase<'a>) -> Self {
+    fn new(
+        bump: &'a Bump,
+        database: &'db TraitDatabase<'a>,
+        requirement_seeds: &'a [RequirementSeed<'a>],
+    ) -> Self {
         Self {
             bump,
             database,
@@ -690,6 +695,10 @@ impl<'a, 'db> Infer<'a, 'db> {
             givens: Vec::new(),
             projection_equations: Vec::new(),
             calls: Vec::new(),
+            requirement_seeds: requirement_seeds
+                .iter()
+                .map(|seed| (seed.use_id, *seed))
+                .collect(),
         }
     }
 
@@ -1209,7 +1218,6 @@ impl<'a, 'db> Infer<'a, 'db> {
                 if let Some(use_id) = use_id {
                     self.record_builtin_obligation(
                         *use_id,
-                        "Num",
                         expected,
                         statement.region,
                         ObligationAction::CompoundAssign,
@@ -1424,7 +1432,6 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let actual = self.infer_expr(env, expr, return_type)?;
                 self.record_builtin_obligation(
                     *use_id,
-                    "Num",
                     actual.clone(),
                     region,
                     ObligationAction::Operator,
@@ -1570,6 +1577,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                 Ok(typ)
             }
             ValueRef::TraitMethod { method, annotation } => {
+                let seed = self
+                    .requirement_seeds
+                    .get(&use_id)
+                    .copied()
+                    .expect("constraint generation must seed every trait method reference");
+                assert_eq!(seed.kind, RequirementKind::TraitMethod(method));
+                let origin = if seed.region == Region::zero() {
+                    region
+                } else {
+                    seed.region
+                };
                 let (typ, vars) = self.instantiate_annotation_with_vars(annotation);
                 if let Some(header) = self.database.trait_(method.trait_) {
                     let args = header
@@ -1587,7 +1605,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                             trait_: method.trait_,
                             args,
                         },
-                        region,
+                        region: origin,
                         action: ObligationAction::Reference(Some(method)),
                         givens: self.givens.clone(),
                     });
@@ -1596,7 +1614,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     use_id,
                     annotation,
                     &vars,
-                    region,
+                    origin,
                     ObligationAction::Reference(Some(method)),
                 );
                 Ok(typ)
@@ -1668,7 +1686,6 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.unify(actual, expected.clone(), pattern.region)?;
                 self.record_builtin_obligation(
                     *use_id,
-                    "Eq",
                     expected,
                     pattern.region,
                     ObligationAction::Pin,
@@ -1813,7 +1830,6 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.unify(left_type.clone(), right_type, right.region)?;
                 self.record_builtin_obligation(
                     use_id,
-                    "Num",
                     left_type.clone(),
                     left.region,
                     ObligationAction::Operator,
@@ -1824,7 +1840,6 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.unify(left_type.clone(), right_type, right.region)?;
                 self.record_builtin_obligation(
                     use_id,
-                    "Eq",
                     left_type,
                     left.region,
                     ObligationAction::Operator,
@@ -1835,7 +1850,6 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.unify(left_type.clone(), right_type, right.region)?;
                 self.record_builtin_obligation(
                     use_id,
-                    "Ord",
                     left_type,
                     left.region,
                     ObligationAction::Operator,
@@ -1868,18 +1882,34 @@ impl<'a, 'db> Infer<'a, 'db> {
     fn record_builtin_obligation(
         &mut self,
         use_id: UseId,
-        trait_name: &'static str,
         subject: Ty<'a>,
-        region: Region,
+        fallback_region: Region,
         action: ObligationAction<'a>,
     ) {
+        let seed = self
+            .requirement_seeds
+            .get(&use_id)
+            .copied()
+            .expect("constraint generation must seed every built-in evidence site");
+        let trait_name = match seed.kind {
+            RequirementKind::Eq => "Eq",
+            RequirementKind::Ord => "Ord",
+            RequirementKind::Num => "Num",
+            RequirementKind::TraitMethod(_) => {
+                panic!("trait method seed used for a built-in operator")
+            }
+        };
         self.obligations.push(Obligation {
             use_id: Some(use_id),
             predicate: Predicate {
                 trait_: builtin_trait_id(trait_name),
                 args: vec![subject],
             },
-            region,
+            region: if seed.region == Region::zero() {
+                fallback_region
+            } else {
+                seed.region
+            },
             action,
             givens: self.givens.clone(),
         });
