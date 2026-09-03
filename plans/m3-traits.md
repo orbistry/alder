@@ -37,6 +37,9 @@ static resolution wherever the type is known.
 
 - Explicit subject parameter; `impl Trait[Type]`; no `Self`, no receivers,
   no `x.show()`.
+- Existing multi-parameter trait heads remain accepted; argument zero is the
+  coherence subject. The current `where a: Trait` shorthand names unary traits
+  only until bound syntax grows explicit trait arguments.
 - Associated types: `type Item` in the trait, `type Item = T` in the impl,
   constrained in `where` with `i.Item == Number`.
 - Default method bodies allowed in the trait.
@@ -65,16 +68,19 @@ static resolution wherever the type is known.
    `BigInt`; comparisons are `Ord`.**
 2. Coherence beyond orphans. **Overlapping impls are an error; no
    specialization.**
-3. Instance resolution strategy. **Elm's solver gains deferred
-   constraints: a bound is recorded when a trait function is used at a
-   type variable, discharged when the variable is unified with a concrete
-   type or generalized into the enclosing function's `where`.** Resolution
-   runs after generalization, per declaration.
-4. Dictionary representation. **A plain JS object per impl, one field per
-   trait function (and per associated function), created once per impl
-   at module load; generic functions take dictionaries as leading
-   parameters in trait-declaration order.** HKT dictionaries are the same
-   shape.
+3. Instance resolution strategy. **The active solver gains deferred
+   constraints: a bound is recorded when a trait function is used at a type
+   variable, discharged when the variable becomes concrete, or checked against
+   the enclosing function's explicit `where` clause during generalization.** A
+   missing generic bound is reported with a suggested clause; body edits never
+   silently change public dictionary ABI. Resolution runs per value SCC.
+4. Dictionary representation. **A plain JS object per closed impl, one field
+   per trait function (and per associated function), created once at module
+   load; an impl with `where` prerequisites is a dictionary factory receiving
+   those prerequisite dictionaries. Generic functions take dictionaries as
+   leading parameters in predicate order.** HKT dictionaries are the same
+   shape. A singleton for every impl is impossible for an impl such as
+   `Show[Array[a]] where a: Show`, because its methods need `Show[a]`.
 5. Superclass access. **A dictionary carries its superclass dictionaries
    as fields** (`Ord` dict has `eq`), Haskell style.
 
@@ -97,9 +103,14 @@ Design panel producing `docs/traits-internals.md`:
   parameters and arguments after solving (a separate elaborated form or
   annotations on nodes; the panel decides).
 - Codegen rules for dictionaries and static resolution.
-- Built-in derive implementations as a compiler pass over enum/record
-  declarations.
+- Built-in derive implementations as a compiler pass over enums and error
+  groups; closed records use structural Eq because Alder record aliases are
+  transparent, not nominal declarations.
 - File ownership.
+
+The resulting contract also fixes package-wide, build-order-independent impl
+collection and adds the narrowly scoped `_` type hole required to represent
+`Result[_, e]` in an impl head. The hole is not a general inferred annotation.
 
 ### Wave 1: front end (parallel)
 

@@ -317,8 +317,9 @@ fn describe(xs: Array[a]) -> String where a: Show {
 - There is no method-call sugar. `show(user)` or `user |> show`, never
   `user.show()`. `.` is for modules, record fields, and tuple indices.
 - `Eq` is derived automatically for every type whose parts are `Eq`;
-  `Show`, `Ord`, `Hash`, and `Json` are `#[derive(...)]` macros. Arithmetic
-  is the `Num` trait (`Number`, `BigInt`); comparisons are `Ord`.
+  `Show`, `Ord`, `Hash`, and `Json` use compiler-backed `#[derive(...)]`
+  attributes in M3, replaced by macros in M5 without changing user code.
+  Arithmetic is the `Num` trait (`Number`, `BigInt`); comparisons are `Ord`.
 
 ### Errors
 
@@ -523,7 +524,10 @@ build time in the compiler's embedded V8, with Elixir-style
 
 ```alder
 #[derive(Show, Eq, Json)]
-type Point = { x: Number, y: Number }
+enum Shape {
+    Point { x: Number, y: Number },
+    Circle(Number),
+}
 
 macro assert_eq(left, right) {
     quote {

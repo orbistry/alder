@@ -265,10 +265,10 @@ then, by design.
 
 ### M3: Traits
 
-- [ ] Type-class constraints in `alder-constrain`/`alder-solve` (single param)
+- [ ] Type-class constraints in `alder-constrain`/`alder-solve` (argument zero is the coherence subject; colon bounds are unary)
 - [ ] Higher-kinded type parameters
 - [ ] Dictionary-passing codegen with static resolution where possible
-- [ ] Derives via macros (`Show`, `Eq`, `Json`)
+- [ ] Compiler-backed derive surface (`Show`, `Eq`, `Ord`, `Hash`, `Json`; macro implementation replaces it in M5)
 - [ ] Orphan rule checking in `alder-can`
 
 ### M4: Errors and async
@@ -611,6 +611,7 @@ type          = fn_type | type_app ;
 fn_type       = 'fn' '(' [ type { ',' type } [ ',' ] ] ')' '->' type ;
 type_app      = path [ type_args ]
               | lower_ident [ type_args ]                              (* type variable; applied for HKT (§10.14) *)
+              | '_'                                                    (* only a direct named-constructor argument in an impl head, e.g. Result[_, e] *)
               | '(' ')' | '(' type [ ',' ] ')' | '(' type ',' type { ',' type } [ ',' ] ')'   (* '(' T ',' ')' is T *)
               | record_type
               | error_row ;

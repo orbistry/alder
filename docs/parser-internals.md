@@ -929,6 +929,8 @@ pub struct FieldPattern<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Type<'a> {
+    /// `_`, retained for M3's partial constructor impl heads.
+    Hole,
     /// `a`, and applied higher-kinded variables `f[a]`, `t[f[a]]`.
     Var { name: &'a str, args: &'a [&'a Located<Type<'a>>] },
     /// `User`, `Map[String, Array[User]]`, `Option::Foo`
@@ -2407,7 +2409,7 @@ impl<'a> Parser<'a> {
 impl<'a> Parser<'a> {
     /// `fn` type or term. Chomps trailing whitespace.
     pub fn type_expr(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>>;
-    /// path[args] | var[args] | ( ) | tuple | record | error row.
+    /// path[args] | var[args] | `_` | ( ) | tuple | record | error row.
     pub(crate) fn type_term(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>>;
     /// At `[`: `[T, U]`.
     pub(crate) fn type_args(&mut self) -> Result<&'a [&'a Located<Type<'a>>], error::TArgs<'a>>;
@@ -2949,7 +2951,7 @@ Each item is a proposed SPEC.md / docs change unless marked _(internal)_.
 11. **Strings** are single-line `"…"` only (`"""` dropped); templates cover multi-line text. Template escapes add `` \` `` and `\$`.
 12. **Tagged templates** (`` sql`…` ``, `` css`…` ``) are a postfix op requiring adjacency; SPEC should add `postfix template`.
 13. **Lambda bodies** accept `block | assignment | expression` (docs write `fn() count += 1`); an assignment body is a synthetic one-statement block. SPEC: `lambda = 'fn' '(' [params] ')' ['->' type] ( block | assign | expression )`.
-14. **HKT type application**: `Type::Var { name, args }` represents `f[a]`, `t[f[a]]`; SPEC's `type_app` gains `lower_ident [ '[' type { ',' type } ']' ]`.
+14. **HKT type application**: `Type::Var { name, args }` represents `f[a]`, `t[f[a]]`; SPEC's `type_app` gains `lower_ident [ '[' type { ',' type } ']' ]`. M3 adds source `Type::Hole` for `_`; the parser accepts it as a type atom and canonicalization restricts it to direct named-constructor arguments in impl heads such as `Result[_, e]`.
 15. **Uppercase module-style access** (`Array.map`, `Http.get`, `Fiber.all`) parses as `Access` on `Expr::Path`; canonicalization decides what the path denotes. Docs conflict with language.md's lowercase-module rule; flagged, not resolved here.
 16. **`component` names** may be lowercase (`pub component page(...)` in web.md) or uppercase; SPEC says upper only.
 17. **Patterns** accept negative number literals and the unit pattern `()` (for `Ok(())`); SPEC omits both. `_foo` keeps Elm's `WildcardNotVar` (identifiers start with a letter).
