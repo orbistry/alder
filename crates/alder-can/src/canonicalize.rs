@@ -16,7 +16,9 @@ use crate::environment::Env;
 use crate::expression::{canonicalize_block, canonicalize_expr};
 use crate::pattern::{BindingMode, canonicalize_pattern};
 use crate::types::{canonicalize_impl_head_type, canonicalize_type, is_task_type};
-use crate::{AttributeError, Error, ErrorKind, ImportError, ItemError, NameError, Warning};
+use crate::{
+    AttributeError, Error, ErrorKind, ImportError, ItemError, NameError, TypeError, Warning,
+};
 
 /// All dependency information needed to canonicalize one source module.
 #[derive(Clone, Copy)]
@@ -662,13 +664,14 @@ fn canonicalize_item<'a>(
             env.push_scope();
             let params = canonicalize_params(bump, env, decl.params, &variables)?;
             env.pop_scope();
+            let constraints = canonicalize_constraints(bump, env, decl.where_clause, &variables)?;
             ItemKind::Extern(bump.alloc(ExternDecl::Fn {
                 module,
                 symbol,
                 name: top_level_name(env, decl.name.value),
                 params,
                 ret: canonicalize_type(bump, env, &variables, ret)?,
-                constraints: &[],
+                constraints,
             }))
         }
         SourceItemKind::Let(decl) => {
@@ -955,30 +958,53 @@ fn canonicalize_constraints<'a>(
     for constraint in source {
         constraints.push(match constraint {
             alder_source::Constraint::Bound { var, bounds } => {
+                if !variables.contains(var.value) {
+                    return Err(vec![Error::new(
+                        var.region,
+                        ErrorKind::Type(TypeError::UnboundVariable { name: var.value }),
+                    )]);
+                }
                 let mut traits = Vec::with_capacity(bounds.len());
                 for path in *bounds {
                     let name = path.segments.last().expect("trait path is nonempty");
-                    traits.push(
-                        env.find_trait(
+                    let binding = env
+                        .find_trait(
                             bump,
                             path.region(),
                             (path.segments.len() > 1).then(|| path.segments[0].value),
                             name.value,
                         )
-                        .map_err(|error| vec![error])?
-                        .reference,
-                    );
+                        .map_err(|error| vec![error])?;
+                    if binding.arity != 1 {
+                        return Err(vec![Error::new(
+                            path.region(),
+                            ErrorKind::Type(TypeError::BadArity {
+                                name: binding.reference.name,
+                                expected: binding.arity,
+                                actual: 1,
+                            }),
+                        )]);
+                    }
+                    traits.push(binding.reference);
                 }
                 TypeConstraint::Bound {
                     var: *var,
                     traits: bump.alloc_slice_copy(&traits),
                 }
             }
-            alder_source::Constraint::AssocEq { var, assoc, typ } => TypeConstraint::AssocEq {
-                var: *var,
-                assoc: *assoc,
-                typ: canonicalize_type(bump, env, variables, typ)?,
-            },
+            alder_source::Constraint::AssocEq { var, assoc, typ } => {
+                if !variables.contains(var.value) {
+                    return Err(vec![Error::new(
+                        var.region,
+                        ErrorKind::Type(TypeError::UnboundVariable { name: var.value }),
+                    )]);
+                }
+                TypeConstraint::AssocEq {
+                    var: *var,
+                    assoc: *assoc,
+                    typ: canonicalize_type(bump, env, variables, typ)?,
+                }
+            }
         });
     }
     Ok(bump.alloc_slice_copy(&constraints))
@@ -1143,6 +1169,7 @@ fn canonicalize_fn<'a>(
         Some(ret) => Some(canonicalize_type(bump, env, &variables, ret)?),
         None => None,
     };
+    let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
     env.control.task_return = ret.is_some_and(is_task_type);
     let body = canonicalize_block(bump, env, source.body.expect("body checked by caller"))?;
     env.control = saved_control;
@@ -1151,7 +1178,7 @@ fn canonicalize_fn<'a>(
         name: top_level_name(env, source.name.value),
         params,
         ret,
-        constraints: &[],
+        constraints,
         body,
     }))
 }
@@ -1714,6 +1741,42 @@ mod tests {
     #[test]
     fn unknown_type_error() {
         insta::assert_snapshot!(can_error("fn invalid(value: Missing) { value }"));
+    }
+
+    #[test]
+    fn function_where_bounds_are_preserved() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                trait Show[a] { fn show(value: a) -> String }
+                fn keep(value: a) -> a where a: Show { value }
+            "#},
+        );
+        let ItemKind::Fn(function) = &result.module.items[1].value.kind else {
+            panic!("expected function")
+        };
+        assert!(matches!(
+            function.constraints,
+            [alder_ast::TypeConstraint::Bound { var, traits }]
+                if var.value == "a" && traits.len() == 1 && traits[0].name == "Show"
+        ));
+    }
+
+    #[test]
+    fn function_where_bound_variable_must_occur_in_signature() {
+        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            fn bad(value: Number) where a: Show { value }
+        "#}));
+    }
+
+    #[test]
+    fn colon_bound_requires_a_unary_trait() {
+        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+            trait Convert[a, b] { fn convert(value: a) -> b }
+            fn bad(value: a) where a: Convert { value }
+        "#}));
     }
 
     #[test]

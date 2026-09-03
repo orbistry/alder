@@ -1,0 +1,23 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(indoc::indoc!\n{r#\"\n            trait Show[a] { fn show(value: a) -> String }\n            fn bad(value: Number) where a: Show { value }\n        \"#})"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 29,
+            },
+            end: Position {
+                line: 2,
+                column: 30,
+            },
+        },
+        kind: Type(
+            UnboundVariable {
+                name: "a",
+            },
+        ),
+    },
+]
