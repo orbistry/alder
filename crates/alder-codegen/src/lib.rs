@@ -371,4 +371,25 @@ mod tests {
             "#[derive(Show, Ord, Hash, Json)]\npub enum Status { Ready, Failed(String) }"
         ));
     }
+
+    #[test]
+    fn compound_assignment_uses_the_selected_num_dictionary() {
+        insta::assert_snapshot!(emit_solved(
+            r#"enum Token { Token }
+impl Num[Token] {
+    fn add(left: Token, right: Token) -> Token { right }
+    fn sub(left: Token, right: Token) -> Token { right }
+    fn mul(left: Token, right: Token) -> Token { right }
+    fn div(left: Token, right: Token) -> Token { right }
+    fn rem(left: Token, right: Token) -> Token { right }
+    fn negate(value: Token) -> Token { value }
+}
+pub fn update() -> Token {
+    let mut value = Token::Token
+    value += Token::Token
+    value
+}
+"#
+        ));
+    }
 }

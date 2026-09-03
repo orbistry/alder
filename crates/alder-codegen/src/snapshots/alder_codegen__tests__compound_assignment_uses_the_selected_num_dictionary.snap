@@ -1,0 +1,67 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit_solved(r#\"enum Token { Token }\nimpl Num[Token] {\n    fn add(left: Token, right: Token) -> Token { right }\n    fn sub(left: Token, right: Token) -> Token { right }\n    fn mul(left: Token, right: Token) -> Token { right }\n    fn div(left: Token, right: Token) -> Token { right }\n    fn rem(left: Token, right: Token) -> Token { right }\n    fn negate(value: Token) -> Token { value }\n}\npub fn update() -> Token {\n    let mut value = Token::Token\n    value += Token::Token\n    value\n}\n\"#)"
+---
+import { $equal } from "alder:kernel";
+const $c_Token_Token = Object["freeze"]({ "$": "Token" });
+function $impl$1$add($self, $a0, $a1) {
+	let $l0_left = $a0;
+	let $l1_right = $a1;
+	return $l1_right;
+}
+function $impl$1$sub($self, $a0, $a1) {
+	let $l2_left = $a0;
+	let $l3_right = $a1;
+	return $l3_right;
+}
+function $impl$1$mul($self, $a0, $a1) {
+	let $l4_left = $a0;
+	let $l5_right = $a1;
+	return $l5_right;
+}
+function $impl$1$div($self, $a0, $a1) {
+	let $l6_left = $a0;
+	let $l7_right = $a1;
+	return $l7_right;
+}
+function $impl$1$rem($self, $a0, $a1) {
+	let $l8_left = $a0;
+	let $l9_right = $a1;
+	return $l9_right;
+}
+function $impl$1$negate($self, $a0) {
+	let $l10_value = $a0;
+	return $l10_value;
+}
+const $dict$Num$1 = {};
+$dict$Num$1["add"] = ($a0, $a1) => {
+	return $impl$1$add($dict$Num$1, $a0, $a1);
+};
+$dict$Num$1["sub"] = ($a0, $a1) => {
+	return $impl$1$sub($dict$Num$1, $a0, $a1);
+};
+$dict$Num$1["mul"] = ($a0, $a1) => {
+	return $impl$1$mul($dict$Num$1, $a0, $a1);
+};
+$dict$Num$1["div"] = ($a0, $a1) => {
+	return $impl$1$div($dict$Num$1, $a0, $a1);
+};
+$dict$Num$1["rem"] = ($a0, $a1) => {
+	return $impl$1$rem($dict$Num$1, $a0, $a1);
+};
+$dict$Num$1["negate"] = ($a0) => {
+	return $impl$1$negate($dict$Num$1, $a0);
+};
+Object["freeze"]($dict$Num$1);
+function $v_update() {
+	const $t0 = $c_Token_Token;
+	let $l11_value = $t0;
+	$l11_value = $dict$Num$1["add"]($l11_value, $c_Token_Token);
+	return $l11_value;
+}
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equal($a0, $a1);
+};
+Object["freeze"]($dict$Eq$0);
+export { $dict$Eq$0, $dict$Num$1, $v_update as update };

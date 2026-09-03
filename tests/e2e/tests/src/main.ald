@@ -97,6 +97,11 @@ test "derived dictionaries execute" {
     assert hash(Phase::Alpha) == hash(Phase::Alpha)
     let decoded = decode(encode(Phase::Beta))?
     assert decoded == Phase::Beta
+    let expected = Phase::Alpha
+    assert match Phase::Alpha {
+        ^expected => true,
+        _ => false,
+    }
 }
 
 tests {

@@ -1605,19 +1605,51 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 statements.push(self.js.expression_statement(call));
             }
             alder_ast::Stmt::Assign {
-                place, op, value, ..
+                use_id,
+                place,
+                op,
+                value,
             } => {
                 let value = self.expr(value)?;
                 statements.extend(value.prefix);
-                let target = self.place(place)?;
-                let operator = match op.value {
-                    alder_ast::AssignOp::Set => AssignmentOperator::Assign,
-                    alder_ast::AssignOp::Add => AssignmentOperator::Addition,
-                    alder_ast::AssignOp::Sub => AssignmentOperator::Subtraction,
-                    alder_ast::AssignOp::Mul => AssignmentOperator::Multiplication,
-                    alder_ast::AssignOp::Div => AssignmentOperator::Division,
+                let evidence = use_id.and_then(|use_id| {
+                    self.solved
+                        .and_then(|solved| solved.uses.get(&use_id))
+                        .and_then(|action| match action {
+                            UseAction::CompoundAssign { dictionary } => Some(dictionary.clone()),
+                            _ => None,
+                        })
+                });
+                let assignment = if op.value == alder_ast::AssignOp::Set
+                    || matches!(evidence, Some(Evidence::Intrinsic(_)) | None)
+                {
+                    let target = self.place(place)?;
+                    let operator = match op.value {
+                        alder_ast::AssignOp::Set => AssignmentOperator::Assign,
+                        alder_ast::AssignOp::Add => AssignmentOperator::Addition,
+                        alder_ast::AssignOp::Sub => AssignmentOperator::Subtraction,
+                        alder_ast::AssignOp::Mul => AssignmentOperator::Multiplication,
+                        alder_ast::AssignOp::Div => AssignmentOperator::Division,
+                    };
+                    self.js.assignment(target, operator, value.expr)
+                } else {
+                    let (place_prefix, read, write) = self.place_pair(place)?;
+                    statements.extend(place_prefix);
+                    let dictionary =
+                        self.evidence(&evidence.expect("non-intrinsic evidence exists"));
+                    let method = match op.value {
+                        alder_ast::AssignOp::Add => "add",
+                        alder_ast::AssignOp::Sub => "sub",
+                        alder_ast::AssignOp::Mul => "mul",
+                        alder_ast::AssignOp::Div => "div",
+                        alder_ast::AssignOp::Set => unreachable!("handled above"),
+                    };
+                    let result = self
+                        .js
+                        .call(self.js.member(dictionary, method), [read, value.expr]);
+                    self.js
+                        .assignment(write, AssignmentOperator::Assign, result)
                 };
-                let assignment = self.js.assignment(target, operator, value.expr);
                 statements.push(self.js.expression_statement(assignment));
             }
             alder_ast::Stmt::For {
@@ -1710,6 +1742,47 @@ impl<'src, 'js> Emitter<'src, 'js> {
         Ok(target)
     }
 
+    fn place_pair(
+        &mut self,
+        place: &alder_ast::Place<'src>,
+    ) -> Result<
+        (
+            ArenaVec<'js, Statement<'js>>,
+            Expression<'js>,
+            Expression<'js>,
+        ),
+        Error,
+    > {
+        let mut prefix = self.js.vec();
+        let mut read = self.js.identifier(&binding_name(place.root));
+        let mut write = self.js.identifier(&binding_name(place.root));
+        for step in place.steps {
+            match step {
+                alder_ast::PlaceStep::Field(field) => {
+                    read = self.js.member(read, field.value);
+                    write = self.js.member(write, field.value);
+                }
+                alder_ast::PlaceStep::TupleIndex(index) => {
+                    read = self.js.index(read, self.js.number(f64::from(index.value)));
+                    write = self.js.index(write, self.js.number(f64::from(index.value)));
+                }
+                alder_ast::PlaceStep::Index(index) => {
+                    let value = self.expr(index)?;
+                    prefix.extend(value.prefix);
+                    let index_name = self.temp();
+                    prefix.push(self.js.variable(
+                        VariableDeclarationKind::Const,
+                        &index_name,
+                        Some(value.expr),
+                    ));
+                    read = self.js.index(read, self.js.identifier(&index_name));
+                    write = self.js.index(write, self.js.identifier(&index_name));
+                }
+            }
+        }
+        Ok((prefix, read, write))
+    }
+
     fn bind_pattern(
         &self,
         pattern: &Located<Pattern<'src>>,
@@ -1797,17 +1870,36 @@ impl<'src, 'js> Emitter<'src, 'js> {
             Pattern::Anything | Pattern::Bind(_) => self.pure(self.js.boolean(true)),
             Pattern::Alias { pattern, .. } => self.pattern_test(pattern, root, steps)?,
             Pattern::Pin {
-                value: expression, ..
+                use_id,
+                value: expression,
             } => {
-                self.kernel.insert("$equal");
                 let mut pin = self.expr(expression)?;
                 let value = self.materialize(pin.expr, &mut pin.prefix);
+                let evidence = self
+                    .solved
+                    .and_then(|solved| solved.uses.get(use_id))
+                    .and_then(|action| match action {
+                        UseAction::Pin { dictionary } => Some(dictionary.clone()),
+                        _ => None,
+                    });
+                let left = self.pattern_place(root, steps);
+                let comparison = match evidence {
+                    Some(Evidence::Intrinsic(_)) => {
+                        self.js.binary(left, BinaryOperator::StrictEquality, value)
+                    }
+                    Some(evidence) => {
+                        let dictionary = self.evidence(&evidence);
+                        self.js
+                            .call(self.js.member(dictionary, "eq"), [left, value])
+                    }
+                    None => {
+                        self.kernel.insert("$equal");
+                        self.js.call(self.js.identifier("$equal"), [left, value])
+                    }
+                };
                 Value {
                     prefix: pin.prefix,
-                    expr: self.js.call(
-                        self.js.identifier("$equal"),
-                        [self.pattern_place(root, steps), value],
-                    ),
+                    expr: comparison,
                 }
             }
             Pattern::Number { text, .. } => self.pure(self.js.binary(
