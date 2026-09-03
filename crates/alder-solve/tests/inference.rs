@@ -482,6 +482,38 @@ fn associated_equality_normalizes_a_generic_method_result() {
 }
 
 #[test]
+fn conflicting_associated_equalities_are_structured() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Iterator[i] {
+                type Item
+                fn next(value: i) -> Item
+            }
+            fn impossible(value: i) -> ()
+                where i: Iterator, i.Item == Number, i.Item == String
+            {}
+        "#},
+    )
+    .expect_err("one associated type cannot equal Number and String");
+    assert!(matches!(
+        &errors[0],
+        alder_solve::SolveError::Core(Error {
+            kind: ErrorKind::AssocTypeMismatch {
+                assoc,
+                expected,
+                actual,
+            },
+            ..
+        }) if assoc == "Item" && expected == "Number" && actual == "String"
+    ));
+    assert!(alder_solve::format_errors(&errors).contains(
+        "associated type `Item` has conflicting equalities: expected `Number`, found `String`"
+    ));
+}
+
+#[test]
 fn an_impl_binding_normalizes_a_concrete_method_result() {
     let bump = Bump::new();
     solve_input(

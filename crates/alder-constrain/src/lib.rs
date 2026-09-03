@@ -38,9 +38,22 @@ pub struct Error {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
-    Mismatch { actual: String, expected: String },
-    Arity { expected: usize, actual: usize },
-    MissingField { field: String },
+    Mismatch {
+        actual: String,
+        expected: String,
+    },
+    Arity {
+        expected: usize,
+        actual: usize,
+    },
+    MissingField {
+        field: String,
+    },
+    AssocTypeMismatch {
+        assoc: String,
+        expected: String,
+        actual: String,
+    },
     InfiniteType,
     UnsupportedHigherKindedUnification,
     InvalidAwait,

@@ -176,6 +176,13 @@ fn format_error(error: &SolveError<'_>) -> String {
                 alder_constrain::ErrorKind::MissingField { field } => {
                     format!("record has no field `{field}`")
                 }
+                alder_constrain::ErrorKind::AssocTypeMismatch {
+                    assoc,
+                    expected,
+                    actual,
+                } => format!(
+                    "associated type `{assoc}` has conflicting equalities: expected `{expected}`, found `{actual}`"
+                ),
                 alder_constrain::ErrorKind::InfiniteType => "infinite type".to_owned(),
                 alder_constrain::ErrorKind::UnsupportedHigherKindedUnification => {
                     "these higher-kinded types cannot be unified".to_owned()

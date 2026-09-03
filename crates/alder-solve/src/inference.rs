@@ -853,7 +853,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             None => self.fresh(),
         };
         let predicates = self.predicates_from_constraints(constraints, &vars);
-        let projection_eqs = self.projection_equations_from_constraints(constraints, &vars);
+        let projection_eqs = self.projection_equations_from_constraints(constraints, &vars)?;
         let placeholder = env
             .globals
             .get(&name)
@@ -997,7 +997,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 let ret = self.from_ast(ret, &mut vars);
                 let predicates = self.predicates_from_constraints(constraints, &vars);
-                let projection_eqs = self.projection_equations_from_constraints(constraints, &vars);
+                let projection_eqs =
+                    self.projection_equations_from_constraints(constraints, &vars)?;
                 let scheme = env
                     .globals
                     .get_mut(name)
@@ -1074,7 +1075,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         };
         let predicates = self.predicates_from_constraints(constraints, &vars);
         let local_projection_equations =
-            self.projection_equations_from_constraints(constraints, &vars);
+            self.projection_equations_from_constraints(constraints, &vars)?;
         let outer_givens = std::mem::take(&mut self.givens);
         let outer_projection_equations = std::mem::take(&mut self.projection_equations);
         self.givens = outer_givens.clone();
@@ -2361,23 +2362,44 @@ impl<'a, 'db> Infer<'a, 'db> {
         &mut self,
         constraints: &'a [alder_ast::TypeConstraint<'a>],
         vars: &BTreeMap<&'a str, Ty<'a>>,
-    ) -> Vec<ProjectionEquation<'a>> {
-        constraints
-            .iter()
-            .filter_map(|constraint| {
-                let alder_ast::TypeConstraint::AssocEq {
-                    projection, typ, ..
-                } = constraint
-                else {
-                    return None;
-                };
-                let mut vars = vars.clone();
-                Some(ProjectionEquation {
-                    projection: self.projection_from_ast(*projection, &mut vars),
-                    typ: self.from_ast(typ, &mut vars),
-                })
-            })
-            .collect()
+    ) -> Result<Vec<ProjectionEquation<'a>>, Error> {
+        let mut equations: Vec<ProjectionEquation<'a>> = Vec::new();
+        for constraint in constraints {
+            let alder_ast::TypeConstraint::AssocEq {
+                projection,
+                typ,
+                region,
+            } = constraint
+            else {
+                continue;
+            };
+            let mut vars = vars.clone();
+            let equation = ProjectionEquation {
+                projection: self.projection_from_ast(*projection, &mut vars),
+                typ: self.from_ast(typ, &mut vars),
+            };
+            for previous in &equations {
+                if previous.projection == equation.projection {
+                    let expected = render_ty(&previous.typ);
+                    let actual = render_ty(&equation.typ);
+                    if self
+                        .unify(previous.typ.clone(), equation.typ.clone(), *region)
+                        .is_err()
+                    {
+                        return Err(Error {
+                            region: *region,
+                            kind: ErrorKind::AssocTypeMismatch {
+                                assoc: projection.assoc.name.to_owned(),
+                                expected,
+                                actual,
+                            },
+                        });
+                    }
+                }
+            }
+            equations.push(equation);
+        }
+        Ok(equations)
     }
 
     fn projection_from_ast(
