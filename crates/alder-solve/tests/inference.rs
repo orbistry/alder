@@ -275,7 +275,7 @@ fn missing_trait_instance_is_structured() {
 }
 
 #[test]
-fn ambiguous_trait_instances_are_structured() {
+fn overlapping_trait_instances_are_rejected_before_search() {
     let bump = Bump::new();
     let errors = solve_input(
         &bump,
@@ -286,13 +286,156 @@ fn ambiguous_trait_instances_are_structured() {
             fn render() -> String { show(1) }
         "#},
     )
-    .expect_err("overlapping candidates must be ambiguous");
+    .expect_err("overlapping candidates must fail coherence");
     assert!(matches!(
         &errors[0],
-        alder_solve::SolveError::Trait(
-            alder_solve::SolveTraitError::AmbiguousInstance { candidates, .. }
-        ) if candidates.len() == 2
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl {
+            trait_, ..
+        }) if trait_.0.name == "Show"
     ));
+}
+
+#[test]
+fn foreign_trait_for_foreign_subject_is_an_orphan() {
+    let bump = Bump::new();
+    let foreign_module = ModuleId {
+        package: PackageId::Named(alder_ast::PackageName {
+            author: "vendor",
+            project: "traits",
+        }),
+        path: &["Foreign"],
+    };
+    let trait_id = alder_ast::TraitId(alder_ast::QualifiedName {
+        module: foreign_module,
+        name: "ForeignEq",
+    });
+    let interface = alder_ast::Interface {
+        home: foreign_module,
+        values: &[],
+        types: &[],
+        enums: &[],
+        traits: bump.alloc_slice_copy(&[alder_ast::InterfaceTrait {
+            exported_as: "ForeignEq",
+            id: trait_id,
+            params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
+                name: Located::at_zero("a"),
+                kind: Kind::Type,
+            }]),
+            superclasses: &[],
+            associated_types: &[],
+            methods: &[],
+        }]),
+        instances: &[],
+        modules: &[],
+        private_names: &[],
+    };
+    let resolved_import = alder_ast::ResolvedImport {
+        module: foreign_module,
+        region: alder_region::Region::zero(),
+        visibility: alder_ast::Visibility::Private,
+        kind: alder_ast::ResolvedImportKind::All,
+    };
+    let interfaces = bump.alloc_slice_copy(&[interface]);
+    let source = bump.alloc_str("impl ForeignEq[Number] {}");
+    let parsed = alder_parse::parse_module(&bump, source).expect("source parses");
+    let canonical = alder_can::canonicalize(
+        &bump,
+        Context {
+            home: ModuleId {
+                package: PackageId::Application,
+                path: &["Main"],
+            },
+            imports: bump.alloc_slice_copy(&[resolved_import]),
+            interfaces,
+        },
+        &parsed,
+    )
+    .expect("source canonicalizes");
+    let constraints = alder_constrain::constrain(&bump, canonical.module);
+    let database = alder_solve::TraitDatabase::build(&bump, canonical.module, interfaces);
+    let errors = alder_solve::solve(&bump, &constraints, &database)
+        .expect_err("a local module cannot own either side of this implementation");
+    assert!(matches!(
+        &errors[0],
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OrphanImpl {
+            trait_, subject, ..
+        }) if trait_.0.name == "ForeignEq" && *subject == "Number"
+    ));
+}
+
+#[test]
+fn generic_and_concrete_heads_overlap() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            impl Show[a] { fn show(value: a) -> String { "any" } }
+            impl Show[Number] { fn show(value: Number) -> String { "number" } }
+        "#},
+    )
+    .expect_err("generic and concrete heads overlap");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl {
+            trait_, ..
+        }) if trait_.0.name == "Show"
+    )));
+}
+
+#[test]
+fn non_decreasing_instance_prerequisite_is_rejected() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            impl Show[a] where a: Show { fn show(value: a) -> String { "loop" } }
+        "#},
+    )
+    .expect_err("the prerequisite must be structurally smaller than the head");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::InvalidTermination {
+            prerequisite, ..
+        }) if prerequisite.0.name == "Show"
+    )));
+}
+
+#[test]
+fn structurally_decreasing_container_instance_is_accepted() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            impl Show[Array[a]] where a: Show {
+                fn show(value: Array[a]) -> String { "array" }
+            }
+        "#},
+    )
+    .expect("the element prerequisite is smaller than the container head");
+}
+
+#[test]
+fn superclass_cycles_are_rejected() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait A[a] where a: B { fn a(value: a) -> a }
+            trait B[a] where a: A { fn b(value: a) -> a }
+        "#},
+    )
+    .expect_err("superclass graphs must be acyclic");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::SuperclassCycle {
+            traits,
+        }) if traits.len() == 2
+            && traits.iter().any(|trait_| trait_.0.name == "A")
+            && traits.iter().any(|trait_| trait_.0.name == "B")
+    )));
 }
 
 #[test]

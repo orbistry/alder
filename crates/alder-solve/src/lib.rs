@@ -10,7 +10,7 @@ use alder_can::Annotations;
 use alder_region::Region;
 
 pub use inference::{run, solve};
-pub use traits::{InstanceHeader, TraitDatabase, TraitHeader, builtin_trait_id};
+pub use traits::{CoherenceError, InstanceHeader, TraitDatabase, TraitHeader, builtin_trait_id};
 
 #[derive(Clone, Debug)]
 pub struct SolveOutput<'a> {
@@ -90,6 +90,7 @@ pub enum Intrinsic {
 #[derive(Clone, Debug)]
 pub enum SolveError<'a> {
     Core(alder_constrain::Error),
+    Coherence(CoherenceError<'a>),
     Trait(SolveTraitError<'a>),
 }
 

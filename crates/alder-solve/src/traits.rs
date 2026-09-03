@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{
-    AssocTypeDecl, ImplDecl, Interface, InterfaceImpl, InterfaceMethod, ItemKind, Kind, MethodId,
-    Module, ModuleId, Name, PackageId, TraitDecl, TraitId, TraitRef, TypeParam,
+    AssocTypeDecl, ImplDecl, ImplId, Interface, InterfaceImpl, InterfaceMethod, ItemKind, Kind,
+    MethodId, Module, ModuleId, Name, PackageId, QualifiedName, TraitDecl, TraitId, TraitRef, Type,
+    TypeParam, TypeSlot,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -49,6 +50,29 @@ impl<'a> InstanceHeader<'a> {
 pub struct TraitDatabase<'a> {
     traits: BTreeMap<TraitId<'a>, TraitHeader<'a>>,
     instances: BTreeMap<TraitId<'a>, Vec<InstanceHeader<'a>>>,
+}
+
+#[derive(Clone, Debug)]
+pub enum CoherenceError<'a> {
+    SuperclassCycle {
+        traits: &'a [TraitId<'a>],
+    },
+    OrphanImpl {
+        implementation: ImplId<'a>,
+        trait_: TraitId<'a>,
+        subject: &'a str,
+        trait_package: PackageId<'a>,
+        type_package: Option<PackageId<'a>>,
+    },
+    OverlappingImpl {
+        first: ImplId<'a>,
+        second: ImplId<'a>,
+        trait_: TraitId<'a>,
+    },
+    InvalidTermination {
+        implementation: ImplId<'a>,
+        prerequisite: TraitId<'a>,
+    },
 }
 
 impl<'a> TraitDatabase<'a> {
@@ -116,6 +140,113 @@ impl<'a> TraitDatabase<'a> {
             .copied()
     }
 
+    pub fn validate(&self, bump: &'a Bump) -> Vec<CoherenceError<'a>> {
+        let mut errors = self.superclass_cycle_errors(bump);
+        for (trait_, instances) in &self.instances {
+            for implementation in instances {
+                let trait_ref = implementation.trait_ref();
+                let subject = trait_ref.args.first().copied();
+                let type_package = subject.and_then(outer_nominal_package);
+                let implementation_package = implementation.id().module.package;
+                if trait_.0.module.package != implementation_package
+                    && type_package != Some(implementation_package)
+                {
+                    let rendered = subject
+                        .map_or_else(|| "()".to_owned(), |subject| render_type(&subject.value));
+                    errors.push(CoherenceError::OrphanImpl {
+                        implementation: implementation.id(),
+                        trait_: *trait_,
+                        subject: bump.alloc_str(&rendered),
+                        trait_package: trait_.0.module.package,
+                        type_package,
+                    });
+                }
+                let head_size = trait_ref
+                    .args
+                    .iter()
+                    .map(|argument| type_size(&argument.value))
+                    .sum::<usize>();
+                let head_counts = variable_counts(trait_ref.args);
+                for prerequisite in implementation.predicates() {
+                    let prerequisite_size = prerequisite
+                        .args
+                        .iter()
+                        .map(|argument| type_size(&argument.value))
+                        .sum::<usize>();
+                    let prerequisite_counts = variable_counts(prerequisite.args);
+                    if prerequisite_size >= head_size
+                        || prerequisite_counts.iter().any(|(name, count)| {
+                            *count > head_counts.get(name).copied().unwrap_or(0)
+                        })
+                    {
+                        errors.push(CoherenceError::InvalidTermination {
+                            implementation: implementation.id(),
+                            prerequisite: prerequisite.trait_,
+                        });
+                    }
+                }
+            }
+            for (index, first) in instances.iter().enumerate() {
+                for second in &instances[index + 1..] {
+                    if heads_overlap(first.trait_ref(), second.trait_ref()) {
+                        errors.push(CoherenceError::OverlappingImpl {
+                            first: first.id(),
+                            second: second.id(),
+                            trait_: *trait_,
+                        });
+                    }
+                }
+            }
+        }
+        errors
+    }
+
+    fn superclass_cycle_errors(&self, bump: &'a Bump) -> Vec<CoherenceError<'a>> {
+        fn visit<'a>(
+            database: &TraitDatabase<'a>,
+            trait_: TraitId<'a>,
+            states: &mut BTreeMap<TraitId<'a>, u8>,
+            stack: &mut Vec<TraitId<'a>>,
+            cycles: &mut BTreeSet<Vec<TraitId<'a>>>,
+        ) {
+            match states.get(&trait_).copied().unwrap_or(0) {
+                2 => return,
+                1 => {
+                    let start = stack.iter().position(|item| *item == trait_).unwrap_or(0);
+                    let mut cycle = stack[start..].to_vec();
+                    if let Some((minimum, _)) = cycle.iter().enumerate().min_by_key(|(_, id)| *id) {
+                        cycle.rotate_left(minimum);
+                    }
+                    cycles.insert(cycle);
+                    return;
+                }
+                _ => {}
+            }
+            states.insert(trait_, 1);
+            stack.push(trait_);
+            if let Some(header) = database.trait_(trait_) {
+                for superclass in header.superclasses {
+                    visit(database, superclass.trait_, states, stack, cycles);
+                }
+            }
+            stack.pop();
+            states.insert(trait_, 2);
+        }
+
+        let mut states = BTreeMap::new();
+        let mut stack = Vec::new();
+        let mut cycles = BTreeSet::new();
+        for trait_ in self.traits.keys().copied() {
+            visit(self, trait_, &mut states, &mut stack, &mut cycles);
+        }
+        cycles
+            .into_iter()
+            .map(|cycle| CoherenceError::SuperclassCycle {
+                traits: bump.alloc_slice_copy(&cycle),
+            })
+            .collect()
+    }
+
     fn insert_local_trait(&mut self, bump: &'a Bump, trait_: &'a TraitDecl<'a>) {
         let methods = trait_
             .items
@@ -161,6 +292,432 @@ impl<'a> TraitDatabase<'a> {
                 },
             );
         }
+    }
+}
+
+fn outer_nominal_package<'a>(typ: &'a Located<Type<'a>>) -> Option<PackageId<'a>> {
+    match &typ.value {
+        Type::Named { reference, .. } => Some(reference.module.package),
+        Type::Partial { constructor, .. } => Some(constructor.module.package),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                outer_nominal_package(target)
+            }
+        },
+        Type::Var { .. }
+        | Type::Projection(_)
+        | Type::Fn { .. }
+        | Type::Unit
+        | Type::Tuple(_)
+        | Type::Record { .. }
+        | Type::ErrorRow { .. } => None,
+    }
+}
+
+fn type_size(typ: &Type<'_>) -> usize {
+    match typ {
+        Type::Var { args, .. } => 1 + args.iter().map(|arg| type_size(&arg.value)).sum::<usize>(),
+        Type::Named { args, .. } => 1 + args.iter().map(|arg| type_size(&arg.value)).sum::<usize>(),
+        Type::Partial { slots, .. } => {
+            1 + slots
+                .iter()
+                .map(|slot| match slot {
+                    TypeSlot::Hole(_) => 1,
+                    TypeSlot::Fixed(typ) => type_size(&typ.value),
+                })
+                .sum::<usize>()
+        }
+        Type::Projection(projection) => {
+            1 + projection
+                .trait_ref
+                .args
+                .iter()
+                .map(|arg| type_size(&arg.value))
+                .sum::<usize>()
+        }
+        Type::Fn { params, ret } => {
+            1 + params
+                .iter()
+                .map(|param| type_size(&param.value))
+                .sum::<usize>()
+                + type_size(&ret.value)
+        }
+        Type::Unit => 1,
+        Type::Tuple(items) => {
+            1 + items
+                .iter()
+                .map(|item| type_size(&item.value))
+                .sum::<usize>()
+        }
+        Type::Record { fields, .. } => {
+            1 + fields
+                .iter()
+                .map(|field| type_size(&field.typ.value))
+                .sum::<usize>()
+        }
+        Type::ErrorRow { tags, .. } => {
+            1 + tags
+                .iter()
+                .flat_map(|tag| tag.args)
+                .map(|arg| type_size(&arg.value))
+                .sum::<usize>()
+        }
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                type_size(&target.value)
+            }
+        },
+    }
+}
+
+fn variable_counts<'a>(types: &'a [&'a Located<Type<'a>>]) -> BTreeMap<&'a str, usize> {
+    fn collect<'a>(typ: &'a Type<'a>, counts: &mut BTreeMap<&'a str, usize>) {
+        match typ {
+            Type::Var { name, args } => {
+                *counts.entry(name).or_default() += 1;
+                for argument in *args {
+                    collect(&argument.value, counts);
+                }
+            }
+            Type::Named { args, .. } => {
+                for argument in *args {
+                    collect(&argument.value, counts);
+                }
+            }
+            Type::Partial { slots, .. } => {
+                for slot in *slots {
+                    if let TypeSlot::Fixed(typ) = slot {
+                        collect(&typ.value, counts);
+                    }
+                }
+            }
+            Type::Projection(projection) => {
+                for argument in projection.trait_ref.args {
+                    collect(&argument.value, counts);
+                }
+            }
+            Type::Fn { params, ret } => {
+                for param in *params {
+                    collect(&param.value, counts);
+                }
+                collect(&ret.value, counts);
+            }
+            Type::Tuple(items) => {
+                for item in *items {
+                    collect(&item.value, counts);
+                }
+            }
+            Type::Record { fields, .. } => {
+                for field in *fields {
+                    collect(&field.typ.value, counts);
+                }
+            }
+            Type::ErrorRow { tags, .. } => {
+                for argument in tags.iter().flat_map(|tag| tag.args) {
+                    collect(&argument.value, counts);
+                }
+            }
+            Type::Alias { target, .. } => match target {
+                alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                    collect(&target.value, counts);
+                }
+            },
+            Type::Unit => {}
+        }
+    }
+
+    let mut counts = BTreeMap::new();
+    for typ in types {
+        collect(&typ.value, &mut counts);
+    }
+    counts
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum HeadType<'a> {
+    Var(usize),
+    Con(QualifiedName<'a>),
+    App(Box<Self>, Vec<Self>),
+    Projection(TraitId<'a>, &'a str, Vec<Self>),
+    Fn(Vec<Self>, Box<Self>),
+    Unit,
+    Tuple(Vec<Self>),
+    Record(Vec<(&'a str, Self)>),
+    ErrorRow(Vec<(&'a str, Vec<Self>)>),
+}
+
+fn heads_overlap<'a>(first: TraitRef<'a>, second: TraitRef<'a>) -> bool {
+    if first.args.len() != second.args.len() {
+        return false;
+    }
+    let mut next = 0;
+    let mut first_vars = BTreeMap::new();
+    let mut second_vars = BTreeMap::new();
+    let first = first
+        .args
+        .iter()
+        .map(|typ| head_type(typ, &mut first_vars, &mut next))
+        .collect::<Vec<_>>();
+    let second = second
+        .args
+        .iter()
+        .map(|typ| head_type(typ, &mut second_vars, &mut next))
+        .collect::<Vec<_>>();
+    let mut substitutions = BTreeMap::new();
+    first
+        .into_iter()
+        .zip(second)
+        .all(|(left, right)| unify_head(left, right, &mut substitutions))
+}
+
+fn head_type<'a>(
+    typ: &'a Located<Type<'a>>,
+    variables: &mut BTreeMap<&'a str, usize>,
+    next: &mut usize,
+) -> HeadType<'a> {
+    let apply = |head, args: &'a [&'a Located<Type<'a>>], variables: &mut _, next: &mut _| {
+        if args.is_empty() {
+            head
+        } else {
+            HeadType::App(
+                Box::new(head),
+                args.iter()
+                    .map(|argument| head_type(argument, variables, next))
+                    .collect(),
+            )
+        }
+    };
+    match &typ.value {
+        Type::Var { name, args } => {
+            let variable = *variables.entry(name).or_insert_with(|| {
+                let id = *next;
+                *next += 1;
+                id
+            });
+            apply(HeadType::Var(variable), args, variables, next)
+        }
+        Type::Named { reference, args } => apply(HeadType::Con(*reference), args, variables, next),
+        Type::Partial { constructor, slots } => HeadType::App(
+            Box::new(HeadType::Con(*constructor)),
+            slots
+                .iter()
+                .map(|slot| match slot {
+                    TypeSlot::Hole(_) => {
+                        let id = *next;
+                        *next += 1;
+                        HeadType::Var(id)
+                    }
+                    TypeSlot::Fixed(typ) => head_type(typ, variables, next),
+                })
+                .collect(),
+        ),
+        Type::Projection(projection) => HeadType::Projection(
+            projection.trait_ref.trait_,
+            projection.assoc.name,
+            projection
+                .trait_ref
+                .args
+                .iter()
+                .map(|argument| head_type(argument, variables, next))
+                .collect(),
+        ),
+        Type::Fn { params, ret } => HeadType::Fn(
+            params
+                .iter()
+                .map(|param| head_type(param, variables, next))
+                .collect(),
+            Box::new(head_type(ret, variables, next)),
+        ),
+        Type::Unit => HeadType::Unit,
+        Type::Tuple(items) => HeadType::Tuple(
+            items
+                .iter()
+                .map(|item| head_type(item, variables, next))
+                .collect(),
+        ),
+        Type::Record { fields, .. } => HeadType::Record(
+            fields
+                .iter()
+                .map(|field| (field.name, head_type(field.typ, variables, next)))
+                .collect(),
+        ),
+        Type::ErrorRow { tags, .. } => HeadType::ErrorRow(
+            tags.iter()
+                .map(|tag| {
+                    (
+                        tag.name,
+                        tag.args
+                            .iter()
+                            .map(|arg| head_type(arg, variables, next))
+                            .collect(),
+                    )
+                })
+                .collect(),
+        ),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                head_type(target, variables, next)
+            }
+        },
+    }
+}
+
+fn prune_head<'a>(
+    typ: HeadType<'a>,
+    substitutions: &BTreeMap<usize, HeadType<'a>>,
+) -> HeadType<'a> {
+    match typ {
+        HeadType::Var(id) => substitutions
+            .get(&id)
+            .cloned()
+            .map_or(HeadType::Var(id), |bound| prune_head(bound, substitutions)),
+        other => other,
+    }
+}
+
+fn occurs_head(
+    id: usize,
+    typ: &HeadType<'_>,
+    substitutions: &BTreeMap<usize, HeadType<'_>>,
+) -> bool {
+    match prune_head(typ.clone(), substitutions) {
+        HeadType::Var(other) => id == other,
+        HeadType::App(head, args) => {
+            occurs_head(id, &head, substitutions)
+                || args.iter().any(|arg| occurs_head(id, arg, substitutions))
+        }
+        HeadType::Projection(_, _, args) | HeadType::Tuple(args) => {
+            args.iter().any(|arg| occurs_head(id, arg, substitutions))
+        }
+        HeadType::Fn(args, ret) => {
+            args.iter().any(|arg| occurs_head(id, arg, substitutions))
+                || occurs_head(id, &ret, substitutions)
+        }
+        HeadType::Record(fields) => fields
+            .iter()
+            .any(|(_, typ)| occurs_head(id, typ, substitutions)),
+        HeadType::ErrorRow(tags) => tags
+            .iter()
+            .any(|(_, args)| args.iter().any(|arg| occurs_head(id, arg, substitutions))),
+        HeadType::Con(_) | HeadType::Unit => false,
+    }
+}
+
+fn unify_head<'a>(
+    left: HeadType<'a>,
+    right: HeadType<'a>,
+    substitutions: &mut BTreeMap<usize, HeadType<'a>>,
+) -> bool {
+    let left = prune_head(left, substitutions);
+    let right = prune_head(right, substitutions);
+    match (left, right) {
+        (HeadType::Var(left), HeadType::Var(right)) if left == right => true,
+        (HeadType::Var(id), typ) | (typ, HeadType::Var(id)) => {
+            if occurs_head(id, &typ, substitutions) {
+                false
+            } else {
+                substitutions.insert(id, typ);
+                true
+            }
+        }
+        (HeadType::Con(left), HeadType::Con(right)) => left == right,
+        (HeadType::Unit, HeadType::Unit) => true,
+        (HeadType::App(left_head, left_args), HeadType::App(right_head, right_args)) => {
+            left_args.len() == right_args.len()
+                && unify_head(*left_head, *right_head, substitutions)
+                && left_args
+                    .into_iter()
+                    .zip(right_args)
+                    .all(|(left, right)| unify_head(left, right, substitutions))
+        }
+        (
+            HeadType::Projection(left_trait, left_name, left_args),
+            HeadType::Projection(right_trait, right_name, right_args),
+        ) => {
+            left_trait == right_trait
+                && left_name == right_name
+                && left_args.len() == right_args.len()
+                && left_args
+                    .into_iter()
+                    .zip(right_args)
+                    .all(|(left, right)| unify_head(left, right, substitutions))
+        }
+        (HeadType::Fn(left_args, left_ret), HeadType::Fn(right_args, right_ret)) => {
+            left_args.len() == right_args.len()
+                && left_args
+                    .into_iter()
+                    .zip(right_args)
+                    .all(|(left, right)| unify_head(left, right, substitutions))
+                && unify_head(*left_ret, *right_ret, substitutions)
+        }
+        (HeadType::Tuple(left), HeadType::Tuple(right)) => {
+            left.len() == right.len()
+                && left
+                    .into_iter()
+                    .zip(right)
+                    .all(|(left, right)| unify_head(left, right, substitutions))
+        }
+        (HeadType::Record(left), HeadType::Record(right)) => {
+            left.len() == right.len()
+                && left
+                    .into_iter()
+                    .zip(right)
+                    .all(|((left_name, left), (right_name, right))| {
+                        left_name == right_name && unify_head(left, right, substitutions)
+                    })
+        }
+        (HeadType::ErrorRow(left), HeadType::ErrorRow(right)) => {
+            left.len() == right.len()
+                && left
+                    .into_iter()
+                    .zip(right)
+                    .all(|((left_name, left), (right_name, right))| {
+                        left_name == right_name
+                            && left.len() == right.len()
+                            && left
+                                .into_iter()
+                                .zip(right)
+                                .all(|(left, right)| unify_head(left, right, substitutions))
+                    })
+        }
+        _ => false,
+    }
+}
+
+fn render_type(typ: &Type<'_>) -> String {
+    match typ {
+        Type::Var { name, args: [] } => (*name).to_owned(),
+        Type::Var { name, args } => format!(
+            "{name}[{}]",
+            args.iter()
+                .map(|arg| render_type(&arg.value))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Named {
+            reference,
+            args: [],
+        } => reference.name.to_owned(),
+        Type::Named { reference, args } => format!(
+            "{}[{}]",
+            reference.name,
+            args.iter()
+                .map(|arg| render_type(&arg.value))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Partial { constructor, .. } => constructor.name.to_owned(),
+        Type::Projection(projection) => projection.assoc.name.to_owned(),
+        Type::Fn { .. } => "fn".to_owned(),
+        Type::Unit => "()".to_owned(),
+        Type::Tuple(_) => "tuple".to_owned(),
+        Type::Record { .. } => "record".to_owned(),
+        Type::ErrorRow { .. } => "error row".to_owned(),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                render_type(&target.value)
+            }
+        },
     }
 }
 

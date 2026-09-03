@@ -524,6 +524,14 @@ pub fn solve<'a>(
     constraints: &Constraints<'a>,
     database: &TraitDatabase<'a>,
 ) -> Result<SolveOutput<'a>, Vec<SolveError<'a>>> {
+    let coherence_errors = database
+        .validate(bump)
+        .into_iter()
+        .map(SolveError::Coherence)
+        .collect::<Vec<_>>();
+    if !coherence_errors.is_empty() {
+        return Err(coherence_errors);
+    }
     let result = Infer::new(bump, database)
         .infer_module(constraints.module)
         .map_err(|error| vec![SolveError::Core(error)])?;
