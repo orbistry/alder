@@ -13,7 +13,8 @@ use bumpalo::Bump;
 #[derive(Clone, Debug)]
 enum Ty<'a> {
     Var(usize),
-    Named(QualifiedName<'a>, Vec<Ty<'a>>),
+    Con(QualifiedName<'a>),
+    App(Box<Ty<'a>>, Vec<Ty<'a>>),
     Partial(QualifiedName<'a>, Vec<TySlot<'a>>),
     Projection(
         alder_ast::TraitId<'a>,
@@ -287,7 +288,10 @@ impl<'a> Infer<'a> {
             None => self.fresh(),
         };
         let body_result = match self.prune(result.clone()) {
-            Ty::Named(reference, args) if reference.name == "Task" && args.len() == 1 => {
+            Ty::App(head, args)
+                if matches!(*head, Ty::Con(reference) if reference.name == "Task")
+                    && args.len() == 1 =>
+            {
                 args.into_iter().next().expect("length checked")
             }
             _ => result.clone(),
@@ -1145,12 +1149,13 @@ impl<'a> Infer<'a> {
         match &typ.value {
             Type::Var { name, args } => {
                 let base = vars.entry(name).or_insert_with(|| self.fresh()).clone();
-                if args.is_empty() { base } else { Ty::Any }
+                let args = args.iter().map(|arg| self.from_ast(arg, vars)).collect();
+                self.apply(base, args)
             }
-            Type::Named { reference, args } => Ty::Named(
-                *reference,
-                args.iter().map(|arg| self.from_ast(arg, vars)).collect(),
-            ),
+            Type::Named { reference, args } => {
+                let args = args.iter().map(|arg| self.from_ast(arg, vars)).collect();
+                self.apply(Ty::Con(*reference), args)
+            }
             Type::Partial { constructor, slots } => Ty::Partial(
                 *constructor,
                 slots
@@ -1201,14 +1206,22 @@ impl<'a> Infer<'a> {
     fn unify(&mut self, left: Ty<'a>, right: Ty<'a>, region: Region) -> Result<(), Error> {
         let left = self.prune(left);
         let right = self.prune(right);
+        if let Some(result) = self.unify_higher_kinded_pattern(&left, &right, region) {
+            return result;
+        }
+        if let Some(result) = self.unify_higher_kinded_pattern(&right, &left, region) {
+            return result;
+        }
         match (left, right) {
             (Ty::Any, _) | (_, Ty::Any) | (Ty::ErrorRow, Ty::ErrorRow) => Ok(()),
             (Ty::Var(left), Ty::Var(right)) if left == right => Ok(()),
             (Ty::Var(id), typ) | (typ, Ty::Var(id)) => self.bind(id, typ, region),
             (Ty::Unit, Ty::Unit) => Ok(()),
-            (Ty::Named(left, left_args), Ty::Named(right, right_args))
-                if left == right && left_args.len() == right_args.len() =>
+            (Ty::Con(left), Ty::Con(right)) if left == right => Ok(()),
+            (Ty::App(left_head, left_args), Ty::App(right_head, right_args))
+                if left_args.len() == right_args.len() =>
             {
+                self.unify(*left_head, *right_head, region)?;
                 for (left, right) in left_args.into_iter().zip(right_args) {
                     self.unify(left, right, region)?;
                 }
@@ -1261,6 +1274,67 @@ impl<'a> Infer<'a> {
             }
             (left, right) => Err(self.mismatch(region, left, right)),
         }
+    }
+
+    fn unify_higher_kinded_pattern(
+        &mut self,
+        pattern: &Ty<'a>,
+        rigid: &Ty<'a>,
+        region: Region,
+    ) -> Option<Result<(), Error>> {
+        let Ty::App(head, pattern_args) = pattern else {
+            return None;
+        };
+        let Ty::Var(head_var) = self.prune((**head).clone()) else {
+            return None;
+        };
+        let (constructor, rigid_args) = match self.prune(rigid.clone()) {
+            Ty::Con(constructor) => (constructor, Vec::new()),
+            Ty::App(head, args) => match *head {
+                Ty::Con(constructor) => (constructor, args),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        if pattern_args.is_empty() || rigid_args.len() < pattern_args.len() {
+            return None;
+        }
+
+        let mut variables = Vec::with_capacity(pattern_args.len());
+        let mut seen = BTreeSet::new();
+        for argument in pattern_args {
+            let Ty::Var(variable) = self.prune(argument.clone()) else {
+                return Some(Err(Error {
+                    region,
+                    kind: ErrorKind::UnsupportedHigherKindedUnification,
+                }));
+            };
+            if variable == head_var || !seen.insert(variable) {
+                return Some(Err(Error {
+                    region,
+                    kind: ErrorKind::UnsupportedHigherKindedUnification,
+                }));
+            }
+            variables.push(variable);
+        }
+
+        for (variable, rigid_arg) in variables.iter().zip(&rigid_args) {
+            if let Err(error) = self.unify(Ty::Var(*variable), rigid_arg.clone(), region) {
+                return Some(Err(error));
+            }
+        }
+        let slots = rigid_args
+            .into_iter()
+            .enumerate()
+            .map(|(index, typ)| {
+                if index < variables.len() {
+                    TySlot::Hole(index as u16)
+                } else {
+                    TySlot::Fixed(typ)
+                }
+            })
+            .collect();
+        Some(self.bind(head_var, Ty::Partial(constructor, slots), region))
     }
 
     fn unify_records(
@@ -1334,14 +1408,76 @@ impl<'a> Infer<'a> {
                 }
                 None => Ty::Var(id),
             },
+            Ty::App(head, args) => {
+                let head = self.prune(*head);
+                let args = args.into_iter().map(|arg| self.prune(arg)).collect();
+                self.apply(head, args)
+            }
             other => other,
+        }
+    }
+
+    fn apply(&self, head: Ty<'a>, mut arguments: Vec<Ty<'a>>) -> Ty<'a> {
+        if arguments.is_empty() {
+            return head;
+        }
+        match head {
+            Ty::App(head, mut existing) => {
+                existing.append(&mut arguments);
+                Ty::App(head, existing)
+            }
+            Ty::Partial(constructor, slots) => {
+                let mut supplied = arguments.into_iter();
+                let mut remaining_hole = 0;
+                let mut filled = Vec::with_capacity(slots.len());
+                let mut complete = true;
+                for slot in slots {
+                    match slot {
+                        TySlot::Fixed(typ) => filled.push(TySlot::Fixed(typ)),
+                        TySlot::Hole(_) => match supplied.next() {
+                            Some(typ) => filled.push(TySlot::Fixed(typ)),
+                            None => {
+                                filled.push(TySlot::Hole(remaining_hole));
+                                remaining_hole += 1;
+                                complete = false;
+                            }
+                        },
+                    }
+                }
+                let rest = supplied.collect::<Vec<_>>();
+                if complete {
+                    let base = Ty::App(
+                        Box::new(Ty::Con(constructor)),
+                        filled
+                            .into_iter()
+                            .map(|slot| match slot {
+                                TySlot::Fixed(typ) => typ,
+                                TySlot::Hole(_) => unreachable!("complete partial has no holes"),
+                            })
+                            .collect(),
+                    );
+                    if rest.is_empty() {
+                        base
+                    } else {
+                        Ty::App(Box::new(base), rest)
+                    }
+                } else {
+                    debug_assert!(rest.is_empty());
+                    Ty::Partial(constructor, filled)
+                }
+            }
+            other => Ty::App(Box::new(other), arguments),
         }
     }
 
     fn occurs(&mut self, needle: usize, typ: &Ty<'a>) -> bool {
         match self.prune(typ.clone()) {
             Ty::Var(id) => id == needle,
-            Ty::Named(_, args) | Ty::Tuple(args) => args.iter().any(|arg| self.occurs(needle, arg)),
+            Ty::Con(_) => false,
+            Ty::App(head, args) => {
+                self.occurs(needle, &head) || args.iter().any(|arg| self.occurs(needle, arg))
+            }
+            Ty::Tuple(args) => args.iter().any(|arg| self.occurs(needle, arg)),
             Ty::Partial(_, slots) => slots.iter().any(|slot| match slot {
                 TySlot::Hole(_) => false,
                 TySlot::Fixed(typ) => self.occurs(needle, typ),
@@ -1360,7 +1496,14 @@ impl<'a> Infer<'a> {
             Ty::Var(id) => {
                 result.insert(id);
             }
-            Ty::Named(_, args) | Ty::Tuple(args) => {
+            Ty::Con(_) => {}
+            Ty::App(head, args) => {
+                self.free_vars(&head, result);
+                for arg in &args {
+                    self.free_vars(arg, result);
+                }
+            }
+            Ty::Tuple(args) => {
                 for arg in &args {
                     self.free_vars(arg, result);
                 }
@@ -1395,8 +1538,9 @@ impl<'a> Infer<'a> {
     fn replace_vars(&mut self, typ: &Ty<'a>, replacements: &BTreeMap<usize, Ty<'a>>) -> Ty<'a> {
         match self.prune(typ.clone()) {
             Ty::Var(id) => replacements.get(&id).cloned().unwrap_or(Ty::Var(id)),
-            Ty::Named(name, args) => Ty::Named(
-                name,
+            Ty::Con(name) => Ty::Con(name),
+            Ty::App(head, args) => Ty::App(
+                Box::new(self.replace_vars(&head, replacements)),
                 args.iter()
                     .map(|arg| self.replace_vars(arg, replacements))
                     .collect(),
@@ -1444,19 +1588,81 @@ impl<'a> Infer<'a> {
     }
 
     fn annotation(&mut self, typ: &Ty<'a>) -> &'a Annotation<'a> {
+        let typ = self.prune(typ.clone());
+        let mut arities = BTreeMap::new();
+        self.collect_kind_arities(&typ, &mut arities);
         let mut names = BTreeMap::new();
-        let typ = self.to_ast(typ, &mut names);
+        let typ = self.to_ast(&typ, &mut names);
+        let mut params = names.into_iter().collect::<Vec<_>>();
+        params.sort_by_key(|(_, name)| generated_type_name_rank(name));
         self.bump.alloc(Annotation {
-            params: self.bump.alloc_slice_fill_iter(names.values().map(|name| {
-                alder_ast::TypeParam {
-                    name: Located::at(Region::zero(), *name),
-                    kind: alder_ast::Kind::Type,
-                }
-            })),
+            params: self
+                .bump
+                .alloc_slice_fill_iter(params.into_iter().map(|(id, name)| alder_ast::TypeParam {
+                    name: Located::at(Region::zero(), name),
+                    kind: self.kind_from_arity(arities.get(&id).copied().unwrap_or(0)),
+                })),
             trait_predicates: &[],
             projection_equalities: &[],
             typ,
         })
+    }
+
+    fn collect_kind_arities(&mut self, typ: &Ty<'a>, arities: &mut BTreeMap<usize, usize>) {
+        match self.prune(typ.clone()) {
+            Ty::Var(id) => {
+                arities.entry(id).or_insert(0);
+            }
+            Ty::Con(_) | Ty::Unit | Ty::ErrorRow | Ty::Any => {}
+            Ty::App(head, args) => {
+                match self.prune(*head) {
+                    Ty::Var(id) => {
+                        arities
+                            .entry(id)
+                            .and_modify(|arity| *arity = (*arity).max(args.len()))
+                            .or_insert(args.len());
+                    }
+                    other => self.collect_kind_arities(&other, arities),
+                }
+                for arg in &args {
+                    self.collect_kind_arities(arg, arities);
+                }
+            }
+            Ty::Partial(_, slots) => {
+                for slot in &slots {
+                    if let TySlot::Fixed(typ) = slot {
+                        self.collect_kind_arities(typ, arities);
+                    }
+                }
+            }
+            Ty::Projection(_, args, _) | Ty::Tuple(args) => {
+                for arg in &args {
+                    self.collect_kind_arities(arg, arities);
+                }
+            }
+            Ty::Fn(args, ret) => {
+                for arg in &args {
+                    self.collect_kind_arities(arg, arities);
+                }
+                self.collect_kind_arities(&ret, arities);
+            }
+            Ty::Record(fields, _) => {
+                for (_, typ) in fields.values() {
+                    self.collect_kind_arities(typ, arities);
+                }
+            }
+        }
+    }
+
+    fn kind_from_arity(&self, arity: usize) -> alder_ast::Kind<'a> {
+        let mut kind = alder_ast::Kind::Type;
+        for _ in 0..arity {
+            kind = alder_ast::Kind::Arrow {
+                param: self.bump.alloc(alder_ast::Kind::Type),
+                result: self.bump.alloc(kind),
+            };
+        }
+        kind
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -1467,22 +1673,30 @@ impl<'a> Infer<'a> {
     ) -> &'a Located<Type<'a>> {
         let typ = match self.prune(typ.clone()) {
             Ty::Var(id) => {
-                let next = names.len();
-                let name = *names.entry(id).or_insert_with(|| {
-                    let generated = if next < 26 {
-                        ((b'a' + next as u8) as char).to_string()
-                    } else {
-                        format!("t{next}")
-                    };
-                    self.bump.alloc_str(&generated)
-                });
+                let name = self.type_var_name(id, names);
                 Type::Var { name, args: &[] }
             }
-            Ty::Named(reference, args) => Type::Named {
+            Ty::Con(reference) => Type::Named {
                 reference,
-                args: self
-                    .bump
-                    .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+                args: &[],
+            },
+            Ty::App(head, args) => match self.prune(*head) {
+                Ty::Con(reference) => Type::Named {
+                    reference,
+                    args: self
+                        .bump
+                        .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+                },
+                Ty::Var(id) => {
+                    let name = self.type_var_name(id, names);
+                    Type::Var {
+                        name,
+                        args: self
+                            .bump
+                            .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+                    }
+                }
+                other => panic!("unsupported public type application head: {other:?}"),
             },
             Ty::Partial(constructor, slots) => Type::Partial {
                 constructor,
@@ -1538,15 +1752,27 @@ impl<'a> Infer<'a> {
         self.bump.alloc(Located::at_zero(typ))
     }
 
+    fn type_var_name(&self, id: usize, names: &mut BTreeMap<usize, &'a str>) -> &'a str {
+        let next = names.len();
+        names.entry(id).or_insert_with(|| {
+            let generated = if next < 26 {
+                ((b'a' + next as u8) as char).to_string()
+            } else {
+                format!("t{next}")
+            };
+            self.bump.alloc_str(&generated)
+        })
+    }
+
     fn named(&self, name: &'a str, args: Vec<Ty<'a>>) -> Ty<'a> {
-        Ty::Named(
-            QualifiedName {
+        self.apply(
+            Ty::Con(QualifiedName {
                 module: ModuleId {
                     package: PackageId::Builtin,
                     path: &[],
                 },
                 name,
-            },
+            }),
             args,
         )
     }
@@ -1564,10 +1790,10 @@ impl<'a> Infer<'a> {
     fn render(&mut self, typ: Ty<'a>) -> String {
         match self.prune(typ) {
             Ty::Var(_) => "a".to_owned(),
-            Ty::Named(name, args) if args.is_empty() => name.name.to_owned(),
-            Ty::Named(name, args) => format!(
+            Ty::Con(name) => name.name.to_owned(),
+            Ty::App(head, args) => format!(
                 "{}[{}]",
-                name.name,
+                self.render(*head),
                 args.into_iter()
                     .map(|arg| self.render(arg))
                     .collect::<Vec<_>>()
@@ -1660,4 +1886,14 @@ fn is_value_item(item: &ItemKind<'_>) -> bool {
             | ItemKind::Component(_)
             | ItemKind::Extern(alder_ast::ExternDecl::Fn { .. })
     )
+}
+
+fn generated_type_name_rank(name: &str) -> usize {
+    match name.as_bytes() {
+        [letter @ b'a'..=b'z'] => usize::from(*letter - b'a'),
+        _ => name
+            .strip_prefix('t')
+            .and_then(|index| index.parse().ok())
+            .unwrap_or(usize::MAX),
+    }
 }

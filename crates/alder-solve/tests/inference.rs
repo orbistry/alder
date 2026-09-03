@@ -1,8 +1,8 @@
 //! End-to-end Alder inference tests: parse → canonicalize → constrain → solve.
 
-use alder_ast::{Annotation, FieldPresence, ModuleId, PackageId, RowExtension, Type};
+use alder_ast::{Annotation, FieldPresence, Kind, ModuleId, PackageId, RowExtension, Type};
 use alder_can::{Annotations, Context};
-use alder_constrain::{Error, UnionFind};
+use alder_constrain::{Error, ErrorKind, UnionFind};
 use alder_region::Located;
 use bumpalo::Bump;
 use indoc::indoc;
@@ -206,6 +206,54 @@ fn mutually_recursive_scc_is_unified_before_generalization() {
         render_annotations(&annotations),
         "first: forall a, b. fn(a) -> b\nsecond: forall a, b. fn(a) -> b"
     );
+}
+
+#[test]
+fn higher_kinded_application_is_preserved_and_specialized() {
+    let bump = Bump::new();
+    let annotations = infer(
+        &bump,
+        indoc! {r#"
+            fn adapt(value: f[a]) -> f[a] { value }
+            fn specialize(value: Result[Number, String]) { adapt(value) }
+        "#},
+    )
+    .unwrap();
+
+    assert_eq!(
+        render_annotations(&annotations),
+        concat!(
+            "adapt: forall a, b. fn(a[b]) -> a[b]\n",
+            "specialize: fn(Result[Number, String]) -> Result[Number, String]"
+        )
+    );
+    let adapt = annotations
+        .iter()
+        .find_map(|(name, annotation)| (name.name == "adapt").then_some(*annotation))
+        .unwrap();
+    assert!(matches!(adapt.params[0].kind, Kind::Arrow { .. }));
+    assert!(matches!(adapt.params[1].kind, Kind::Type));
+}
+
+#[test]
+fn repeated_higher_kinded_pattern_argument_is_rejected() {
+    let bump = Bump::new();
+    let errors = infer(
+        &bump,
+        indoc! {r#"
+            fn adapt(value: f[a, a]) -> f[a, a] { value }
+            fn specialize(value: Result[Number, Number]) { adapt(value) }
+        "#},
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        errors.as_slice(),
+        [Error {
+            kind: ErrorKind::UnsupportedHigherKindedUnification,
+            ..
+        }]
+    ));
 }
 
 #[test]

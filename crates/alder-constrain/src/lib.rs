@@ -35,6 +35,7 @@ pub enum ErrorKind {
     Arity { expected: usize, actual: usize },
     MissingField { field: String },
     InfiniteType,
+    UnsupportedHigherKindedUnification,
     InvalidAwait,
     InvalidTry,
     ReturnMismatch,
