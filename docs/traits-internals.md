@@ -495,14 +495,14 @@ from that package is imported. Saving validates that every listed impl belongs
 to a listed module and exposes only externally nameable identities.
 
 M3 preserves one `Bump` per module, with that module's source copied into it.
-The driver creates all module arenas before parsing, never moves the arena
-collection afterward, and retains the arenas until the build finishes. Parsed
-modules and canonical bodies borrow only their corresponding arena. Header data
-crossing module boundaries is converted immediately to owned DTOs; the frozen
-trait database owns all of its names and types. Selected database evidence and
-all errors are copied into the active module arena before returning. A separate
-build/interface arena may hydrate solved public interfaces, but it never owns
-module AST nodes. The driver performs:
+Parsed modules and canonical bodies borrow only their corresponding arena.
+Dependency interfaces are deep-copied into the active module arena before
+canonicalization, and a successful solved interface is deep-copied into the
+separate build/interface arena before the module arena is dropped. No phase
+therefore borrows another module's allocation, and the build/interface arena
+never owns module AST nodes. Persistent header data crossing module boundaries
+uses the owned DTOs below; the frozen trait database owns all of its names and
+types. The driver performs:
 
 1. Fetch and parse every module.
 2. Resolve module/package identities and imports.
