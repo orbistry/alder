@@ -655,6 +655,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_nested_trait_signature_parser_error_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Show[a] {
+                fn show(value: Array[]) -> String
+            }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_missing_instance_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Display[a] {

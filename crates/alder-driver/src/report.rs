@@ -42,6 +42,22 @@ fn syntax_problem(message: impl Into<String>, row: u32, column: u32) -> SyntaxPr
     }
 }
 
+fn expected_problem(
+    message: impl Into<String>,
+    row: u32,
+    column: u32,
+    label: &'static str,
+    help: Option<String>,
+) -> SyntaxProblem {
+    SyntaxProblem {
+        message: message.into(),
+        row,
+        column,
+        label,
+        help,
+    }
+}
+
 fn module_problem(error: &alder_parse::error::Module<'_>) -> SyntaxProblem {
     use alder_parse::error::Module;
     match error {
@@ -81,18 +97,14 @@ fn item_problem(error: &alder_parse::error::Item<'_>) -> SyntaxProblem {
         },
         Item::Trait(error, ..) => trait_problem(error),
         Item::Impl(error, ..) => impl_problem(error),
-        Item::Attribute(_, row, column) => syntax_problem("invalid attribute", *row, *column),
-        Item::Import(_, row, column) => syntax_problem("invalid import declaration", *row, *column),
-        Item::Fn(_, row, column) => syntax_problem("invalid function declaration", *row, *column),
-        Item::Let(_, row, column) => syntax_problem("invalid top-level binding", *row, *column),
-        Item::TypeAlias(_, row, column) => syntax_problem("invalid type alias", *row, *column),
-        Item::Enum(_, row, column) => syntax_problem("invalid enum declaration", *row, *column),
-        Item::ErrorDecl(_, row, column) => {
-            syntax_problem("invalid error declaration", *row, *column)
-        }
-        Item::Component(_, row, column) => {
-            syntax_problem("invalid component declaration", *row, *column)
-        }
+        Item::Attribute(error, ..) => attribute_problem(error),
+        Item::Import(error, ..) => import_problem(error),
+        Item::Fn(error, ..) => function_problem(error, "function"),
+        Item::Let(error, ..) => let_problem(error),
+        Item::TypeAlias(error, ..) => type_alias_problem(error),
+        Item::Enum(error, ..) => enum_problem(error),
+        Item::ErrorDecl(error, ..) => error_decl_problem(error),
+        Item::Component(error, ..) => component_problem(error),
         Item::Table(_, row, column) => syntax_problem("invalid table declaration", *row, *column),
         Item::Schema(_, row, column) => syntax_problem("invalid schema declaration", *row, *column),
         Item::Macro(_, row, column) => syntax_problem("invalid macro declaration", *row, *column),
@@ -157,9 +169,7 @@ fn trait_problem(error: &alder_parse::error::Trait<'_>) -> SyntaxProblem {
             label: "remove this definition",
             help: Some("provide the associated type value in each `impl`".to_owned()),
         },
-        Trait::Fn(_, row, column) => {
-            syntax_problem("invalid trait method declaration", *row, *column)
-        }
+        Trait::Fn(error, ..) => function_problem(error, "trait method"),
     }
 }
 
@@ -239,7 +249,7 @@ fn impl_problem(error: &alder_parse::error::Impl<'_>) -> SyntaxProblem {
             help: Some("define it like `type Item = Value`".to_owned()),
         },
         Impl::AssocBody(error, ..) => type_problem(error),
-        Impl::Fn(_, row, column) => syntax_problem("invalid impl method", *row, *column),
+        Impl::Fn(error, ..) => function_problem(error, "implementation method"),
     }
 }
 
@@ -333,11 +343,11 @@ fn type_problem(error: &alder_parse::error::Type<'_>) -> SyntaxProblem {
         Type::PathMember(row, column) => {
             syntax_problem("I was expecting a type name after `::`", *row, *column)
         }
-        Type::Args(_, row, column) => syntax_problem("invalid type argument list", *row, *column),
-        Type::Fn(_, row, column) => syntax_problem("invalid function type", *row, *column),
-        Type::Tuple(_, row, column) => syntax_problem("invalid tuple type", *row, *column),
-        Type::Record(_, row, column) => syntax_problem("invalid record type", *row, *column),
-        Type::ErrorRow(_, row, column) => syntax_problem("invalid error-row type", *row, *column),
+        Type::Args(error, ..) => type_args_problem(error),
+        Type::Fn(error, ..) => function_type_problem(error),
+        Type::Tuple(error, ..) => tuple_type_problem(error),
+        Type::Record(error, ..) => record_type_problem(error),
+        Type::ErrorRow(error, ..) => error_row_problem(error),
         Type::TooDeep(row, column) => SyntaxProblem {
             message: "this type is nested too deeply".to_owned(),
             row: *row,
@@ -345,6 +355,801 @@ fn type_problem(error: &alder_parse::error::Type<'_>) -> SyntaxProblem {
             label: "nesting limit reached here",
             help: Some("split this type into named aliases".to_owned()),
         },
+    }
+}
+
+fn attribute_problem(error: &alder_parse::error::Attribute<'_>) -> SyntaxProblem {
+    use alder_parse::error::Attribute;
+    match error {
+        Attribute::Open(row, column) => expected_problem(
+            "I found `#`, but an attribute starts with `#[`",
+            *row,
+            *column,
+            "expected `[` after `#`",
+            Some("write an attribute like `#[derive(Eq)]`".to_owned()),
+        ),
+        Attribute::Name(row, column) => expected_problem(
+            "I was expecting an attribute name",
+            *row,
+            *column,
+            "expected a lower-case name",
+            None,
+        ),
+        Attribute::Arg(error, ..) => expression_problem(error),
+        Attribute::ArgEnd(row, column) => expected_problem(
+            "I was expecting another attribute argument or the end of the argument list",
+            *row,
+            *column,
+            "expected `,` or `)`",
+            None,
+        ),
+        Attribute::End(row, column) => expected_problem(
+            "this attribute is missing its closing bracket",
+            *row,
+            *column,
+            "expected `]`",
+            None,
+        ),
+        Attribute::Dangling(row, column) => expected_problem(
+            "an attribute must be followed by a declaration",
+            *row,
+            *column,
+            "expected a declaration here",
+            None,
+        ),
+    }
+}
+
+fn import_problem(error: &alder_parse::error::Import<'_>) -> SyntaxProblem {
+    use alder_parse::error::Import;
+    match error {
+        Import::Path(error, ..) => module_path_problem(error),
+        Import::Tail(row, column) => expected_problem(
+            "I was expecting imported names after this dot",
+            *row,
+            *column,
+            "expected `{` or `*`",
+            None,
+        ),
+        Import::Name(row, column) => expected_problem(
+            "I was expecting a name in this import list",
+            *row,
+            *column,
+            "expected an imported name",
+            None,
+        ),
+        Import::NameAlias(row, column) | Import::Alias(row, column) => expected_problem(
+            "I was expecting a lower-case alias after `as`",
+            *row,
+            *column,
+            "expected an alias",
+            None,
+        ),
+        Import::NamesEnd(row, column) => expected_problem(
+            "I was expecting another imported name or the end of this list",
+            *row,
+            *column,
+            "expected `,` or `}`",
+            None,
+        ),
+        Import::PubNeedsNames(row, column) => expected_problem(
+            "a public import must say which names it re-exports",
+            *row,
+            *column,
+            "this imports only the module",
+            Some("use `pub import path.{ Name }` or `pub import path.*`".to_owned()),
+        ),
+        Import::ReservedBinding(keyword, row, column) => expected_problem(
+            format!(
+                "`{}` is reserved and cannot be the local module name",
+                keyword.as_str()
+            ),
+            *row,
+            *column,
+            "reserved word used as a binding",
+            Some("add `as name` or import selected names with `.{ ... }`".to_owned()),
+        ),
+        Import::RootOnly(row, column) => expected_problem(
+            "the local import root does not provide a module name",
+            *row,
+            *column,
+            "expected a module path",
+            Some("add a path, an alias, or a selected-name import".to_owned()),
+        ),
+    }
+}
+
+fn module_path_problem(error: &alder_parse::error::ModulePath) -> SyntaxProblem {
+    use alder_parse::error::ModulePath;
+    match error {
+        ModulePath::Start(row, column) => expected_problem(
+            "I was expecting an import path",
+            *row,
+            *column,
+            "expected `@` or `~`",
+            None,
+        ),
+        ModulePath::Author(row, column) => expected_problem(
+            "I was expecting a package author after `@`",
+            *row,
+            *column,
+            "expected a lower-case author name",
+            None,
+        ),
+        ModulePath::Slash(row, column) => expected_problem(
+            "I was expecting `/` between the package author and name",
+            *row,
+            *column,
+            "expected `/`",
+            None,
+        ),
+        ModulePath::Package(row, column) => expected_problem(
+            "I was expecting a package name after `/`",
+            *row,
+            *column,
+            "expected a lower-case package name",
+            None,
+        ),
+        ModulePath::Segment(row, column) => expected_problem(
+            "I was expecting a module path segment after `/`",
+            *row,
+            *column,
+            "expected a lower-case name",
+            None,
+        ),
+    }
+}
+
+fn function_problem(error: &alder_parse::error::Fn<'_>, owner: &str) -> SyntaxProblem {
+    use alder_parse::error::Fn;
+    match error {
+        Fn::Name(row, column) => expected_problem(
+            format!("I was expecting a name for this {owner}"),
+            *row,
+            *column,
+            "expected a lower-case name",
+            None,
+        ),
+        Fn::Params(error, ..) => params_problem(error),
+        Fn::Ret(error, ..) => type_problem(error),
+        Fn::Where(error, ..) => where_problem(error),
+        Fn::Body(error, ..) => block_problem(error),
+    }
+}
+
+fn params_problem(error: &alder_parse::error::Params<'_>) -> SyntaxProblem {
+    use alder_parse::error::Params;
+    match error {
+        Params::Open(row, column) => expected_problem(
+            "I was expecting `(` to start the parameter list",
+            *row,
+            *column,
+            "expected `(`",
+            None,
+        ),
+        Params::Pattern(error, ..) => pattern_problem(error),
+        Params::Type(error, ..) => type_problem(error),
+        Params::End(row, column) => expected_problem(
+            "I was expecting another parameter or the end of the parameter list",
+            *row,
+            *column,
+            "expected `,` or `)`",
+            None,
+        ),
+    }
+}
+
+fn let_problem(error: &alder_parse::error::Let<'_>) -> SyntaxProblem {
+    use alder_parse::error::Let;
+    match error {
+        Let::Pattern(error, ..) => pattern_problem(error),
+        Let::Type(error, ..) => type_problem(error),
+        Let::Equals(row, column) => expected_problem(
+            "I was expecting `=` after this binding",
+            *row,
+            *column,
+            "expected `=`",
+            None,
+        ),
+        Let::Body(error, ..) => expression_problem(error),
+    }
+}
+
+fn type_alias_problem(error: &alder_parse::error::TypeAlias<'_>) -> SyntaxProblem {
+    use alder_parse::error::TypeAlias;
+    match error {
+        TypeAlias::Name(row, column) => expected_problem(
+            "I was expecting a name after `type`",
+            *row,
+            *column,
+            "expected an upper-case name",
+            Some("a type alias starts like `type UserId = Number`".to_owned()),
+        ),
+        TypeAlias::Params(error, ..) => type_params_problem(error, "type alias"),
+        TypeAlias::Body(error, ..) => type_problem(error),
+    }
+}
+
+fn enum_problem(error: &alder_parse::error::Enum<'_>) -> SyntaxProblem {
+    use alder_parse::error::Enum;
+    match error {
+        Enum::Name(row, column) => expected_problem(
+            "I was expecting an enum name after `enum`",
+            *row,
+            *column,
+            "expected an upper-case name",
+            None,
+        ),
+        Enum::Params(error, ..) => type_params_problem(error, "enum"),
+        Enum::Open(row, column) => expected_problem(
+            "I was expecting `{` to start this enum",
+            *row,
+            *column,
+            "expected `{`",
+            None,
+        ),
+        Enum::Variant(row, column) => expected_problem(
+            "I was expecting an enum variant",
+            *row,
+            *column,
+            "expected an upper-case variant name",
+            None,
+        ),
+        Enum::VariantArg(error, ..) => type_problem(error),
+        Enum::VariantArgEnd(row, column) => expected_problem(
+            "I was expecting another payload type or the end of this variant",
+            *row,
+            *column,
+            "expected `,` or `)`",
+            None,
+        ),
+        Enum::VariantRecord(error, ..) => record_type_problem(error),
+        Enum::VariantRecordExt(row, column) => expected_problem(
+            "enum record payloads cannot extend another record",
+            *row,
+            *column,
+            "remove this record extension",
+            None,
+        ),
+        Enum::End(row, column) => expected_problem(
+            "I was expecting another enum variant or the end of the enum",
+            *row,
+            *column,
+            "expected `,` or `}`",
+            None,
+        ),
+    }
+}
+
+fn error_decl_problem(error: &alder_parse::error::ErrorDecl<'_>) -> SyntaxProblem {
+    use alder_parse::error::ErrorDecl;
+    match error {
+        ErrorDecl::Name(row, column) => expected_problem(
+            "I was expecting a name after `error`",
+            *row,
+            *column,
+            "expected an upper-case name",
+            None,
+        ),
+        ErrorDecl::Open(row, column) => expected_problem(
+            "I was expecting `{` to start this error group",
+            *row,
+            *column,
+            "expected `{`",
+            None,
+        ),
+        ErrorDecl::Tag(error, ..) => tag_variant_problem(error),
+        ErrorDecl::End(row, column) => expected_problem(
+            "I was expecting another error tag or the end of this group",
+            *row,
+            *column,
+            "expected `,` or `}`",
+            None,
+        ),
+    }
+}
+
+fn tag_variant_problem(error: &alder_parse::error::TagVariant<'_>) -> SyntaxProblem {
+    use alder_parse::error::TagVariant;
+    match error {
+        TagVariant::Name(row, column) => expected_problem(
+            "I was expecting a lower-case tag name after `:`",
+            *row,
+            *column,
+            "expected a tag name",
+            None,
+        ),
+        TagVariant::Arg(error, ..) => type_problem(error),
+        TagVariant::ArgEnd(row, column) => expected_problem(
+            "I was expecting another tag payload type or `)`",
+            *row,
+            *column,
+            "expected `,` or `)`",
+            None,
+        ),
+    }
+}
+
+fn component_problem(error: &alder_parse::error::Component<'_>) -> SyntaxProblem {
+    use alder_parse::error::Component;
+    match error {
+        Component::Name(row, column) => expected_problem(
+            "I was expecting a component name",
+            *row,
+            *column,
+            "expected an upper-case name",
+            None,
+        ),
+        Component::Params(error, ..) => params_problem(error),
+        Component::Body(error, ..) => block_problem(error),
+    }
+}
+
+fn type_args_problem(error: &alder_parse::error::TArgs<'_>) -> SyntaxProblem {
+    use alder_parse::error::TArgs;
+    match error {
+        TArgs::Type(error, ..) => type_problem(error),
+        TArgs::Empty(row, column) => expected_problem(
+            "type argument lists cannot be empty",
+            *row,
+            *column,
+            "add a type argument or remove `[]`",
+            None,
+        ),
+        TArgs::End(row, column) => expected_problem(
+            "I was expecting another type argument or the end of this list",
+            *row,
+            *column,
+            "expected `,` or `]`",
+            None,
+        ),
+    }
+}
+
+fn function_type_problem(error: &alder_parse::error::TFn<'_>) -> SyntaxProblem {
+    use alder_parse::error::TFn;
+    match error {
+        TFn::Open(row, column) => expected_problem(
+            "I was expecting `(` after `fn` in this function type",
+            *row,
+            *column,
+            "expected `(`",
+            None,
+        ),
+        TFn::Param(error, ..) | TFn::Ret(error, ..) => type_problem(error),
+        TFn::ParamEnd(row, column) => expected_problem(
+            "I was expecting another parameter type or `)`",
+            *row,
+            *column,
+            "expected `,` or `)`",
+            None,
+        ),
+        TFn::Arrow(row, column) => expected_problem(
+            "I was expecting `->` before the function result type",
+            *row,
+            *column,
+            "expected `->`",
+            Some("function types look like `fn(Input) -> Output`".to_owned()),
+        ),
+    }
+}
+
+fn tuple_type_problem(error: &alder_parse::error::TTuple<'_>) -> SyntaxProblem {
+    use alder_parse::error::TTuple;
+    match error {
+        TTuple::Type(error, ..) => type_problem(error),
+        TTuple::End(row, column) => expected_problem(
+            "I was expecting another tuple type or `)`",
+            *row,
+            *column,
+            "expected `,` or `)`",
+            None,
+        ),
+    }
+}
+
+fn record_type_problem(error: &alder_parse::error::TRecord<'_>) -> SyntaxProblem {
+    use alder_parse::error::TRecord;
+    match error {
+        TRecord::Field(row, column) => expected_problem(
+            "I was expecting a field name in this record type",
+            *row,
+            *column,
+            "expected a lower-case field name",
+            None,
+        ),
+        TRecord::Colon(row, column) => expected_problem(
+            "I was expecting a type after this record field",
+            *row,
+            *column,
+            "expected `:` or `?:`",
+            None,
+        ),
+        TRecord::Type(error, ..) => type_problem(error),
+        TRecord::ExtField(row, column) => expected_problem(
+            "an extended record type needs at least one field",
+            *row,
+            *column,
+            "expected a field after `|`",
+            None,
+        ),
+        TRecord::End(row, column) => expected_problem(
+            "I was expecting another record field or `}`",
+            *row,
+            *column,
+            "expected `,` or `}`",
+            None,
+        ),
+    }
+}
+
+fn error_row_problem(error: &alder_parse::error::TErrorRow<'_>) -> SyntaxProblem {
+    use alder_parse::error::TErrorRow;
+    match error {
+        TErrorRow::Start(row, column) => expected_problem(
+            "I was expecting an error tag, row variable, or `]`",
+            *row,
+            *column,
+            "expected `:tag`, a row variable, or `]`",
+            None,
+        ),
+        TErrorRow::Tag(error, ..) => tag_variant_problem(error),
+        TErrorRow::Ext(row, column) => expected_problem(
+            "I was expecting an error tag or row variable after `|`",
+            *row,
+            *column,
+            "expected `:tag` or a row variable",
+            None,
+        ),
+        TErrorRow::End(row, column) => expected_problem(
+            "I was expecting another error tag or the end of this row",
+            *row,
+            *column,
+            "expected `|` or `]`",
+            None,
+        ),
+    }
+}
+
+fn block_problem(error: &alder_parse::error::Block<'_>) -> SyntaxProblem {
+    use alder_parse::error::Block;
+    match error {
+        Block::Open(row, column) => expected_problem(
+            "I was expecting `{` to start this block",
+            *row,
+            *column,
+            "expected `{`",
+            None,
+        ),
+        Block::Stmt(error, ..) => statement_problem(error),
+        Block::SameLine(row, column) => expected_problem(
+            "statements must be separated by a line break",
+            *row,
+            *column,
+            "this statement starts on the previous statement's line",
+            Some("start this statement on a new line".to_owned()),
+        ),
+        Block::LooksLikeRecord(row, column) => expected_problem(
+            "this looks like a record where a block was expected",
+            *row,
+            *column,
+            "record syntax starts here",
+            Some("wrap the record in parentheses to use it as the block value".to_owned()),
+        ),
+        Block::End(row, column) => expected_problem(
+            "I was expecting another statement or the end of this block",
+            *row,
+            *column,
+            "expected a statement or `}`",
+            None,
+        ),
+        Block::TooDeep(row, column) => expected_problem(
+            "this block is nested too deeply",
+            *row,
+            *column,
+            "nesting limit reached here",
+            Some("move part of this expression into a named function".to_owned()),
+        ),
+    }
+}
+
+fn statement_problem(error: &alder_parse::error::Stmt<'_>) -> SyntaxProblem {
+    use alder_parse::error::Stmt;
+    match error {
+        Stmt::Let(error, ..) => let_problem(error),
+        Stmt::Use(row, column) => expected_problem(
+            "I was expecting a provider name after `use`",
+            *row,
+            *column,
+            "expected a provider path",
+            None,
+        ),
+        Stmt::UseMember(row, column) => expected_problem(
+            "`use` names a provider, not one of its members",
+            *row,
+            *column,
+            "remove this member access",
+            None,
+        ),
+        Stmt::For(_, row, column) => {
+            syntax_problem("I could not finish parsing this `for` loop", *row, *column)
+        }
+        Stmt::While(_, row, column) => syntax_problem(
+            "I could not finish parsing this `while` loop",
+            *row,
+            *column,
+        ),
+        Stmt::Return(error, ..)
+        | Stmt::Break(error, ..)
+        | Stmt::Assert(error, ..)
+        | Stmt::Expr(error, ..)
+        | Stmt::AssignValue(error, ..) => expression_problem(error),
+        Stmt::AssignTarget(operator, row, column) => expected_problem(
+            "the left side of this assignment is not assignable",
+            *row,
+            *column,
+            "expected a variable, field, or index",
+            matches!(operator, alder_source::AssignOp::Div)
+                .then(|| "if you meant inequality, use `!=` instead of `/=`".to_owned()),
+        ),
+        Stmt::Semicolon(row, column) => expected_problem(
+            "statements are separated by line breaks, not semicolons",
+            *row,
+            *column,
+            "remove this semicolon",
+            None,
+        ),
+    }
+}
+
+fn pattern_problem(error: &alder_parse::error::Pattern<'_>) -> SyntaxProblem {
+    use alder_parse::error::Pattern;
+    match error {
+        Pattern::Start(row, column) => syntax_problem("I was expecting a pattern", *row, *column),
+        Pattern::Reserved(keyword, row, column) => expected_problem(
+            format!(
+                "`{}` is reserved and cannot be used as a pattern",
+                keyword.as_str()
+            ),
+            *row,
+            *column,
+            "reserved word used here",
+            None,
+        ),
+        Pattern::SqlKeyword(keyword, row, column) => expected_problem(
+            format!("`{}` is a query keyword, not a pattern", keyword.as_str()),
+            *row,
+            *column,
+            "query keyword used here",
+            None,
+        ),
+        Pattern::Number(error, row, column) => number_problem(error, *row, *column),
+        Pattern::String(error, row, column) => string_problem(error, *row, *column),
+        Pattern::Pin(error, ..) => expression_problem(error),
+        Pattern::PathMember(row, column) => expected_problem(
+            "I was expecting a constructor name after `::`",
+            *row,
+            *column,
+            "expected a name",
+            None,
+        ),
+        Pattern::PathVar(row, column) => expected_problem(
+            "a value path must be pinned when used as a pattern",
+            *row,
+            *column,
+            "this is a value path",
+            Some("prefix the path with `^` to compare against its value".to_owned()),
+        ),
+        Pattern::Ctor(_, row, column) | Pattern::Tag(_, row, column) => {
+            syntax_problem("invalid constructor pattern", *row, *column)
+        }
+        Pattern::TagName(row, column) => expected_problem(
+            "I was expecting a lower-case tag name after `:`",
+            *row,
+            *column,
+            "expected a tag name",
+            None,
+        ),
+        Pattern::Tuple(_, row, column) => syntax_problem("invalid tuple pattern", *row, *column),
+        Pattern::Array(_, row, column) => syntax_problem("invalid array pattern", *row, *column),
+        Pattern::Record(_, row, column) => syntax_problem("invalid record pattern", *row, *column),
+        Pattern::Alias(row, column) => expected_problem(
+            "I was expecting a binding name after `as`",
+            *row,
+            *column,
+            "expected a lower-case name",
+            None,
+        ),
+        Pattern::WildcardNotVar(name, _, row, column) => expected_problem(
+            format!("`{name}` looks like a wildcard, not a binding"),
+            *row,
+            *column,
+            "only `_` is a wildcard",
+            Some("remove the leading underscore to bind this name".to_owned()),
+        ),
+        Pattern::TooDeep(row, column) => expected_problem(
+            "this pattern is nested too deeply",
+            *row,
+            *column,
+            "nesting limit reached here",
+            None,
+        ),
+    }
+}
+
+fn expression_problem(error: &alder_parse::error::Expr<'_>) -> SyntaxProblem {
+    use alder_parse::error::Expr;
+    match error {
+        Expr::Start(row, column) => syntax_problem("I was expecting an expression", *row, *column),
+        Expr::Reserved(keyword, row, column) => expected_problem(
+            format!("`{}` cannot start an expression here", keyword.as_str()),
+            *row,
+            *column,
+            "reserved word used here",
+            None,
+        ),
+        Expr::SqlKeyword(keyword, row, column) => expected_problem(
+            format!("`{}` is a query keyword, not a value", keyword.as_str()),
+            *row,
+            *column,
+            "query keyword used as a value",
+            None,
+        ),
+        Expr::Number(error, row, column) => number_problem(error, *row, *column),
+        Expr::String(error, row, column) => string_problem(error, *row, *column),
+        Expr::Template(_, row, column) | Expr::TaggedTemplate(_, row, column) => {
+            syntax_problem("invalid template literal", *row, *column)
+        }
+        Expr::Array(_, row, column) => syntax_problem("invalid array expression", *row, *column),
+        Expr::Tuple(_, row, column) => syntax_problem("invalid tuple expression", *row, *column),
+        Expr::Record(_, row, column) | Expr::RecordCtor(_, row, column) => {
+            syntax_problem("invalid record expression", *row, *column)
+        }
+        Expr::Block(error, ..) | Expr::Loop(error, ..) => block_problem(error),
+        Expr::Lambda(_, row, column) => syntax_problem("invalid anonymous function", *row, *column),
+        Expr::If(_, row, column) => syntax_problem("invalid `if` expression", *row, *column),
+        Expr::Match(_, row, column) => syntax_problem("invalid `match` expression", *row, *column),
+        Expr::Provide(_, row, column) => {
+            syntax_problem("invalid `provide` expression", *row, *column)
+        }
+        Expr::Call(_, row, column) => syntax_problem("invalid function call", *row, *column),
+        Expr::Index(_, row, column) => syntax_problem("invalid index expression", *row, *column),
+        Expr::Tag(_, row, column) => syntax_problem("invalid tagged value", *row, *column),
+        Expr::State(_, row, column) => syntax_problem("invalid state expression", *row, *column),
+        Expr::Style(_, row, column) => syntax_problem("invalid style block", *row, *column),
+        Expr::Query(_, row, column) => syntax_problem("invalid query", *row, *column),
+        Expr::Markup(_, row, column) => syntax_problem("invalid markup", *row, *column),
+        Expr::MacroCall(_, row, column) => syntax_problem("invalid macro call", *row, *column),
+        Expr::PathMember(row, column) => expected_problem(
+            "I was expecting a name after `::`",
+            *row,
+            *column,
+            "expected a path member",
+            None,
+        ),
+        Expr::Access(row, column) => expected_problem(
+            "I was expecting a field name, tuple index, or `await` after `.`",
+            *row,
+            *column,
+            "expected an accessor",
+            None,
+        ),
+        Expr::Unary(row, column) => expected_problem(
+            "this unary operator is missing its operand",
+            *row,
+            *column,
+            "expected an expression",
+            None,
+        ),
+        Expr::PinOutsideQuery(row, column) => expected_problem(
+            "expression pins are only allowed inside queries",
+            *row,
+            *column,
+            "`^` is not valid here",
+            None,
+        ),
+        Expr::Placeholder(row, column) => expected_problem(
+            "`_` is only allowed as a complete call argument",
+            *row,
+            *column,
+            "placeholder is not valid here",
+            None,
+        ),
+        Expr::OperatorReserved(_, row, column) => expected_problem(
+            "this operator is not part of Alder",
+            *row,
+            *column,
+            "unsupported operator",
+            None,
+        ),
+        Expr::OperatorRight(operator, row, column) => expected_problem(
+            format!(
+                "operator `{}` is missing its right operand",
+                operator.as_str()
+            ),
+            *row,
+            *column,
+            "expected an expression",
+            None,
+        ),
+        Expr::UnexpectedClose(row, column) => expected_problem(
+            "I found a closing markup tag where an expression was expected",
+            *row,
+            *column,
+            "unexpected closing tag",
+            None,
+        ),
+        Expr::TooDeep(row, column) => expected_problem(
+            "this expression is nested too deeply",
+            *row,
+            *column,
+            "nesting limit reached here",
+            Some("move part of this expression into a named binding".to_owned()),
+        ),
+    }
+}
+
+fn number_problem(error: &alder_parse::error::Number, row: u32, column: u32) -> SyntaxProblem {
+    use alder_parse::error::Number;
+    let (message, label, help) = match error {
+        Number::End => (
+            "a number cannot run directly into a name",
+            "separate the number and name",
+            None,
+        ),
+        Number::Dot => (
+            "this decimal point needs digits after it",
+            "expected a decimal digit",
+            None,
+        ),
+        Number::Exponent => (
+            "this exponent needs at least one digit",
+            "expected an exponent digit",
+            None,
+        ),
+        Number::HexDigit => (
+            "this hexadecimal number needs a hexadecimal digit",
+            "expected `0`-`9` or `a`-`f`",
+            None,
+        ),
+        Number::NoLeadingZero => (
+            "decimal numbers cannot have leading zeros",
+            "remove the leading zero",
+            None,
+        ),
+        Number::BigIntFraction => (
+            "BigInt literals cannot contain a fractional part",
+            "fractional BigInt",
+            Some("remove the decimal part or the `n` suffix".to_owned()),
+        ),
+    };
+    expected_problem(message, row, column, label, help)
+}
+
+fn string_problem(error: &alder_parse::error::StringError, row: u32, column: u32) -> SyntaxProblem {
+    use alder_parse::error::StringError;
+    match error {
+        StringError::Endless => expected_problem(
+            "this string is missing its closing quote",
+            row,
+            column,
+            "string starts here",
+            Some("add a closing `\"` before the end of the line".to_owned()),
+        ),
+        StringError::Newline => expected_problem(
+            "ordinary strings cannot contain a line break",
+            row,
+            column,
+            "line break occurs here",
+            Some("use a template literal for multiline text".to_owned()),
+        ),
+        StringError::Escape(_) => expected_problem(
+            "this string contains an invalid escape sequence",
+            row,
+            column,
+            "invalid escape",
+            Some("use a standard escape such as `\\n`, `\\t`, `\\\"`, or `\\u{...}`".to_owned()),
+        ),
     }
 }
 

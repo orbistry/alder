@@ -80,6 +80,10 @@ static resolution wherever the type is known.
 - `Ord` has one `compare(left, right) -> Ordering` method. Generic comparisons
   inspect the `Less`/`Equal`/`Greater` tag, while primitive intrinsics retain
   allocation-free native relational operators.
+- Trait and impl parser diagnostics descend through their function, parameter,
+  pattern, block, expression-leaf, and complete type error hierarchies before
+  building an owned miette report, preserving the innermost source location
+  and syntax-specific correction.
 
 ## Open decisions (recommendation in bold)
 
