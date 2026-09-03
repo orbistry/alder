@@ -45,6 +45,13 @@ impl<'a> InstanceHeader<'a> {
         }
     }
 
+    pub fn params(self) -> &'a [TypeParam<'a>] {
+        match self {
+            Self::Local(implementation) => implementation.params,
+            Self::Foreign(implementation) => implementation.params,
+        }
+    }
+
     pub fn assoc_bindings(self) -> &'a [AssocBinding<'a>] {
         match self {
             Self::Local(implementation) => implementation.assoc_bindings,
@@ -103,6 +110,12 @@ pub enum CoherenceError<'a> {
     InvalidTermination {
         implementation: ImplId<'a>,
         prerequisite: TraitId<'a>,
+    },
+    KindMismatch {
+        implementation: ImplId<'a>,
+        parameter: u16,
+        expected_arity: u16,
+        actual_arity: u16,
     },
 }
 
@@ -176,6 +189,24 @@ impl<'a> TraitDatabase<'a> {
         for (trait_, instances) in &self.instances {
             for implementation in instances {
                 let trait_ref = implementation.trait_ref();
+                if let Some(header) = self.trait_(*trait_) {
+                    for (index, (parameter, argument)) in
+                        header.params.iter().zip(trait_ref.args).enumerate()
+                    {
+                        let expected = kind_arity(parameter.kind);
+                        let actual = type_kind_arity(&argument.value, implementation.params());
+                        if let Some(actual) = actual
+                            && actual != expected
+                        {
+                            errors.push(CoherenceError::KindMismatch {
+                                implementation: implementation.id(),
+                                parameter: index as u16,
+                                expected_arity: expected as u16,
+                                actual_arity: actual as u16,
+                            });
+                        }
+                    }
+                }
                 let subject = trait_ref.args.first().copied();
                 let type_package = subject.and_then(outer_nominal_package);
                 let implementation_package = implementation.id().module.package;
@@ -335,6 +366,41 @@ impl<'a> TraitDatabase<'a> {
                 },
             );
         }
+    }
+}
+
+fn kind_arity(kind: Kind<'_>) -> usize {
+    match kind {
+        Kind::Type => 0,
+        Kind::Arrow { result, .. } => 1 + kind_arity(*result),
+    }
+}
+
+fn type_kind_arity(typ: &Type<'_>, params: &[TypeParam<'_>]) -> Option<usize> {
+    match typ {
+        Type::Partial { slots, .. } => Some(
+            slots
+                .iter()
+                .filter(|slot| matches!(slot, TypeSlot::Hole(_)))
+                .count(),
+        ),
+        Type::Var { name, args } if !args.is_empty() => params
+            .iter()
+            .find(|parameter| parameter.name.value == *name)
+            .map(|parameter| kind_arity(parameter.kind).saturating_sub(args.len())),
+        Type::Var { .. } => None,
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                type_kind_arity(&target.value, params)
+            }
+        },
+        Type::Named { .. }
+        | Type::Projection(_)
+        | Type::Fn { .. }
+        | Type::Unit
+        | Type::Tuple(_)
+        | Type::Record { .. }
+        | Type::ErrorRow { .. } => Some(0),
     }
 }
 

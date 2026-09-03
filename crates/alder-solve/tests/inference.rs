@@ -870,6 +870,32 @@ fn repeated_higher_kinded_pattern_argument_is_rejected() {
 }
 
 #[test]
+fn concrete_type_cannot_fill_a_higher_kinded_trait_parameter() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Mapper[f] {
+                fn map(value: f[a], transform: fn(a) -> b) -> f[b]
+            }
+            impl Mapper[Number] {
+                fn map(value: Number, transform: fn(a) -> b) -> Number { value }
+            }
+        "#},
+    )
+    .expect_err("Number has kind Type, not Type -> Type");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Coherence(alder_solve::CoherenceError::KindMismatch {
+            parameter: 0,
+            expected_arity: 1,
+            actual_arity: 0,
+            ..
+        })
+    )));
+}
+
+#[test]
 fn arbitrary_tuple_and_array() {
     assert_inference_snapshot!("let values = [(1, true, \"three\")]");
 }
