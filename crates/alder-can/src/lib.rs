@@ -8,7 +8,9 @@ mod error;
 pub mod expression;
 mod interface;
 pub mod pattern;
+mod scc;
 pub mod types;
+mod value_scc;
 mod warning;
 
 pub use canonicalize::{CanResult, Context, canonicalize};

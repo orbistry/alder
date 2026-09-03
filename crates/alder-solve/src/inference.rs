@@ -77,24 +77,51 @@ impl<'a> Infer<'a> {
 
     fn infer_module(&mut self, module: &'a Module<'a>) -> Result<Annotations<'a>, Error> {
         let mut env = Env::default();
+        let mut value_items = BTreeMap::new();
         for item in module.items {
             match &item.value.kind {
-                ItemKind::Fn(function) => self.predeclare(&mut env, function.name),
+                ItemKind::Fn(function) => {
+                    self.predeclare(&mut env, function.name);
+                    value_items.insert(function.name, *item);
+                }
                 ItemKind::Extern(alder_ast::ExternDecl::Fn { name, .. }) => {
-                    self.predeclare(&mut env, *name)
+                    self.predeclare(&mut env, *name);
+                    value_items.insert(*name, *item);
                 }
                 ItemKind::Let(decl) => {
                     for binding in decl.bindings {
                         self.predeclare(&mut env, *binding);
+                        value_items.insert(*binding, *item);
                     }
                 }
-                ItemKind::Component(component) => self.predeclare(&mut env, component.name),
+                ItemKind::Component(component) => {
+                    self.predeclare(&mut env, component.name);
+                    value_items.insert(component.name, *item);
+                }
                 _ => {}
             }
         }
 
         for item in module.items {
-            self.infer_item(&mut env, &item.value.kind, item.region)?;
+            if !is_value_item(&item.value.kind) {
+                self.infer_item(&mut env, &item.value.kind, item.region)?;
+            }
+        }
+
+        for group in module.value_sccs {
+            let mut inferred_items = BTreeSet::new();
+            for member in group.members {
+                let item = value_items
+                    .get(member)
+                    .expect("each value SCC member has a declaration");
+                let identity: *const Located<alder_ast::Item<'a>> = *item;
+                if inferred_items.insert(identity) {
+                    self.infer_value_item(&mut env, &item.value.kind, item.region)?;
+                }
+            }
+            for member in group.members {
+                self.generalize_global(&mut env, *member);
+            }
         }
 
         let mut annotations = BTreeMap::new();
@@ -123,51 +150,21 @@ impl<'a> Infer<'a> {
     ) -> Result<(), Error> {
         match item {
             ItemKind::Fn(function) => {
-                let typ =
-                    self.infer_function(env, function.params, function.ret, function.body, region)?;
-                self.unify_global(env, function.name, typ, region)?;
+                self.infer_value_item(env, item, region)?;
                 self.generalize_global(env, function.name);
             }
-            ItemKind::Extern(alder_ast::ExternDecl::Fn {
-                name, params, ret, ..
-            }) => {
-                let mut vars = BTreeMap::new();
-                let mut args = Vec::with_capacity(params.len());
-                for param in *params {
-                    args.push(match param.annotation {
-                        Some(typ) => self.from_ast(typ, &mut vars),
-                        None => self.fresh(),
-                    });
-                }
-                let ret = self.from_ast(ret, &mut vars);
-                self.unify_global(env, *name, Ty::Fn(args, Box::new(ret)), region)?;
+            ItemKind::Extern(alder_ast::ExternDecl::Fn { name, .. }) => {
+                self.infer_value_item(env, item, region)?;
                 self.generalize_global(env, *name);
             }
             ItemKind::Let(decl) => {
-                let mut value = self.infer_expr(env, decl.value, None)?;
-                if let Some(annotation) = decl.annotation {
-                    let annotated = self.from_ast(annotation, &mut BTreeMap::new());
-                    self.unify(value.clone(), annotated, annotation.region)?;
-                    value = self.prune(value);
-                }
-                self.infer_pattern(env, decl.pattern, value, true)?;
+                self.infer_value_item(env, item, region)?;
                 for binding in decl.bindings {
                     self.generalize_global(env, *binding);
                 }
             }
             ItemKind::Component(component) => {
-                let typ =
-                    self.infer_function(env, component.params, None, component.body, region)?;
-                let Ty::Fn(args, inferred) = typ else {
-                    unreachable!()
-                };
-                self.unify(*inferred, self.named("Html", Vec::new()), region)?;
-                self.unify_global(
-                    env,
-                    component.name,
-                    Ty::Fn(args, Box::new(self.named("Html", Vec::new()))),
-                    region,
-                )?;
+                self.infer_value_item(env, item, region)?;
                 self.generalize_global(env, component.name);
             }
             ItemKind::Impl(impl_) => {
@@ -211,6 +208,59 @@ impl<'a> Infer<'a> {
             | ItemKind::Extern(alder_ast::ExternDecl::Type { .. }) => {}
         }
         Ok(())
+    }
+
+    fn infer_value_item(
+        &mut self,
+        env: &mut Env<'a>,
+        item: &'a ItemKind<'a>,
+        region: Region,
+    ) -> Result<(), Error> {
+        match item {
+            ItemKind::Fn(function) => {
+                let typ =
+                    self.infer_function(env, function.params, function.ret, function.body, region)?;
+                self.unify_global(env, function.name, typ, region)
+            }
+            ItemKind::Extern(alder_ast::ExternDecl::Fn {
+                name, params, ret, ..
+            }) => {
+                let mut vars = BTreeMap::new();
+                let mut args = Vec::with_capacity(params.len());
+                for param in *params {
+                    args.push(match param.annotation {
+                        Some(typ) => self.from_ast(typ, &mut vars),
+                        None => self.fresh(),
+                    });
+                }
+                let ret = self.from_ast(ret, &mut vars);
+                self.unify_global(env, *name, Ty::Fn(args, Box::new(ret)), region)
+            }
+            ItemKind::Let(decl) => {
+                let mut value = self.infer_expr(env, decl.value, None)?;
+                if let Some(annotation) = decl.annotation {
+                    let annotated = self.from_ast(annotation, &mut BTreeMap::new());
+                    self.unify(value.clone(), annotated, annotation.region)?;
+                    value = self.prune(value);
+                }
+                self.infer_pattern(env, decl.pattern, value, true)
+            }
+            ItemKind::Component(component) => {
+                let typ =
+                    self.infer_function(env, component.params, None, component.body, region)?;
+                let Ty::Fn(args, inferred) = typ else {
+                    unreachable!()
+                };
+                self.unify(*inferred, self.named("Html", Vec::new()), region)?;
+                self.unify_global(
+                    env,
+                    component.name,
+                    Ty::Fn(args, Box::new(self.named("Html", Vec::new()))),
+                    region,
+                )
+            }
+            _ => unreachable!("only value items are inferred by value SCCs"),
+        }
     }
 
     fn infer_function(
@@ -1600,4 +1650,14 @@ fn block_contains_return(block: &Located<Block<'_>>) -> bool {
             | Stmt::Assert(_)
             | Stmt::Expr(_) => false,
         })
+}
+
+fn is_value_item(item: &ItemKind<'_>) -> bool {
+    matches!(
+        item,
+        ItemKind::Fn(_)
+            | ItemKind::Let(_)
+            | ItemKind::Component(_)
+            | ItemKind::Extern(alder_ast::ExternDecl::Fn { .. })
+    )
 }

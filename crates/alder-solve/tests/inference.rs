@@ -173,6 +173,42 @@ fn polymorphic_identity() {
 }
 
 #[test]
+fn dependency_scc_generalizes_before_earlier_source_use() {
+    let bump = Bump::new();
+    let annotations = infer(
+        &bump,
+        indoc! {r#"
+            fn pair() { (identity(1), identity("x")) }
+            fn identity(value) { value }
+        "#},
+    )
+    .unwrap();
+
+    assert_eq!(
+        render_annotations(&annotations),
+        "identity: forall a. fn(a) -> a\npair: fn() -> (Number, String)"
+    );
+}
+
+#[test]
+fn mutually_recursive_scc_is_unified_before_generalization() {
+    let bump = Bump::new();
+    let annotations = infer(
+        &bump,
+        indoc! {r#"
+            fn first(value) { second(value) }
+            fn second(value) { first(value) }
+        "#},
+    )
+    .unwrap();
+
+    assert_eq!(
+        render_annotations(&annotations),
+        "first: forall a, b. fn(a) -> b\nsecond: forall a, b. fn(a) -> b"
+    );
+}
+
+#[test]
 fn arbitrary_tuple_and_array() {
     assert_inference_snapshot!("let values = [(1, true, \"three\")]");
 }

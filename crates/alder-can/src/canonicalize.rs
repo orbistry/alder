@@ -5,8 +5,8 @@ use alder_ast::{
     ErrorTagType, ExternDecl, FnDecl, ImplDecl, ImplFn, ImplItem, Interface, Item, ItemKind,
     MacroDecl, Modifier, Module, ModuleId, Param, QualifiedName, ResolvedImport,
     ResolvedImportKind, SchemaDecl, SchemaItem, TableColumn, TableDecl, TestDecl, TopLevelLet,
-    TraitDecl, TraitFn, TraitItem, Type, TypeAlias, TypeConstraint, ValueScc, Variant,
-    VariantPayload, Visibility,
+    TraitDecl, TraitFn, TraitItem, Type, TypeAlias, TypeConstraint, Variant, VariantPayload,
+    Visibility,
 };
 use alder_region::{Located, Region};
 use alder_source::{Item as SourceItem, ItemKind as SourceItemKind, Module as SourceModule};
@@ -60,11 +60,13 @@ pub fn canonicalize<'a>(
         return Err(errors);
     }
 
+    let items = bump.alloc_slice_copy(&items);
+    let value_sccs = crate::value_scc::build(bump, context.home, items);
     let module = bump.alloc(Module {
         id: context.home,
         imports: context.imports,
-        items: bump.alloc_slice_copy(&items),
-        value_sccs: &[] as &[ValueScc<'a>],
+        items,
+        value_sccs,
     });
 
     Ok(CanResult {
@@ -1603,6 +1605,46 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn value_sccs_are_complete_dependency_ordered_and_recursive() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                fn dependent() { base() }
+                fn base() { 1 }
+                fn even(n) { odd(n) }
+                fn odd(n) { even(n) }
+                fn self_recursive() { self_recursive() }
+            "#},
+        );
+        let groups = result
+            .module
+            .value_sccs
+            .iter()
+            .map(|group| {
+                (
+                    group.recursive,
+                    group
+                        .members
+                        .iter()
+                        .map(|member| member.name)
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            groups,
+            vec![
+                (true, vec!["self_recursive"]),
+                (true, vec!["even", "odd"]),
+                (false, vec!["base"]),
+                (false, vec!["dependent"]),
+            ]
+        );
     }
 
     #[test]
