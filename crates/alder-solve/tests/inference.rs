@@ -209,6 +209,52 @@ fn declared_bound_supplies_trait_method_evidence() {
 }
 
 #[test]
+fn declared_bounds_are_preserved_in_the_binding_abi() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            fn describe(value: a) -> String where a: Show { show(value) }
+        "#},
+    )
+    .expect("declared bound resolves");
+    let (name, binding) = solved
+        .bindings
+        .iter()
+        .find(|(name, _)| name.name == "describe")
+        .expect("describe has elaboration metadata");
+    assert_eq!(binding.abi, alder_solve::BindingAbi::DirectFunction);
+    assert_eq!(binding.dictionary_params.len(), 1);
+    assert_eq!(binding.dictionary_params[0].trait_.0.name, "Show");
+    assert_eq!(solved.schemes[name].trait_predicates.len(), 1);
+}
+
+#[test]
+fn constrained_binding_references_instantiate_their_predicates() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            impl Show[Number] { fn show(value: Number) -> String { "number" } }
+            fn describe(value: a) -> String where a: Show { show(value) }
+            fn render() -> String { describe(1) }
+        "#},
+    )
+    .expect("the constrained callee selects its dictionary");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::DirectCall {
+            dictionaries,
+            target: Some(alder_solve::DirectTarget::Binding(name)),
+            ..
+        } if matches!(dictionaries.as_slice(), [alder_solve::Evidence::Impl { .. }])
+            && name.name == "describe"
+    )));
+}
+
+#[test]
 fn missing_trait_instance_is_structured() {
     let bump = Bump::new();
     let errors = solve_input(

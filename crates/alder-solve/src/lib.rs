@@ -5,7 +5,7 @@ mod traits;
 
 use std::collections::BTreeMap;
 
-use alder_ast::{ImplId, MethodId, TraitId, UseId};
+use alder_ast::{ImplId, MethodId, QualifiedName, TraitId, UseId};
 use alder_can::Annotations;
 use alder_region::Region;
 
@@ -15,7 +15,22 @@ pub use traits::{InstanceHeader, TraitDatabase, TraitHeader, builtin_trait_id};
 #[derive(Clone, Debug)]
 pub struct SolveOutput<'a> {
     pub annotations: Annotations<'a>,
+    pub schemes: Annotations<'a>,
+    pub bindings: BTreeMap<alder_ast::QualifiedName<'a>, BindingEvidence<'a>>,
     pub uses: BTreeMap<UseId, UseAction<'a>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BindingEvidence<'a> {
+    pub dictionary_params: &'a [alder_ast::TraitRef<'a>],
+    pub abi: BindingAbi,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BindingAbi {
+    PlainValue,
+    DirectFunction,
+    EvidenceFactory,
 }
 
 #[derive(Clone, Debug)]
@@ -24,6 +39,12 @@ pub enum UseAction<'a> {
         dictionaries: Vec<Evidence<'a>>,
         method: Option<MethodId<'a>>,
     },
+    DirectCall {
+        callee_use: UseId,
+        dictionaries: Vec<Evidence<'a>>,
+        target: Option<DirectTarget<'a>>,
+    },
+    IndirectCall,
     Operator {
         dictionary: Evidence<'a>,
     },
@@ -33,6 +54,12 @@ pub enum UseAction<'a> {
     CompoundAssign {
         dictionary: Evidence<'a>,
     },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum DirectTarget<'a> {
+    Binding(QualifiedName<'a>),
+    TraitMethod(MethodId<'a>),
 }
 
 #[derive(Clone, Debug)]

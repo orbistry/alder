@@ -11,8 +11,8 @@ use alder_region::{Located, Region};
 use bumpalo::Bump;
 
 use crate::{
-    Evidence, Intrinsic, SolveError, SolveOutput, SolveTraitError, TraitDatabase, UseAction,
-    builtin_trait_id,
+    BindingAbi, BindingEvidence, DirectTarget, Evidence, Intrinsic, SolveError, SolveOutput,
+    SolveTraitError, TraitDatabase, UseAction, builtin_trait_id,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -99,9 +99,29 @@ fn resolve_obligations<'a>(
             Err(error) => errors.push(SolveError::Trait(error)),
         }
     }
+    for call in result.calls {
+        let action = match (call.callee_use, call.target) {
+            (Some(callee_use), target @ Some(_)) => {
+                let dictionaries = match uses.get(&callee_use) {
+                    Some(UseAction::Reference { dictionaries, .. }) => dictionaries.clone(),
+                    _ => Vec::new(),
+                };
+                UseAction::DirectCall {
+                    callee_use,
+                    dictionaries,
+                    target,
+                }
+            }
+            _ => UseAction::IndirectCall,
+        };
+        uses.insert(call.use_id, action);
+    }
     if errors.is_empty() {
+        let schemes = result.annotations.clone();
         Ok(SolveOutput {
             annotations: result.annotations,
+            schemes,
+            bindings: result.bindings,
             uses,
         })
     } else {
@@ -432,6 +452,7 @@ fn render_ty(typ: &Ty<'_>) -> String {
 #[derive(Clone, Debug)]
 struct Scheme<'a> {
     quantified: Vec<usize>,
+    predicates: Vec<Predicate<'a>>,
     typ: Ty<'a>,
 }
 
@@ -460,7 +481,16 @@ struct Obligation<'a> {
 
 struct InferenceResult<'a> {
     annotations: Annotations<'a>,
+    bindings: BTreeMap<QualifiedName<'a>, BindingEvidence<'a>>,
     obligations: Vec<Obligation<'a>>,
+    calls: Vec<CallSite<'a>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CallSite<'a> {
+    use_id: UseId,
+    callee_use: Option<UseId>,
+    target: Option<DirectTarget<'a>>,
 }
 
 #[derive(Clone, Default)]
@@ -475,6 +505,7 @@ struct Infer<'a, 'db> {
     substitutions: Vec<Option<Ty<'a>>>,
     obligations: Vec<Obligation<'a>>,
     givens: Vec<Predicate<'a>>,
+    calls: Vec<CallSite<'a>>,
 }
 
 pub fn run<'a>(
@@ -507,6 +538,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             substitutions: Vec::new(),
             obligations: Vec::new(),
             givens: Vec::new(),
+            calls: Vec::new(),
         }
     }
 
@@ -566,8 +598,22 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
 
         let mut annotations = BTreeMap::new();
+        let mut bindings = BTreeMap::new();
         for (name, scheme) in env.globals {
-            annotations.insert(name, self.annotation(&scheme.typ));
+            let abi = match self.prune(scheme.typ.clone()) {
+                Ty::Fn(_, _) => BindingAbi::DirectFunction,
+                _ if scheme.predicates.is_empty() => BindingAbi::PlainValue,
+                _ => BindingAbi::EvidenceFactory,
+            };
+            let annotation = self.annotation(&scheme);
+            annotations.insert(name, annotation);
+            bindings.insert(
+                name,
+                BindingEvidence {
+                    dictionary_params: annotation.trait_predicates,
+                    abi,
+                },
+            );
         }
         let mut obligations = std::mem::take(&mut self.obligations);
         for obligation in &mut obligations {
@@ -582,7 +628,9 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         Ok(InferenceResult {
             annotations,
+            bindings,
             obligations,
+            calls: std::mem::take(&mut self.calls),
         })
     }
 
@@ -592,6 +640,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             name,
             Scheme {
                 quantified: Vec::new(),
+                predicates: Vec::new(),
                 typ,
             },
         );
@@ -681,7 +730,7 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<(), Error> {
         match item {
             ItemKind::Fn(function) => {
-                let typ = self.infer_function(
+                let (typ, predicates) = self.infer_function(
                     env,
                     function.params,
                     function.ret,
@@ -689,10 +738,18 @@ impl<'a, 'db> Infer<'a, 'db> {
                     function.body,
                     region,
                 )?;
+                env.globals
+                    .get_mut(&function.name)
+                    .expect("function was predeclared")
+                    .predicates = predicates;
                 self.unify_global(env, function.name, typ, region)
             }
             ItemKind::Extern(alder_ast::ExternDecl::Fn {
-                name, params, ret, ..
+                name,
+                params,
+                ret,
+                constraints,
+                ..
             }) => {
                 let mut vars = BTreeMap::new();
                 let mut args = Vec::with_capacity(params.len());
@@ -703,6 +760,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                     });
                 }
                 let ret = self.from_ast(ret, &mut vars);
+                let predicates = self.predicates_from_constraints(constraints, &vars);
+                env.globals
+                    .get_mut(name)
+                    .expect("extern function was predeclared")
+                    .predicates = predicates;
                 self.unify_global(env, *name, Ty::Fn(args, Box::new(ret)), region)
             }
             ItemKind::Let(decl) => {
@@ -715,8 +777,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.infer_pattern(env, decl.pattern, value, true)
             }
             ItemKind::Component(component) => {
-                let typ =
+                let (typ, predicates) =
                     self.infer_function(env, component.params, None, &[], component.body, region)?;
+                debug_assert!(predicates.is_empty());
                 let Ty::Fn(args, inferred) = typ else {
                     unreachable!()
                 };
@@ -740,7 +803,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         constraints: &'a [alder_ast::TypeConstraint<'a>],
         body: &'a Located<Block<'a>>,
         region: Region,
-    ) -> Result<Ty<'a>, Error> {
+    ) -> Result<(Ty<'a>, Vec<Predicate<'a>>), Error> {
         let mut local = env.clone();
         let mut vars = BTreeMap::new();
         let mut args = Vec::with_capacity(params.len());
@@ -756,23 +819,10 @@ impl<'a, 'db> Infer<'a, 'db> {
             Some(ret) => self.from_ast(ret, &mut vars),
             None => self.fresh(),
         };
+        let predicates = self.predicates_from_constraints(constraints, &vars);
         let outer_givens = std::mem::take(&mut self.givens);
         self.givens = outer_givens.clone();
-        for constraint in constraints {
-            if let alder_ast::TypeConstraint::Bound {
-                var,
-                traits: trait_names,
-            } = constraint
-                && let Some(subject) = vars.get(var.value).cloned()
-            {
-                for trait_name in *trait_names {
-                    self.givens.push(Predicate {
-                        trait_: TraitId(*trait_name),
-                        args: vec![subject.clone()],
-                    });
-                }
-            }
-        }
+        self.givens.extend(predicates.iter().cloned());
         let body_result = match self.prune(result.clone()) {
             Ty::App(head, args)
                 if matches!(*head, Ty::Con(reference) if reference.name == "Task")
@@ -787,7 +837,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             if body.value.tail.is_some() || !block_contains_return(body) {
                 self.unify(body_type, body_result, region)?;
             }
-            Ok(Ty::Fn(args, Box::new(self.prune(result))))
+            Ok((Ty::Fn(args, Box::new(self.prune(result))), predicates))
         })();
         self.givens = outer_givens;
         inferred
@@ -949,10 +999,33 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.infer_record(env, fields, return_type)
             }
             Expr::Call {
+                use_id,
                 function,
                 arguments,
-                ..
             } => {
+                let (callee_use, target) = match function.value {
+                    Expr::Var {
+                        use_id,
+                        reference: ValueRef::TopLevel(name),
+                    }
+                    | Expr::Var {
+                        use_id,
+                        reference:
+                            ValueRef::Foreign {
+                                reference: name, ..
+                            },
+                    }
+                    | Expr::Var {
+                        use_id,
+                        reference: ValueRef::Builtin(name),
+                    } => (Some(use_id), Some(DirectTarget::Binding(name))),
+                    Expr::Var {
+                        use_id,
+                        reference: ValueRef::TraitMethod { method, .. },
+                    } => (Some(use_id), Some(DirectTarget::TraitMethod(method))),
+                    Expr::Var { use_id, .. } => (Some(use_id), None),
+                    _ => (None, None),
+                };
                 let function_type = self.infer_expr(env, function, return_type.clone())?;
                 let mut args = Vec::with_capacity(arguments.len());
                 for argument in *arguments {
@@ -964,6 +1037,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                     Ty::Fn(args, Box::new(result.clone())),
                     region,
                 )?;
+                self.calls.push(CallSite {
+                    use_id: *use_id,
+                    callee_use,
+                    target,
+                });
                 Ok(self.prune(result))
             }
             Expr::Access { record, field } => {
@@ -1147,7 +1225,16 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<Ty<'a>, Error> {
         match reference {
             ValueRef::Local(local) => Ok(self.instantiate(&env.locals[&local.id.0])),
-            ValueRef::TopLevel(name) => Ok(self.instantiate(&env.globals[&name])),
+            ValueRef::TopLevel(name) => {
+                let (typ, predicates) = self.instantiate_scheme(&env.globals[&name]);
+                self.record_predicates(
+                    use_id,
+                    predicates,
+                    region,
+                    ObligationAction::Reference(None),
+                );
+                Ok(typ)
+            }
             ValueRef::Foreign { annotation, .. } => {
                 let (typ, vars) = self.instantiate_annotation_with_vars(annotation);
                 self.record_annotation_predicates(
@@ -1238,6 +1325,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         local.id.0,
                         Scheme {
                             quantified: Vec::new(),
+                            predicates: Vec::new(),
                             typ: expected,
                         },
                     );
@@ -1359,6 +1447,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         local.id.0,
                         Scheme {
                             quantified: Vec::new(),
+                            predicates: Vec::new(),
                             typ: self.named("Array", vec![item.clone()]),
                         },
                     );
@@ -1372,6 +1461,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         local.id.0,
                         Scheme {
                             quantified: Vec::new(),
+                            predicates: Vec::new(),
                             typ: expected,
                         },
                     );
@@ -1728,24 +1818,48 @@ impl<'a, 'db> Infer<'a, 'db> {
 
     fn generalize_global(&mut self, env: &mut Env<'a>, name: QualifiedName<'a>) {
         let typ = self.prune(env.globals[&name].typ.clone());
+        let mut predicates = env.globals[&name].predicates.clone();
+        for predicate in &mut predicates {
+            for argument in &mut predicate.args {
+                *argument = self.prune(argument.clone());
+            }
+        }
         let mut vars = BTreeSet::new();
         self.free_vars(&typ, &mut vars);
         env.globals.insert(
             name,
             Scheme {
                 quantified: vars.into_iter().collect(),
+                predicates,
                 typ,
             },
         );
     }
 
     fn instantiate(&mut self, scheme: &Scheme<'a>) -> Ty<'a> {
+        self.instantiate_scheme(scheme).0
+    }
+
+    fn instantiate_scheme(&mut self, scheme: &Scheme<'a>) -> (Ty<'a>, Vec<Predicate<'a>>) {
         let replacements: BTreeMap<_, _> = scheme
             .quantified
             .iter()
             .map(|id| (*id, self.fresh()))
             .collect();
-        self.replace_vars(&scheme.typ, &replacements)
+        let typ = self.replace_vars(&scheme.typ, &replacements);
+        let predicates = scheme
+            .predicates
+            .iter()
+            .map(|predicate| Predicate {
+                trait_: predicate.trait_,
+                args: predicate
+                    .args
+                    .iter()
+                    .map(|argument| self.replace_vars(argument, &replacements))
+                    .collect(),
+            })
+            .collect();
+        (typ, predicates)
     }
 
     fn instantiate_annotation(&mut self, annotation: &'a Annotation<'a>) -> Ty<'a> {
@@ -1769,24 +1883,64 @@ impl<'a, 'db> Infer<'a, 'db> {
         region: Region,
         action: ObligationAction<'a>,
     ) {
-        for predicate in annotation.trait_predicates {
-            let mut vars = vars.clone();
-            let args = predicate
-                .args
-                .iter()
-                .map(|argument| self.from_ast(argument, &mut vars))
-                .collect();
+        let predicates = annotation
+            .trait_predicates
+            .iter()
+            .map(|predicate| {
+                let mut vars = vars.clone();
+                Predicate {
+                    trait_: predicate.trait_,
+                    args: predicate
+                        .args
+                        .iter()
+                        .map(|argument| self.from_ast(argument, &mut vars))
+                        .collect(),
+                }
+            })
+            .collect();
+        self.record_predicates(use_id, predicates, region, action);
+    }
+
+    fn record_predicates(
+        &mut self,
+        use_id: UseId,
+        predicates: Vec<Predicate<'a>>,
+        region: Region,
+        action: ObligationAction<'a>,
+    ) {
+        for predicate in predicates {
             self.obligations.push(Obligation {
                 use_id,
-                predicate: Predicate {
-                    trait_: predicate.trait_,
-                    args,
-                },
+                predicate,
                 region,
                 action,
                 givens: self.givens.clone(),
             });
         }
+    }
+
+    fn predicates_from_constraints(
+        &mut self,
+        constraints: &'a [alder_ast::TypeConstraint<'a>],
+        vars: &BTreeMap<&'a str, Ty<'a>>,
+    ) -> Vec<Predicate<'a>> {
+        let mut predicates = Vec::new();
+        for constraint in constraints {
+            if let alder_ast::TypeConstraint::Bound {
+                var,
+                traits: trait_names,
+            } = constraint
+                && let Some(subject) = vars.get(var.value).cloned()
+            {
+                for trait_name in *trait_names {
+                    predicates.push(Predicate {
+                        trait_: TraitId(*trait_name),
+                        args: vec![subject.clone()],
+                    });
+                }
+            }
+        }
+        predicates
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -2236,12 +2390,30 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
     }
 
-    fn annotation(&mut self, typ: &Ty<'a>) -> &'a Annotation<'a> {
-        let typ = self.prune(typ.clone());
+    fn annotation(&mut self, scheme: &Scheme<'a>) -> &'a Annotation<'a> {
+        let typ = self.prune(scheme.typ.clone());
         let mut arities = BTreeMap::new();
         self.collect_kind_arities(&typ, &mut arities);
+        for predicate in &scheme.predicates {
+            for argument in &predicate.args {
+                self.collect_kind_arities(argument, &mut arities);
+            }
+        }
         let mut names = BTreeMap::new();
         let typ = self.to_ast(&typ, &mut names);
+        let trait_predicates = self
+            .bump
+            .alloc_slice_fill_iter(scheme.predicates.iter().map(|predicate| {
+                alder_ast::TraitRef {
+                    trait_: predicate.trait_,
+                    args: self.bump.alloc_slice_fill_iter(
+                        predicate
+                            .args
+                            .iter()
+                            .map(|argument| self.to_ast(argument, &mut names)),
+                    ),
+                }
+            }));
         let mut params = names.into_iter().collect::<Vec<_>>();
         params.sort_by_key(|(_, name)| generated_type_name_rank(name));
         self.bump.alloc(Annotation {
@@ -2251,7 +2423,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     name: Located::at(Region::zero(), name),
                     kind: self.kind_from_arity(arities.get(&id).copied().unwrap_or(0)),
                 })),
-            trait_predicates: &[],
+            trait_predicates,
             projection_equalities: &[],
             typ,
         })
