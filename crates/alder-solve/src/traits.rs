@@ -351,17 +351,13 @@ impl<'a> TraitDatabase<'a> {
                 name: builtin_name(if name == "Functor" { "f" } else { "a" }),
                 kind: parameter_kind,
             }]);
-            let superclasses: &'a [TraitRef<'a>] = if name == "Ord" {
-                let argument = bump.alloc(Located::at_zero(Type::Var {
-                    name: "a",
-                    args: &[],
-                }));
-                bump.alloc_slice_copy(&[TraitRef {
-                    trait_: builtin_trait_id("Eq"),
-                    args: bump.alloc_slice_copy(&[argument as &Located<Type<'a>>]),
-                }])
-            } else {
-                &[]
+            let superclasses: &'a [TraitRef<'a>] = match name {
+                "Ord" | "Hash" => bump.alloc_slice_copy(&[builtin_superclass(bump, "Eq")]),
+                "Num" => bump.alloc_slice_copy(&[
+                    builtin_superclass(bump, "Eq"),
+                    builtin_superclass(bump, "Ord"),
+                ]),
+                _ => &[],
             };
             self.traits.insert(
                 id,
@@ -374,6 +370,17 @@ impl<'a> TraitDatabase<'a> {
                 },
             );
         }
+    }
+}
+
+fn builtin_superclass<'a>(bump: &'a Bump, name: &'static str) -> TraitRef<'a> {
+    let argument = bump.alloc(Located::at_zero(Type::Var {
+        name: "a",
+        args: &[],
+    }));
+    TraitRef {
+        trait_: builtin_trait_id(name),
+        args: bump.alloc_slice_copy(&[argument as &Located<Type<'a>>]),
     }
 }
 

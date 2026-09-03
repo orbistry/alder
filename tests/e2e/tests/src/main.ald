@@ -46,6 +46,10 @@ fn generic_negate(value: a) -> a where a: Num {
     -value
 }
 
+fn numeric_equal(left: a, right: a) -> Bool where a: Num {
+    left == right
+}
+
 fn generic_greater(left: a, right: a) -> Bool where a: Ord {
     left > right
 }
@@ -117,6 +121,7 @@ test "arithmetic works" {
     assert generic_add(20, 22) == 42
     assert generic_sub(44, 2) == 42
     assert generic_negate(42) == -42
+    assert numeric_equal(42, 42)
     assert generic_greater(2, 1)
     assert ordered_equal(1, 1)
     assert ranked_same(42, 42)
@@ -158,7 +163,8 @@ test "derived dictionaries execute" {
     assert Phase::Alpha == Phase::Alpha
     assert Phase::Beta < Phase::Alpha
     assert show(Phase::Alpha) == "Alpha"
-    assert hash(Phase::Alpha) == hash(Phase::Alpha)
+    let phase_hash: BigInt = hash(Phase::Alpha)
+    assert phase_hash == hash(Phase::Alpha)
     let decoded = decode(encode(Phase::Beta))?
     assert decoded == Phase::Beta
     let expected = Phase::Alpha

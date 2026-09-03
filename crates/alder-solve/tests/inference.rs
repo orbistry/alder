@@ -738,6 +738,32 @@ fn numeric_operators_select_number_and_bigint_intrinsics() {
 }
 
 #[test]
+fn builtin_hash_and_num_bounds_expose_their_superclasses() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn hash_equal(left: a, right: a) -> Bool where a: Hash { left == right }
+            fn num_equal(left: a, right: a) -> Bool where a: Num { left == right }
+            fn num_greater(left: a, right: a) -> Bool where a: Num { left > right }
+        "#},
+    )
+    .expect("Hash and Num dictionaries expose their declared superclasses");
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Operator {
+            dictionary: alder_solve::Evidence::ParamSuper { param: 0, slot: 0 },
+        }
+    )));
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Operator {
+            dictionary: alder_solve::Evidence::ParamSuper { param: 0, slot: 1 },
+        }
+    )));
+}
+
+#[test]
 fn functions_have_no_structural_eq_instance() {
     let bump = Bump::new();
     let errors = solve_input(

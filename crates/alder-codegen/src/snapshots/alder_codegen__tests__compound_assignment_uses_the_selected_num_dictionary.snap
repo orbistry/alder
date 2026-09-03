@@ -1,67 +1,104 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-expression: "emit_solved(r#\"enum Token { Token }\nimpl Num[Token] {\n    fn add(left: Token, right: Token) -> Token { right }\n    fn sub(left: Token, right: Token) -> Token { right }\n    fn mul(left: Token, right: Token) -> Token { right }\n    fn div(left: Token, right: Token) -> Token { right }\n    fn rem(left: Token, right: Token) -> Token { right }\n    fn negate(value: Token) -> Token { value }\n}\npub fn update() -> Token {\n    let mut value = Token::Token\n    value += Token::Token\n    value\n}\n\"#)"
+expression: "emit_solved(r#\"enum Token { Token }\nimpl Ord[Token] {\n    fn lt(left: Token, right: Token) -> Bool { false }\n    fn lte(left: Token, right: Token) -> Bool { true }\n    fn gt(left: Token, right: Token) -> Bool { false }\n    fn gte(left: Token, right: Token) -> Bool { true }\n}\nimpl Num[Token] {\n    fn add(left: Token, right: Token) -> Token { right }\n    fn sub(left: Token, right: Token) -> Token { right }\n    fn mul(left: Token, right: Token) -> Token { right }\n    fn div(left: Token, right: Token) -> Token { right }\n    fn rem(left: Token, right: Token) -> Token { right }\n    fn negate(value: Token) -> Token { value }\n}\npub fn update() -> Token {\n    let mut value = Token::Token\n    value += Token::Token\n    value\n}\n\"#)"
 ---
 import { $equal } from "alder:kernel";
 const $c_Token_Token = Object["freeze"]({ "$": "Token" });
-function $impl$1$add($self, $a0, $a1) {
+function $impl$1$lt($self, $a0, $a1) {
 	let $l0_left = $a0;
 	let $l1_right = $a1;
-	return $l1_right;
+	return false;
 }
-function $impl$1$sub($self, $a0, $a1) {
+function $impl$1$lte($self, $a0, $a1) {
 	let $l2_left = $a0;
 	let $l3_right = $a1;
-	return $l3_right;
+	return true;
 }
-function $impl$1$mul($self, $a0, $a1) {
+function $impl$1$gt($self, $a0, $a1) {
 	let $l4_left = $a0;
 	let $l5_right = $a1;
-	return $l5_right;
+	return false;
 }
-function $impl$1$div($self, $a0, $a1) {
+function $impl$1$gte($self, $a0, $a1) {
 	let $l6_left = $a0;
 	let $l7_right = $a1;
-	return $l7_right;
+	return true;
 }
-function $impl$1$rem($self, $a0, $a1) {
+const $dict$Ord$1 = {};
+$dict$Ord$1["$super0"] = $dict$Eq$0;
+$dict$Ord$1["lt"] = ($a0, $a1) => {
+	return $impl$1$lt($dict$Ord$1, $a0, $a1);
+};
+$dict$Ord$1["lte"] = ($a0, $a1) => {
+	return $impl$1$lte($dict$Ord$1, $a0, $a1);
+};
+$dict$Ord$1["gt"] = ($a0, $a1) => {
+	return $impl$1$gt($dict$Ord$1, $a0, $a1);
+};
+$dict$Ord$1["gte"] = ($a0, $a1) => {
+	return $impl$1$gte($dict$Ord$1, $a0, $a1);
+};
+Object["freeze"]($dict$Ord$1);
+function $impl$2$add($self, $a0, $a1) {
 	let $l8_left = $a0;
 	let $l9_right = $a1;
 	return $l9_right;
 }
-function $impl$1$negate($self, $a0) {
-	let $l10_value = $a0;
-	return $l10_value;
+function $impl$2$sub($self, $a0, $a1) {
+	let $l10_left = $a0;
+	let $l11_right = $a1;
+	return $l11_right;
 }
-const $dict$Num$1 = {};
-$dict$Num$1["add"] = ($a0, $a1) => {
-	return $impl$1$add($dict$Num$1, $a0, $a1);
+function $impl$2$mul($self, $a0, $a1) {
+	let $l12_left = $a0;
+	let $l13_right = $a1;
+	return $l13_right;
+}
+function $impl$2$div($self, $a0, $a1) {
+	let $l14_left = $a0;
+	let $l15_right = $a1;
+	return $l15_right;
+}
+function $impl$2$rem($self, $a0, $a1) {
+	let $l16_left = $a0;
+	let $l17_right = $a1;
+	return $l17_right;
+}
+function $impl$2$negate($self, $a0) {
+	let $l18_value = $a0;
+	return $l18_value;
+}
+const $dict$Num$2 = {};
+$dict$Num$2["$super0"] = $dict$Eq$0;
+$dict$Num$2["$super1"] = $dict$Ord$1;
+$dict$Num$2["add"] = ($a0, $a1) => {
+	return $impl$2$add($dict$Num$2, $a0, $a1);
 };
-$dict$Num$1["sub"] = ($a0, $a1) => {
-	return $impl$1$sub($dict$Num$1, $a0, $a1);
+$dict$Num$2["sub"] = ($a0, $a1) => {
+	return $impl$2$sub($dict$Num$2, $a0, $a1);
 };
-$dict$Num$1["mul"] = ($a0, $a1) => {
-	return $impl$1$mul($dict$Num$1, $a0, $a1);
+$dict$Num$2["mul"] = ($a0, $a1) => {
+	return $impl$2$mul($dict$Num$2, $a0, $a1);
 };
-$dict$Num$1["div"] = ($a0, $a1) => {
-	return $impl$1$div($dict$Num$1, $a0, $a1);
+$dict$Num$2["div"] = ($a0, $a1) => {
+	return $impl$2$div($dict$Num$2, $a0, $a1);
 };
-$dict$Num$1["rem"] = ($a0, $a1) => {
-	return $impl$1$rem($dict$Num$1, $a0, $a1);
+$dict$Num$2["rem"] = ($a0, $a1) => {
+	return $impl$2$rem($dict$Num$2, $a0, $a1);
 };
-$dict$Num$1["negate"] = ($a0) => {
-	return $impl$1$negate($dict$Num$1, $a0);
+$dict$Num$2["negate"] = ($a0) => {
+	return $impl$2$negate($dict$Num$2, $a0);
 };
-Object["freeze"]($dict$Num$1);
+Object["freeze"]($dict$Num$2);
 function $v_update() {
 	const $t0 = $c_Token_Token;
-	let $l11_value = $t0;
-	$l11_value = $dict$Num$1["add"]($l11_value, $c_Token_Token);
-	return $l11_value;
+	let $l19_value = $t0;
+	$l19_value = $dict$Num$2["add"]($l19_value, $c_Token_Token);
+	return $l19_value;
 }
 const $dict$Eq$0 = {};
 $dict$Eq$0["eq"] = ($a0, $a1) => {
 	return $equal($a0, $a1);
 };
 Object["freeze"]($dict$Eq$0);
-export { $dict$Eq$0, $dict$Num$1, $v_update as update };
+export { $dict$Eq$0, $dict$Num$2, $dict$Ord$1, $v_update as update };

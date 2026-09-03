@@ -376,6 +376,12 @@ mod tests {
     fn compound_assignment_uses_the_selected_num_dictionary() {
         insta::assert_snapshot!(emit_solved(
             r#"enum Token { Token }
+impl Ord[Token] {
+    fn lt(left: Token, right: Token) -> Bool { false }
+    fn lte(left: Token, right: Token) -> Bool { true }
+    fn gt(left: Token, right: Token) -> Bool { false }
+    fn gte(left: Token, right: Token) -> Bool { true }
+}
 impl Num[Token] {
     fn add(left: Token, right: Token) -> Token { right }
     fn sub(left: Token, right: Token) -> Token { right }

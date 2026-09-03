@@ -45,13 +45,13 @@ export function $compareEnum(left, right, variants) {
 }
 
 export function $hash(value) {
-    const text = stableText(value);
-    let hash = 2166136261;
-    for (let index = 0; index < text.length; index += 1) {
-        hash ^= text.charCodeAt(index);
-        hash = Math.imul(hash, 16777619);
+    const bytes = new TextEncoder().encode(stableText(value));
+    let hash = 14695981039346656037n;
+    for (const byte of bytes) {
+        hash ^= BigInt(byte);
+        hash = (hash * 1099511628211n) & 0xffffffffffffffffn;
     }
-    return hash >>> 0;
+    return hash;
 }
 
 function stableText(value) {

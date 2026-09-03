@@ -2346,6 +2346,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 properties.push(self.js.property("$super0", equality));
             }
             Intrinsic::NumNumber | Intrinsic::NumBigInt => {
+                let (equality, ordering) = match intrinsic {
+                    Intrinsic::NumNumber => (Intrinsic::EqNumber, Intrinsic::OrdNumber),
+                    Intrinsic::NumBigInt => (Intrinsic::EqBigInt, Intrinsic::OrdBigInt),
+                    _ => unreachable!(),
+                };
+                let equality = self.intrinsic_dictionary(equality);
+                properties.push(self.js.property("$super0", equality));
+                let ordering = self.intrinsic_dictionary(ordering);
+                properties.push(self.js.property("$super1", ordering));
                 properties.push(self.intrinsic_binary_property("add", BinaryOperator::Addition));
                 properties.push(self.intrinsic_binary_property("sub", BinaryOperator::Subtraction));
                 properties

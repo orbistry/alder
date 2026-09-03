@@ -185,7 +185,7 @@ impl<'a> Env<'a> {
                     ("gt", &["a", "a"], "Bool"),
                     ("gte", &["a", "a"], "Bool"),
                 ],
-                "Hash" => &[("hash", &["a"], "Number")],
+                "Hash" => &[("hash", &["a"], "BigInt")],
                 "Json" => &[("encode", &["a"], "String"), ("decode", &["String"], "a")],
                 "Num" => &[
                     ("add", &["a", "a"], "a"),
