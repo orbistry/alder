@@ -94,7 +94,23 @@ enum Import {
 }
 
 pub fn emit_module(module: &Module<'_>, options: EmitOptions) -> Result<EmittedModule, Error> {
-    let generated = oxc_backend::emit_module_ast(module, options)?;
+    emit_module_with_solution(module, None, options)
+}
+
+pub fn emit_solved_module(
+    module: &Module<'_>,
+    solved: &alder_solve::SolveOutput<'_>,
+    options: EmitOptions,
+) -> Result<EmittedModule, Error> {
+    emit_module_with_solution(module, Some(solved), options)
+}
+
+fn emit_module_with_solution(
+    module: &Module<'_>,
+    solved: Option<&alder_solve::SolveOutput<'_>>,
+    options: EmitOptions,
+) -> Result<EmittedModule, Error> {
+    let generated = oxc_backend::emit_module_ast(module, solved, options)?;
     Ok(EmittedModule {
         module_id: generated.module_id,
         ast: generated.ast,
@@ -251,6 +267,31 @@ mod tests {
             .code()
     }
 
+    fn emit_solved(source: &str) -> String {
+        let bump = Bump::new();
+        let source = bump.alloc_str(source);
+        let parsed = alder_parse::parse_module(&bump, source).expect("source parses");
+        let canonical = alder_can::canonicalize(
+            &bump,
+            alder_can::Context {
+                home: ModuleId {
+                    package: PackageId::Application,
+                    path: &["main"],
+                },
+                imports: &[] as &[ResolvedImport<'_>],
+                interfaces: &[],
+            },
+            &parsed,
+        )
+        .expect("source canonicalizes");
+        let constraints = alder_constrain::constrain(&bump, canonical.module);
+        let traits = alder_solve::TraitDatabase::build(&bump, canonical.module, &[]);
+        let solved = alder_solve::solve(&bump, &constraints, &traits).expect("module solves");
+        emit_solved_module(canonical.module, &solved, EmitOptions::default())
+            .expect("module emits")
+            .code()
+    }
+
     #[test]
     fn function_and_block_lifting() {
         insta::assert_snapshot!(emit("pub fn answer() { let x = 40\n x + 2 }"));
@@ -295,6 +336,25 @@ mod tests {
     fn result_extern_is_guarded() {
         insta::assert_snapshot!(emit(
             "#[extern(\"library\", \"parse\")]\npub fn parse(value: String) -> Result[Number, String]"
+        ));
+    }
+
+    #[test]
+    fn trait_dictionary_passing() {
+        insta::assert_snapshot!(emit_solved(
+            "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\nfn describe(value: a) -> String where a: Show { show(value) }\npub fn main() -> String { describe(1) }"
+        ));
+    }
+
+    #[test]
+    fn solved_primitive_equality_is_strict() {
+        insta::assert_snapshot!(emit_solved("pub fn same() -> Bool { 1 == 2 }"));
+    }
+
+    #[test]
+    fn prerequisite_dictionary_factory() {
+        insta::assert_snapshot!(emit_solved(
+            "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\nimpl Show[Array[a]] where a: Show { fn show(value: Array[a]) -> String { \"array\" } }\npub fn main() -> String { show([1]) }"
         ));
     }
 }

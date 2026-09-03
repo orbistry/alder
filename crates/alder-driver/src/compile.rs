@@ -238,12 +238,13 @@ fn compile_module<'s>(
         .collect();
 
     let constraint = alder_constrain::constrain(store, can_result.module);
-    let annotations = match alder_solve::run(store, &constraint) {
-        Ok(annotations) => annotations,
+    let trait_database = alder_solve::TraitDatabase::build(store, can_result.module, interfaces);
+    let solved = match alder_solve::solve(store, &constraint, &trait_database) {
+        Ok(solved) => solved,
         Err(errors) => return failed(format!("{:?}", errors)),
     };
 
-    let interface = alder_can::from_module(store, can_result.module, &annotations);
+    let interface = alder_can::from_module(store, can_result.module, &solved.annotations);
     let artifact = match mode {
         BuildMode::Check => None,
         BuildMode::Build | BuildMode::Test => {
@@ -254,7 +255,7 @@ fn compile_module<'s>(
                     alder_codegen::EmitMode::Build
                 },
             };
-            match alder_codegen::emit_module(can_result.module, options) {
+            match alder_codegen::emit_solved_module(can_result.module, &solved, options) {
                 Ok(artifact) => Some(artifact),
                 Err(error) => {
                     return failed(format!(

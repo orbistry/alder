@@ -149,8 +149,10 @@ version = "0.1.0"
 dependencies = [
  "alder-ast",
  "alder-can",
+ "alder-constrain",
  "alder-parse",
  "alder-region",
+ "alder-solve",
  "bumpalo",
  "insta",
  "oxc_allocator",

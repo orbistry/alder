@@ -4,6 +4,7 @@ use std::{cell::RefCell, collections::BTreeSet};
 
 use alder_ast::{Expr, ItemKind, Module, ModuleId, Pattern, RecordField, ValueRef, Visibility};
 use alder_region::Located;
+use alder_solve::{DirectTarget, Evidence, Intrinsic, SolveOutput, UseAction};
 use oxc_allocator::Vec as ArenaVec;
 use oxc_ast::ast::{Expression, ObjectPropertyKind, Program, Statement, VariableDeclarationKind};
 use oxc_span::SourceType;
@@ -33,6 +34,35 @@ struct Metadata {
     dependencies: Vec<String>,
 }
 
+fn impl_origin_index(origin: alder_ast::ImplOrigin) -> u32 {
+    match origin {
+        alder_ast::ImplOrigin::Source { item_ordinal }
+        | alder_ast::ImplOrigin::Derived {
+            type_ordinal: item_ordinal,
+            ..
+        }
+        | alder_ast::ImplOrigin::AutomaticEq {
+            type_ordinal: item_ordinal,
+        } => item_ordinal,
+        alder_ast::ImplOrigin::Builtin { index } => u32::from(index),
+    }
+}
+
+fn trait_operator_method(operator: alder_ast::BinOp) -> Option<&'static str> {
+    match operator {
+        alder_ast::BinOp::Add => Some("add"),
+        alder_ast::BinOp::Sub => Some("sub"),
+        alder_ast::BinOp::Mul => Some("mul"),
+        alder_ast::BinOp::Div => Some("div"),
+        alder_ast::BinOp::Rem => Some("rem"),
+        alder_ast::BinOp::Lt => Some("lt"),
+        alder_ast::BinOp::LtEq => Some("lte"),
+        alder_ast::BinOp::Gt => Some("gt"),
+        alder_ast::BinOp::GtEq => Some("gte"),
+        _ => None,
+    }
+}
+
 struct Emitter<'src, 'js> {
     js: JsAst<'js>,
     home: ModuleId<'src>,
@@ -40,6 +70,7 @@ struct Emitter<'src, 'js> {
     imports: BTreeSet<Import>,
     kernel: BTreeSet<&'static str>,
     loop_results: Vec<Option<String>>,
+    solved: Option<&'src SolveOutput<'src>>,
 }
 
 #[derive(Clone)]
@@ -50,6 +81,7 @@ enum PatternStep {
 
 pub(crate) fn emit_module_ast(
     module: &Module<'_>,
+    solved: Option<&SolveOutput<'_>>,
     options: EmitOptions,
 ) -> Result<AstModule, Error> {
     let output = RefCell::new(None);
@@ -65,6 +97,7 @@ pub(crate) fn emit_module_ast(
             imports: BTreeSet::new(),
             kernel: BTreeSet::new(),
             loop_results: Vec::new(),
+            solved,
         };
         match emitter.module(module, options) {
             Ok((program, metadata)) => {
@@ -151,6 +184,32 @@ impl<'src, 'js> Emitter<'src, 'js> {
                         exports.push((top_name(*name), name.name.to_owned()));
                     }
                 }
+                ItemKind::Trait(trait_) => {
+                    for trait_item in trait_.items {
+                        if let alder_ast::TraitItem::Fn(method) = trait_item
+                            && let Some(default) = method.body
+                        {
+                            let symbol =
+                                format!("$default${}${}", trait_.id.0.name, method.id.name);
+                            declarations.push(self.lowered_function(
+                                &symbol,
+                                vec!["$self".to_owned()],
+                                method.params,
+                                default,
+                            )?);
+                            exports.push((symbol.clone(), symbol));
+                        }
+                    }
+                }
+                ItemKind::Impl(implementation) => {
+                    let symbol = format!(
+                        "$dict${}${}",
+                        implementation.trait_ref.trait_.0.name,
+                        impl_origin_index(implementation.id.origin)
+                    );
+                    declarations.extend(self.implementation(implementation, &symbol)?);
+                    exports.push((symbol.clone(), symbol));
+                }
                 ItemKind::Test(test) if options.mode == super::EmitMode::Test => {
                     declarations.push(self.test(module.id, test)?);
                 }
@@ -162,8 +221,6 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     }
                 }
                 ItemKind::TypeAlias(_)
-                | ItemKind::Trait(_)
-                | ItemKind::Impl(_)
                 | ItemKind::ErrorGroup(_)
                 | ItemKind::Table(_)
                 | ItemKind::Schema(_)
@@ -324,20 +381,143 @@ impl<'src, 'js> Emitter<'src, 'js> {
         params: &[alder_ast::Param<'src>],
         body: &Located<alder_ast::Block<'src>>,
     ) -> Result<Statement<'js>, Error> {
-        let args = (0..params.len())
+        let dictionary_count = self
+            .solved
+            .and_then(|solved| solved.bindings.get(&name))
+            .map_or(0, |binding| binding.dictionary_params.len());
+        let leading = (0..dictionary_count)
+            .map(|index| format!("$dict{index}"))
+            .collect::<Vec<_>>();
+        self.lowered_function(&top_name(name), leading, params, body)
+    }
+
+    fn lowered_function(
+        &mut self,
+        name: &str,
+        leading: Vec<String>,
+        params: &[alder_ast::Param<'src>],
+        body: &Located<alder_ast::Block<'src>>,
+    ) -> Result<Statement<'js>, Error> {
+        let source_args = (0..params.len())
             .map(|index| format!("$a{index}"))
             .collect::<Vec<_>>();
+        let args = leading
+            .into_iter()
+            .chain(source_args.iter().cloned())
+            .collect::<Vec<_>>();
         let mut statements = self.js.vec();
-        for (param, arg) in params.iter().zip(&args) {
+        for (param, arg) in params.iter().zip(&source_args) {
             self.bind_pattern(param.pattern, arg, &[], &mut statements);
         }
         statements.extend(self.block_return(body)?);
-        Ok(self.js.function(
-            &top_name(name),
-            &args,
-            statements,
-            super::contains_await_block(body),
-        ))
+        Ok(self
+            .js
+            .function(name, &args, statements, super::contains_await_block(body)))
+    }
+
+    fn implementation(
+        &mut self,
+        implementation: &alder_ast::ImplDecl<'src>,
+        dictionary_symbol: &str,
+    ) -> Result<ArenaVec<'js, Statement<'js>>, Error> {
+        let mut declarations = self.js.vec();
+        let prerequisite_args = (0..implementation.trait_predicates.len())
+            .map(|index| format!("$dict{index}"))
+            .collect::<Vec<_>>();
+        let mut methods = Vec::new();
+        for item in implementation.items {
+            let alder_ast::ImplItem::Fn(method) = item else {
+                continue;
+            };
+            let helper = format!(
+                "$impl${}${}",
+                impl_origin_index(implementation.id.origin),
+                method.method.name
+            );
+            let mut leading = vec!["$self".to_owned()];
+            leading.extend(prerequisite_args.iter().cloned());
+            leading.extend(
+                (0..method.scheme.trait_predicates.len())
+                    .map(|index| format!("$dict{}", prerequisite_args.len() + index)),
+            );
+            declarations.push(self.lowered_function(
+                &helper,
+                leading,
+                method.params,
+                method.body,
+            )?);
+            methods.push((method, helper));
+        }
+
+        let self_name = if prerequisite_args.is_empty() {
+            dictionary_symbol
+        } else {
+            "$self"
+        };
+        let mut dictionary_body = self.js.vec();
+        dictionary_body.push(self.js.variable(
+            VariableDeclarationKind::Const,
+            self_name,
+            Some(self.js.object(self.js.vec())),
+        ));
+        for (method, helper) in methods {
+            let method_dictionary_args = (0..method.scheme.trait_predicates.len())
+                .map(|index| format!("$methodDict{index}"))
+                .collect::<Vec<_>>();
+            let source_args = (0..method.params.len())
+                .map(|index| format!("$a{index}"))
+                .collect::<Vec<_>>();
+            let arrow_args = method_dictionary_args
+                .iter()
+                .chain(&source_args)
+                .cloned()
+                .collect::<Vec<_>>();
+            let mut helper_args = self.js.vec();
+            helper_args.push(self.js.identifier(self_name));
+            helper_args.extend(
+                prerequisite_args
+                    .iter()
+                    .map(|argument| self.js.identifier(argument)),
+            );
+            helper_args.extend(
+                method_dictionary_args
+                    .iter()
+                    .map(|argument| self.js.identifier(argument)),
+            );
+            helper_args.extend(
+                source_args
+                    .iter()
+                    .map(|argument| self.js.identifier(argument)),
+            );
+            let call = self.js.call(self.js.identifier(&helper), helper_args);
+            let mut arrow_body = self.js.vec();
+            arrow_body.push(self.js.return_statement(call));
+            let arrow = self.js.arrow(&arrow_args, arrow_body, false);
+            let target = self
+                .js
+                .member(self.js.identifier(self_name), method.method.name);
+            let assignment = self
+                .js
+                .assignment(target, AssignmentOperator::Assign, arrow);
+            dictionary_body.push(self.js.expression_statement(assignment));
+        }
+        let frozen = self.js.call(
+            self.js.member(self.js.identifier("Object"), "freeze"),
+            [self.js.identifier(self_name)],
+        );
+        if prerequisite_args.is_empty() {
+            dictionary_body.push(self.js.expression_statement(frozen));
+            declarations.extend(dictionary_body);
+        } else {
+            dictionary_body.push(self.js.return_statement(frozen));
+            declarations.push(self.js.function(
+                dictionary_symbol,
+                &prerequisite_args,
+                dictionary_body,
+                false,
+            ));
+        }
+        Ok(declarations)
     }
 
     fn top_let(
@@ -439,18 +619,53 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 fields,
             } => self.record(fields, Some(*constructor))?,
             Expr::Call {
+                use_id,
                 function,
                 arguments,
-                ..
             } => {
-                let function = self.expr(function)?;
-                let mut prefix = function.prefix;
-                let function = self.materialize(function.expr, &mut prefix);
+                let action = self
+                    .solved
+                    .and_then(|solved| solved.uses.get(use_id))
+                    .cloned();
+                let direct = match &action {
+                    Some(UseAction::DirectCall {
+                        dictionaries,
+                        target: Some(DirectTarget::TraitMethod(method)),
+                        ..
+                    }) if !dictionaries.is_empty() => {
+                        let dictionary = self.evidence(&dictionaries[0]);
+                        Some((
+                            self.js.vec(),
+                            self.js.member(dictionary, method.name),
+                            dictionaries[1..].to_vec(),
+                        ))
+                    }
+                    Some(UseAction::DirectCall { dictionaries, .. }) => {
+                        let function = self.expr(function)?;
+                        Some((function.prefix, function.expr, dictionaries.clone()))
+                    }
+                    _ => None,
+                };
+                let (mut prefix, function, dictionaries) = match direct {
+                    Some(direct) => direct,
+                    None => {
+                        let function = self.expr(function)?;
+                        (function.prefix, function.expr, Vec::new())
+                    }
+                };
+                let function = self.materialize(function, &mut prefix);
                 let (other_prefix, arguments) = self.values(arguments)?;
                 prefix.extend(other_prefix);
+                let mut call_arguments = self.js.vec();
+                call_arguments.extend(
+                    dictionaries
+                        .iter()
+                        .map(|dictionary| self.evidence(dictionary)),
+                );
+                call_arguments.extend(arguments);
                 Value {
                     prefix,
-                    expr: self.js.call(function, arguments),
+                    expr: self.js.call(function, call_arguments),
                 }
             }
             Expr::Access { record, field } => {
@@ -515,8 +730,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
             } => self.unary(UnaryOperator::UnaryNegation, expression)?,
             Expr::Not(expression) => self.unary(UnaryOperator::LogicalNot, expression)?,
             Expr::Binop {
-                op, left, right, ..
-            } => self.binop(op.value, left, right)?,
+                use_id,
+                op,
+                left,
+                right,
+            } => self.binop(*use_id, op.value, left, right)?,
             Expr::Block(block) => self.block_value(block)?,
             Expr::Lambda { params, body, .. } => self.lambda(params, body)?,
             Expr::If {
@@ -620,6 +838,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
 
     fn binop(
         &mut self,
+        use_id: alder_ast::UseId,
         op: alder_ast::BinOp,
         left: &Located<Expr<'src>>,
         right: &Located<Expr<'src>>,
@@ -661,8 +880,35 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let right = self.expr(right)?;
         prefix.extend(right.prefix);
         let right = right.expr;
+        let evidence = self
+            .solved
+            .and_then(|solved| solved.uses.get(&use_id))
+            .and_then(|action| match action {
+                UseAction::Operator { dictionary } => Some(dictionary.clone()),
+                _ => None,
+            });
+        let intrinsic = matches!(evidence, Some(Evidence::Intrinsic(_)));
         let expr = match op {
             alder_ast::BinOp::Pipe => self.js.call(right, [left]),
+            alder_ast::BinOp::Eq | alder_ast::BinOp::NotEq if evidence.is_some() && !intrinsic => {
+                let dictionary = self.evidence(evidence.as_ref().expect("guarded"));
+                let equal = self
+                    .js
+                    .call(self.js.member(dictionary, "eq"), [left, right]);
+                if op == alder_ast::BinOp::NotEq {
+                    self.js.unary(UnaryOperator::LogicalNot, equal)
+                } else {
+                    equal
+                }
+            }
+            alder_ast::BinOp::Eq | alder_ast::BinOp::NotEq if intrinsic => {
+                let equal = self.js.binary(left, BinaryOperator::StrictEquality, right);
+                if op == alder_ast::BinOp::NotEq {
+                    self.js.unary(UnaryOperator::LogicalNot, equal)
+                } else {
+                    equal
+                }
+            }
             alder_ast::BinOp::Eq | alder_ast::BinOp::NotEq => {
                 self.kernel.insert("$equal");
                 let equal = self.js.call(self.js.identifier("$equal"), [left, right]);
@@ -671,6 +917,16 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 } else {
                     equal
                 }
+            }
+            op if evidence.is_some() && !intrinsic && trait_operator_method(op).is_some() => {
+                let dictionary = self.evidence(evidence.as_ref().expect("guarded"));
+                self.js.call(
+                    self.js.member(
+                        dictionary,
+                        trait_operator_method(op).expect("guarded by match"),
+                    ),
+                    [left, right],
+                )
             }
             alder_ast::BinOp::Add => self.js.binary(left, BinaryOperator::Addition, right),
             alder_ast::BinOp::Sub => self.js.binary(left, BinaryOperator::Subtraction, right),
@@ -1542,6 +1798,82 @@ impl<'src, 'js> Emitter<'src, 'js> {
         }
     }
 
+    fn evidence(&mut self, evidence: &Evidence<'src>) -> Expression<'js> {
+        match evidence {
+            Evidence::Param(index) => self.js.identifier(&format!("$dict{index}")),
+            Evidence::SelfDictionary => self.js.identifier("$self"),
+            Evidence::Super(index) => self
+                .js
+                .member(self.js.identifier("$self"), &format!("$super{index}")),
+            Evidence::Impl {
+                module,
+                symbol,
+                kind,
+                arguments,
+                ..
+            } => {
+                let dictionary = if *module == self.home {
+                    self.js.identifier(symbol)
+                } else {
+                    let reference = alder_ast::QualifiedName {
+                        module: *module,
+                        name: symbol,
+                    };
+                    let local = self.value_import(reference, (*symbol).to_owned());
+                    self.js.identifier(&local)
+                };
+                if *kind == alder_ast::DictionaryKind::Factory {
+                    let arguments = arguments
+                        .iter()
+                        .map(|argument| self.evidence(argument))
+                        .collect::<Vec<_>>();
+                    self.js.call(dictionary, arguments)
+                } else {
+                    dictionary
+                }
+            }
+            Evidence::Intrinsic(intrinsic) => self.intrinsic_dictionary(*intrinsic),
+            Evidence::StructuralEq(_) => {
+                self.kernel.insert("$equal");
+                let args = vec!["$a".to_owned(), "$b".to_owned()];
+                let call = self.js.call(
+                    self.js.identifier("$equal"),
+                    args.iter().map(|arg| self.js.identifier(arg)),
+                );
+                let mut body = self.js.vec();
+                body.push(self.js.return_statement(call));
+                let mut properties = self.js.vec();
+                properties.push(self.js.property("eq", self.js.arrow(&args, body, false)));
+                self.js.object(properties)
+            }
+        }
+    }
+
+    fn intrinsic_dictionary(&self, intrinsic: Intrinsic) -> Expression<'js> {
+        let mut properties = self.js.vec();
+        let (name, operator) = match intrinsic {
+            Intrinsic::EqNumber
+            | Intrinsic::EqString
+            | Intrinsic::EqBool
+            | Intrinsic::EqBigInt
+            | Intrinsic::EqUnit => ("eq", BinaryOperator::StrictEquality),
+            Intrinsic::OrdNumber | Intrinsic::OrdString | Intrinsic::OrdBigInt => {
+                ("lt", BinaryOperator::LessThan)
+            }
+            Intrinsic::NumNumber | Intrinsic::NumBigInt => ("add", BinaryOperator::Addition),
+        };
+        let args = vec!["$a".to_owned(), "$b".to_owned()];
+        let expression = self.js.binary(
+            self.js.identifier(&args[0]),
+            operator,
+            self.js.identifier(&args[1]),
+        );
+        let mut body = self.js.vec();
+        body.push(self.js.return_statement(expression));
+        properties.push(self.js.property(name, self.js.arrow(&args, body, false)));
+        self.js.object(properties)
+    }
+
     fn constructor_reference(
         &mut self,
         constructor: alder_ast::ConstructorRef<'src>,
@@ -1630,7 +1962,7 @@ mod tests {
             &parsed,
         )
         .unwrap();
-        emit_module_ast(canonical.module, EmitOptions::default()).unwrap()
+        emit_module_ast(canonical.module, None, EmitOptions::default()).unwrap()
     }
 
     #[test]

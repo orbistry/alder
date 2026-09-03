@@ -1,7 +1,25 @@
 pub fn main() {}
 
+trait Show[a] {
+    fn show(value: a) -> String
+}
+
+impl Show[Number] {
+    fn show(value: Number) -> String {
+        "number"
+    }
+}
+
+fn describe(value: a) -> String where a: Show {
+    show(value)
+}
+
 test "arithmetic works" {
     assert 1 + 1 == 2
+}
+
+test "trait dictionaries dispatch" {
+    assert describe(1) == "number"
 }
 
 tests {

@@ -197,7 +197,16 @@ fn resolve_predicate<'a>(
             nested_error = Some(error);
         } else {
             let impl_id = implementation.id();
-            successes.push((impl_id, Evidence::Impl { impl_id, arguments }));
+            successes.push((
+                impl_id,
+                Evidence::Impl {
+                    impl_id,
+                    module: impl_id.module,
+                    symbol: implementation.dictionary_symbol(bump),
+                    kind: implementation.dictionary_kind(),
+                    arguments,
+                },
+            ));
         }
     }
     stack.pop();
@@ -605,12 +614,6 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
         }
 
-        for item in module.items {
-            if !is_value_item(&item.value.kind) {
-                self.infer_item(&mut env, &item.value.kind, item.region)?;
-            }
-        }
-
         for group in module.value_sccs {
             let mut inferred_items = BTreeSet::new();
             for member in group.members {
@@ -624,6 +627,12 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             for member in group.members {
                 self.generalize_global(&mut env, *member);
+            }
+        }
+
+        for item in module.items {
+            if !is_value_item(&item.value.kind) {
+                self.infer_item(&mut env, &item.value.kind, item.region)?;
             }
         }
 

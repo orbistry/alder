@@ -1,0 +1,23 @@
+---
+source: crates/alder-codegen/src/lib.rs
+expression: "emit_solved(\"trait Show[a] { fn show(value: a) -> String }\\nimpl Show[Number] { fn show(value: Number) -> String { \\\"number\\\" } }\\nfn describe(value: a) -> String where a: Show { show(value) }\\npub fn main() -> String { describe(1) }\")"
+---
+function $impl$1$show($self, $a0) {
+	let $l1_value = $a0;
+	return "number";
+}
+const $dict$Show$1 = {};
+$dict$Show$1["show"] = ($a0) => {
+	return $impl$1$show($dict$Show$1, $a0);
+};
+Object["freeze"]($dict$Show$1);
+function $v_describe($dict0, $a0) {
+	let $l2_value = $a0;
+	const $t0 = $dict0["show"];
+	return $t0($l2_value);
+}
+function $v_main() {
+	const $t1 = $v_describe;
+	return $t1($dict$Show$1, 1);
+}
+export { $dict$Show$1, $v_main as main };

@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{
-    AssocTypeDecl, ImplDecl, ImplId, Interface, InterfaceImpl, InterfaceMethod, ItemKind, Kind,
-    MethodId, Module, ModuleId, Name, PackageId, QualifiedName, TraitDecl, TraitId, TraitRef, Type,
-    TypeParam, TypeSlot,
+    AssocTypeDecl, DictionaryKind, ImplDecl, ImplId, Interface, InterfaceImpl, InterfaceMethod,
+    ItemKind, Kind, MethodId, Module, ModuleId, Name, PackageId, QualifiedName, TraitDecl, TraitId,
+    TraitRef, Type, TypeParam, TypeSlot,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -42,6 +42,30 @@ impl<'a> InstanceHeader<'a> {
         match self {
             Self::Local(implementation) => implementation.trait_predicates,
             Self::Foreign(implementation) => implementation.trait_predicates,
+        }
+    }
+
+    pub fn dictionary_symbol(self, bump: &'a Bump) -> &'a str {
+        match self {
+            Self::Local(implementation) => bump.alloc_str(&format!(
+                "$dict${}${}",
+                implementation.trait_ref.trait_.0.name,
+                impl_origin_index(implementation.id.origin)
+            )),
+            Self::Foreign(implementation) => implementation.dictionary_symbol,
+        }
+    }
+
+    pub fn dictionary_kind(self) -> DictionaryKind {
+        match self {
+            Self::Local(implementation) => {
+                if implementation.trait_predicates.is_empty() {
+                    DictionaryKind::Singleton
+                } else {
+                    DictionaryKind::Factory
+                }
+            }
+            Self::Foreign(implementation) => implementation.dictionary_kind,
         }
     }
 }
@@ -718,6 +742,20 @@ fn render_type(typ: &Type<'_>) -> String {
                 render_type(&target.value)
             }
         },
+    }
+}
+
+fn impl_origin_index(origin: alder_ast::ImplOrigin) -> u32 {
+    match origin {
+        alder_ast::ImplOrigin::Source { item_ordinal }
+        | alder_ast::ImplOrigin::Derived {
+            type_ordinal: item_ordinal,
+            ..
+        }
+        | alder_ast::ImplOrigin::AutomaticEq {
+            type_ordinal: item_ordinal,
+        } => item_ordinal,
+        alder_ast::ImplOrigin::Builtin { index } => u32::from(index),
     }
 }
 

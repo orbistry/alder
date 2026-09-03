@@ -5,7 +5,7 @@ mod traits;
 
 use std::collections::BTreeMap;
 
-use alder_ast::{ImplId, MethodId, QualifiedName, TraitId, UseId};
+use alder_ast::{DictionaryKind, ImplId, MethodId, ModuleId, QualifiedName, TraitId, UseId};
 use alder_can::Annotations;
 use alder_region::Region;
 
@@ -69,6 +69,9 @@ pub enum Evidence<'a> {
     Super(u16),
     Impl {
         impl_id: ImplId<'a>,
+        module: ModuleId<'a>,
+        symbol: &'a str,
+        kind: DictionaryKind,
         arguments: Vec<Evidence<'a>>,
     },
     Intrinsic(Intrinsic),
