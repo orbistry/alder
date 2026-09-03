@@ -1,0 +1,91 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "enum Token { Token }\nimpl Ord[Token] {\n    fn compare(left: Token, right: Token) -> Ordering { Ordering::Equal }\n}\nimpl Num[Token] {\n    fn add(left: Token, right: Token) -> Token { right }\n    fn sub(left: Token, right: Token) -> Token { right }\n    fn mul(left: Token, right: Token) -> Token { right }\n    fn div(left: Token, right: Token) -> Token { right }\n    fn rem(left: Token, right: Token) -> Token { right }\n    fn negate(value: Token) -> Token { value }\n}\nfn next_index() -> Number { 0 }\npub fn update() -> Token {\n    let mut values = [Token::Token]\n    values[next_index()] += Token::Token\n    values[0]\n}\n"
+---
+import { $equalDerived } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, { "Token": {
+		"record": false,
+		"fields": [],
+		"optional": [],
+		"dictionaries": []
+	} });
+};
+Object["freeze"]($dict$Eq$0);
+const $c_Token_Token = Object["freeze"]({ "$": "Token" });
+function $impl$1$compare($self, $a0, $a1) {
+	let $l0_left = $a0;
+	let $l1_right = $a1;
+	return { "$": "Equal" };
+}
+const $dict$Ord$1 = {};
+$dict$Ord$1["$super0"] = $dict$Eq$0;
+$dict$Ord$1["compare"] = ($a0, $a1) => {
+	return $impl$1$compare($dict$Ord$1, $a0, $a1);
+};
+Object["freeze"]($dict$Ord$1);
+function $impl$2$add($self, $a0, $a1) {
+	let $l2_left = $a0;
+	let $l3_right = $a1;
+	return $l3_right;
+}
+function $impl$2$sub($self, $a0, $a1) {
+	let $l4_left = $a0;
+	let $l5_right = $a1;
+	return $l5_right;
+}
+function $impl$2$mul($self, $a0, $a1) {
+	let $l6_left = $a0;
+	let $l7_right = $a1;
+	return $l7_right;
+}
+function $impl$2$div($self, $a0, $a1) {
+	let $l8_left = $a0;
+	let $l9_right = $a1;
+	return $l9_right;
+}
+function $impl$2$rem($self, $a0, $a1) {
+	let $l10_left = $a0;
+	let $l11_right = $a1;
+	return $l11_right;
+}
+function $impl$2$negate($self, $a0) {
+	let $l12_value = $a0;
+	return $l12_value;
+}
+const $dict$Num$2 = {};
+$dict$Num$2["$super0"] = $dict$Eq$0;
+$dict$Num$2["$super1"] = $dict$Ord$1;
+$dict$Num$2["add"] = ($a0, $a1) => {
+	return $impl$2$add($dict$Num$2, $a0, $a1);
+};
+$dict$Num$2["sub"] = ($a0, $a1) => {
+	return $impl$2$sub($dict$Num$2, $a0, $a1);
+};
+$dict$Num$2["mul"] = ($a0, $a1) => {
+	return $impl$2$mul($dict$Num$2, $a0, $a1);
+};
+$dict$Num$2["div"] = ($a0, $a1) => {
+	return $impl$2$div($dict$Num$2, $a0, $a1);
+};
+$dict$Num$2["rem"] = ($a0, $a1) => {
+	return $impl$2$rem($dict$Num$2, $a0, $a1);
+};
+$dict$Num$2["negate"] = ($a0) => {
+	return $impl$2$negate($dict$Num$2, $a0);
+};
+Object["freeze"]($dict$Num$2);
+function $v_next_index() {
+	return 0;
+}
+function $v_update() {
+	const $t0 = [$c_Token_Token];
+	let $l13_values = $t0;
+	const $t1 = $v_next_index;
+	const $t2 = $t1();
+	$l13_values[$t2] = $dict$Num$2["add"]($l13_values[$t2], $c_Token_Token);
+	const $t3 = $l13_values;
+	return $t3[0];
+}
+export { $dict$Eq$0, $dict$Num$2, $dict$Ord$1, $v_update as update };

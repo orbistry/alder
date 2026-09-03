@@ -532,4 +532,28 @@ mod tests {
             }
         "#};
     }
+
+    #[test]
+    fn indexed_dictionary_assignment_evaluates_its_place_once() {
+        assert_solved_emit_snapshot! {r#"
+            enum Token { Token }
+            impl Ord[Token] {
+                fn compare(left: Token, right: Token) -> Ordering { Ordering::Equal }
+            }
+            impl Num[Token] {
+                fn add(left: Token, right: Token) -> Token { right }
+                fn sub(left: Token, right: Token) -> Token { right }
+                fn mul(left: Token, right: Token) -> Token { right }
+                fn div(left: Token, right: Token) -> Token { right }
+                fn rem(left: Token, right: Token) -> Token { right }
+                fn negate(value: Token) -> Token { value }
+            }
+            fn next_index() -> Number { 0 }
+            pub fn update() -> Token {
+                let mut values = [Token::Token]
+                values[next_index()] += Token::Token
+                values[0]
+            }
+        "#};
+    }
 }
