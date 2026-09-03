@@ -398,7 +398,8 @@ fn resolve_predicate<'a>(
             origin,
         });
     }
-    if let Some(evidence) = resolve_intrinsic(bump, database, predicate, givens, origin, stack)? {
+    if let Some(evidence) = resolve_structural_eq(bump, database, predicate, givens, origin, stack)?
+    {
         return Ok(evidence);
     }
     stack.push((predicate.trait_, rendered.clone()));
@@ -441,8 +442,7 @@ fn resolve_predicate<'a>(
             nested_error = Some(error);
         } else {
             let impl_id = implementation.id();
-            successes.push((
-                impl_id,
+            let evidence = builtin_instance_evidence(impl_id, predicate, &arguments).unwrap_or(
                 Evidence::Impl {
                     impl_id,
                     module: impl_id.module,
@@ -450,7 +450,8 @@ fn resolve_predicate<'a>(
                     kind: implementation.dictionary_kind(),
                     arguments,
                 },
-            ));
+            );
+            successes.push((impl_id, evidence));
         }
     }
     stack.pop();
@@ -477,7 +478,7 @@ fn resolve_predicate<'a>(
     }
 }
 
-fn resolve_intrinsic<'a>(
+fn resolve_structural_eq<'a>(
     bump: &'a Bump,
     database: &TraitDatabase<'a>,
     predicate: &Predicate<'a>,
@@ -485,159 +486,121 @@ fn resolve_intrinsic<'a>(
     origin: Region,
     stack: &mut Vec<(TraitId<'a>, String)>,
 ) -> Result<Option<Evidence<'a>>, SolveTraitError<'a>> {
-    if predicate.trait_.0.module.package != PackageId::Builtin {
+    if predicate.trait_ != builtin_trait_id("Eq") {
         return Ok(None);
     }
     let Some(subject) = predicate.args.first() else {
         return Ok(None);
     };
-    let name = predicate.trait_.0.name;
-    let nominal = nominal_name(subject);
-    let intrinsic = match (name, nominal) {
-        ("Show", Some("Number" | "String" | "Bool" | "BigInt")) => Some(Intrinsic::ShowKernel),
-        ("Hash", Some("Number" | "String" | "Bool" | "BigInt")) => Some(Intrinsic::HashKernel),
-        ("Json", Some("Number" | "String" | "Bool" | "BigInt")) => Some(Intrinsic::JsonKernel),
-        ("Eq", Some("Number")) => Some(Intrinsic::EqNumber),
-        ("Eq", Some("String")) => Some(Intrinsic::EqString),
-        ("Eq", Some("Bool")) => Some(Intrinsic::EqBool),
-        ("Eq", Some("BigInt")) => Some(Intrinsic::EqBigInt),
-        ("Ord", Some("Number")) => Some(Intrinsic::OrdNumber),
-        ("Ord", Some("String")) => Some(Intrinsic::OrdString),
-        ("Ord", Some("BigInt")) => Some(Intrinsic::OrdBigInt),
-        ("Num", Some("Number")) => Some(Intrinsic::NumNumber),
-        ("Num", Some("BigInt")) => Some(Intrinsic::NumBigInt),
-        ("Functor" | "Applicative" | "Monad" | "Traversable", _) => match subject {
-            Ty::Partial(reference, slots)
-                if reference.module.package == PackageId::Builtin
-                    && slots
-                        .iter()
-                        .filter(|slot| matches!(slot, TySlot::Hole(_)))
-                        .count()
-                        == 1 =>
-            {
-                match (name, reference.name) {
-                    ("Functor", "Array") => Some(Intrinsic::FunctorArray),
-                    ("Functor", "Option") => Some(Intrinsic::FunctorOption),
-                    ("Functor", "Result") => Some(Intrinsic::FunctorResult),
-                    ("Applicative", "Array") => Some(Intrinsic::ApplicativeArray),
-                    ("Applicative", "Option") => Some(Intrinsic::ApplicativeOption),
-                    ("Applicative", "Result") => Some(Intrinsic::ApplicativeResult),
-                    ("Monad", "Array") => Some(Intrinsic::MonadArray),
-                    ("Monad", "Option") => Some(Intrinsic::MonadOption),
-                    ("Monad", "Result") => Some(Intrinsic::MonadResult),
-                    ("Traversable", "Array") => Some(Intrinsic::TraversableArray),
-                    ("Traversable", "Option") => Some(Intrinsic::TraversableOption),
-                    ("Traversable", "Result") => Some(Intrinsic::TraversableResult),
-                    _ => None,
-                }
-            }
-            _ => None,
-        },
-        ("Iterator", Some("Array")) => Some(Intrinsic::IteratorArray),
+    let structural = match subject {
+        Ty::Tuple(items) => Some((StructuralEqShape::Tuple, items.clone())),
+        Ty::Record(fields, false) => Some((
+            StructuralEqShape::Record(fields.keys().copied().collect()),
+            fields.values().map(|(_, typ)| typ.clone()).collect(),
+        )),
         _ => None,
     };
-    if let Some(intrinsic) = intrinsic {
-        return Ok(Some(Evidence::Intrinsic(intrinsic)));
-    }
-    if matches!(subject, Ty::Unit) {
-        let intrinsic = match name {
-            "Show" => Some(Intrinsic::ShowKernel),
-            "Hash" => Some(Intrinsic::HashKernel),
-            "Json" => Some(Intrinsic::JsonKernel),
-            _ => None,
-        };
-        if intrinsic.is_some() {
-            return Ok(intrinsic.map(Evidence::Intrinsic));
-        }
-    }
-    if matches!(name, "Show" | "Hash" | "Json")
-        && let Some((reference, arguments)) = nominal_parts(subject)
-        && reference.module.package == PackageId::Builtin
-        && matches!(reference.name, "Array" | "Option" | "Result")
-    {
+    if let Some((shape, children)) = structural {
         let mut evidence = Vec::new();
-        for argument in arguments {
+        for child in children {
             evidence.push(resolve_predicate(
                 bump,
                 database,
                 &Predicate {
                     trait_: predicate.trait_,
-                    args: vec![argument.clone()],
+                    args: vec![child],
                 },
                 givens,
                 origin,
                 stack,
             )?);
         }
-        let intrinsic = match name {
-            "Show" => Intrinsic::ShowKernel,
-            "Hash" => Intrinsic::HashKernel,
-            "Json" => Intrinsic::JsonKernel,
-            _ => unreachable!(),
-        };
-        let container = match reference.name {
-            "Array" => IntrinsicContainer::Array,
-            "Option" => IntrinsicContainer::Option,
-            "Result" => IntrinsicContainer::Result,
-            _ => unreachable!(),
-        };
-        return Ok(Some(Evidence::IntrinsicContainer {
-            intrinsic,
-            container,
-            arguments: evidence,
+        return Ok(Some(Evidence::StructuralEq {
+            shape,
+            fields: evidence,
         }));
     }
-    if name == "Eq" && matches!(subject, Ty::Unit) {
-        return Ok(Some(Evidence::Intrinsic(Intrinsic::EqUnit)));
+    Ok(None)
+}
+
+fn builtin_instance_evidence<'a>(
+    implementation: alder_ast::ImplId<'a>,
+    predicate: &Predicate<'a>,
+    arguments: &[Evidence<'a>],
+) -> Option<Evidence<'a>> {
+    if implementation.module.package != PackageId::Builtin {
+        return None;
     }
-    if name == "Eq" {
-        let structural = match subject {
-            Ty::Tuple(items) => Some((StructuralEqShape::Tuple, items.clone())),
-            Ty::Record(fields, false) => Some((
-                StructuralEqShape::Record(fields.keys().copied().collect()),
-                fields.values().map(|(_, typ)| typ.clone()).collect(),
-            )),
-            _ if matches!(
-                nominal_parts(subject),
-                Some((reference, _))
-                    if reference.module.package == PackageId::Builtin
-                        && matches!(reference.name, "Array" | "Option" | "Result")
-            ) =>
-            {
-                nominal_parts(subject).map(|(reference, arguments)| {
-                    let shape = match reference.name {
-                        "Array" => StructuralEqShape::Array,
-                        "Option" => StructuralEqShape::Option,
-                        "Result" => StructuralEqShape::Result,
-                        _ => unreachable!(),
-                    };
-                    (shape, arguments.to_vec())
-                })
-            }
+    let subject = predicate.args.first()?;
+    let trait_name = predicate.trait_.0.name;
+    let nominal = match subject {
+        Ty::Partial(reference, _) => Some(reference.name),
+        _ => nominal_name(subject),
+    };
+    let container = match nominal {
+        Some("Array") => Some(IntrinsicContainer::Array),
+        Some("Option") => Some(IntrinsicContainer::Option),
+        Some("Result") => Some(IntrinsicContainer::Result),
+        _ => None,
+    };
+    if let Some(container) = container {
+        if let Some(intrinsic) = match trait_name {
+            "Show" => Some(Intrinsic::ShowKernel),
+            "Hash" => Some(Intrinsic::HashKernel),
+            "Json" => Some(Intrinsic::JsonKernel),
             _ => None,
-        };
-        if let Some((shape, children)) = structural {
-            let mut evidence = Vec::new();
-            for child in children {
-                evidence.push(resolve_predicate(
-                    bump,
-                    database,
-                    &Predicate {
-                        trait_: predicate.trait_,
-                        args: vec![child],
-                    },
-                    givens,
-                    origin,
-                    stack,
-                )?);
-            }
-            return Ok(Some(Evidence::StructuralEq {
+        } {
+            return Some(Evidence::IntrinsicContainer {
+                intrinsic,
+                container,
+                arguments: arguments.to_vec(),
+            });
+        }
+        if trait_name == "Eq" {
+            let shape = match container {
+                IntrinsicContainer::Array => StructuralEqShape::Array,
+                IntrinsicContainer::Option => StructuralEqShape::Option,
+                IntrinsicContainer::Result => StructuralEqShape::Result,
+            };
+            return Some(Evidence::StructuralEq {
                 shape,
-                fields: evidence,
-            }));
+                fields: arguments.to_vec(),
+            });
         }
     }
-    Ok(None)
+    let intrinsic = match (trait_name, nominal) {
+        ("Show", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::ShowKernel,
+        ("Hash", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::HashKernel,
+        ("Json", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::JsonKernel,
+        ("Eq", Some("Number")) => Intrinsic::EqNumber,
+        ("Eq", Some("String")) => Intrinsic::EqString,
+        ("Eq", Some("Bool")) => Intrinsic::EqBool,
+        ("Eq", Some("BigInt")) => Intrinsic::EqBigInt,
+        ("Ord", Some("Number")) => Intrinsic::OrdNumber,
+        ("Ord", Some("String")) => Intrinsic::OrdString,
+        ("Ord", Some("BigInt")) => Intrinsic::OrdBigInt,
+        ("Num", Some("Number")) => Intrinsic::NumNumber,
+        ("Num", Some("BigInt")) => Intrinsic::NumBigInt,
+        ("Functor", Some("Array")) => Intrinsic::FunctorArray,
+        ("Functor", Some("Option")) => Intrinsic::FunctorOption,
+        ("Functor", Some("Result")) => Intrinsic::FunctorResult,
+        ("Applicative", Some("Array")) => Intrinsic::ApplicativeArray,
+        ("Applicative", Some("Option")) => Intrinsic::ApplicativeOption,
+        ("Applicative", Some("Result")) => Intrinsic::ApplicativeResult,
+        ("Monad", Some("Array")) => Intrinsic::MonadArray,
+        ("Monad", Some("Option")) => Intrinsic::MonadOption,
+        ("Monad", Some("Result")) => Intrinsic::MonadResult,
+        ("Traversable", Some("Array")) => Intrinsic::TraversableArray,
+        ("Traversable", Some("Option")) => Intrinsic::TraversableOption,
+        ("Traversable", Some("Result")) => Intrinsic::TraversableResult,
+        ("Iterator", Some("Array")) => Intrinsic::IteratorArray,
+        ("Show", None) if matches!(subject, Ty::Unit) => Intrinsic::ShowKernel,
+        ("Hash", None) if matches!(subject, Ty::Unit) => Intrinsic::HashKernel,
+        ("Json", None) if matches!(subject, Ty::Unit) => Intrinsic::JsonKernel,
+        ("Eq", None) if matches!(subject, Ty::Unit) => Intrinsic::EqUnit,
+        _ => return None,
+    };
+    Some(Evidence::Intrinsic(intrinsic))
 }
 
 fn match_type<'a>(

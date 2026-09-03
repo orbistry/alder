@@ -18,7 +18,7 @@ pub use error::{
     AttributeError, Error, ErrorKind, ExprError, ImportError, ItemError, NameError, PatternError,
     StmtError, TypeError,
 };
-pub use interface::{from_module, headers_from_module};
+pub use interface::{builtin_trait_interface, from_module, headers_from_module};
 pub use warning::{Warning, WarningKind};
 
 /// Type annotations produced for top-level values by the solver.

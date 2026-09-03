@@ -1916,24 +1916,23 @@ fn canonicalize_impl_fn<'a>(
             .transpose()?;
         env.control.task_return = ret.is_some_and(is_task_type);
         let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
-        let Some(body) = source.body else {
-            return Err(vec![Error::new(
-                source.name.region,
-                ErrorKind::Attribute(AttributeError::InvalidExtern {
-                    reason: "implementation methods require a body",
-                }),
-            )]);
-        };
-        let body = if include_body {
-            canonicalize_block(bump, env, body)?
-        } else {
-            bump.alloc(Located::at(
-                body.region,
+        let body = match (include_body, source.body) {
+            (true, Some(body)) => canonicalize_block(bump, env, body)?,
+            (true, None) => {
+                return Err(vec![Error::new(
+                    source.name.region,
+                    ErrorKind::Attribute(AttributeError::InvalidExtern {
+                        reason: "implementation methods require a body",
+                    }),
+                )]);
+            }
+            (false, body) => bump.alloc(Located::at(
+                body.map_or(source.name.region, |body| body.region),
                 alder_ast::Block {
                     statements: &[],
                     tail: None,
                 },
-            ))
+            )),
         };
         Ok(bump.alloc(ImplFn {
             method: method.id,
@@ -3442,7 +3441,14 @@ mod tests {
         for path in paths {
             let source = fs::read_to_string(&path).unwrap();
             let bump = Bump::new();
-            can(&bump, &source);
+            if path.file_name().is_some_and(|name| name == "Traits.ald") {
+                let source_text = bump.alloc_str(&source);
+                let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
+                canonicalize_headers(&bump, context(), &source)
+                    .expect("trait header source canonicalizes");
+            } else {
+                can(&bump, &source);
+            }
         }
     }
 }

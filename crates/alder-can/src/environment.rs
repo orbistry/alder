@@ -1484,4 +1484,41 @@ mod tests {
         assert_eq!(env.fresh_local("left").id, LocalId(0));
         assert_eq!(branch.fresh_local("right").id, LocalId(1));
     }
+
+    #[test]
+    fn bootstrap_trait_bindings_match_the_audited_stdlib_headers() {
+        let bump = Bump::new();
+        let env = Env::new(
+            &bump,
+            ModuleId {
+                package: PackageId::Application,
+                path: &[],
+            },
+        );
+        let interface = crate::builtin_trait_interface(&bump);
+
+        for trait_ in interface.traits {
+            let Candidate::Unique(binding) = env
+                .traits
+                .get(trait_.id.0.name)
+                .expect("every audited builtin trait has a bootstrap binding")
+            else {
+                panic!("builtin trait binding must be unambiguous");
+            };
+            assert_eq!(binding.reference, trait_.id.0);
+            assert_eq!(binding.arity, trait_.params.len());
+            assert_eq!(
+                binding
+                    .methods
+                    .iter()
+                    .map(|method| method.id)
+                    .collect::<Vec<_>>(),
+                trait_
+                    .methods
+                    .iter()
+                    .map(|method| method.id)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
 }

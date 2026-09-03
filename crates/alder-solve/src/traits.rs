@@ -2,10 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{
     AssocBinding, AssocTypeDecl, DictionaryKind, ImplDecl, ImplId, Interface, InterfaceImpl,
-    InterfaceMethod, ItemKind, Kind, MethodId, Module, ModuleId, Name, PackageId, QualifiedName,
+    InterfaceMethod, ItemKind, Kind, MethodId, Module, ModuleId, PackageId, QualifiedName,
     TraitDecl, TraitId, TraitRef, Type, TypeParam, TypeSlot,
 };
-use alder_region::{Located, Region};
+use alder_region::Located;
 use bumpalo::Bump;
 
 #[derive(Clone, Copy, Debug)]
@@ -133,27 +133,10 @@ impl<'a> TraitDatabase<'a> {
             traits: BTreeMap::new(),
             instances: BTreeMap::new(),
         };
-        database.insert_builtins(bump);
+        let builtins = alder_can::builtin_trait_interface(bump);
+        database.insert_interface(&builtins);
         for interface in dependencies {
-            for trait_ in interface.traits {
-                database.traits.insert(
-                    trait_.id,
-                    TraitHeader {
-                        id: trait_.id,
-                        params: trait_.params,
-                        superclasses: trait_.superclasses,
-                        associated_types: trait_.associated_types,
-                        methods: trait_.methods,
-                    },
-                );
-            }
-            for implementation in interface.instances {
-                database
-                    .instances
-                    .entry(implementation.trait_ref.trait_)
-                    .or_default()
-                    .push(InstanceHeader::Foreign(implementation));
-            }
+            database.insert_interface(interface);
         }
         for item in module.items {
             match &item.value.kind {
@@ -170,6 +153,27 @@ impl<'a> TraitDatabase<'a> {
             instances.sort_by_key(|implementation| implementation.id());
         }
         database
+    }
+
+    fn insert_interface(&mut self, interface: &Interface<'a>) {
+        for trait_ in interface.traits {
+            self.traits.insert(
+                trait_.id,
+                TraitHeader {
+                    id: trait_.id,
+                    params: trait_.params,
+                    superclasses: trait_.superclasses,
+                    associated_types: trait_.associated_types,
+                    methods: trait_.methods,
+                },
+            );
+        }
+        for implementation in interface.instances {
+            self.instances
+                .entry(implementation.trait_ref.trait_)
+                .or_default()
+                .push(InstanceHeader::Foreign(implementation));
+        }
     }
 
     pub fn trait_(&self, id: TraitId<'a>) -> Option<TraitHeader<'a>> {
@@ -345,133 +349,6 @@ impl<'a> TraitDatabase<'a> {
             },
         );
     }
-
-    fn insert_builtins(&mut self, bump: &'a Bump) {
-        for name in [
-            "Show",
-            "Eq",
-            "Ord",
-            "Hash",
-            "Json",
-            "Num",
-            "Functor",
-            "Applicative",
-            "Monad",
-            "Traversable",
-            "Iterator",
-        ] {
-            let id = builtin_trait_id(name);
-            let higher_kinded = matches!(name, "Functor" | "Applicative" | "Monad" | "Traversable");
-            let parameter_kind = if higher_kinded {
-                Kind::Arrow {
-                    param: bump.alloc(Kind::Type),
-                    result: bump.alloc(Kind::Type),
-                }
-            } else {
-                Kind::Type
-            };
-            let params = bump.alloc_slice_copy(&[TypeParam {
-                name: builtin_name(if name == "Traversable" {
-                    "t"
-                } else if name == "Iterator" {
-                    "i"
-                } else if higher_kinded {
-                    "f"
-                } else {
-                    "a"
-                }),
-                kind: parameter_kind,
-            }]);
-            let superclasses: &'a [TraitRef<'a>] = match name {
-                "Ord" | "Hash" => bump.alloc_slice_copy(&[builtin_superclass(bump, "Eq", "a")]),
-                "Num" => bump.alloc_slice_copy(&[
-                    builtin_superclass(bump, "Eq", "a"),
-                    builtin_superclass(bump, "Ord", "a"),
-                ]),
-                "Applicative" => bump.alloc_slice_copy(&[builtin_superclass(bump, "Functor", "f")]),
-                "Monad" => bump.alloc_slice_copy(&[builtin_superclass(bump, "Applicative", "f")]),
-                _ => &[],
-            };
-            let associated_types: &'a [AssocTypeDecl<'a>] = if name == "Iterator" {
-                bump.alloc_slice_copy(&[AssocTypeDecl {
-                    id: alder_ast::AssocTypeId {
-                        trait_: id,
-                        index: 0,
-                        name: "Item",
-                    },
-                    kind: Kind::Type,
-                    region: Region::zero(),
-                }])
-            } else {
-                &[]
-            };
-            self.traits.insert(
-                id,
-                TraitHeader {
-                    id,
-                    params,
-                    superclasses,
-                    associated_types,
-                    methods: &[],
-                },
-            );
-        }
-        self.insert_builtin_array_iterator(bump);
-    }
-
-    fn insert_builtin_array_iterator(&mut self, bump: &'a Bump) {
-        let iterator = builtin_trait_id("Iterator");
-        let parameter = TypeParam {
-            name: builtin_name("a"),
-            kind: Kind::Type,
-        };
-        let item = bump.alloc(Located::at_zero(Type::Var {
-            name: "a",
-            args: &[],
-        }));
-        let array = bump.alloc(Located::at_zero(Type::Named {
-            reference: QualifiedName {
-                module: ModuleId {
-                    package: PackageId::Builtin,
-                    path: &[],
-                },
-                name: "Array",
-            },
-            args: bump.alloc_slice_copy(&[item as &Located<Type<'a>>]),
-        }));
-        let implementation = bump.alloc(InterfaceImpl {
-            id: ImplId {
-                module: ModuleId {
-                    package: PackageId::Builtin,
-                    path: &[],
-                },
-                origin: alder_ast::ImplOrigin::Builtin { index: 0 },
-            },
-            params: bump.alloc_slice_copy(&[parameter]),
-            trait_ref: TraitRef {
-                trait_: iterator,
-                args: bump.alloc_slice_copy(&[array as &Located<Type<'a>>]),
-            },
-            trait_predicates: &[],
-            projection_equalities: &[],
-            assoc_bindings: bump.alloc_slice_copy(&[AssocBinding {
-                assoc: alder_ast::AssocTypeId {
-                    trait_: iterator,
-                    index: 0,
-                    name: "Item",
-                },
-                typ: item,
-                region: Region::zero(),
-            }]),
-            dictionary_symbol: "$dict$Iterator$Array",
-            dictionary_kind: DictionaryKind::Singleton,
-            methods: &[],
-        });
-        self.instances
-            .entry(iterator)
-            .or_default()
-            .push(InstanceHeader::Foreign(implementation));
-    }
 }
 
 fn projection_cycles<'a>(bindings: &[AssocBinding<'a>]) -> Vec<Vec<alder_ast::AssocTypeId<'a>>> {
@@ -580,21 +457,6 @@ fn collect_associated_projections<'a>(
             }
         },
         Type::Unit => {}
-    }
-}
-
-fn builtin_superclass<'a>(
-    bump: &'a Bump,
-    name: &'static str,
-    variable: &'static str,
-) -> TraitRef<'a> {
-    let argument = bump.alloc(Located::at_zero(Type::Var {
-        name: variable,
-        args: &[],
-    }));
-    TraitRef {
-        trait_: builtin_trait_id(name),
-        args: bump.alloc_slice_copy(&[argument as &Located<Type<'a>>]),
     }
 }
 
@@ -1083,10 +945,6 @@ pub fn builtin_trait_id(name: &'static str) -> TraitId<'static> {
     })
 }
 
-fn builtin_name(name: &'static str) -> Name<'static> {
-    Located::at(Region::zero(), name)
-}
-
 #[cfg(test)]
 mod tests {
     use alder_ast::{ModuleId, PackageId};
@@ -1123,6 +981,33 @@ mod tests {
         let local = local.expect("local trait");
         assert!(database.trait_(local).is_some());
         assert_eq!(database.instances(local).len(), 1);
-        assert!(database.trait_(builtin_trait_id("Eq")).is_some());
+        let equality = database
+            .trait_(builtin_trait_id("Eq"))
+            .expect("audited stdlib Eq header is loaded");
+        assert_eq!(equality.methods[0].id.name, "eq");
+        let iterator = database
+            .trait_(builtin_trait_id("Iterator"))
+            .expect("audited stdlib Iterator header is loaded");
+        assert_eq!(iterator.associated_types[0].id.name, "Item");
+        assert_eq!(database.instances(iterator.id).len(), 1);
+        for (trait_name, instances) in [
+            ("Show", 8),
+            ("Eq", 8),
+            ("Ord", 3),
+            ("Hash", 8),
+            ("Json", 8),
+            ("Num", 2),
+            ("Functor", 3),
+            ("Applicative", 3),
+            ("Monad", 3),
+            ("Traversable", 3),
+            ("Iterator", 1),
+        ] {
+            assert_eq!(
+                database.instances(builtin_trait_id(trait_name)).len(),
+                instances,
+                "all {trait_name} instance headers come from std/Traits.ald"
+            );
+        }
     }
 }

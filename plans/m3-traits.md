@@ -73,6 +73,10 @@ static resolution wherever the type is known.
   default-method, and implementation-method bodies. Canonical headers survive
   body failures, and a final body pass uses the same complete package header
   closure for coherence and instance resolution.
+- First-party trait and primitive/container instance headers are authored in
+  `std/Traits.ald`, canonicalized through the header pipeline, and inserted
+  into the ordinary `TraitDatabase`. Intrinsic evidence is selected only after
+  an ordinary matching header wins instance search.
 
 ## Open decisions (recommendation in bold)
 

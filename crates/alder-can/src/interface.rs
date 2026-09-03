@@ -8,6 +8,27 @@ use bumpalo::Bump;
 
 use crate::Annotations;
 
+/// Canonical first-party trait headers authored in Alder source.
+pub fn builtin_trait_interface<'a>(bump: &'a Bump) -> Interface<'a> {
+    const SOURCE: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../std/Traits.ald"));
+    let source = alder_parse::parse_module(bump, SOURCE)
+        .expect("the embedded first-party trait module must parse");
+    let result = crate::canonicalize_headers(
+        bump,
+        crate::Context {
+            home: alder_ast::ModuleId {
+                package: alder_ast::PackageId::Builtin,
+                path: &[],
+            },
+            imports: &[],
+            interfaces: &[],
+        },
+        &source,
+    )
+    .expect("the embedded first-party trait module must canonicalize");
+    headers_from_module(bump, result.module)
+}
+
 /// Build the public, solved contract consumed by dependent modules.
 pub fn from_module<'a>(
     bump: &'a Bump,

@@ -1318,8 +1318,9 @@ place component, so an indexed place is evaluated once.
 
 Builtin traits and instances enter the same `TraitDatabase` as user code.
 Instance search does not contain ad-hoc branches for each trait. `Intrinsic`
-evidence is the code-generation optimization marker attached to those normal
-headers.
+evidence is the code-generation optimization marker recognized only after one
+of those normal headers wins the same matching and prerequisite search as a
+user instance.
 
 The embedded stdlib defines `Show`, `Eq`, `Ord`, `Hash`, `Num`, `Functor`,
 `Applicative`, `Monad`, `Traversable`, `Iterator`, and `Json`, plus primitive and
@@ -1327,6 +1328,14 @@ container impls. These stdlib definitions remain audited Alder/JS source files;
 compiler synthesis is reserved for derives and automatic structural `Eq`.
 Their headers are loaded into both the canonical name environment and the
 `TraitDatabase` before operators or derive paths are canonicalized.
+
+`std/Traits.ald` is embedded and header-canonicalized for each solver arena. It
+is the audited source of every first-party trait header and the primitive,
+container, HKT, and Array iterator instance headers. The canonicalizer retains
+a minimal bootstrap name table because that same source defines the names it
+must parse; a parity test compares every bootstrap trait ID, arity, and method
+ID with the canonical source interface so the bootstrap cannot become an
+independent language contract.
 
 The fixed first-party declarations used by operators and derives are equivalent
 to:
