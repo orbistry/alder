@@ -9,6 +9,8 @@ alder::trait::missing_instance
  5 │ fn main() {
  6 │     display(1)
    ·     ───┬───
-   ·        ╰── trait evidence is required here
+   ·        ╰── this use needs trait evidence
  7 │ }
    ╰────
+  help: define an implementation of `Display[Number]`, or use a type that
+        already has one

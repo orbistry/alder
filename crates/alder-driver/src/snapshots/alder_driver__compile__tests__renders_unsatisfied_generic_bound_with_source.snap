@@ -9,7 +9,7 @@ alder::trait::unsatisfied_bound
  5 │ fn render(value: a) -> String {
  6 │     display(value)
    ·     ───┬───
-   ·        ╰── trait evidence is required here
+   ·        ╰── this use requires a bound
  7 │ }
    ╰────
   help: add a matching bound, such as `where a: Display`

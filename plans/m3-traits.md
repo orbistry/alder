@@ -88,6 +88,10 @@ static resolution wherever the type is known.
   never expose unification-variable IDs, label both local impl sites for an
   overlap, and attach actionable help for bounds, ownership, kinds, and cycles.
   Deterministic no-color snapshots cover the rendered source.
+- Instance search retains root-to-leaf obligation frames in structured errors.
+  Ambiguity reports label every available local candidate and identify foreign
+  candidates whose source is unavailable; nested missing-instance reports show
+  the prerequisite chain that led to the leaf failure.
 - The complete Traits guide example is byte-for-byte tied to an executed CLI
   fixture. Runtime coverage also exercises generic Applicative dispatch,
   Monad, Traversable, Iterator, all three builtin Functors, and dictionary

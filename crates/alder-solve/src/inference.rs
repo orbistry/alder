@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{
     Annotation, BinOp, BindingName, Block, Child, ChildBlock, ChildItem, Expr, FieldPresence,
-    ItemKind, MethodId, Module, ModuleId, PackageId, Pattern, QualifiedName, RecordField,
+    ImplId, ItemKind, MethodId, Module, ModuleId, PackageId, Pattern, QualifiedName, RecordField,
     RowExtension, Stmt, TraitId, Type, TypeSlot, UseId, ValueRef,
 };
 use alder_can::Annotations;
@@ -60,7 +60,10 @@ fn resolve_obligations<'a>(
             &obligation.givens,
             obligation.region,
             &mut stack,
-            &variable_names,
+            ResolutionStep {
+                variable_names: &variable_names,
+                required_by: None,
+            },
         ) {
             Ok(evidence) => match obligation.action {
                 ObligationAction::Reference(method) => match uses.entry(
@@ -289,7 +292,10 @@ fn resolve_derived_variant_fields<'a, 'field>(
             givens,
             typ.region,
             &mut stack,
-            &variable_names,
+            ResolutionStep {
+                variable_names: &variable_names,
+                required_by: None,
+            },
         ) {
             Ok(evidence) => {
                 resolved.insert(
@@ -390,44 +396,63 @@ fn ty_from_ast<'a>(typ: &Located<Type<'a>>, vars: &mut BTreeMap<&'a str, Ty<'a>>
     }
 }
 
+#[derive(Clone, Copy)]
+struct ResolutionStep<'a, 'names> {
+    variable_names: &'names BTreeMap<usize, &'a str>,
+    required_by: Option<ImplId<'a>>,
+}
+
 fn resolve_predicate<'a>(
     bump: &'a Bump,
     database: &TraitDatabase<'a>,
     predicate: &Predicate<'a>,
     givens: &[Given<'a>],
     origin: Region,
-    stack: &mut Vec<(TraitId<'a>, String)>,
-    variable_names: &BTreeMap<usize, &'a str>,
+    stack: &mut Vec<crate::ObligationFrame<'a>>,
+    step: ResolutionStep<'a, '_>,
 ) -> Result<Evidence<'a>, SolveTraitError<'a>> {
     let subject = predicate.args.first().cloned().unwrap_or(Ty::Unit);
-    let rendered = render_ty(&subject, variable_names);
+    let rendered = render_ty(&subject, step.variable_names);
     if let Some(given) = givens.iter().find(|given| {
         given.predicate.trait_ == predicate.trait_ && given.predicate.args == predicate.args
     }) {
         return Ok(given.evidence.clone());
     }
-    if stack
+    if let Some(cycle_start) = stack
         .iter()
-        .any(|(trait_, active)| *trait_ == predicate.trait_ && *active == rendered)
+        .position(|frame| frame.trait_ == predicate.trait_ && frame.subject == rendered)
     {
+        let current = crate::ObligationFrame {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            required_by: step.required_by,
+        };
+        let mut cycle = stack[cycle_start..].to_vec();
+        cycle.push(current);
+        let chain = bump.alloc_slice_copy(&cycle);
         return Err(SolveTraitError::InstanceCycle {
             trait_: predicate.trait_,
             subject: bump.alloc_str(&rendered),
             origin,
+            chain,
         });
     }
-    if let Some(evidence) = resolve_structural_eq(
-        bump,
-        database,
-        predicate,
-        givens,
-        origin,
-        stack,
-        variable_names,
-    )? {
-        return Ok(evidence);
+    stack.push(crate::ObligationFrame {
+        trait_: predicate.trait_,
+        subject: bump.alloc_str(&rendered),
+        required_by: step.required_by,
+    });
+    match resolve_structural_eq(bump, database, predicate, givens, origin, stack, step) {
+        Ok(Some(evidence)) => {
+            stack.pop();
+            return Ok(evidence);
+        }
+        Ok(None) => {}
+        Err(error) => {
+            stack.pop();
+            return Err(error);
+        }
     }
-    stack.push((predicate.trait_, rendered.clone()));
     let mut successes = Vec::new();
     let mut nested_error = None;
     for implementation in database.instances(predicate.trait_) {
@@ -462,7 +487,10 @@ fn resolve_predicate<'a>(
                 givens,
                 origin,
                 stack,
-                variable_names,
+                ResolutionStep {
+                    required_by: Some(implementation.id()),
+                    ..step
+                },
             ) {
                 Ok(evidence) => arguments.push(evidence),
                 Err(error) => {
@@ -487,6 +515,7 @@ fn resolve_predicate<'a>(
             successes.push((impl_id, evidence));
         }
     }
+    let chain = bump.alloc_slice_copy(stack);
     stack.pop();
     match successes.len() {
         1 => Ok(successes.pop().expect("one success").1),
@@ -494,19 +523,24 @@ fn resolve_predicate<'a>(
             trait_: predicate.trait_,
             subject: bump.alloc_str(&rendered),
             origin,
-            candidates: bump
-                .alloc_slice_fill_iter(successes.into_iter().map(|(impl_id, _)| impl_id)),
+            details: bump.alloc(crate::AmbiguousInstanceDetails {
+                candidates: bump
+                    .alloc_slice_fill_iter(successes.into_iter().map(|(impl_id, _)| impl_id)),
+                chain,
+            }),
         }),
         _ if nested_error.is_some() => Err(nested_error.expect("checked above")),
         _ if contains_variable(&subject) => Err(SolveTraitError::UnsatisfiedBound {
             trait_: predicate.trait_,
             subject: bump.alloc_str(&rendered),
             origin,
+            chain,
         }),
         _ => Err(SolveTraitError::MissingInstance {
             trait_: predicate.trait_,
             subject: bump.alloc_str(&rendered),
             origin,
+            chain,
         }),
     }
 }
@@ -517,8 +551,8 @@ fn resolve_structural_eq<'a>(
     predicate: &Predicate<'a>,
     givens: &[Given<'a>],
     origin: Region,
-    stack: &mut Vec<(TraitId<'a>, String)>,
-    variable_names: &BTreeMap<usize, &'a str>,
+    stack: &mut Vec<crate::ObligationFrame<'a>>,
+    step: ResolutionStep<'a, '_>,
 ) -> Result<Option<Evidence<'a>>, SolveTraitError<'a>> {
     if predicate.trait_ != builtin_trait_id("Eq") {
         return Ok(None);
@@ -547,7 +581,7 @@ fn resolve_structural_eq<'a>(
                 givens,
                 origin,
                 stack,
-                variable_names,
+                step,
             )?);
         }
         return Ok(Some(Evidence::StructuralEq {

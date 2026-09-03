@@ -650,6 +650,75 @@ mod tests {
         diagnostics.clone()
     }
 
+    fn ambiguous_failure(source: &str) -> Diagnostic {
+        let bump = Bump::new();
+        let source = bump.alloc_str(source);
+        let parsed = alder_parse::parse_module(&bump, source).expect("source parses");
+        let canonical = alder_can::canonicalize(
+            &bump,
+            alder_can::Context {
+                home: ModuleId {
+                    package: PackageId::Application,
+                    path: &["main"],
+                },
+                imports: &[],
+                interfaces: &[],
+            },
+            &parsed,
+        )
+        .expect("source canonicalizes before coherence checking");
+        let mut candidates = canonical
+            .module
+            .items
+            .iter()
+            .filter_map(|item| match item.value.kind {
+                alder_ast::ItemKind::Impl(implementation) => Some(implementation.id),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let trait_ = candidates
+            .first()
+            .and_then(|id| {
+                canonical.module.items.iter().find_map(|item| {
+                    let alder_ast::ItemKind::Impl(implementation) = item.value.kind else {
+                        return None;
+                    };
+                    (implementation.id == *id).then_some(implementation.trait_ref.trait_)
+                })
+            })
+            .expect("fixture has a trait implementation");
+        candidates.push(alder_ast::ImplId {
+            module: ModuleId {
+                package: PackageId::Named(alder_ast::PackageName {
+                    author: "example",
+                    project: "dependency",
+                }),
+                path: &["display"],
+            },
+            origin: alder_ast::ImplOrigin::Source { item_ordinal: 4 },
+        });
+        let error =
+            alder_solve::SolveError::Trait(alder_solve::SolveTraitError::AmbiguousInstance {
+                trait_,
+                subject: "Number",
+                origin: canonical
+                    .module
+                    .items
+                    .last()
+                    .expect("fixture has a call")
+                    .region,
+                details: bump.alloc(alder_solve::AmbiguousInstanceDetails {
+                    candidates: bump.alloc_slice_copy(&candidates),
+                    chain: &[],
+                }),
+            });
+        crate::report::solve(
+            Source::new("/project/src/main.ald", source.to_owned()),
+            canonical.module,
+            &error,
+        )
+    }
+
     #[tokio::test]
     async fn renders_trait_parser_error_with_source() {
         assert_diagnostic_snapshot! {r#"
@@ -690,6 +759,35 @@ mod tests {
 
             fn render(value: a) -> String {
                 display(value)
+            }
+        "#};
+    }
+
+    #[test]
+    fn renders_ambiguous_instance_candidates_with_source() {
+        let source = indoc::indoc! {r#"
+            trait Display[a] {
+                fn display(value: a) -> String
+            }
+
+            impl Display[a] {
+                fn display(value: a) -> String { "generic" }
+            }
+
+            impl Display[Number] {
+                fn display(value: Number) -> String { "number" }
+            }
+
+            fn main() { display(1) }
+        "#};
+        assert_rendered_diagnostic_snapshot!(source, ambiguous_failure(source));
+    }
+
+    #[tokio::test]
+    async fn renders_nested_instance_obligation_chain_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            fn main() -> String {
+                show([fn(value: Number) -> Number { value }])
             }
         "#};
     }

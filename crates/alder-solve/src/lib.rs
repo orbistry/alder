@@ -164,21 +164,37 @@ pub enum SolveTraitError<'a> {
         trait_: TraitId<'a>,
         subject: &'a str,
         origin: Region,
+        chain: &'a [ObligationFrame<'a>],
     },
     AmbiguousInstance {
         trait_: TraitId<'a>,
         subject: &'a str,
         origin: Region,
-        candidates: &'a [ImplId<'a>],
+        details: &'a AmbiguousInstanceDetails<'a>,
     },
     UnsatisfiedBound {
         trait_: TraitId<'a>,
         subject: &'a str,
         origin: Region,
+        chain: &'a [ObligationFrame<'a>],
     },
     InstanceCycle {
         trait_: TraitId<'a>,
         subject: &'a str,
         origin: Region,
+        chain: &'a [ObligationFrame<'a>],
     },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AmbiguousInstanceDetails<'a> {
+    pub candidates: &'a [ImplId<'a>],
+    pub chain: &'a [ObligationFrame<'a>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ObligationFrame<'a> {
+    pub trait_: TraitId<'a>,
+    pub subject: &'a str,
+    pub required_by: Option<ImplId<'a>>,
 }

@@ -1,0 +1,28 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] {\n    fn display(value: a) -> String\n}\n\nimpl Display[a] {\n    fn display(value: a) -> String { \"generic\" }\n}\n\nimpl Display[Number] {\n    fn display(value: Number) -> String { \"number\" }\n}\n\nfn main() { display(1) }\n"
+---
+alder::trait::ambiguous_instance
+
+  × multiple implementations of `Display[Number]` match (3 candidates)
+    ╭─[/project/src/main.ald:13:1]
+  4 │     
+  5 │ ╭─▶ impl Display[a] {
+  6 │ │       fn display(value: a) -> String { "generic" }
+  7 │ ├─▶ }
+    · ╰──── candidate implementation 1
+  8 │     
+  9 │ ╭─▶ impl Display[Number] {
+ 10 │ │       fn display(value: Number) -> String { "number" }
+ 11 │ ├─▶ }
+    · ╰──── candidate implementation 2
+ 12 │     
+ 13 │     fn main() { display(1) }
+    ·     ────────────┬───────────
+    ·                 ╰── the implementation cannot be selected here
+    ╰────
+  help: add a type annotation that selects one implementation; candidates:
+          1. a source implementation in `main`
+          2. a source implementation in `main`
+          3. a source implementation in `example/dependency/display` (source
+        unavailable)

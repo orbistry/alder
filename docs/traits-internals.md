@@ -1505,38 +1505,26 @@ pub struct ImplSite<'a> {
 }
 
 pub struct ObligationFrame<'a> {
-    pub goal: TraitRef<'a>,
-    pub region: Region,
-    pub reason: ObligationReason<'a>,
+    pub trait_: TraitId<'a>,
+    pub subject: &'a str,
+    pub required_by: Option<ImplId<'a>>,
 }
 
 pub struct DisplayType<'a>(pub &'a str);
 pub struct DisplayKind<'a>(pub &'a str);
 pub struct Suggestion<'a>(pub &'a str);
 
-pub enum ObligationReason<'a> {
-    TraitMethod(MethodId<'a>),
-    Operator(&'a str),
-    ImplPrerequisite(ImplId<'a>),
-    Superclass(TraitId<'a>),
-    DeclaredBound,
-}
-
 pub enum SolveError<'a> {
     Core(alder_constrain::Error),
     Trait(SolveTraitError<'a>),
+    Coherence(CoherenceError<'a>),
 }
 
 pub enum SolveTraitError<'a> {
-    MissingInstance { goal: TraitRef<'a>, origin: Region, nested: &'a [ObligationFrame<'a>], suggestion: Option<Suggestion<'a>> },
-    AmbiguousInstance { goal: TraitRef<'a>, origin: Region, candidates: &'a [ImplSite<'a>] },
-    UnsatisfiedBound { goal: TraitRef<'a>, declaration: Region, origin: Region, suggested_where: Suggestion<'a> },
-    KindMismatch { expected: DisplayKind<'a>, actual: DisplayKind<'a>, context: Region },
-    AssocTypeMismatch { assoc: AssocTypeId<'a>, expected: DisplayType<'a>, actual: DisplayType<'a>, region: Region },
-    InstanceCycle { chain: &'a [ObligationFrame<'a>] },
-    ProjectionCycle { chain: &'a [ProjectionType<'a>] },
-    AmbiguousTypeVariable { variable: &'a str, region: Region },
-    UnsupportedHigherKindedUnification { left: DisplayType<'a>, right: DisplayType<'a>, region: Region },
+    MissingInstance { trait_: TraitId<'a>, subject: &'a str, origin: Region, chain: &'a [ObligationFrame<'a>] },
+    AmbiguousInstance { trait_: TraitId<'a>, subject: &'a str, origin: Region, details: &'a AmbiguousInstanceDetails<'a> },
+    UnsatisfiedBound { trait_: TraitId<'a>, subject: &'a str, origin: Region, chain: &'a [ObligationFrame<'a>] },
+    InstanceCycle { trait_: TraitId<'a>, subject: &'a str, origin: Region, chain: &'a [ObligationFrame<'a>] },
 }
 
 pub enum CanonicalTraitError<'a> {
@@ -1615,6 +1603,12 @@ Messages name the user spelling of types and traits, underline the triggering
 use, show candidate impl locations for ambiguity/overlap, and show the nested
 obligation chain. Common arithmetic failures lead with the concrete expected
 numeric type where available, preserving useful M2 diagnostics.
+
+Every recursive instance lookup pushes an `ObligationFrame`. A leaf failure
+retains the complete root-to-leaf slice; cycle errors retain the repeating
+portion of the active stack. Ambiguity reports label every candidate in the
+current module and list foreign candidates by module, explicitly marking sites
+whose source is unavailable.
 
 Inference retains the source spelling for every generalized type variable used
 by an obligation. Reports render those names (for example, `a`) rather than

@@ -1194,7 +1194,7 @@ pub fn warning(source: Source, warning: &alder_can::Warning<'_>) -> Diagnostic {
 pub fn solve(source: Source, module: &Module<'_>, error: &SolveError<'_>) -> Diagnostic {
     match error {
         SolveError::Core(error) => constrain(source, error),
-        SolveError::Trait(error) => trait_error(source, error),
+        SolveError::Trait(error) => trait_error(source, module, error),
         SolveError::Coherence(error) => coherence(source, module, error),
     }
 }
@@ -1246,70 +1246,132 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
         .with_primary_label(error.region, "type requirement originates here")
 }
 
-fn trait_error(source: Source, error: &SolveTraitError<'_>) -> Diagnostic {
-    let (code, message, region, help) = match error {
+fn trait_error(source: Source, module: &Module<'_>, error: &SolveTraitError<'_>) -> Diagnostic {
+    match error {
         SolveTraitError::MissingInstance {
             trait_,
             subject,
             origin,
-        } => (
-            "missing_instance",
+            chain,
+        } => Diagnostic::error(
+            source,
             format!(
                 "no implementation of `{}[{subject}]` was found",
                 trait_.0.name
             ),
-            *origin,
-            None,
-        ),
+        )
+        .with_code("alder::trait::missing_instance")
+        .with_primary_label(*origin, "this use needs trait evidence")
+        .with_help(with_obligation_chain(
+            format!(
+                "define an implementation of `{}[{subject}]`, or use a type that already has one",
+                trait_.0.name
+            ),
+            chain,
+        )),
         SolveTraitError::AmbiguousInstance {
             trait_,
             subject,
             origin,
-            candidates,
-        } => (
-            "ambiguous_instance",
-            format!(
-                "multiple implementations of `{}[{subject}]` match ({} candidates)",
-                trait_.0.name,
-                candidates.len()
-            ),
-            *origin,
-            Some("add a type annotation that selects one implementation".to_owned()),
-        ),
+            details,
+        } => {
+            let candidates = details.candidates;
+            let mut diagnostic = Diagnostic::error(
+                source,
+                format!(
+                    "multiple implementations of `{}[{subject}]` match ({} candidates)",
+                    trait_.0.name,
+                    candidates.len()
+                ),
+            )
+            .with_code("alder::trait::ambiguous_instance")
+            .with_primary_label(*origin, "the implementation cannot be selected here");
+            for (index, candidate) in candidates.iter().enumerate() {
+                if let Some(region) = local_impl_region(module, *candidate) {
+                    diagnostic = diagnostic.with_secondary_label(
+                        region,
+                        format!("candidate implementation {}", index + 1),
+                    );
+                }
+            }
+            let candidates = candidates
+                .iter()
+                .enumerate()
+                .map(|(index, candidate)| {
+                    let availability = if local_impl_region(module, *candidate).is_none() {
+                        " (source unavailable)"
+                    } else {
+                        ""
+                    };
+                    format!(
+                        "  {}. {}{availability}",
+                        index + 1,
+                        impl_description(*candidate)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            diagnostic.with_help(with_obligation_chain(
+                format!(
+                    "add a type annotation that selects one implementation; candidates:\n{candidates}"
+                ),
+                details.chain,
+            ))
+        }
         SolveTraitError::UnsatisfiedBound {
             trait_,
             subject,
             origin,
-        } => (
-            "unsatisfied_bound",
+            chain,
+        } => Diagnostic::error(
+            source,
             format!("the generic type `{subject}` requires `{}`", trait_.0.name),
-            *origin,
-            Some(format!(
+        )
+        .with_code("alder::trait::unsatisfied_bound")
+        .with_primary_label(*origin, "this use requires a bound")
+        .with_help(with_obligation_chain(
+            format!(
                 "add a matching bound, such as `where {subject}: {}`",
                 trait_.0.name
-            )),
-        ),
+            ),
+            chain,
+        )),
         SolveTraitError::InstanceCycle {
             trait_,
             subject,
             origin,
-        } => (
-            "instance_cycle",
+            chain,
+        } => Diagnostic::error(
+            source,
             format!(
                 "resolving `{}[{subject}]` forms an instance cycle",
                 trait_.0.name
             ),
-            *origin,
-            None,
-        ),
-    };
-    let mut diagnostic = Diagnostic::error(source, message)
-        .with_code(format!("alder::trait::{code}"))
-        .with_primary_label(region, "trait evidence is required here");
-    if let Some(help) = help {
-        diagnostic = diagnostic.with_help(help);
+        )
+        .with_code("alder::trait::instance_cycle")
+        .with_primary_label(*origin, "instance resolution returns to this requirement")
+        .with_help(with_obligation_chain(
+            "make the instance prerequisites structurally decrease".to_owned(),
+            chain,
+        )),
     }
-    diagnostic
+}
+
+fn with_obligation_chain(help: String, chain: &[alder_solve::ObligationFrame<'_>]) -> String {
+    if chain.len() < 2 {
+        return help;
+    }
+    let chain = chain
+        .iter()
+        .map(|frame| {
+            let goal = format!("{}[{}]", frame.trait_.0.name, frame.subject);
+            frame.required_by.map_or(goal.clone(), |implementation| {
+                format!("{goal}, required by {}", impl_description(implementation))
+            })
+        })
+        .collect::<Vec<_>>()
+        .join("\n  -> ");
+    format!("{help}\n\nobligation chain:\n  {chain}")
 }
 
 fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) -> Diagnostic {
@@ -1799,23 +1861,42 @@ fn point(row: u32, column: u32) -> Region {
 }
 
 fn impl_region(module: &Module<'_>, implementation: ImplId<'_>) -> Region {
+    local_impl_region(module, implementation).unwrap_or_else(Region::one)
+}
+
+fn local_impl_region(module: &Module<'_>, implementation: ImplId<'_>) -> Option<Region> {
     if implementation.module != module.id {
-        return Region::one();
+        return None;
     }
     let ordinal = match implementation.origin {
         ImplOrigin::Source { item_ordinal } => item_ordinal,
         ImplOrigin::Derived { type_ordinal, .. } | ImplOrigin::AutomaticEq { type_ordinal } => {
             type_ordinal
         }
-        ImplOrigin::Builtin { .. } => return Region::one(),
+        ImplOrigin::Builtin { .. } => return None,
     };
     module
         .items
         .get(ordinal as usize)
-        .map_or(Region::one(), |item| match item.value.kind {
+        .map(|item| match item.value.kind {
             ItemKind::Impl(_) | ItemKind::Enum(_) | ItemKind::ErrorGroup(_) => item.region,
             _ => item.region,
         })
+}
+
+fn impl_description(implementation: ImplId<'_>) -> String {
+    let module = module_name(implementation.module);
+    if implementation.module.package == PackageId::Builtin {
+        return "a standard-library implementation".to_owned();
+    }
+    match implementation.origin {
+        ImplOrigin::Source { .. } => format!("a source implementation in `{module}`"),
+        ImplOrigin::Derived { .. } => format!("a derived implementation in `{module}`"),
+        ImplOrigin::AutomaticEq { .. } => {
+            format!("an automatic Eq implementation in `{module}`")
+        }
+        ImplOrigin::Builtin { .. } => "a standard-library implementation".to_owned(),
+    }
 }
 
 fn package_name(package: PackageId<'_>) -> &'static str {
@@ -1827,7 +1908,18 @@ fn package_name(package: PackageId<'_>) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
 fn module_name(module: ModuleId<'_>) -> String {
-    module.path.join("/")
+    let path = module.path.join("/");
+    match module.package {
+        PackageId::Named(package) if path.is_empty() => {
+            format!("{}/{}", package.author, package.project)
+        }
+        PackageId::Named(package) => format!("{}/{}/{path}", package.author, package.project),
+        PackageId::Application if path.is_empty() => "the application root".to_owned(),
+        PackageId::Application => path,
+        PackageId::ApplicationMember(member) if path.is_empty() => member.to_owned(),
+        PackageId::ApplicationMember(member) => format!("{member}/{path}"),
+        PackageId::Builtin if path.is_empty() => "the standard library".to_owned(),
+        PackageId::Builtin => format!("standard library/{path}"),
+    }
 }
