@@ -5,6 +5,9 @@
 
 use alder_region::{Located, Region};
 
+mod interface_copy;
+pub use interface_copy::copy_interface;
+
 pub use alder_source::{AssignOp, BinOp, JoinKind, OrderDir};
 
 pub type Node<'a, T> = &'a Located<T>;

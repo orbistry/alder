@@ -4,8 +4,9 @@
 //! constrain -> solve -> `Interface::from_module` with the solver's
 //! annotations. Modules compile in dependency order, and each solved
 //! module's interface is deep-copied into a build-wide arena so dependents
-//! canonicalize their imports against it — interfaces only ever exist for
-//! type-solved modules.
+//! canonicalize their imports against it. Dependency interfaces are copied
+//! back into each module arena before use, so no phase borrows another
+//! module's allocation. Interfaces only ever exist for type-solved modules.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -113,6 +114,8 @@ pub async fn build_with_mode(
 /// Type checking is inherently dependency-ordered, so within-build
 /// parallelism is limited to source fetching for now.
 fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> BuildResult {
+    // This arena owns only solved public interfaces. Every source module and
+    // all of its phase-local ASTs use a separate arena in `compile_module`.
     let store = Bump::new();
     let mut interfaces: Vec<Interface<'_>> = Vec::new();
 
@@ -237,23 +240,28 @@ fn compile_module<'s>(
         Err(e) => return failed(vec![crate::report::source_failure(report_source, e)]),
     };
 
-    let src: &'s str = store.alloc_str(source);
-    let mut parser = alder_parse::Parser::new(store, src.as_bytes());
+    let module_arena = Bump::new();
+    let src = module_arena.alloc_str(source);
+    let mut parser = alder_parse::Parser::new(&module_arena, src.as_bytes());
 
     let module = match parser.module() {
         Ok(module) => module,
         Err(e) => return failed(vec![crate::report::parse(report_source, &e)]),
     };
 
-    let home = module_id_from_uri(store, uri);
-    let imports = resolve_imports(store, &module);
-    let interfaces = store.alloc_slice_copy(interfaces);
+    let home = module_id_from_uri(&module_arena, uri);
+    let imports = resolve_imports(&module_arena, &module);
+    let interfaces = module_arena.alloc_slice_fill_iter(
+        interfaces
+            .iter()
+            .map(|interface| alder_ast::copy_interface(&module_arena, interface)),
+    );
     let context = alder_can::Context {
         home,
         imports,
         interfaces,
     };
-    let can_result = match alder_can::canonicalize(store, context, &module) {
+    let can_result = match alder_can::canonicalize(&module_arena, context, &module) {
         Ok(can_result) => can_result,
         Err(errors) => {
             return failed(
@@ -270,9 +278,10 @@ fn compile_module<'s>(
         .map(|warning| crate::report::warning(report_source.clone(), warning))
         .collect();
 
-    let constraint = alder_constrain::constrain(store, can_result.module);
-    let trait_database = alder_solve::TraitDatabase::build(store, can_result.module, interfaces);
-    let solved = match alder_solve::solve(store, &constraint, &trait_database) {
+    let constraint = alder_constrain::constrain(&module_arena, can_result.module);
+    let trait_database =
+        alder_solve::TraitDatabase::build(&module_arena, can_result.module, interfaces);
+    let solved = match alder_solve::solve(&module_arena, &constraint, &trait_database) {
         Ok(solved) => solved,
         Err(errors) => {
             return failed(
@@ -286,7 +295,8 @@ fn compile_module<'s>(
         }
     };
 
-    let interface = alder_can::from_module(store, can_result.module, &solved.annotations);
+    let module_interface =
+        alder_can::from_module(&module_arena, can_result.module, &solved.annotations);
     let artifact = match mode {
         BuildMode::Check => None,
         BuildMode::Build | BuildMode::Test => {
@@ -315,7 +325,7 @@ fn compile_module<'s>(
             warnings,
             artifact,
         },
-        Some(interface),
+        Some(alder_ast::copy_interface(store, &module_interface)),
     )
 }
 
