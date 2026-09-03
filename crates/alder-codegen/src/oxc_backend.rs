@@ -426,8 +426,8 @@ impl<'src, 'js> Emitter<'src, 'js> {
         implementation: &alder_ast::ImplDecl<'src>,
         dictionary_symbol: &str,
     ) -> Result<ArenaVec<'js, Statement<'js>>, Error> {
-        if implementation.synthetic == Some(alder_ast::DeriveKind::Eq) {
-            return Ok(self.automatic_eq_dictionary(implementation, dictionary_symbol));
+        if implementation.synthetic.is_some() {
+            return Ok(self.derived_dictionary(implementation, dictionary_symbol));
         }
         let mut declarations = self.js.vec();
         let prerequisite_args = (0..implementation.trait_predicates.len())
@@ -589,12 +589,14 @@ impl<'src, 'js> Emitter<'src, 'js> {
         Ok(declarations)
     }
 
-    fn automatic_eq_dictionary(
+    fn derived_dictionary(
         &mut self,
         implementation: &alder_ast::ImplDecl<'src>,
         dictionary_symbol: &str,
     ) -> ArenaVec<'js, Statement<'js>> {
-        self.kernel.insert("$equal");
+        let kind = implementation
+            .synthetic
+            .expect("derived dictionaries have a derive kind");
         let prerequisite_args = (0..implementation.trait_predicates.len())
             .map(|index| format!("$dict{index}"))
             .collect::<Vec<_>>();
@@ -609,20 +611,71 @@ impl<'src, 'js> Emitter<'src, 'js> {
             self_name,
             Some(self.js.object(self.js.vec())),
         ));
-        let args = vec!["$a".to_owned(), "$b".to_owned()];
-        let equal = self.js.call(
-            self.js.identifier("$equal"),
-            args.iter().map(|argument| self.js.identifier(argument)),
-        );
-        let mut equal_body = self.js.vec();
-        equal_body.push(self.js.return_statement(equal));
-        let target = self.js.member(self.js.identifier(self_name), "eq");
-        let assignment = self.js.assignment(
-            target,
-            AssignmentOperator::Assign,
-            self.js.arrow(&args, equal_body, false),
-        );
-        body.push(self.js.expression_statement(assignment));
+        match kind {
+            alder_ast::DeriveKind::Eq => {
+                self.derived_kernel_method(&mut body, self_name, "eq", "$equal", 2, None);
+            }
+            alder_ast::DeriveKind::Show => {
+                self.derived_kernel_method(&mut body, self_name, "show", "$show", 1, None);
+            }
+            alder_ast::DeriveKind::Ord => {
+                let equality = format!("$dict$Eq${}", impl_origin_index(implementation.id.origin));
+                let super_target = self.js.member(self.js.identifier(self_name), "$super0");
+                let equality = if prerequisite_args.is_empty() {
+                    self.js.identifier(&equality)
+                } else {
+                    self.js.call(
+                        self.js.identifier(&equality),
+                        prerequisite_args.iter().map(|argument| {
+                            self.js.member(self.js.identifier(argument), "$super0")
+                        }),
+                    )
+                };
+                let super_assignment =
+                    self.js
+                        .assignment(super_target, AssignmentOperator::Assign, equality);
+                body.push(self.js.expression_statement(super_assignment));
+                self.derived_kernel_method(
+                    &mut body,
+                    self_name,
+                    "lt",
+                    "$compare",
+                    2,
+                    Some(BinaryOperator::LessThan),
+                );
+                self.derived_kernel_method(
+                    &mut body,
+                    self_name,
+                    "lte",
+                    "$compare",
+                    2,
+                    Some(BinaryOperator::LessEqualThan),
+                );
+                self.derived_kernel_method(
+                    &mut body,
+                    self_name,
+                    "gt",
+                    "$compare",
+                    2,
+                    Some(BinaryOperator::GreaterThan),
+                );
+                self.derived_kernel_method(
+                    &mut body,
+                    self_name,
+                    "gte",
+                    "$compare",
+                    2,
+                    Some(BinaryOperator::GreaterEqualThan),
+                );
+            }
+            alder_ast::DeriveKind::Hash => {
+                self.derived_kernel_method(&mut body, self_name, "hash", "$hash", 1, None);
+            }
+            alder_ast::DeriveKind::Json => {
+                self.derived_kernel_method(&mut body, self_name, "encode", "$jsonEncode", 1, None);
+                self.derived_kernel_method(&mut body, self_name, "decode", "$jsonDecode", 1, None);
+            }
+        }
         let frozen = self.js.call(
             self.js.member(self.js.identifier("Object"), "freeze"),
             [self.js.identifier(self_name)],
@@ -639,6 +692,38 @@ impl<'src, 'js> Emitter<'src, 'js> {
             );
         }
         declarations
+    }
+
+    fn derived_kernel_method(
+        &mut self,
+        body: &mut ArenaVec<'js, Statement<'js>>,
+        dictionary: &str,
+        method: &str,
+        kernel: &'static str,
+        arity: usize,
+        comparison: Option<BinaryOperator>,
+    ) {
+        self.kernel.insert(kernel);
+        let args = (0..arity)
+            .map(|index| format!("$a{index}"))
+            .collect::<Vec<_>>();
+        let call = self.js.call(
+            self.js.identifier(kernel),
+            args.iter().map(|argument| self.js.identifier(argument)),
+        );
+        let result = match comparison {
+            Some(operator) => self.js.binary(call, operator, self.js.number(0.0)),
+            None => call,
+        };
+        let mut method_body = self.js.vec();
+        method_body.push(self.js.return_statement(result));
+        let target = self.js.member(self.js.identifier(dictionary), method);
+        let assignment = self.js.assignment(
+            target,
+            AssignmentOperator::Assign,
+            self.js.arrow(&args, method_body, false),
+        );
+        body.push(self.js.expression_statement(assignment));
     }
 
     fn top_let(

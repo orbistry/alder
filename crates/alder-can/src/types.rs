@@ -285,19 +285,27 @@ mod tests {
         parser.type_expr().expect("type parses")
     }
 
-    fn env() -> Env<'static> {
-        Env::new(ModuleId {
-            package: PackageId::Application,
-            path: &[],
-        })
+    fn env<'a>(bump: &'a Bump) -> Env<'a> {
+        Env::new(
+            bump,
+            ModuleId {
+                package: PackageId::Application,
+                path: &[],
+            },
+        )
     }
 
     #[test]
     fn optional_record_field_is_preserved() {
         let bump = Bump::new();
         let source = bump.alloc_str("{ name: String, nickname?: String }");
-        let typ = canonicalize_type(&bump, &env(), &BTreeSet::new(), parse_type(&bump, source))
-            .expect("type canonicalizes");
+        let typ = canonicalize_type(
+            &bump,
+            &env(&bump),
+            &BTreeSet::new(),
+            parse_type(&bump, source),
+        )
+        .expect("type canonicalizes");
         let CanType::Record { fields, .. } = &typ.value else {
             panic!("expected record")
         };
@@ -311,8 +319,13 @@ mod tests {
     fn function_arity_is_preserved() {
         let bump = Bump::new();
         let source = bump.alloc_str("fn(Number, String) -> Bool");
-        let typ = canonicalize_type(&bump, &env(), &BTreeSet::new(), parse_type(&bump, source))
-            .expect("type canonicalizes");
+        let typ = canonicalize_type(
+            &bump,
+            &env(&bump),
+            &BTreeSet::new(),
+            parse_type(&bump, source),
+        )
+        .expect("type canonicalizes");
         let CanType::Fn { params, .. } = &typ.value else {
             panic!("expected function")
         };
@@ -323,17 +336,26 @@ mod tests {
     fn result_one_argument_shorthand_is_accepted() {
         let bump = Bump::new();
         let source = bump.alloc_str("Result[String]");
-        canonicalize_type(&bump, &env(), &BTreeSet::new(), parse_type(&bump, source))
-            .expect("shorthand canonicalizes");
+        canonicalize_type(
+            &bump,
+            &env(&bump),
+            &BTreeSet::new(),
+            parse_type(&bump, source),
+        )
+        .expect("shorthand canonicalizes");
     }
 
     #[test]
     fn impl_head_partial_constructor_is_preserved() {
         let bump = Bump::new();
         let source = bump.alloc_str("Result[_, String]");
-        let typ =
-            canonicalize_impl_head_type(&bump, &env(), &BTreeSet::new(), parse_type(&bump, source))
-                .expect("partial impl head canonicalizes");
+        let typ = canonicalize_impl_head_type(
+            &bump,
+            &env(&bump),
+            &BTreeSet::new(),
+            parse_type(&bump, source),
+        )
+        .expect("partial impl head canonicalizes");
         let CanType::Partial { constructor, slots } = &typ.value else {
             panic!("expected partial constructor")
         };
@@ -346,9 +368,13 @@ mod tests {
     fn bare_constructor_impl_head_becomes_a_partial_type() {
         let bump = Bump::new();
         let source = bump.alloc_str("Option");
-        let typ =
-            canonicalize_impl_head_type(&bump, &env(), &BTreeSet::new(), parse_type(&bump, source))
-                .expect("bare constructor impl head canonicalizes");
+        let typ = canonicalize_impl_head_type(
+            &bump,
+            &env(&bump),
+            &BTreeSet::new(),
+            parse_type(&bump, source),
+        )
+        .expect("bare constructor impl head canonicalizes");
         let CanType::Partial { constructor, slots } = &typ.value else {
             panic!("expected partial constructor")
         };
@@ -360,8 +386,13 @@ mod tests {
     fn ordinary_type_hole_is_rejected() {
         let bump = Bump::new();
         let source = bump.alloc_str("_");
-        let errors = canonicalize_type(&bump, &env(), &BTreeSet::new(), parse_type(&bump, source))
-            .expect_err("ordinary type hole must fail");
+        let errors = canonicalize_type(
+            &bump,
+            &env(&bump),
+            &BTreeSet::new(),
+            parse_type(&bump, source),
+        )
+        .expect_err("ordinary type hole must fail");
         assert!(matches!(
             errors[0].kind,
             ErrorKind::Type(TypeError::InvalidHole)
@@ -372,9 +403,13 @@ mod tests {
     fn nested_impl_head_hole_is_rejected() {
         let bump = Bump::new();
         let source = bump.alloc_str("Result[Array[_], String]");
-        let errors =
-            canonicalize_impl_head_type(&bump, &env(), &BTreeSet::new(), parse_type(&bump, source))
-                .expect_err("nested type hole must fail");
+        let errors = canonicalize_impl_head_type(
+            &bump,
+            &env(&bump),
+            &BTreeSet::new(),
+            parse_type(&bump, source),
+        )
+        .expect_err("nested type hole must fail");
         assert!(matches!(
             errors[0].kind,
             ErrorKind::Type(TypeError::InvalidHole)

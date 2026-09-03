@@ -200,7 +200,7 @@ pub enum StmtError<'a> {
 #[derive(Clone, Debug)]
 pub enum AttributeError<'a> {
     InvalidExtern { reason: &'a str },
-    DeriveUnavailable,
+    InvalidDerive { reason: &'a str },
     Unknown { name: &'a str },
     MacroUnavailable,
 }

@@ -5,6 +5,52 @@ export function $equal(left, right) {
     return equalInner(left, right, new WeakMap());
 }
 
+export function $show(value) {
+    if (typeof value === "string") return JSON.stringify(value);
+    if (value === undefined) return "()";
+    if (value === null) return "None";
+    if (Array.isArray(value)) return `[${value.map($show).join(", ")}]`;
+    if (typeof value === "object" && typeof value.$ === "string") {
+        const arguments_ = Object.keys(value)
+            .filter((key) => /^_\d+$/.test(key))
+            .sort((left, right) => Number(left.slice(1)) - Number(right.slice(1)))
+            .map((key) => $show(value[key]));
+        return arguments_.length === 0 ? value.$ : `${value.$}(${arguments_.join(", ")})`;
+    }
+    if (typeof value === "object") {
+        return `{ ${Object.keys(value).sort().map((key) => `${key}: ${$show(value[key])}`).join(", ")} }`;
+    }
+    return String(value);
+}
+
+export function $compare(left, right) {
+    if ($equal(left, right)) return 0;
+    if ((typeof left === "number" && typeof right === "number")
+        || (typeof left === "bigint" && typeof right === "bigint")
+        || (typeof left === "string" && typeof right === "string")) {
+        return left < right ? -1 : 1;
+    }
+    return stableText(left) < stableText(right) ? -1 : 1;
+}
+
+export function $hash(value) {
+    const text = stableText(value);
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function stableText(value) {
+    if (value === undefined) return "null";
+    if (typeof value === "bigint") return `{"$bigint":${JSON.stringify(String(value))}}`;
+    if (value === null || typeof value !== "object") return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(stableText).join(",")}]`;
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableText(value[key])}`).join(",")}}`;
+}
+
 function equalInner(left, right, seen) {
     if (Object.is(left, right)) return true;
     if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) {

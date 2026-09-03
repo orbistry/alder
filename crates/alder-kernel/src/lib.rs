@@ -11,6 +11,9 @@ mod tests {
     fn built_kernel_exports_the_codegen_contract() {
         for symbol in [
             "$equal",
+            "$show",
+            "$compare",
+            "$hash",
             "$matchFailure",
             "$optionBox",
             "$providerPush",

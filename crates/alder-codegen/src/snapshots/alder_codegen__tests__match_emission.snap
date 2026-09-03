@@ -30,8 +30,8 @@ function $v_unwrap($a0) {
 }
 function $dict$Eq$0($dict0) {
 	const $self = {};
-	$self["eq"] = ($a, $b) => {
-		return $equal($a, $b);
+	$self["eq"] = ($a0, $a1) => {
+		return $equal($a0, $a1);
 	};
 	return Object["freeze"]($self);
 }

@@ -364,4 +364,11 @@ mod tests {
             "trait Show[a] { fn show(value: a) -> String\nfn render(value: a) -> String { show(value) } }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\npub fn main() -> String { render(1) }"
         ));
     }
+
+    #[test]
+    fn built_in_derive_dictionaries() {
+        insta::assert_snapshot!(emit(
+            "#[derive(Show, Ord, Hash, Json)]\npub enum Status { Ready, Failed(String) }"
+        ));
+    }
 }

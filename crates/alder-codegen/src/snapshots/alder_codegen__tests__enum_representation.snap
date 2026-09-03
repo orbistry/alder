@@ -18,8 +18,8 @@ function $c_Shape_Rect(width, height) {
 	};
 }
 const $dict$Eq$0 = {};
-$dict$Eq$0["eq"] = ($a, $b) => {
-	return $equal($a, $b);
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equal($a0, $a1);
 };
 Object["freeze"]($dict$Eq$0);
 export { $c_Shape_Circle, $c_Shape_Point, $c_Shape_Rect, $dict$Eq$0 };

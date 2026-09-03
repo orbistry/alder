@@ -40,7 +40,7 @@ pub fn canonicalize<'a>(
     context: Context<'a>,
     source: &SourceModule<'a>,
 ) -> Result<CanResult<'a>, Vec<Error<'a>>> {
-    let mut env = Env::new(context.home);
+    let mut env = Env::new(bump, context.home);
     let mut errors = load_imports(bump, &mut env, context.imports, context.interfaces);
     errors.extend(predeclare(&mut env, source));
     let enums = canonicalize_enums(bump, &mut env, source, &mut errors);
@@ -59,13 +59,58 @@ pub fn canonicalize<'a>(
             Ok(canonical_item) => {
                 items.push(canonical_item);
                 if let ItemKind::Enum(enum_) = &canonical_item.value.kind {
-                    automatic_impls.push(automatic_eq_impl(
-                        bump,
-                        context.home,
-                        enum_,
-                        item_ordinal as u32,
-                        canonical_item.region,
-                    ));
+                    if enum_supports_structural_derive(enum_) {
+                        automatic_impls.push(enum_derive_impl(
+                            bump,
+                            context.home,
+                            enum_,
+                            canonical_item.region,
+                            alder_ast::DeriveKind::Eq,
+                            alder_ast::ImplOrigin::AutomaticEq {
+                                type_ordinal: item_ordinal as u32,
+                            },
+                        ));
+                    }
+                    for attribute in canonical_item.value.attributes {
+                        let Attribute::Derive { region, names } = attribute else {
+                            continue;
+                        };
+                        for (derive_index, name) in names.iter().enumerate() {
+                            let kind = derive_kind(name.name)
+                                .expect("derive attributes contain validated built-in names");
+                            if kind == alder_ast::DeriveKind::Eq {
+                                if !enum_supports_structural_derive(enum_) {
+                                    errors.push(Error::new(
+                                        *region,
+                                        ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                            reason: "function-valued fields cannot derive Eq",
+                                        }),
+                                    ));
+                                }
+                                continue;
+                            }
+                            if !enum_supports_structural_derive(enum_) {
+                                errors.push(Error::new(
+                                    *region,
+                                    ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                        reason: "function-valued fields cannot use built-in derives",
+                                    }),
+                                ));
+                                continue;
+                            }
+                            automatic_impls.push(enum_derive_impl(
+                                bump,
+                                context.home,
+                                enum_,
+                                canonical_item.region,
+                                kind,
+                                alder_ast::ImplOrigin::Derived {
+                                    type_ordinal: item_ordinal as u32,
+                                    derive_index: derive_index as u16,
+                                },
+                            ));
+                        }
+                    }
                 }
             }
             Err(mut item_errors) => errors.append(&mut item_errors),
@@ -91,12 +136,66 @@ pub fn canonicalize<'a>(
     })
 }
 
-fn automatic_eq_impl<'a>(
+fn enum_supports_structural_derive(enum_: &EnumDecl<'_>) -> bool {
+    enum_.variants.iter().all(|variant| match variant.payload {
+        VariantPayload::Unit => true,
+        VariantPayload::Tuple(types) => {
+            types.iter().all(|typ| type_supports_structural_derive(typ))
+        }
+        VariantPayload::Record(fields) => fields
+            .iter()
+            .all(|field| type_supports_structural_derive(field.typ)),
+    })
+}
+
+fn type_supports_structural_derive(typ: &Located<Type<'_>>) -> bool {
+    match &typ.value {
+        Type::Fn { .. } => false,
+        Type::Var { args, .. } | Type::Named { args, .. } => args
+            .iter()
+            .all(|argument| type_supports_structural_derive(argument)),
+        Type::Partial { slots, .. } => slots.iter().all(|slot| match slot {
+            alder_ast::TypeSlot::Hole(_) => true,
+            alder_ast::TypeSlot::Fixed(typ) => type_supports_structural_derive(typ),
+        }),
+        Type::Projection(projection) => projection
+            .trait_ref
+            .args
+            .iter()
+            .all(|argument| type_supports_structural_derive(argument)),
+        Type::Tuple(items) => items
+            .iter()
+            .all(|item| type_supports_structural_derive(item)),
+        Type::Record { fields, .. } => fields
+            .iter()
+            .all(|field| type_supports_structural_derive(field.typ)),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(typ) | alder_ast::AliasType::Filled(typ) => {
+                type_supports_structural_derive(typ)
+            }
+        },
+        Type::Unit | Type::ErrorRow { .. } => true,
+    }
+}
+
+fn derive_kind(name: &str) -> Option<alder_ast::DeriveKind> {
+    match name {
+        "Show" => Some(alder_ast::DeriveKind::Show),
+        "Eq" => Some(alder_ast::DeriveKind::Eq),
+        "Ord" => Some(alder_ast::DeriveKind::Ord),
+        "Hash" => Some(alder_ast::DeriveKind::Hash),
+        "Json" => Some(alder_ast::DeriveKind::Json),
+        _ => None,
+    }
+}
+
+fn enum_derive_impl<'a>(
     bump: &'a Bump,
     home: ModuleId<'a>,
     enum_: &'a EnumDecl<'a>,
-    type_ordinal: u32,
     region: Region,
+    kind: alder_ast::DeriveKind,
+    origin: alder_ast::ImplOrigin,
 ) -> &'a Located<Item<'a>> {
     let params = bump.alloc_slice_fill_iter(enum_.params.iter().map(|name| alder_ast::TypeParam {
         name: *name,
@@ -118,20 +217,26 @@ fn automatic_eq_impl<'a>(
             args: arguments,
         },
     ));
-    let eq = alder_ast::TraitId(QualifiedName {
+    let trait_ = alder_ast::TraitId(QualifiedName {
         module: ModuleId {
             package: alder_ast::PackageId::Builtin,
             path: &[],
         },
-        name: "Eq",
+        name: match kind {
+            alder_ast::DeriveKind::Show => "Show",
+            alder_ast::DeriveKind::Eq => "Eq",
+            alder_ast::DeriveKind::Ord => "Ord",
+            alder_ast::DeriveKind::Hash => "Hash",
+            alder_ast::DeriveKind::Json => "Json",
+        },
     });
     let trait_predicates =
         bump.alloc_slice_fill_iter(arguments.iter().map(|argument| alder_ast::TraitRef {
-            trait_: eq,
+            trait_,
             args: bump.alloc_slice_copy(&[*argument]),
         }));
     let trait_ref = alder_ast::TraitRef {
-        trait_: eq,
+        trait_,
         args: bump.alloc_slice_copy(&[subject as &Located<Type<'a>>]),
     };
     bump.alloc(Located::at(
@@ -142,9 +247,9 @@ fn automatic_eq_impl<'a>(
             kind: ItemKind::Impl(bump.alloc(ImplDecl {
                 id: alder_ast::ImplId {
                     module: home,
-                    origin: alder_ast::ImplOrigin::AutomaticEq { type_ordinal },
+                    origin,
                 },
-                trait_: eq.0,
+                trait_: trait_.0,
                 args: trait_ref.args,
                 trait_ref,
                 params,
@@ -153,7 +258,7 @@ fn automatic_eq_impl<'a>(
                 projection_equalities: &[],
                 assoc_bindings: &[],
                 items: &[],
-                synthetic: Some(alder_ast::DeriveKind::Eq),
+                synthetic: Some(kind),
                 region,
             })),
         },
@@ -1123,6 +1228,18 @@ fn canonicalize_item<'a>(
         }
         SourceItemKind::Import(_) => unreachable!("imports are filtered before item conversion"),
     };
+    if attributes
+        .iter()
+        .any(|attribute| matches!(attribute, Attribute::Derive { .. }))
+        && !matches!(kind, ItemKind::Enum(_) | ItemKind::ErrorGroup(_))
+    {
+        return Err(vec![Error::new(
+            item.region,
+            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                reason: "built-in derives are only available on enums and error groups",
+            }),
+        )]);
+    }
     Ok(bump.alloc(Located::at(
         item.region,
         Item {
@@ -1913,10 +2030,61 @@ fn canonicalize_attributes<'a>(
                 });
             }
             "derive" => {
-                return Err(vec![Error::new(
-                    attribute.region,
-                    ErrorKind::Attribute(AttributeError::DeriveUnavailable),
-                )]);
+                let mut names = Vec::with_capacity(attribute.value.args.len());
+                let mut seen = BTreeMap::new();
+                for argument in attribute.value.args {
+                    let alder_source::Expr::Path(path) = argument.value else {
+                        return Err(vec![Error::new(
+                            argument.region,
+                            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                reason: "derive arguments must be trait names",
+                            }),
+                        )]);
+                    };
+                    let [name] = path.segments else {
+                        return Err(vec![Error::new(
+                            argument.region,
+                            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                reason: "derive names cannot be qualified",
+                            }),
+                        )]);
+                    };
+                    if !matches!(name.value, "Show" | "Eq" | "Ord" | "Hash" | "Json") {
+                        return Err(vec![Error::new(
+                            name.region,
+                            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                reason: "unknown built-in derive",
+                            }),
+                        )]);
+                    }
+                    if seen.insert(name.value, name.region).is_some() {
+                        return Err(vec![Error::new(
+                            name.region,
+                            ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                reason: "a derive may only be listed once",
+                            }),
+                        )]);
+                    }
+                    names.push(QualifiedName {
+                        module: ModuleId {
+                            package: alder_ast::PackageId::Builtin,
+                            path: &[],
+                        },
+                        name: name.value,
+                    });
+                }
+                if names.is_empty() {
+                    return Err(vec![Error::new(
+                        attribute.region,
+                        ErrorKind::Attribute(AttributeError::InvalidDerive {
+                            reason: "derive requires at least one trait name",
+                        }),
+                    )]);
+                }
+                attributes.push(Attribute::Derive {
+                    region: attribute.region,
+                    names: bump.alloc_slice_copy(&names),
+                });
             }
             _ => attributes.push(Attribute::Other {
                 name: attribute.value.name,
@@ -2604,6 +2772,75 @@ mod tests {
     fn unavailable_feature_errors() {
         insta::assert_snapshot!(can_error("#[derive(Eq)]\ntype Id = Number"));
         insta::assert_snapshot!(can_error("fn expand() { generated!() }"));
+    }
+
+    #[test]
+    fn enum_derives_generate_stable_semantic_impls() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            "#[derive(Show, Eq, Ord, Hash, Json)]\nenum Status { Ready }",
+        );
+        let implementations = result
+            .module
+            .items
+            .iter()
+            .filter_map(|item| match item.value.kind {
+                ItemKind::Impl(implementation) => Some(implementation),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(implementations.len(), 5);
+        assert_eq!(
+            implementations[0].synthetic,
+            Some(alder_ast::DeriveKind::Eq)
+        );
+        assert_eq!(
+            implementations[1].synthetic,
+            Some(alder_ast::DeriveKind::Show)
+        );
+        assert_eq!(
+            implementations[2].synthetic,
+            Some(alder_ast::DeriveKind::Ord)
+        );
+        assert_eq!(
+            implementations[3].synthetic,
+            Some(alder_ast::DeriveKind::Hash)
+        );
+        assert_eq!(
+            implementations[4].synthetic,
+            Some(alder_ast::DeriveKind::Json)
+        );
+        assert!(matches!(
+            implementations[1].id.origin,
+            alder_ast::ImplOrigin::Derived {
+                type_ordinal: 0,
+                derive_index: 0
+            }
+        ));
+    }
+
+    #[test]
+    fn invalid_derive_arguments_are_structured() {
+        insta::assert_snapshot!(can_error("#[derive(Missing)]\nenum Status { Ready }"));
+        insta::assert_snapshot!(can_error("#[derive(\"Eq\")]\nenum Status { Ready }"));
+        insta::assert_snapshot!(can_error("#[derive(Eq, Eq)]\nenum Status { Ready }"));
+        insta::assert_snapshot!(can_error(
+            "#[derive(Eq)]\nenum Callback { Callback(fn() -> ()) }"
+        ));
+    }
+
+    #[test]
+    fn function_fields_do_not_receive_automatic_equality() {
+        let bump = Bump::new();
+        let result = can(&bump, "enum Callback { Callback(fn() -> ()) }");
+        assert!(
+            !result
+                .module
+                .items
+                .iter()
+                .any(|item| matches!(item.value.kind, ItemKind::Impl(_)))
+        );
     }
 
     #[test]

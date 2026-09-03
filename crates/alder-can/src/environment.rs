@@ -95,7 +95,7 @@ pub struct Env<'a> {
 }
 
 impl<'a> Env<'a> {
-    pub fn new(home: ModuleId<'a>) -> Self {
+    pub fn new(bump: &'a Bump, home: ModuleId<'a>) -> Self {
         let mut env = Self {
             home,
             scopes: vec![Scope::default()],
@@ -110,7 +110,7 @@ impl<'a> Env<'a> {
             next_use: Rc::new(Cell::new(0)),
         };
         env.add_builtin_types();
-        env.add_builtin_traits();
+        env.add_builtin_traits(bump);
         env.add_builtin_modules();
         env
     }
@@ -167,24 +167,121 @@ impl<'a> Env<'a> {
         }
     }
 
-    fn add_builtin_traits(&mut self) {
-        for name in ["Eq", "Ord", "Num"] {
+    fn add_builtin_traits(&mut self, bump: &'a Bump) {
+        for name in ["Show", "Eq", "Ord", "Hash", "Json", "Num"] {
+            let trait_id = alder_ast::TraitId(QualifiedName {
+                module: ModuleId {
+                    package: PackageId::Builtin,
+                    path: &[],
+                },
+                name,
+            });
+            let specifications: &[(&str, &[&str], &str)] = match name {
+                "Show" => &[("show", &["a"], "String")],
+                "Eq" => &[("eq", &["a", "a"], "Bool")],
+                "Ord" => &[
+                    ("lt", &["a", "a"], "Bool"),
+                    ("lte", &["a", "a"], "Bool"),
+                    ("gt", &["a", "a"], "Bool"),
+                    ("gte", &["a", "a"], "Bool"),
+                ],
+                "Hash" => &[("hash", &["a"], "Number")],
+                "Json" => &[("encode", &["a"], "String"), ("decode", &["String"], "a")],
+                "Num" => &[
+                    ("add", &["a", "a"], "a"),
+                    ("sub", &["a", "a"], "a"),
+                    ("mul", &["a", "a"], "a"),
+                    ("div", &["a", "a"], "a"),
+                    ("rem", &["a", "a"], "a"),
+                    ("negate", &["a"], "a"),
+                ],
+                _ => unreachable!(),
+            };
+            let methods = specifications
+                .iter()
+                .enumerate()
+                .map(|(index, (method_name, params, ret))| {
+                    let type_node = |name: &'a str| {
+                        bump.alloc(Located::at_zero(if name == "a" {
+                            Type::Var { name, args: &[] }
+                        } else {
+                            Type::Named {
+                                reference: QualifiedName {
+                                    module: ModuleId {
+                                        package: PackageId::Builtin,
+                                        path: &[],
+                                    },
+                                    name,
+                                },
+                                args: &[],
+                            }
+                        })) as &'a Located<Type<'a>>
+                    };
+                    let annotation = bump.alloc(Annotation {
+                        params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
+                            name: Located::at_zero("a"),
+                            kind: alder_ast::Kind::Type,
+                        }]),
+                        trait_predicates: &[],
+                        projection_equalities: &[],
+                        typ: bump.alloc(Located::at_zero(Type::Fn {
+                            params: bump.alloc_slice_fill_iter(
+                                params.iter().map(|parameter| type_node(parameter)),
+                            ),
+                            ret: if name == "Json" && *method_name == "decode" {
+                                bump.alloc(Located::at_zero(Type::Named {
+                                    reference: QualifiedName {
+                                        module: ModuleId {
+                                            package: PackageId::Builtin,
+                                            path: &[],
+                                        },
+                                        name: "Result",
+                                    },
+                                    args: bump
+                                        .alloc_slice_copy(&[type_node("a"), type_node("String")]),
+                                }))
+                            } else {
+                                type_node(ret)
+                            },
+                        })),
+                    });
+                    MethodBinding {
+                        id: MethodId {
+                            trait_: trait_id,
+                            index: index as u16,
+                            name: method_name,
+                        },
+                        annotation,
+                        region: Region::zero(),
+                        has_default: false,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let methods = bump.alloc_slice_copy(&methods);
             self.traits.insert(
                 name,
                 Candidate::Unique(TraitBinding {
-                    reference: QualifiedName {
-                        module: ModuleId {
-                            package: PackageId::Builtin,
-                            path: &[],
-                        },
-                        name,
-                    },
+                    reference: trait_id.0,
                     arity: 1,
                     region: Region::zero(),
                     associated_types: &[],
-                    methods: &[],
+                    methods,
                 }),
             );
+            for method in methods.iter() {
+                self.scopes[0].values.insert(
+                    method.id.name,
+                    ValueBinding {
+                        reference: ValueRef::TraitMethod {
+                            method: method.id,
+                            annotation: method.annotation,
+                        },
+                        region: Region::zero(),
+                        mutable: false,
+                        annotation: Some(method.annotation),
+                    },
+                );
+            }
         }
     }
 
@@ -244,7 +341,14 @@ impl<'a> Env<'a> {
         mutable: bool,
     ) -> Result<QualifiedName<'a>, Region> {
         if let Some(existing) = self.scopes[0].values.get(text) {
-            return Err(existing.region);
+            let shadows_builtin = matches!(
+                existing.reference,
+                ValueRef::TraitMethod { method, .. }
+                    if method.trait_.0.module.package == PackageId::Builtin
+            );
+            if !shadows_builtin {
+                return Err(existing.region);
+            }
         }
         let reference = QualifiedName {
             module: self.home,
@@ -367,7 +471,9 @@ impl<'a> Env<'a> {
         associated_types: &'a [AssocTypeId<'a>],
         methods: &'a [MethodBinding<'a>],
     ) -> Result<(), Region> {
-        if let Some(Candidate::Unique(existing)) = self.traits.get(text) {
+        if let Some(Candidate::Unique(existing)) = self.traits.get(text)
+            && existing.reference.module.package != PackageId::Builtin
+        {
             return Err(existing.region);
         }
         self.traits.insert(
@@ -541,7 +647,14 @@ impl<'a> Env<'a> {
 
     pub fn insert_trait_method(&mut self, binding: MethodBinding<'a>) -> Result<(), Region> {
         if let Some(existing) = self.scopes[0].values.get(binding.id.name) {
-            return Err(existing.region);
+            let shadows_builtin = matches!(
+                existing.reference,
+                ValueRef::TraitMethod { method, .. }
+                    if method.trait_.0.module.package == PackageId::Builtin
+            );
+            if !shadows_builtin {
+                return Err(existing.region);
+            }
         }
         self.scopes[0].values.insert(
             binding.id.name,
@@ -613,7 +726,9 @@ impl<'a> Env<'a> {
         region: Region,
         arity: usize,
     ) -> Result<QualifiedName<'a>, Region> {
-        if let Some(Candidate::Unique(existing)) = self.traits.get(text) {
+        if let Some(Candidate::Unique(existing)) = self.traits.get(text)
+            && existing.reference.module.package != PackageId::Builtin
+        {
             return Err(existing.region);
         }
         if let Some(Candidate::Unique(existing)) = self.types.get(text) {
@@ -936,10 +1051,14 @@ mod tests {
 
     #[test]
     fn local_ids_are_stable_and_unique() {
-        let mut env = Env::new(ModuleId {
-            package: PackageId::Application,
-            path: &[],
-        });
+        let bump = Bump::new();
+        let mut env = Env::new(
+            &bump,
+            ModuleId {
+                package: PackageId::Application,
+                path: &[],
+            },
+        );
         let x = env.insert_local("x", Region::one(), false).unwrap();
         env.push_scope();
         let inner_x = env.insert_local("x", Region::zero(), true).unwrap();
@@ -949,10 +1068,14 @@ mod tests {
 
     #[test]
     fn cloned_environments_share_id_allocators() {
-        let mut env = Env::new(ModuleId {
-            package: PackageId::Application,
-            path: &[],
-        });
+        let bump = Bump::new();
+        let mut env = Env::new(
+            &bump,
+            ModuleId {
+                package: PackageId::Application,
+                path: &[],
+            },
+        );
         let mut branch = env.clone();
 
         assert_eq!(env.fresh_use(), UseId(0));

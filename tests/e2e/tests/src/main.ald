@@ -1,21 +1,21 @@
 pub fn main() {}
 
-trait Show[a] {
-    fn show(value: a) -> String
+trait Display[a] {
+    fn display(value: a) -> String
 
     fn render(value: a) -> String {
-        show(value)
+        display(value)
     }
 }
 
-impl Show[Number] {
-    fn show(value: Number) -> String {
+impl Display[Number] {
+    fn display(value: Number) -> String {
         "number"
     }
 }
 
-fn describe(value: a) -> String where a: Show {
-    show(value)
+fn describe(value: a) -> String where a: Display {
+    display(value)
 }
 
 fn generic_equal(left: a, right: a) -> Bool where a: Eq {
@@ -45,6 +45,12 @@ fn ordered_equal(left: a, right: a) -> Bool where a: Ord {
 enum Maybe[a] {
     None,
     Some(a),
+}
+
+#[derive(Show, Ord, Hash, Json)]
+enum Phase {
+    Alpha,
+    Beta,
 }
 
 trait Mapper[f] {
@@ -82,6 +88,15 @@ test "higher-kinded trait dictionaries dispatch" {
         Maybe::Some(value) => value == 42,
         Maybe::None => false,
     }
+}
+
+test "derived dictionaries execute" {
+    assert Phase::Alpha == Phase::Alpha
+    assert Phase::Alpha < Phase::Beta
+    assert show(Phase::Alpha) == "Alpha"
+    assert hash(Phase::Alpha) == hash(Phase::Alpha)
+    let decoded = decode(encode(Phase::Beta))?
+    assert decoded == Phase::Beta
 }
 
 tests {
