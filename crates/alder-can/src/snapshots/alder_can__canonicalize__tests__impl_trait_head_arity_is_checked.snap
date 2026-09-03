@@ -1,0 +1,25 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(indoc::indoc!\n{r#\"\n            trait Convert[a, b] { fn convert(value: a) -> b }\n            impl Convert[Number] { fn convert(value: Number) -> Number { value } }\n        \"#})"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 6,
+            },
+            end: Position {
+                line: 2,
+                column: 13,
+            },
+        },
+        kind: Type(
+            BadArity {
+                name: "Convert",
+                expected: 2,
+                actual: 1,
+            },
+        ),
+    },
+]

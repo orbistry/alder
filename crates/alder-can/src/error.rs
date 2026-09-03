@@ -114,6 +114,16 @@ pub enum TypeError<'a> {
         name: &'a str,
         position: &'static str,
     },
+    UnknownImplItem {
+        trait_name: &'a str,
+        name: &'a str,
+        item_kind: &'static str,
+    },
+    MissingImplItem {
+        trait_name: &'a str,
+        name: &'a str,
+        item_kind: &'static str,
+    },
     InvalidHole,
 }
 

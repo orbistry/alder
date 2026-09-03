@@ -1,0 +1,25 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+expression: "can_error(indoc::indoc!\n{r#\"\n            trait Iterator[i] {\n                type Item\n                fn next(value: i) -> Item\n            }\n            impl Iterator[Number] {\n                fn next(value: Number) -> Number { value }\n            }\n        \"#})"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 5,
+                column: 1,
+            },
+            end: Position {
+                line: 7,
+                column: 2,
+            },
+        },
+        kind: Type(
+            MissingImplItem {
+                trait_name: "Iterator",
+                name: "Item",
+                item_kind: "associated type",
+            },
+        ),
+    },
+]

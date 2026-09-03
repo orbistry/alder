@@ -36,6 +36,12 @@ pub fn canonicalize_type<'a>(
         SourceType::Named { path, args } => {
             let last = path.segments.last().expect("source paths are nonempty");
             let qualifier = (path.segments.len() > 1).then(|| path.segments[0].value);
+            if qualifier.is_none()
+                && args.is_empty()
+                && let Some(projection) = env.find_associated_type(last.value)
+            {
+                return Ok(bump.alloc(Located::at(source.region, CanType::Projection(projection))));
+            }
             let binding = env
                 .find_type(bump, path.region(), qualifier, last.value)
                 .map_err(|error| vec![error])?;

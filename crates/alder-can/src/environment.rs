@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use alder_ast::{
     Annotation, AssocTypeId, ConstructorRef, Interface, InterfaceEnum, LocalId, LocalName,
-    MethodId, ModuleId, Namespace, PackageId, QualifiedName, Type, UseId, ValueRef, Variant,
-    VariantPayload,
+    MethodId, ModuleId, Namespace, PackageId, ProjectionType, QualifiedName, Type, UseId, ValueRef,
+    Variant, VariantPayload,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -54,6 +54,7 @@ pub struct MethodBinding<'a> {
     pub id: MethodId<'a>,
     pub annotation: &'a Annotation<'a>,
     pub region: Region,
+    pub has_default: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -87,6 +88,7 @@ pub struct Env<'a> {
     pub traits: BTreeMap<&'a str, Candidate<'a, TraitBinding<'a>>>,
     pub modules: BTreeMap<&'a str, Candidate<'a, ModuleBinding<'a>>>,
     pub providers: Vec<BTreeMap<&'a str, QualifiedName<'a>>>,
+    pub associated_types: Vec<BTreeMap<&'a str, ProjectionType<'a>>>,
     pub control: ControlContext,
     next_local: Rc<Cell<u32>>,
     next_use: Rc<Cell<u32>>,
@@ -102,6 +104,7 @@ impl<'a> Env<'a> {
             traits: BTreeMap::new(),
             modules: BTreeMap::new(),
             providers: Vec::new(),
+            associated_types: Vec::new(),
             control: ControlContext::default(),
             next_local: Rc::new(Cell::new(0)),
             next_use: Rc::new(Cell::new(0)),
@@ -533,6 +536,26 @@ impl<'a> Env<'a> {
             .copied()
     }
 
+    pub fn push_associated_types(
+        &mut self,
+        associated_types: BTreeMap<&'a str, ProjectionType<'a>>,
+    ) {
+        self.associated_types.push(associated_types);
+    }
+
+    pub fn pop_associated_types(&mut self) {
+        self.associated_types
+            .pop()
+            .expect("associated type scope exists");
+    }
+
+    pub fn find_associated_type(&self, name: &str) -> Option<ProjectionType<'a>> {
+        self.associated_types
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name).copied())
+    }
+
     pub fn register_enum(
         &mut self,
         reference: QualifiedName<'a>,
@@ -606,6 +629,7 @@ impl<'a> Env<'a> {
                             id: method.id,
                             annotation: method.scheme,
                             region,
+                            has_default: method.has_default,
                         }
                     })),
                 });

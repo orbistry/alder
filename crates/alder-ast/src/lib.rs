@@ -353,10 +353,18 @@ pub struct TraitFn<'a> {
 
 #[derive(Debug)]
 pub struct ImplDecl<'a> {
+    pub id: ImplId<'a>,
     pub trait_: QualifiedName<'a>,
     pub args: &'a [Node<'a, Type<'a>>],
+    pub trait_ref: TraitRef<'a>,
+    pub params: &'a [TypeParam<'a>],
     pub constraints: &'a [TypeConstraint<'a>],
+    pub trait_predicates: &'a [TraitRef<'a>],
+    pub projection_equalities: &'a [ProjectionEquality<'a>],
+    pub assoc_bindings: &'a [AssocBinding<'a>],
     pub items: &'a [ImplItem<'a>],
+    pub synthetic: Option<DeriveKind>,
+    pub region: Region,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -370,10 +378,12 @@ pub enum ImplItem<'a> {
 
 #[derive(Debug)]
 pub struct ImplFn<'a> {
+    pub method: MethodId<'a>,
     pub name: Name<'a>,
     pub params: &'a [Param<'a>],
     pub ret: Option<Node<'a, Type<'a>>>,
     pub constraints: &'a [TypeConstraint<'a>],
+    pub scheme: &'a Annotation<'a>,
     pub body: Node<'a, Block<'a>>,
 }
 
