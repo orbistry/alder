@@ -2,11 +2,12 @@
 //!
 //! Each module runs Elm's full pipeline: parse -> canonicalize ->
 //! constrain -> solve -> `Interface::from_module` with the solver's
-//! annotations. Modules compile in dependency order, and each solved
-//! module's interface is deep-copied into a build-wide arena so dependents
-//! canonicalize their imports against it. Dependency interfaces are copied
-//! back into each module arena before use, so no phase borrows another
-//! module's allocation. Interfaces only ever exist for type-solved modules.
+//! annotations. A discovery pass collects canonical type/trait/impl headers
+//! package-wide and provisionally solves inferred value interfaces needed by
+//! dependents. Every body is then compiled against the same frozen closure.
+//! Headers and solved interfaces are deep-copied into a build-wide arena and
+//! copied back into each module arena before use, so no phase borrows another
+//! module's allocation.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -85,6 +86,11 @@ struct CompileOutput {
     artifact: Option<alder_codegen::EmittedModule>,
 }
 
+struct InterfaceOutput<'a> {
+    interface: Option<Interface<'a>>,
+    solved: bool,
+}
+
 /// Compile all modules through the full pipeline, in dependency order.
 ///
 /// The async part only fetches sources; the CPU-bound compilation runs on
@@ -107,53 +113,64 @@ pub async fn build_with_mode(
         .expect("compile task panicked")
 }
 
-/// Compile modules in dependency order, retrying failures after new package
-/// interfaces become available. The retry pass makes sibling-module instance
-/// visibility independent of the arbitrary order within a graph level.
+/// Discover every canonical package header, then compile all bodies against
+/// that frozen header/interface closure. Provisional solving supplies inferred
+/// value interfaces needed by downstream canonicalization; a body failure does
+/// not prevent its valid type, trait, and impl headers from entering the
+/// package-wide coherence check.
 ///
 /// Type checking is inherently dependency-ordered, so within-build
 /// parallelism is limited to source fetching for now.
 fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> BuildResult {
-    // This arena owns only solved public interfaces. Every source module and
-    // all of its phase-local ASTs use a separate arena in `compile_module`.
+    // This arena owns canonical package headers and solved public interfaces.
+    // Every source module and all phase-local ASTs use a separate arena in
+    // `compile_module`.
     let store = Bump::new();
     let mut interfaces: Vec<Interface<'_>> = Vec::new();
+
+    let total = sources.len();
+    let mut solved_interfaces = vec![false; total];
+
+    loop {
+        let mut progress = false;
+        for index in 0..total {
+            if solved_interfaces[index] {
+                continue;
+            }
+            let (uri, source) = &sources[index];
+            let (_, discovered) =
+                compile_module(uri, source, &store, &interfaces, BuildMode::Check);
+            if let Some(interface) = discovered.interface {
+                let existing = interfaces
+                    .iter()
+                    .position(|candidate| candidate.home == interface.home);
+                if let Some(existing) = existing {
+                    if discovered.solved && !solved_interfaces[index] {
+                        interfaces[existing] = interface;
+                        progress = true;
+                    }
+                } else {
+                    interfaces.push(interface);
+                    progress = true;
+                }
+                solved_interfaces[index] = discovered.solved;
+            }
+        }
+        if !progress {
+            break;
+        }
+    }
 
     let mut results: HashMap<Url, ModuleResult> = HashMap::new();
     let mut all_warnings: Vec<Diagnostic> = Vec::new();
     let mut artifacts = HashMap::new();
-    let total = sources.len();
-    let mut pending = (0..total).collect::<Vec<_>>();
-    let mut failures = HashMap::new();
-
-    loop {
-        let mut next = Vec::new();
-        let mut progress = false;
-        for index in pending {
-            let (uri, source) = &sources[index];
-            let (output, interface) = compile_module(uri, source, &store, &interfaces, mode);
-            if let Some(interface) = interface {
-                progress = true;
-                interfaces.push(interface);
-                failures.remove(&output.uri);
-                all_warnings.extend(output.warnings);
-                if let Some(artifact) = output.artifact {
-                    artifacts.insert(output.uri.clone(), artifact);
-                }
-                results.insert(output.uri, output.result);
-            } else {
-                failures.insert(output.uri, output.result);
-                next.push(index);
-            }
+    for (uri, source) in &sources {
+        let (output, _) = compile_module(uri, source, &store, &interfaces, mode);
+        all_warnings.extend(output.warnings);
+        if let Some(artifact) = output.artifact {
+            artifacts.insert(output.uri.clone(), artifact);
         }
-        if next.is_empty() {
-            break;
-        }
-        if !progress {
-            results.extend(failures);
-            break;
-        }
-        pending = next;
+        results.insert(output.uri, output.result);
     }
 
     let success = results
@@ -218,7 +235,7 @@ fn compile_module<'s>(
     store: &'s Bump,
     interfaces: &[Interface<'s>],
     mode: BuildMode,
-) -> (CompileOutput, Option<Interface<'s>>) {
+) -> (CompileOutput, InterfaceOutput<'s>) {
     let report_source = Source::new(
         uri.path(),
         source.as_ref().map_or("", String::as_str).to_owned(),
@@ -231,7 +248,10 @@ fn compile_module<'s>(
                 warnings: vec![],
                 artifact: None,
             },
-            None,
+            InterfaceOutput {
+                interface: None,
+                solved: false,
+            },
         )
     };
 
@@ -251,24 +271,65 @@ fn compile_module<'s>(
 
     let home = module_id_from_uri(&module_arena, uri);
     let imports = resolve_imports(&module_arena, &module);
-    let interfaces = module_arena.alloc_slice_fill_iter(
-        interfaces
-            .iter()
-            .map(|interface| alder_ast::copy_interface(&module_arena, interface)),
-    );
+    let interfaces = interfaces
+        .iter()
+        .filter(|interface| interface.home != home)
+        .map(|interface| alder_ast::copy_interface(&module_arena, interface))
+        .collect::<Vec<_>>();
+    let interfaces = module_arena.alloc_slice_copy(&interfaces);
     let context = alder_can::Context {
         home,
         imports,
         interfaces,
     };
+    let header_result = alder_can::canonicalize_headers(&module_arena, context, &module).ok();
+    let header_interface = header_result
+        .as_ref()
+        .map(|result| alder_can::headers_from_module(&module_arena, result.module))
+        .map(|interface| alder_ast::copy_interface(store, &interface));
+    if let Some(header) = &header_result {
+        let database = alder_solve::TraitDatabase::build(&module_arena, header.module, interfaces);
+        let coherence = database
+            .validate(&module_arena)
+            .into_iter()
+            .filter(|error| coherence_belongs_to(error, home))
+            .collect::<Vec<_>>();
+        if !coherence.is_empty() {
+            let diagnostics = coherence
+                .iter()
+                .map(|error| {
+                    crate::report::solve(
+                        report_source.clone(),
+                        header.module,
+                        &alder_solve::SolveError::Coherence(error.clone()),
+                    )
+                })
+                .collect();
+            let (output, _) = failed(diagnostics);
+            return (
+                output,
+                InterfaceOutput {
+                    interface: header_interface,
+                    solved: false,
+                },
+            );
+        }
+    }
     let can_result = match alder_can::canonicalize(&module_arena, context, &module) {
         Ok(can_result) => can_result,
         Err(errors) => {
-            return failed(
+            let (output, _) = failed(
                 errors
                     .iter()
                     .map(|error| crate::report::canonicalize(report_source.clone(), error))
                     .collect(),
+            );
+            return (
+                output,
+                InterfaceOutput {
+                    interface: header_interface,
+                    solved: false,
+                },
             );
         }
     };
@@ -278,19 +339,31 @@ fn compile_module<'s>(
         .map(|warning| crate::report::warning(report_source.clone(), warning))
         .collect();
 
+    let header_interface = header_interface.unwrap_or_else(|| {
+        let interface = alder_can::headers_from_module(&module_arena, can_result.module);
+        alder_ast::copy_interface(store, &interface)
+    });
+
     let constraint = alder_constrain::constrain(&module_arena, can_result.module);
     let trait_database =
         alder_solve::TraitDatabase::build(&module_arena, can_result.module, interfaces);
     let solved = match alder_solve::solve(&module_arena, &constraint, &trait_database) {
         Ok(solved) => solved,
         Err(errors) => {
-            return failed(
+            let (output, _) = failed(
                 errors
                     .iter()
                     .map(|error| {
                         crate::report::solve(report_source.clone(), can_result.module, error)
                     })
                     .collect(),
+            );
+            return (
+                output,
+                InterfaceOutput {
+                    interface: Some(header_interface),
+                    solved: false,
+                },
             );
         }
     };
@@ -310,7 +383,14 @@ fn compile_module<'s>(
             match alder_codegen::emit_solved_module(can_result.module, &solved, options) {
                 Ok(artifact) => Some(artifact),
                 Err(error) => {
-                    return failed(vec![crate::report::codegen(report_source, &error)]);
+                    let (output, _) = failed(vec![crate::report::codegen(report_source, &error)]);
+                    return (
+                        output,
+                        InterfaceOutput {
+                            interface: Some(header_interface),
+                            solved: false,
+                        },
+                    );
                 }
             }
         }
@@ -325,8 +405,28 @@ fn compile_module<'s>(
             warnings,
             artifact,
         },
-        Some(alder_ast::copy_interface(store, &module_interface)),
+        InterfaceOutput {
+            interface: Some(alder_ast::copy_interface(store, &module_interface)),
+            solved: true,
+        },
     )
+}
+
+fn coherence_belongs_to(error: &alder_solve::CoherenceError<'_>, home: ModuleId<'_>) -> bool {
+    match error {
+        alder_solve::CoherenceError::SuperclassCycle { traits } => {
+            traits.iter().any(|trait_| trait_.0.module == home)
+        }
+        alder_solve::CoherenceError::OrphanImpl { implementation, .. }
+        | alder_solve::CoherenceError::InvalidTermination { implementation, .. }
+        | alder_solve::CoherenceError::KindMismatch { implementation, .. }
+        | alder_solve::CoherenceError::ProjectionCycle { implementation, .. } => {
+            implementation.module == home
+        }
+        alder_solve::CoherenceError::OverlappingImpl { first, second, .. } => {
+            first.module == home || second.module == home
+        }
+    }
 }
 
 fn module_id_from_uri<'a>(bump: &'a Bump, uri: &Url) -> ModuleId<'a> {
@@ -760,6 +860,47 @@ mod tests {
         );
 
         assert!(result.is_success(), "{:?}", result.modules[&consumer]);
+    }
+
+    #[test]
+    fn package_coherence_uses_headers_from_modules_with_broken_bodies() {
+        let model = url("project/src/model.ald");
+        let first = url("project/src/first.ald");
+        let second = url("project/src/second.ald");
+        let result = build_sync(
+            vec![
+                (
+                    model,
+                    Ok("pub enum Token { Token }\npub trait Display[a] { fn display(value: a) -> String }".to_owned()),
+                ),
+                (
+                    first.clone(),
+                    Ok(indoc::indoc! {r#"
+                        import ~/model.{ Token, Display }
+                        impl Display[Token] { fn display(value: Token) -> String { "first" } }
+                        fn broken() { missing_first }
+                    "#}.to_owned()),
+                ),
+                (
+                    second.clone(),
+                    Ok(indoc::indoc! {r#"
+                        import ~/model.{ Token, Display }
+                        impl Display[Token] { fn display(value: Token) -> String { "second" } }
+                        fn broken() { missing_second }
+                    "#}.to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+        );
+
+        for module in [first, second] {
+            let ModuleResult::Failed { diagnostics } = &result.modules[&module] else {
+                panic!("overlapping package instances must fail every defining module");
+            };
+            assert!(diagnostics.iter().any(|diagnostic| {
+                diagnostic.message() == "overlapping implementations of `Display` are not allowed"
+            }));
+        }
     }
 
     /// Unannotated mutually recursive exports used from another module:

@@ -69,6 +69,10 @@ static resolution wherever the type is known.
   field. Evidence is retained through nested builtin containers, and generated
   Eq dictionaries are initialized before dictionaries that use them as a
   superclass.
+- Package builds run a header-only canonicalization pass that skips value,
+  default-method, and implementation-method bodies. Canonical headers survive
+  body failures, and a final body pass uses the same complete package header
+  closure for coherence and instance resolution.
 
 ## Open decisions (recommendation in bold)
 

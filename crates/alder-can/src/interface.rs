@@ -14,6 +14,21 @@ pub fn from_module<'a>(
     module: &'a Module<'a>,
     annotations: &Annotations<'a>,
 ) -> Interface<'a> {
+    interface_from_module(bump, module, Some(annotations))
+}
+
+/// Build the canonical declaration header used while collecting a package's
+/// complete trait database. Value bindings are omitted until their inferred
+/// schemes are available, while types, traits, and impl heads are complete.
+pub fn headers_from_module<'a>(bump: &'a Bump, module: &'a Module<'a>) -> Interface<'a> {
+    interface_from_module(bump, module, None)
+}
+
+fn interface_from_module<'a>(
+    bump: &'a Bump,
+    module: &'a Module<'a>,
+    annotations: Option<&Annotations<'a>>,
+) -> Interface<'a> {
     let mut values = Vec::new();
     let mut types = Vec::new();
     let mut enums = Vec::new();
@@ -25,42 +40,56 @@ pub fn from_module<'a>(
     for item in module.items {
         let public = matches!(item.value.visibility, Visibility::Public(_));
         match &item.value.kind {
-            ItemKind::Fn(function) => value(
-                annotations,
-                public,
-                function.name,
-                ValueKind::Function,
-                &mut values,
-                &mut private_names,
-            ),
-            ItemKind::Let(decl) => {
-                for binding in decl.bindings {
+            ItemKind::Fn(function) => {
+                if let Some(annotations) = annotations {
                     value(
                         annotations,
                         public,
-                        *binding,
-                        ValueKind::Let,
+                        function.name,
+                        ValueKind::Function,
                         &mut values,
                         &mut private_names,
                     );
                 }
             }
-            ItemKind::Component(component) => value(
-                annotations,
-                public,
-                component.name,
-                ValueKind::Component,
-                &mut values,
-                &mut private_names,
-            ),
-            ItemKind::Extern(alder_ast::ExternDecl::Fn { name, .. }) => value(
-                annotations,
-                public,
-                *name,
-                ValueKind::Extern,
-                &mut values,
-                &mut private_names,
-            ),
+            ItemKind::Let(decl) => {
+                if let Some(annotations) = annotations {
+                    for binding in decl.bindings {
+                        value(
+                            annotations,
+                            public,
+                            *binding,
+                            ValueKind::Let,
+                            &mut values,
+                            &mut private_names,
+                        );
+                    }
+                }
+            }
+            ItemKind::Component(component) => {
+                if let Some(annotations) = annotations {
+                    value(
+                        annotations,
+                        public,
+                        component.name,
+                        ValueKind::Component,
+                        &mut values,
+                        &mut private_names,
+                    );
+                }
+            }
+            ItemKind::Extern(alder_ast::ExternDecl::Fn { name, .. }) => {
+                if let Some(annotations) = annotations {
+                    value(
+                        annotations,
+                        public,
+                        *name,
+                        ValueKind::Extern,
+                        &mut values,
+                        &mut private_names,
+                    );
+                }
+            }
             ItemKind::TypeAlias(alias) => {
                 if public {
                     types.push(InterfaceType {

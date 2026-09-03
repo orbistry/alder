@@ -40,6 +40,25 @@ pub fn canonicalize<'a>(
     context: Context<'a>,
     source: &SourceModule<'a>,
 ) -> Result<CanResult<'a>, Vec<Error<'a>>> {
+    canonicalize_mode(bump, context, source, false)
+}
+
+/// Canonicalize only declarations needed by package-wide trait collection.
+/// Value and default/implementation method bodies are deliberately skipped.
+pub fn canonicalize_headers<'a>(
+    bump: &'a Bump,
+    context: Context<'a>,
+    source: &SourceModule<'a>,
+) -> Result<CanResult<'a>, Vec<Error<'a>>> {
+    canonicalize_mode(bump, context, source, true)
+}
+
+fn canonicalize_mode<'a>(
+    bump: &'a Bump,
+    context: Context<'a>,
+    source: &SourceModule<'a>,
+    headers_only: bool,
+) -> Result<CanResult<'a>, Vec<Error<'a>>> {
     let mut env = Env::new(bump, context.home);
     let mut errors = load_imports(bump, &mut env, context.imports, context.interfaces);
     errors.extend(predeclare(&mut env, source));
@@ -55,7 +74,17 @@ pub fn canonicalize<'a>(
         if matches!(item.value.kind, SourceItemKind::Import(_)) {
             continue;
         }
-        match canonicalize_item(bump, &mut env, item, &enums, item_ordinal as u32) {
+        if headers_only && !is_header_item(&item.value.kind) {
+            continue;
+        }
+        match canonicalize_item(
+            bump,
+            &mut env,
+            item,
+            &enums,
+            item_ordinal as u32,
+            !headers_only,
+        ) {
             Ok(canonical_item) => {
                 items.push(canonical_item);
                 if let ItemKind::Enum(enum_) = &canonical_item.value.kind {
@@ -188,6 +217,20 @@ pub fn canonicalize<'a>(
         module,
         warnings: &[],
     })
+}
+
+fn is_header_item(item: &SourceItemKind<'_>) -> bool {
+    matches!(
+        item,
+        SourceItemKind::TypeAlias(_)
+            | SourceItemKind::OpaqueType(_)
+            | SourceItemKind::Enum(_)
+            | SourceItemKind::Trait(_)
+            | SourceItemKind::Impl(_)
+            | SourceItemKind::Error(_)
+            | SourceItemKind::Table(_)
+            | SourceItemKind::Schema(_)
+    )
 }
 
 fn enum_supports_structural_derive(enum_: &EnumDecl<'_>) -> bool {
@@ -1269,6 +1312,7 @@ fn canonicalize_item<'a>(
     item: &'a Located<SourceItem<'a>>,
     enums: &BTreeMap<&'a str, &'a EnumDecl<'a>>,
     item_ordinal: u32,
+    include_bodies: bool,
 ) -> Result<&'a Located<Item<'a>>, Vec<Error<'a>>> {
     let visibility = match item.value.visibility {
         alder_source::Visibility::Private => Visibility::Private,
@@ -1350,13 +1394,16 @@ fn canonicalize_item<'a>(
             }))
         }
         SourceItemKind::Enum(decl) => ItemKind::Enum(enums[decl.name.value]),
-        SourceItemKind::Trait(decl) => ItemKind::Trait(canonicalize_trait(bump, env, decl)?),
+        SourceItemKind::Trait(decl) => {
+            ItemKind::Trait(canonicalize_trait(bump, env, decl, include_bodies)?)
+        }
         SourceItemKind::Impl(decl) => ItemKind::Impl(canonicalize_impl(
             bump,
             env,
             decl,
             item_ordinal,
             item.region,
+            include_bodies,
         )?),
         SourceItemKind::Error(decl) => {
             ItemKind::ErrorGroup(canonicalize_error_group(bump, env, decl)?)
@@ -1407,6 +1454,7 @@ fn canonicalize_item<'a>(
                     nested,
                     &nested_enums,
                     nested_ordinal as u32,
+                    true,
                 )?);
             }
             ItemKind::Tests(bump.alloc_slice_copy(&canonical))
@@ -1439,6 +1487,7 @@ fn canonicalize_trait<'a>(
     bump: &'a Bump,
     env: &mut Env<'a>,
     source: &'a alder_source::TraitDecl<'a>,
+    include_bodies: bool,
 ) -> Result<&'a TraitDecl<'a>, Vec<Error<'a>>> {
     let variables: BTreeSet<_> = source.params.iter().map(|param| param.value).collect();
     let binding = env
@@ -1516,7 +1565,12 @@ fn canonicalize_trait<'a>(
             items.push(match item {
                 alder_source::TraitItem::AssocType(name) => TraitItem::AssocType(*name),
                 alder_source::TraitItem::Fn(function) => TraitItem::Fn(canonicalize_trait_fn(
-                    bump, env, function, &variables, name.name,
+                    bump,
+                    env,
+                    function,
+                    &variables,
+                    name.name,
+                    include_bodies,
                 )?),
             });
         }
@@ -1589,6 +1643,7 @@ fn canonicalize_trait_fn<'a>(
     source: &'a alder_source::FnDecl<'a>,
     trait_variables: &BTreeSet<&'a str>,
     trait_name: &'a str,
+    include_body: bool,
 ) -> Result<&'a TraitFn<'a>, Vec<Error<'a>>> {
     let mut variables = trait_variables.clone();
     variables.extend(signature_variables(source));
@@ -1607,10 +1662,22 @@ fn canonicalize_trait_fn<'a>(
             .transpose()?;
         env.control.task_return = ret.is_some_and(is_task_type);
         let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
-        let body = source
-            .body
-            .map(|body| canonicalize_block(bump, env, body))
-            .transpose()?;
+        let body = if include_body {
+            source
+                .body
+                .map(|body| canonicalize_block(bump, env, body))
+                .transpose()?
+        } else {
+            source.body.map(|body| {
+                bump.alloc(Located::at(
+                    body.region,
+                    alder_ast::Block {
+                        statements: &[],
+                        tail: None,
+                    },
+                )) as &Located<alder_ast::Block<'a>>
+            })
+        };
         Ok(bump.alloc(TraitFn {
             id: method.id,
             name: source.name,
@@ -1632,6 +1699,7 @@ fn canonicalize_impl<'a>(
     source: &'a alder_source::ImplDecl<'a>,
     item_ordinal: u32,
     region: Region,
+    include_bodies: bool,
 ) -> Result<&'a ImplDecl<'a>, Vec<Error<'a>>> {
     let trait_name = source
         .trait_
@@ -1764,7 +1832,12 @@ fn canonicalize_impl<'a>(
                         )]);
                     };
                     ImplItem::Fn(canonicalize_impl_fn(
-                        bump, env, function, &variables, method,
+                        bump,
+                        env,
+                        function,
+                        &variables,
+                        method,
+                        include_bodies,
                     )?)
                 }
             });
@@ -1826,6 +1899,7 @@ fn canonicalize_impl_fn<'a>(
     source: &'a alder_source::FnDecl<'a>,
     impl_variables: &BTreeSet<&'a str>,
     method: MethodBinding<'a>,
+    include_body: bool,
 ) -> Result<&'a ImplFn<'a>, Vec<Error<'a>>> {
     let mut variables = impl_variables.clone();
     variables.extend(signature_variables(source));
@@ -1850,7 +1924,17 @@ fn canonicalize_impl_fn<'a>(
                 }),
             )]);
         };
-        let body = canonicalize_block(bump, env, body)?;
+        let body = if include_body {
+            canonicalize_block(bump, env, body)?
+        } else {
+            bump.alloc(Located::at(
+                body.region,
+                alder_ast::Block {
+                    statements: &[],
+                    tail: None,
+                },
+            ))
+        };
         Ok(bump.alloc(ImplFn {
             method: method.id,
             name: source.name,
@@ -2567,6 +2651,34 @@ mod tests {
             "{:#?}",
             canonicalize(&bump, context(), &source).unwrap_err()
         )
+    }
+
+    #[test]
+    fn header_canonicalization_skips_value_and_method_bodies() {
+        let bump = Bump::new();
+        let source_text = bump.alloc_str(indoc::indoc! {r#"
+            trait Show[a] {
+                fn show(value: a) -> String { missing_default }
+            }
+            impl Show[Number] {
+                fn show(value: Number) -> String { missing_impl }
+            }
+            fn broken() { missing_value }
+        "#});
+        let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
+        let result = canonicalize_headers(&bump, context(), &source)
+            .expect("valid headers do not depend on body name resolution");
+
+        assert_eq!(result.module.items.len(), 2);
+        assert!(matches!(
+            result.module.items[0].value.kind,
+            ItemKind::Trait(_)
+        ));
+        assert!(matches!(
+            result.module.items[1].value.kind,
+            ItemKind::Impl(_)
+        ));
+        assert!(canonicalize(&bump, context(), &source).is_err());
     }
 
     #[test]

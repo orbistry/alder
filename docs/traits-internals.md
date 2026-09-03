@@ -519,6 +519,16 @@ types. The driver performs:
 8. Build solved public interfaces and defensively repeat coherence validation
    over the final linked closure.
 
+The current driver realizes this as a discovery fixed point followed by a
+final body pass. `canonicalize_headers` runs ordinary declaration/import/type
+validation but omits value items and substitutes empty, region-preserving
+blocks for trait defaults and impl methods. Each header is copied immediately
+to the build arena, even when full body canonicalization or solving fails.
+Provisional successful solves contribute inferred public value schemes needed
+to discover downstream headers. Once no header or solved interface changes,
+the driver recompiles every module against that identical frozen closure and
+runs coherence before body canonicalization can mask a package error.
+
 Header defaults carry only `has_default` and a deterministic symbol. The
 default body is canonicalized later with ordinary local IDs and combined with
 the matching method header to produce the final `TraitMethod`.
