@@ -1241,6 +1241,96 @@ mod tests {
         assert!(result.is_success());
     }
 
+    #[test]
+    fn trait_methods_support_every_import_form_across_interfaces() {
+        let traits = url("project/src/traits.ald");
+        let qualified = url("project/src/qualified.ald");
+        let named = url("project/src/named.ald");
+        let open = url("project/src/open.ald");
+        let trait_qualified = url("project/src/trait_qualified.ald");
+        let result = build_sync(
+            vec![
+                (
+                    traits,
+                    Ok(indoc::indoc! {r#"
+                        pub trait Display[a] { fn display(value: a) -> String }
+                        impl Display[Number] {
+                            fn display(value: Number) -> String { "number" }
+                        }
+                    "#}.to_owned()),
+                ),
+                (
+                    qualified.clone(),
+                    Ok("import ~/traits\npub fn render() -> String { traits.display(1) }".to_owned()),
+                ),
+                (
+                    named.clone(),
+                    Ok("import ~/traits.{ display }\npub fn render() -> String { display(1) }".to_owned()),
+                ),
+                (
+                    open.clone(),
+                    Ok("import ~/traits.*\npub fn render() -> String { display(1) }".to_owned()),
+                ),
+                (
+                    trait_qualified.clone(),
+                    Ok("import ~/traits.{ Display }\npub fn render() -> String { Display::display(1) }".to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+
+        for module in [qualified, named, open, trait_qualified] {
+            assert!(
+                matches!(result.modules[&module], ModuleResult::Success { .. }),
+                "{module} did not compile: {:?}",
+                result.modules[&module]
+            );
+        }
+    }
+
+    #[test]
+    fn colliding_open_imported_trait_methods_render_their_source() {
+        let source = indoc::indoc! {r#"
+            import ~/first.*
+            import ~/second.*
+            pub fn main() -> String { render(1) }
+        "#};
+        let consumer = url("project/src/main.ald");
+        let result = build_sync(
+            vec![
+                (
+                    url("project/src/first.ald"),
+                    Ok(indoc::indoc! {r#"
+                        pub trait First[a] { fn render(value: a) -> String }
+                        impl First[Number] {
+                            fn render(value: Number) -> String { "first" }
+                        }
+                    "#}
+                    .to_owned()),
+                ),
+                (
+                    url("project/src/second.ald"),
+                    Ok(indoc::indoc! {r#"
+                        pub trait Second[a] { fn render(value: a) -> String }
+                        impl Second[Number] {
+                            fn render(value: Number) -> String { "second" }
+                        }
+                    "#}
+                    .to_owned()),
+                ),
+                (consumer.clone(), Ok(source.to_owned())),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&consumer] else {
+            panic!("colliding trait methods must fail the importing module")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
     #[tokio::test]
     async fn named_package_identity_applies_to_modules_local_imports_and_indexes() {
         let mem = InMemorySource::new();
