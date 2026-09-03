@@ -791,8 +791,26 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     expr: self.js.call(tag, arguments),
                 }
             }
-            Expr::Var { reference, .. } => {
-                let expression = self.reference(*reference);
+            Expr::Var { use_id, reference } => {
+                let action = self
+                    .solved
+                    .and_then(|solved| solved.uses.get(use_id))
+                    .cloned();
+                let expression = match action {
+                    Some(UseAction::Reference {
+                        dictionaries,
+                        method: Some(method),
+                    }) if !dictionaries.is_empty() => {
+                        let dictionary = self.evidence(&dictionaries[0]);
+                        let method = self.js.member(dictionary, method.name);
+                        self.bind_evidence(method, &dictionaries[1..])
+                    }
+                    Some(UseAction::Reference { dictionaries, .. }) => {
+                        let reference = self.reference(*reference);
+                        self.bind_evidence(reference, &dictionaries)
+                    }
+                    _ => self.reference(*reference),
+                };
                 self.pure(expression)
             }
             Expr::Constructor(constructor) => {
@@ -848,6 +866,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
                             dictionaries[1..].to_vec(),
                         ))
                     }
+                    Some(UseAction::DirectCall {
+                        dictionaries,
+                        target: Some(DirectTarget::Binding(binding)),
+                        ..
+                    }) if !dictionaries.is_empty() => Some((
+                        self.js.vec(),
+                        self.reference(ValueRef::TopLevel(*binding)),
+                        dictionaries.clone(),
+                    )),
                     Some(UseAction::DirectCall { dictionaries, .. }) => {
                         let function = self.expr(function)?;
                         Some((function.prefix, function.expr, dictionaries.clone()))
@@ -2208,6 +2235,25 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 .assignment(target, AssignmentOperator::Assign, value);
             body.push(self.js.expression_statement(assignment));
         }
+    }
+
+    fn bind_evidence(
+        &mut self,
+        function: Expression<'js>,
+        dictionaries: &[Evidence<'src>],
+    ) -> Expression<'js> {
+        if dictionaries.is_empty() {
+            return function;
+        }
+        let bind = self.js.member(function, "bind");
+        let mut arguments = self.js.vec();
+        arguments.push(self.js.undefined());
+        arguments.extend(
+            dictionaries
+                .iter()
+                .map(|dictionary| self.evidence(dictionary)),
+        );
+        self.js.call(bind, arguments)
     }
 
     fn intrinsic_dictionary(&self, intrinsic: Intrinsic) -> Expression<'js> {

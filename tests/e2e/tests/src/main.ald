@@ -18,6 +18,10 @@ fn describe(value: a) -> String where a: Display {
     display(value)
 }
 
+fn invoke_display(function: fn(Number) -> String) -> String {
+    function(42)
+}
+
 fn recursive_left(value: a) -> String where a: Display {
     recursive_right(value)
 }
@@ -125,6 +129,8 @@ test "arithmetic works" {
 
 test "trait dictionaries dispatch" {
     assert describe(1) == "number"
+    assert invoke_display(describe) == "number"
+    assert invoke_display(display) == "number"
     assert render(1) == "number"
     assert recursive_left(1) == "number"
 }
