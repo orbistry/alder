@@ -443,6 +443,18 @@ mod tests {
     }
 
     #[test]
+    fn mutually_recursive_defaults_use_the_selected_dictionary() {
+        assert_solved_emit_snapshot! {r#"
+            trait Alternate[a] {
+                fn first(value: a) -> String { second(value) }
+                fn second(value: a) -> String { first(value) }
+            }
+            impl Alternate[Number] {}
+            pub fn render(value: Number) -> String { first(value) }
+        "#};
+    }
+
+    #[test]
     fn built_in_derive_dictionaries() {
         assert_emit_snapshot! {r#"
             #[derive(Show, Ord, Hash, Json)]

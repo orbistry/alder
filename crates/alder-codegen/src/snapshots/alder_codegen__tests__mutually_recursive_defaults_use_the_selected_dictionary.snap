@@ -1,0 +1,28 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "trait Alternate[a] {\n    fn first(value: a) -> String { second(value) }\n    fn second(value: a) -> String { first(value) }\n}\nimpl Alternate[Number] {}\npub fn render(value: Number) -> String { first(value) }\n"
+---
+function $default$Alternate$first($self, $a0) {
+	let $l0_value = $a0;
+	const $t0 = $self["second"];
+	return $t0($l0_value);
+}
+function $default$Alternate$second($self, $a0) {
+	let $l1_value = $a0;
+	const $t1 = $self["first"];
+	return $t1($l1_value);
+}
+const $dict$Alternate$1 = {};
+$dict$Alternate$1["first"] = ($a0) => {
+	return $default$Alternate$first($dict$Alternate$1, $a0);
+};
+$dict$Alternate$1["second"] = ($a0) => {
+	return $default$Alternate$second($dict$Alternate$1, $a0);
+};
+Object["freeze"]($dict$Alternate$1);
+function $v_render($a0) {
+	let $l2_value = $a0;
+	const $t2 = $dict$Alternate$1["first"];
+	return $t2($l2_value);
+}
+export { $default$Alternate$first, $default$Alternate$second, $dict$Alternate$1, $v_render as render };
