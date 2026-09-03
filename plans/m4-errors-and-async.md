@@ -1,147 +1,178 @@
 # M4: Errors, async, and context
 
-Three features that share the type system's row machinery and the
-runtime's scheduler: open error rows on `Result`, inferred `Task` from
-`.await` running on generator-based fibers, and `use`/`provide` context
-resolved at compile time.
+M4 has three related effect-like features: structural error rows on
+`Result`, inferred `Task` functions, and compile-time-tracked context.
+They share propagation ideas, but they do not share one undifferentiated
+runtime or solver representation. Error rows land first as a complete
+vertical slice; async and context follow without weakening that slice.
 
-## Starting state
+## Audited starting state (2026-09-03)
 
-- M2: `Err(:tag(x))` gets a free error type variable; `.await` is typed
-  `Task[a] -> a` with the enclosing function required to declare `Task`;
-  `.await` compiles to JS `await` in an `async` function; `use`/`provide`
-  are opaque.
-- M3: traits exist (`Task` will get `Functor`/`Monad` instances).
-- Parser: `:tag(args)` in expressions and patterns, `error` groups,
-  `[:tag(A) | r]` error rows in types, `Result[a]` shorthand, `provide`
-  as an expression (M2b).
+- The parser and source/canonical ASTs already represent `:tag(args)`, tag
+  patterns, `error` groups, `[:tag(A) | r]`, `Result[a]`, `.await`, `?`,
+  `use`, and `provide`.
+- Canonicalization already publishes error groups and error-row annotations
+  through interfaces. Owned `.aldi` serialization already preserves group
+  tags, tag payloads, and row extensions.
+- Error groups participate in M3 derives, but bare tags still carry
+  `group: None`; their payload arity and types are not checked against a
+  solved row.
+- The solver currently collapses every error row to an opaque `Ty::ErrorRow`.
+  Tag argument expressions are inferred and discarded, tag-pattern payloads
+  receive unrelated fresh variables, and conversion back to the AST always
+  emits the placeholder `[:_ | e]`.
+- `?` already lowers to one evaluation plus an early `Err` return in codegen,
+  but inference only unwraps `Result[a, e]`; it does not include `e` in the
+  enclosing function's row.
+- There is no post-solve exhaustiveness pass yet. M4 must add one rather than
+  "extend the M2 pass" described by the old plan.
+- `.await` currently requires an explicitly declared `Task` return during
+  canonicalization and emits JavaScript `await` in an `async` function. The
+  generator/fiber design and async inference have not landed.
+- `alder-report` already owns miette-backed diagnostics and source-span
+  helpers. Parser and compiler diagnostics are rendered by the driver, with
+  color disabled only in snapshot tests.
+- Oxc/Rolldown ASTs are the codegen boundary. Compiler-generated modules are
+  built as AST nodes, not JavaScript string concatenation. Auditable kernel
+  and standard-library sources may remain checked-in JS/TS/Alder files.
 
 ## Exit criteria
 
-- `fn find(id: Id) Result[User]` infers `[:not_found(Id) | r]` from the
-  body; `?` merges rows across calls; a named `error` group flattens into
-  an open row on `?` and closes it when written explicitly; `match` on a
-  closed row is exhaustive and an open row requires `_`; hover, docs, and
-  the emitted `.d.ts` (M8) show the inferred row.
-- A function using `.await` is inferred to return `Task[..]`; `Task` is a
-  visible type; un-awaited calls are `Task` values usable with
-  `Fiber.fork`, `Fiber.all`, `Fiber.race`, `Fiber.scope`; interruption and
-  structured concurrency work on the generator-based scheduler in the
-  kernel; `main` may be a `Task`.
-- `use Db` inside a function makes the function require a `Db` provider;
-  `provide Db = value { ... }` satisfies it lexically through the call
-  graph; a missing provider at an entry point is a compile error naming
-  the path; tests swap providers.
+### Error-row vertical slice
+
+- `Result[a]` introduces an inferred open error row. Tags preserve positional
+  payload types, `?` includes every propagated tag, and an explicitly closed
+  row rejects undeclared tags.
+- Named `error` groups normalize to closed structural rows. Using `?` inside
+  an open-row function flattens the group; explicitly naming the group keeps
+  the accepted set closed.
+- Tags are legal only in `Result`'s error position. Row variables are kinded
+  separately from ordinary types and record rows.
+- Matching a closed row must cover every tag (or `_`); matching an open row
+  requires `_`. Tag patterns receive the row's payload types and arity.
+- Public inferred rows survive interfaces and `.aldi` round trips with stable
+  ordering and deterministic display names.
+- Miette diagnostics cover row mismatch, missing/extra tags, payload arity and
+  payload type errors, illegal tag placement, and non-exhaustive/open matches.
+  Rendered diagnostics are snapshot-tested without color using Alder source,
+  not the Rust expression that produced it.
+- Existing tag and `?` runtime representations remain allocation-minimal and
+  are covered by codegen plus standalone end-to-end execution tests.
+
+### Remaining M4 features
+
+- A function containing `.await` is inferred to return `Task[..]`; task
+  functions lower to generator functions and execute on the kernel fiber
+  scheduler. `main` may return `Task`.
+- `.await?` remains ordinary postfix composition. A stage such as
+  `request |> send(client).await?` forwards into `send` before applying
+  `.await` and `?`; no fused `await?` construct or do-notation is introduced.
+- `Fiber.fork/all/race/scope`, interruption, and structured concurrency work.
+- `use Provider` requirements propagate through calls; `provide` discharges
+  them lexically; unresolved entry-point requirements are diagnostics.
 
 ## Settled decisions
 
-- Error rows exist only in `Result`'s error position; `:tag` elsewhere is
-  a type error. Tags carry positional payloads.
-- `Result[a]` (one argument) means an inferred error row.
-- Named groups are names for closed rows and never wrappers; `?` on a
-  group inside an open-row function flattens it.
-- `Task` is visible and writable in signatures; asyncness is inferred
-  from `.await` (no `async` keyword).
-- Fibers are generator-based (`yield*`), Effect-TS style, with structured
-  concurrency, interruption, and scopes, implemented in the TypeScript
-  kernel; user code never sees generators.
-- Context is lexical through the call graph and the render tree; missing
-  providers are compile errors at entry points.
-- Panics are not catchable by user code; the framework installs error
-  boundaries (M6).
-
-## Open decisions (recommendation in bold)
-
-1. Should `pub` functions be required to spell their error row? **No in
-   M4; emit the inferred row into interfaces and docs, and revisit when
-   semver diffing (M9) needs stable surfaces.**
-2. Row variable naming in messages. **Render open rows as
-   `[:a | :b | ...]` and closed as `[:a | :b]`; never show the row
-   variable's internal name.**
-3. Context representation at runtime. **A fiber-local map keyed by
-   provider type id, propagated by the scheduler (AsyncLocalStorage
-   semantics without Node), captured on `Fiber.fork`.**
-4. `Task` and `Result` interplay. **`Task[Result[a]]` is the shape; `?`
-   inside a `Task`-returning function works on the inner `Result` after
-   `.await` (`f().await?`), and there is no combined `TaskResult` type.**
-5. Interruption semantics. **Cooperative at `yield` points (every
-   `.await`); `Fiber.scope` cancels children on exit; a cancelled fiber's
-   pending `Result` is `Err(:interrupted)`.**
+- Error rows exist only as `Result` error arguments. They are structural;
+  named groups are aliases for closed rows, never runtime wrappers.
+- `Result[a]` means `Result[a, [: | fresh_row]]`.
+- Error-row tails, record-row tails, and ordinary type variables have distinct
+  kinds. Cross-kind unification is an error.
+- `?` adds a row-inclusion constraint from the operand into the enclosing
+  `Result`; it does not equate both rows.
+- Public functions may infer rows in M4. Interfaces expose the inferred row;
+  semver-surface policy remains an M9 concern.
+- User-facing rows omit internal tail names: `[:a | :b]` is closed and
+  `[:a | :b | _]` is open. Internal/debug output may show stable variables.
+- Diagnostics use `thiserror` for Rust error plumbing and
+  `miette::Diagnostic` through `alder-report`. Normal CLI rendering keeps
+  color when supported; deterministic snapshots explicitly disable it.
+- `.await` stays postfix because `.await?` composes naturally. Pipe lowering
+  reaches the destination call through postfix wrappers before those wrappers
+  execute.
+- `Task[Result[a]]` is the combined shape; there is no `TaskResult` type.
+- Panics are not user-catchable. Framework error boundaries arrive in M6.
 
 ## Work breakdown
 
-### Wave 0: contract
+### Wave 0: audited contract
 
-Design panel producing `docs/effects-internals.md`:
+- [x] Audit parser, AST, canonicalization, solver, interfaces, diagnostics,
+  codegen, stdlib, and runtime against current main.
+- [x] Replace the stale starting-state assumptions in this plan.
+- [x] Write `docs/effects-internals.md`, including row algorithms,
+  diagnostics, async/context boundaries, and the postfix-await pipe rule.
 
-- Error rows in the solver: row kinds (record rows, optional-field rows,
-  error rows share the union-find representation), tag unification, row
-  merging for `?`, group flattening, closure on explicit annotation,
-  exhaustiveness over closed rows (extends the M2 exhaustiveness pass).
-- `Task` inference: a per-function "awaits" flag collected during
-  constraint generation, the return type wrapped in `Task` when set and
-  not already declared; call sites of `Task` functions without `.await`
-  are `Task` values; the entry point runner.
-- Context: `use` collects a provider requirement per function;
-  requirements propagate up the call graph like effects (a lightweight
-  effect row for providers only); `provide` discharges; entry points must
-  have an empty requirement set; interfaces carry requirements.
-- Kernel scheduler API: `Fiber` primitives, scopes, interruption, the
-  generator protocol between compiled functions and the scheduler,
-  context propagation, and the JS calling convention for `Task`
-  functions (generator functions, `yield*` for awaits).
-- Codegen: `.await` → `yield*`, `Task` functions → generator functions,
-  `?` → early return, `provide` → scheduler call with a scope.
-- Error types and rendering.
+### Wave 1: error-row model and inference
 
-### Wave 1: front end (parallel)
+- [ ] Add kinded error-row variables, structural tag maps, payload vectors,
+  closed/open tails, pruning, occurs checks, generalization, instantiation,
+  and deterministic AST conversion in `alder-solve`.
+- [ ] Normalize local and imported named error groups to closed rows.
+- [ ] Infer singleton tag rows, enforce legal placement, and type tag-pattern
+  payloads from the expected row.
+- [ ] Implement row equality plus row inclusion for `?`, including multiple
+  propagated calls and closed-row rejection.
+- [ ] Preserve inferred rows through public interfaces and `.aldi` hydration.
 
-- `alder-constrain` + `alder-solve`: error rows, `?` merging, groups,
-  `Task` inference, provider requirements.
-- `alder-can`: `error` groups in the env, `:tag` arity checks, `use`
-  target validation (must name a provider type), exhaustiveness pass
-  extension.
-- Error rendering.
-- Tests: inference tests for every rule; snapshot errors.
+### Wave 2: checking and reporting
 
-### Wave 2: runtime (parallel)
+- [ ] Add the post-solve match checker for closed and open error rows, treating
+  guarded arms as non-covering.
+- [ ] Add structured canonicalization/solve errors and Elm-quality wording,
+  labels, hints, and related spans through `alder-report`.
+- [ ] Snapshot semantic values with the project source-aware macros and
+  `indoc`; snapshot rendered miette output with color disabled.
 
-- `alder-kernel`: scheduler (fibers, scopes, interruption, timers,
-  `Fiber.all/race/fork/join/sleep`), context map, entry runner, error
-  boundary hook for M6.
-- `alder-codegen`: generator emission, `?` lowering, `provide` lowering,
-  `Task` value creation for un-awaited calls.
-- `std/`: `Task`, `Fiber`, `Result` helpers with rows, `Task`
-  `Functor`/`Monad` instances.
-- e2e: concurrent fetches with `Fiber.all`, cancellation with
-  `Fiber.race`, context swap in tests.
+### Wave 3: runtime vertical slice
 
-### Wave 3: sweep
+- [ ] Audit/update `Result` stdlib annotations and helpers for inferred rows.
+- [ ] Verify Oxc AST lowering for tags, tag patterns, and one-evaluation `?`;
+  add missing direct-AST cases without source-string code generation.
+- [ ] Add runtime/e2e projects covering tag payloads, three-way `?` merging,
+  group flattening, closed matching, and propagated `Err` identity.
 
-- Docs (`language.md` Errors/Async/Context, `runtime.md` kernel), SPEC M4
-  ticked, changeset, critic pass.
+### Wave 4: async and context
 
-## Tests to add (minimum)
+- [ ] Remove the explicit-Task canonicalization gate and infer asyncness.
+- [ ] Lower task functions/await to generators/`yield*`; implement scheduler,
+  fiber operations, scopes, interruption, and async entry points.
+- [ ] Implement provider requirements, lexical discharge, interface storage,
+  context propagation, and entry-point validation.
 
-- Rows: inference of open rows across three calls; group flatten;
-  explicit close rejects an extra tag; exhaustiveness with and without
-  `_`; `:tag` outside `Result` rejected; arity mismatch on a tag.
-- Task: inferred from nested `.await`; declared `Task` without `.await`;
-  un-awaited call typed `Task`; `main` as `Task`.
-- Context: requirement propagation through two calls; provider inside a
-  lambda passed elsewhere (lexical, not dynamic); missing provider at
-  entry with the path in the message.
-- Kernel: scheduler unit tests in TypeScript (run via deno_core in
-  `cargo test`): fairness, interruption of sleeping fibers, scope
-  cleanup on error, context isolation between forked fibers.
+### Wave 5: sweep
 
-## Risks
+- [ ] Update `SPEC.md`, language/runtime/tooling docs, and milestone checkboxes.
+- [ ] Add granular Sampo changesets for every changed publishable crate.
+- [ ] Run `cargo fmt --all`, full Clippy with warnings denied, full tests,
+  package verification for changed crates, and standalone e2e execution.
 
-- Error rows and record rows in one union-find must not unify with each
-  other; tag the row kind and test the cross case.
-- Generator-based `Task` functions cost a frame per call; keep
-  non-`Task` functions plain and make sure inference never wraps a
-  function that does not await.
-- Context as an effect row is the first effect-like thing in the type
-  system; keep it minimal (provider set only) so it does not become
-  general effect tracking by accident.
+## Required error-row tests
+
+- Inference of one tag and an open row from `Result[a]`.
+- Union of tags propagated by `?` across at least three calls.
+- Repeated tag payload unification, including arity and type mismatch.
+- Named local and imported group flattening; explicit group closure rejecting
+  an extra tag.
+- Tag expression outside a `Result` error position.
+- Exhaustive closed match, missing closed tag, wildcard closed match, and open
+  match both with and without `_`; guarded tag arms do not close coverage.
+- Public inferred row interface round trip and deterministic ordering.
+- Direct-AST codegen snapshots and standalone execution of success and each
+  propagated error path.
+
+## Risks and guards
+
+- Row equality is not row inclusion. Keep separate APIs and tests so `?`
+  cannot accidentally erase errors or require callers to have identical rows.
+- Duplicate labels with unequal payloads can make row unification order
+  dependent. Canonicalize maps by tag name and unify payload positions before
+  reconciling tails.
+- Named groups may be recursive through aliases. Normalize with a visited set
+  and report a structured cycle instead of recursing indefinitely.
+- Exhaustiveness needs solved subject rows. Record match sites during inference
+  and check them only after substitutions are fully pruned.
+- Error rows are erased at runtime. No type-system fix may change the stable
+  `{ $: ":tag", _0: ... }` representation or evaluate a `?` operand twice.
+- Generator tasks add a frame per async call. Keep non-task functions plain
+  and retain `.await?` as composition rather than a combined runtime primitive.
