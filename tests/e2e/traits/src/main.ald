@@ -102,6 +102,22 @@ fn describe_generic(value: a) -> String where a: Describe {
     describe(value)
 }
 
+fn invoke(renderer: fn(a) -> String, value: a) -> String {
+    renderer(value)
+}
+
+fn describe_indirect(value: a) -> String where a: Describe {
+    invoke(describe, value)
+}
+
+fn lift(value: a) -> f[a] where f: Applicative {
+    pure(value)
+}
+
+fn apply_generic(function: f[fn(a) -> b], value: f[a]) -> f[b] where f: Applicative {
+    apply(function, value)
+}
+
 fn less_than(left: a, right: a) -> Bool where a: Ord {
     left < right
 }
@@ -110,6 +126,7 @@ pub fn main() {
     assert(describe_generic(1) == "number")
     assert(describe_generic("text") == "text")
     assert(describe_generic([1, 2]) == "array")
+    assert(describe_indirect(1) == "number")
 
     assert(show(Status::Failed("oops")) == "Failed(\"oops\")")
     assert(show(Status::Meta { code: 7, note: "same" }) == "Meta { code: 7, note: \"same\" }")
@@ -163,4 +180,32 @@ pub fn main() {
     let result: Result[Number, String] = Result.ok(1)
     let mapped_result: Result[Number, String] = map(result, fn(value) { value + 1 })
     assert(mapped_result == Result.ok(2))
+
+    let pure_option: Option[Number] = lift(4)
+    assert(pure_option == Option.some(4))
+
+    let array_functions: Array[fn(Number) -> Number] = [
+        fn(value) { value + 1 },
+        fn(value) { value * 2 },
+    ]
+    let applied_array: Array[Number] = apply(array_functions, [2, 3])
+    assert(applied_array == [3, 4, 4, 6])
+
+    let option_function: Option[fn(Number) -> Number] = Option.some(fn(value) { value + 1 })
+    let applied_option: Option[Number] = apply_generic(option_function, Option.some(2))
+    assert(applied_option == Option.some(3))
+
+    let bound_array: Array[Number] = flat_map([1, 2], fn(value) { [value, value + 10] })
+    assert(bound_array == [1, 11, 2, 12])
+
+    let traversed_array: Option[Array[Number]] = traverse(
+        [1, 2],
+        fn(value) { Option.some(value + 1) },
+    )
+    assert(traversed_array == Option.some([2, 3]))
+
+    let first: Option[Number] = next([7, 8])
+    let empty: Option[Number] = next([])
+    assert(first == Option.some(7))
+    assert(empty == Option.none())
 }

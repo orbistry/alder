@@ -88,6 +88,10 @@ static resolution wherever the type is known.
   never expose unification-variable IDs, label both local impl sites for an
   overlap, and attach actionable help for bounds, ownership, kinds, and cycles.
   Deterministic no-color snapshots cover the rendered source.
+- The complete Traits guide example is byte-for-byte tied to an executed CLI
+  fixture. Runtime coverage also exercises generic Applicative dispatch,
+  Monad, Traversable, Iterator, all three builtin Functors, and dictionary
+  capture through a first-class constrained callback.
 
 ## Open decisions (recommendation in bold)
 

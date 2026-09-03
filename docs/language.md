@@ -271,29 +271,44 @@ parameters. No `self`; trait functions are ordinary functions called by
 name or through the pipe.
 
 ```alder
+enum User { User(String) }
+
 pub trait Show[a] {
     fn show(value: a) -> String
 }
 
 impl Show[User] {
-    fn show(user: User) -> String { user.name }
+    fn show(user: User) -> String {
+        match user { User::User(name) => name }
+    }
 }
 
 pub trait Functor[f] {
     fn map(fa: f[a], g: fn(a) -> b) -> f[b]
 }
 
-impl Functor[Option] {
-    fn map(fa: Option[a], g: fn(a) -> b) -> Option[b] {
-        match fa {
-            Some(x) => Some(g(x)),
-            None => None,
-        }
+enum Box[a] { Box(a) }
+
+impl Functor[Box] {
+    fn map(fa: Box[a], g: fn(a) -> b) -> Box[b] {
+        match fa { Box::Box(value) => Box::Box(g(value)) }
     }
 }
 
-fn describe(xs: Array[a]) -> String where a: Show {
-    xs |> Array.map(show) |> String.join(", ")
+trait SequenceIterator[i] {
+    type Item
+    fn next(it: i) -> Option[Item]
+}
+
+fn describe(value: a) -> String where a: Show {
+    show(value)
+}
+
+pub fn main() {
+    assert(describe(User::User("Ada")) == "Ada")
+
+    let boxed: Box[Number] = map(Box::Box(1), fn(value) { value + 1 })
+    assert(boxed == Box::Box(2))
 }
 ```
 
@@ -301,15 +316,8 @@ fn describe(xs: Array[a]) -> String where a: Show {
   may constrain their own parameters the same way
   (`trait Ord[a] where a: Eq`), and impls too
   (`impl Show[Cache[k, v]] where k: Show, v: Show`).
-- Associated types are declared one item per line, like every other
-  trait item:
-
-  ```alder
-  trait Iterator[i] {
-      type Item
-      fn next(it: i) -> Option[Item]
-  }
-  ```
+- Associated types are declared one item per line, like `type Item` in the
+  `SequenceIterator` example above.
 
 - Default method bodies are allowed in the trait.
 - Rust's orphan rule applies: an `impl` must live in the package that

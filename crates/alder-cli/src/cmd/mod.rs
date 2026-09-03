@@ -56,12 +56,37 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn standalone_e2e_projects_execute() {
-        for name in ["hello", "enums", "loops", "modules", "traits"] {
+        for name in [
+            "hello",
+            "enums",
+            "loops",
+            "modules",
+            "traits",
+            "docs_traits",
+        ] {
             assert_eq!(
                 execute(name, BuildMode::Build, EntryKind::Standalone).await,
                 0
             );
         }
+    }
+
+    #[test]
+    fn runnable_traits_documentation_matches_its_fixture() {
+        let docs = include_str!("../../../../docs/language.md");
+        let traits = docs
+            .split_once("### Traits\n")
+            .expect("language guide has a Traits section")
+            .1;
+        let example = traits
+            .split_once("```alder\n")
+            .expect("Traits section has an Alder example")
+            .1
+            .split_once("\n```")
+            .expect("Traits example fence is closed")
+            .0;
+        let fixture = include_str!("../../../../tests/e2e/docs_traits/src/main.ald");
+        assert_eq!(example.trim_end(), fixture.trim_end());
     }
 
     #[tokio::test(flavor = "current_thread")]
