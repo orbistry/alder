@@ -496,6 +496,10 @@ signature/default-presence changes also change the interface fingerprint.
 The dependency resolver loads `PackageInstanceIndexFile` once when any module
 from that package is imported. Saving validates that every listed impl belongs
 to a listed module and exposes only externally nameable identities.
+Successful driver builds return deterministic owned interface files and one
+deduplicated instance index per package. CLI build, check, run, and test flows
+persist those artifacts below `.alder/interfaces/` and `.alder/instances/` only
+after the complete build succeeds.
 
 M3 preserves one `Bump` per module, with that module's source copied into it.
 Parsed modules and canonical bodies borrow only their corresponding arena.

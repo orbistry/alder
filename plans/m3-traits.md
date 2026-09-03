@@ -70,6 +70,9 @@ static resolution wherever the type is known.
   with SHA-256 rather than Rust's process-oriented `DefaultHasher`.
 - Impl source regions and URIs survive interface and package-index dehydration,
   persistence, loading, and arena hydration for downstream diagnostics.
+- Successful builds expose deterministic semantic interfaces and a deduplicated
+  instance index per package; CLI compilation persists them only after all
+  modules succeed.
 - Derived dictionaries consume solver-selected evidence for every payload
   field. Evidence is retained through nested builtin containers, and generated
   Eq dictionaries are initialized before dictionaries that use them as a

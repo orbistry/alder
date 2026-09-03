@@ -49,7 +49,9 @@ mod tests {
     }
 
     async fn execute(name: &str, mode: BuildMode, kind: EntryKind) -> i32 {
-        let compiled = super::build::compile(&fixture(name), mode).await.unwrap();
+        let compiled = super::build::compile_ephemeral(&fixture(name), mode)
+            .await
+            .unwrap();
         let bundle = super::build::bundle(&compiled.result, kind).await.unwrap();
         alder_runtime::execute(bundle, Vec::new()).await.unwrap()
     }
@@ -92,5 +94,25 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn test_declarations_execute() {
         assert_eq!(execute("tests", BuildMode::Test, EntryKind::Test).await, 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn successful_build_artifacts_are_persisted_outside_the_source_tree() {
+        let compiled = super::build::compile_ephemeral(&fixture("traits"), BuildMode::Check)
+            .await
+            .unwrap();
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-cli-interface-test-{}-{nonce}",
+            std::process::id()
+        ));
+        super::build::persist_semantic_artifacts(&root, &compiled.result).unwrap();
+
+        assert!(root.join(".alder/interfaces/main.aldi").is_file());
+        assert!(root.join(".alder/instances/application.aldi").is_file());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

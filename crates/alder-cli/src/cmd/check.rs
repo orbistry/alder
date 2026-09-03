@@ -52,6 +52,7 @@ impl Args {
         }
 
         if result.is_success() {
+            super::build::persist_semantic_artifacts(&project.root, &result)?;
             eprintln!(
                 "Success! Compiled {} modules ({} declarations)",
                 result.total,

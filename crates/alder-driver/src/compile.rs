@@ -9,7 +9,7 @@
 //! copied back into each module arena before use, so no phase borrows another
 //! module's allocation.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use alder_ast::{
@@ -25,6 +25,9 @@ use url::Url;
 use crate::database::Database;
 use crate::error::DriverError;
 use crate::graph::DepGraph;
+use crate::interface::{
+    InterfaceFile, OwnedImplHeader, OwnedModuleId, OwnedPackageId, PackageInstanceIndexFile,
+};
 
 /// Result of compiling a single module.
 #[derive(Debug)]
@@ -61,6 +64,12 @@ pub struct BuildResult {
 
     /// ESM modules produced in build or test mode, keyed by source URI.
     pub artifacts: HashMap<Url, alder_codegen::EmittedModule>,
+
+    /// Solved semantic interfaces ready for persistent caching.
+    pub interfaces: Vec<InterfaceFile>,
+
+    /// Complete exported instance indexes, grouped by package.
+    pub package_instance_indexes: Vec<PackageInstanceIndexFile>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -164,8 +173,17 @@ fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> B
     let mut results: HashMap<Url, ModuleResult> = HashMap::new();
     let mut all_warnings: Vec<Diagnostic> = Vec::new();
     let mut artifacts = HashMap::new();
+    let mut interface_files = Vec::new();
     for (uri, source) in &sources {
-        let (output, _) = compile_module(uri, source, &store, &interfaces, mode);
+        let (output, discovered) = compile_module(uri, source, &store, &interfaces, mode);
+        if discovered.solved
+            && let Some(interface) = discovered.interface
+        {
+            interface_files.push(
+                InterfaceFile::dehydrate_with_source(&interface, uri.as_str())
+                    .expect("canonical interfaces always serialize"),
+            );
+        }
         all_warnings.extend(output.warnings);
         if let Some(artifact) = output.artifact {
             artifacts.insert(output.uri.clone(), artifact);
@@ -177,6 +195,8 @@ fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> B
         .values()
         .filter(|r| matches!(r, ModuleResult::Success { .. }))
         .count();
+    interface_files.sort_by(|left, right| left.module.cmp(&right.module));
+    let package_instance_indexes = package_indexes(&interface_files);
 
     BuildResult {
         modules: results,
@@ -185,7 +205,28 @@ fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> B
         failed: total - success,
         warnings: all_warnings,
         artifacts,
+        interfaces: interface_files,
+        package_instance_indexes,
     }
+}
+
+fn package_indexes(interfaces: &[InterfaceFile]) -> Vec<PackageInstanceIndexFile> {
+    let mut packages: BTreeMap<OwnedPackageId, (Vec<OwnedModuleId>, Vec<OwnedImplHeader>)> =
+        BTreeMap::new();
+    for interface in interfaces {
+        let (modules, instances) = packages
+            .entry(interface.module.package.clone())
+            .or_default();
+        modules.push(interface.module.clone());
+        instances.extend(interface.instances.iter().cloned());
+    }
+    packages
+        .into_iter()
+        .map(|(package, (modules, instances))| {
+            PackageInstanceIndexFile::new(package, modules, instances)
+                .expect("solved interfaces form a valid package index")
+        })
+        .collect()
 }
 
 /// Fetch source content for all modules, in parallel.
@@ -892,7 +933,15 @@ mod tests {
     async fn build_mode_emits_an_artifact_for_each_successful_module() {
         let mem = InMemorySource::new();
         let uri = url("project/src/main.ald");
-        mem.insert(uri.clone(), "pub fn main() { 42 }".to_string());
+        mem.insert(
+            uri.clone(),
+            indoc::indoc! {r#"
+                pub trait Inspect[a] {}
+                impl Inspect[Number] {}
+                pub fn main() { 42 }
+            "#}
+            .to_owned(),
+        );
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![uri.clone()];
@@ -902,6 +951,15 @@ mod tests {
         assert!(result.is_success());
         assert_eq!(result.artifacts.len(), 1);
         assert_eq!(result.artifacts[&uri].module_id, "alder://app/main.mjs");
+        assert_eq!(result.interfaces.len(), 1);
+        assert_eq!(result.interfaces[0].instances.len(), 1);
+        assert_eq!(
+            result.interfaces[0].instances[0].source_uri.as_deref(),
+            Some(uri.as_str())
+        );
+        assert_eq!(result.package_instance_indexes.len(), 1);
+        assert_eq!(result.package_instance_indexes[0].modules.len(), 1);
+        assert_eq!(result.package_instance_indexes[0].instances.len(), 1);
     }
 
     #[tokio::test]

@@ -3,7 +3,8 @@ use std::{path::PathBuf, sync::Arc};
 use alder_bundle::EntryKind;
 use alder_config::{Config, Target};
 use alder_driver::{
-    BuildMode, BuildResult, Database, FileSystemSource, Project, build_graph, build_with_mode,
+    BuildMode, BuildResult, Database, FileSystemSource, InterfaceCache, Project, build_graph,
+    build_with_mode,
 };
 use miette::{IntoDiagnostic, Result, miette};
 use tokio::sync::Mutex;
@@ -47,6 +48,15 @@ pub(super) struct Compiled {
 }
 
 pub(super) async fn compile(path: &PathBuf, mode: BuildMode) -> Result<Compiled> {
+    compile_inner(path, mode, true).await
+}
+
+#[cfg(test)]
+pub(super) async fn compile_ephemeral(path: &PathBuf, mode: BuildMode) -> Result<Compiled> {
+    compile_inner(path, mode, false).await
+}
+
+async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result<Compiled> {
     let project = Project::load(path).await.into_diagnostic()?;
     let target = project_target(&project.config)?;
     let db = Arc::new(Mutex::new(Database::new(FileSystemSource::new())));
@@ -86,11 +96,28 @@ pub(super) async fn compile(path: &PathBuf, mode: BuildMode) -> Result<Compiled>
             .fold(primary, |primary, related| primary.with_related(related));
         return Err(miette::Report::new(primary));
     }
+    if persist {
+        persist_semantic_artifacts(&project.root, &result)?;
+    }
     Ok(Compiled {
         root: project.root,
         target,
         result,
     })
+}
+
+pub(super) fn persist_semantic_artifacts(
+    root: &std::path::Path,
+    result: &BuildResult,
+) -> Result<()> {
+    let cache = InterfaceCache::new(root);
+    for interface in &result.interfaces {
+        cache.save(interface).into_diagnostic()?;
+    }
+    for index in &result.package_instance_indexes {
+        cache.save_package_index(index).into_diagnostic()?;
+    }
+    Ok(())
 }
 
 pub(super) async fn bundle(result: &BuildResult, kind: EntryKind) -> Result<String> {

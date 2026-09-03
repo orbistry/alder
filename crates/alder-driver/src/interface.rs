@@ -279,6 +279,20 @@ impl InterfaceCache {
             .join(format!("{}.aldi", module_name.replace('.', "/")))
     }
 
+    pub fn interface_path(&self, module: &OwnedModuleId) -> PathBuf {
+        let package = match &module.package {
+            OwnedPackageId::Application => None,
+            OwnedPackageId::Named { author, project } => Some(format!("@{author}/{project}")),
+            OwnedPackageId::ApplicationMember(member) => Some(format!("members/{member}")),
+            OwnedPackageId::Builtin => Some("builtin".to_owned()),
+        };
+        let mut path = self.cache_dir.clone();
+        if let Some(package) = package {
+            path = path.join(package);
+        }
+        path.join(format!("{}.aldi", module.path.join("/")))
+    }
+
     pub fn package_index_path(&self, package: &OwnedPackageId) -> PathBuf {
         let name = match package {
             OwnedPackageId::Named { author, project } => format!("{author}/{project}"),
@@ -298,7 +312,7 @@ impl InterfaceCache {
     }
 
     pub fn save(&self, interface: &InterfaceFile) -> Result<(), DriverError> {
-        interface.save(&self.cache_path(&interface.module.path.join(".")))
+        interface.save(&self.interface_path(&interface.module))
     }
 
     pub fn load_package_index(&self, package: &OwnedPackageId) -> Option<PackageInstanceIndexFile> {
@@ -524,6 +538,16 @@ mod tests {
         assert_eq!(
             cache.cache_path("Json.Decode"),
             PathBuf::from("/project/.alder/interfaces/Json/Decode.aldi")
+        );
+        assert_eq!(
+            cache.interface_path(&OwnedModuleId {
+                package: OwnedPackageId::Named {
+                    author: "alice".to_owned(),
+                    project: "json".to_owned(),
+                },
+                path: vec!["Decode".to_owned()],
+            }),
+            PathBuf::from("/project/.alder/interfaces/@alice/json/Decode.aldi")
         );
         assert_eq!(
             cache.package_index_path(&OwnedPackageId::Named {
