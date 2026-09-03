@@ -3456,7 +3456,7 @@ mod tests {
             panic!("expected method")
         };
         assert_eq!(method.method.name, "next");
-        let interface = crate::from_module(&bump, result.module, &crate::Annotations::new());
+        let interface = crate::headers_from_module(&bump, result.module);
         assert_eq!(interface.instances.len(), 1);
         assert_eq!(interface.instances[0].id, implementation.id);
         assert_eq!(
@@ -3464,6 +3464,60 @@ mod tests {
             alder_ast::DictionaryKind::Factory
         );
         assert_eq!(interface.instances[0].methods.len(), 1);
+    }
+
+    #[test]
+    fn solved_interfaces_only_publish_externally_nameable_impls() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                enum Private { Private }
+                pub enum Public { Public }
+
+                trait PrivateTrait[a] {}
+                pub trait PublicTrait[a] {}
+
+                impl Show[Private] {
+                    fn show(value: Private) -> String { "private" }
+                }
+                impl Show[Public] {
+                    fn show(value: Public) -> String { "public" }
+                }
+                impl PrivateTrait[Number] {}
+                impl PublicTrait[Number] {}
+            "#},
+        );
+        let headers = crate::headers_from_module(&bump, result.module);
+        let published = crate::from_module(&bump, result.module, &crate::Annotations::new());
+
+        assert!(headers.instances.len() > published.instances.len());
+        assert!(published.instances.iter().all(|implementation| {
+            let trait_name = implementation.trait_ref.trait_.0.name;
+            let subject_name =
+                implementation
+                    .trait_ref
+                    .args
+                    .first()
+                    .and_then(|subject| match &subject.value {
+                        Type::Named { reference, .. } => Some(reference.name),
+                        _ => None,
+                    });
+            trait_name != "PrivateTrait" && subject_name != Some("Private")
+        }));
+        assert!(published.instances.iter().any(|implementation| {
+            implementation.trait_ref.trait_.0.name == "Show"
+                && matches!(
+                    &implementation.trait_ref.args[0].value,
+                    Type::Named { reference, .. } if reference.name == "Public"
+                )
+        }));
+        assert!(
+            published
+                .instances
+                .iter()
+                .any(|implementation| { implementation.trait_ref.trait_.0.name == "PublicTrait" })
+        );
     }
 
     #[test]

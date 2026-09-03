@@ -208,6 +208,9 @@ fn interface_from_module<'a>(
                 &mut private_names,
             ),
             ItemKind::Impl(implementation) => {
+                if annotations.is_some() && !impl_is_externally_nameable(module, implementation) {
+                    continue;
+                }
                 let dictionary_symbol = bump.alloc_str(&format!(
                     "$dict${}${}",
                     implementation.trait_.name,
@@ -293,6 +296,126 @@ fn interface_from_module<'a>(
         instances: bump.alloc_slice_copy(&instances),
         modules: bump.alloc_slice_copy(&modules),
         private_names: bump.alloc_slice_copy(&private_names),
+    }
+}
+
+fn impl_is_externally_nameable(
+    module: &Module<'_>,
+    implementation: &alder_ast::ImplDecl<'_>,
+) -> bool {
+    trait_ref_is_externally_nameable(module, implementation.trait_ref)
+        && implementation
+            .trait_predicates
+            .iter()
+            .all(|predicate| trait_ref_is_externally_nameable(module, *predicate))
+        && implementation.projection_equalities.iter().all(|equality| {
+            trait_ref_is_externally_nameable(module, equality.projection.trait_ref)
+                && type_is_externally_nameable(module, &equality.typ.value)
+        })
+        && implementation
+            .assoc_bindings
+            .iter()
+            .all(|binding| type_is_externally_nameable(module, &binding.typ.value))
+}
+
+fn trait_ref_is_externally_nameable(
+    module: &Module<'_>,
+    trait_ref: alder_ast::TraitRef<'_>,
+) -> bool {
+    trait_is_externally_nameable(module, trait_ref.trait_)
+        && trait_ref
+            .args
+            .iter()
+            .all(|argument| type_is_externally_nameable(module, &argument.value))
+}
+
+fn trait_is_externally_nameable(module: &Module<'_>, trait_: alder_ast::TraitId<'_>) -> bool {
+    trait_.0.module != module.id
+        || module.items.iter().any(|item| {
+            matches!(item.value.visibility, Visibility::Public(_))
+                && matches!(
+                    &item.value.kind,
+                    ItemKind::Trait(declaration) if declaration.id == trait_
+                )
+        })
+}
+
+fn name_is_externally_nameable(module: &Module<'_>, name: alder_ast::QualifiedName<'_>) -> bool {
+    name.module != module.id
+        || module.items.iter().any(|item| {
+            if !matches!(item.value.visibility, Visibility::Public(_)) {
+                return false;
+            }
+            match &item.value.kind {
+                ItemKind::TypeAlias(declaration) => declaration.name == name,
+                ItemKind::Enum(declaration) => declaration.name == name,
+                ItemKind::ErrorGroup(declaration) => declaration.name == name,
+                ItemKind::Table(declaration) => declaration.name == name,
+                ItemKind::Schema(declaration) => declaration.name == name,
+                ItemKind::Extern(alder_ast::ExternDecl::Type { name: declaration }) => {
+                    *declaration == name
+                }
+                _ => false,
+            }
+        })
+}
+
+fn type_is_externally_nameable(module: &Module<'_>, typ: &alder_ast::Type<'_>) -> bool {
+    match typ {
+        alder_ast::Type::Var { args, .. } => args
+            .iter()
+            .all(|argument| type_is_externally_nameable(module, &argument.value)),
+        alder_ast::Type::Named { reference, args } => {
+            name_is_externally_nameable(module, *reference)
+                && args
+                    .iter()
+                    .all(|argument| type_is_externally_nameable(module, &argument.value))
+        }
+        alder_ast::Type::Partial { constructor, slots } => {
+            name_is_externally_nameable(module, *constructor)
+                && slots.iter().all(|slot| match slot {
+                    alder_ast::TypeSlot::Hole(_) => true,
+                    alder_ast::TypeSlot::Fixed(typ) => {
+                        type_is_externally_nameable(module, &typ.value)
+                    }
+                })
+        }
+        alder_ast::Type::Projection(projection) => {
+            trait_ref_is_externally_nameable(module, projection.trait_ref)
+        }
+        alder_ast::Type::Fn { params, ret } => {
+            params
+                .iter()
+                .all(|param| type_is_externally_nameable(module, &param.value))
+                && type_is_externally_nameable(module, &ret.value)
+        }
+        alder_ast::Type::Unit => true,
+        alder_ast::Type::Tuple(types) => types
+            .iter()
+            .all(|typ| type_is_externally_nameable(module, &typ.value)),
+        alder_ast::Type::Record { fields, .. } => fields
+            .iter()
+            .all(|field| type_is_externally_nameable(module, &field.typ.value)),
+        alder_ast::Type::ErrorRow { tags, .. } => tags.iter().all(|tag| {
+            tag.args
+                .iter()
+                .all(|argument| type_is_externally_nameable(module, &argument.value))
+        }),
+        alder_ast::Type::Alias {
+            reference,
+            arguments,
+            target,
+        } => {
+            name_is_externally_nameable(module, *reference)
+                && arguments
+                    .iter()
+                    .all(|argument| type_is_externally_nameable(module, &argument.typ.value))
+                && match target {
+                    alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
+                        type_is_externally_nameable(module, &target.value)
+                    }
+                }
+        }
     }
 }
 
