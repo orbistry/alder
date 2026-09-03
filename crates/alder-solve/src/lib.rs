@@ -18,6 +18,7 @@ pub struct SolveOutput<'a> {
     pub schemes: Annotations<'a>,
     pub bindings: BTreeMap<alder_ast::QualifiedName<'a>, BindingEvidence<'a>>,
     pub uses: BTreeMap<UseId, UseAction<'a>>,
+    pub impl_superclasses: BTreeMap<(ImplId<'a>, u16), Evidence<'a>>,
 }
 
 #[derive(Clone, Copy, Debug)]

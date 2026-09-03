@@ -300,6 +300,64 @@ fn default_body_can_use_a_superclass_dictionary() {
 }
 
 #[test]
+fn implementation_must_supply_each_superclass_dictionary() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Equal[a] { fn equal(left: a, right: a) -> Bool }
+            trait Ordered[a] where a: Equal {
+                fn less(left: a, right: a) -> Bool
+            }
+            impl Ordered[Number] {
+                fn less(left: Number, right: Number) -> Bool { left < right }
+            }
+        "#},
+    )
+    .expect_err("an Ordered implementation without Equal cannot construct its dictionary");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
+            trait_, subject, ..
+        }) if trait_.0.name == "Equal" && *subject == "Number"
+    )));
+}
+
+#[test]
+fn implementation_records_resolved_superclass_evidence() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Equal[a] { fn equal(left: a, right: a) -> Bool }
+            trait Ordered[a] where a: Equal {
+                fn less(left: a, right: a) -> Bool
+            }
+            impl Equal[Number] {
+                fn equal(left: Number, right: Number) -> Bool { left == right }
+            }
+            impl Ordered[Number] {
+                fn less(left: Number, right: Number) -> Bool { left < right }
+            }
+        "#},
+    )
+    .expect("the sibling Equal implementation satisfies Ordered's superclass");
+    assert!(
+        solved
+            .impl_superclasses
+            .iter()
+            .any(|((implementation, slot), evidence)| {
+                *slot == 0
+                    && matches!(
+                        evidence,
+                        alder_solve::Evidence::Impl { impl_id, .. }
+                            if impl_id != implementation
+                    )
+            })
+    );
+}
+
+#[test]
 fn declared_bounds_are_preserved_in_the_binding_abi() {
     let bump = Bump::new();
     let solved = solve_input(

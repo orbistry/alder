@@ -46,6 +46,7 @@ fn resolve_obligations<'a>(
     result: InferenceResult<'a>,
 ) -> Result<SolveOutput<'a>, Vec<SolveError<'a>>> {
     let mut uses = BTreeMap::new();
+    let mut impl_superclasses = BTreeMap::new();
     let mut errors = Vec::new();
     for obligation in result.obligations {
         let mut stack = Vec::new();
@@ -58,7 +59,11 @@ fn resolve_obligations<'a>(
             &mut stack,
         ) {
             Ok(evidence) => match obligation.action {
-                ObligationAction::Reference(method) => match uses.entry(obligation.use_id) {
+                ObligationAction::Reference(method) => match uses.entry(
+                    obligation
+                        .use_id
+                        .expect("reference obligations carry a use id"),
+                ) {
                     std::collections::btree_map::Entry::Vacant(entry) => {
                         entry.insert(UseAction::Reference {
                             dictionaries: vec![evidence],
@@ -73,7 +78,9 @@ fn resolve_obligations<'a>(
                 },
                 ObligationAction::Operator => {
                     uses.insert(
-                        obligation.use_id,
+                        obligation
+                            .use_id
+                            .expect("operator obligations carry a use id"),
                         UseAction::Operator {
                             dictionary: evidence,
                         },
@@ -81,7 +88,7 @@ fn resolve_obligations<'a>(
                 }
                 ObligationAction::Pin => {
                     uses.insert(
-                        obligation.use_id,
+                        obligation.use_id.expect("pin obligations carry a use id"),
                         UseAction::Pin {
                             dictionary: evidence,
                         },
@@ -89,11 +96,19 @@ fn resolve_obligations<'a>(
                 }
                 ObligationAction::CompoundAssign => {
                     uses.insert(
-                        obligation.use_id,
+                        obligation
+                            .use_id
+                            .expect("compound assignment obligations carry a use id"),
                         UseAction::CompoundAssign {
                             dictionary: evidence,
                         },
                     );
+                }
+                ObligationAction::ImplSuperclass {
+                    implementation,
+                    slot,
+                } => {
+                    impl_superclasses.insert((implementation, slot), evidence);
                 }
             },
             Err(error) => errors.push(SolveError::Trait(error)),
@@ -123,6 +138,7 @@ fn resolve_obligations<'a>(
             schemes,
             bindings: result.bindings,
             uses,
+            impl_superclasses,
         })
     } else {
         Err(errors)
@@ -489,11 +505,15 @@ enum ObligationAction<'a> {
     Operator,
     Pin,
     CompoundAssign,
+    ImplSuperclass {
+        implementation: alder_ast::ImplId<'a>,
+        slot: u16,
+    },
 }
 
 #[derive(Clone, Debug)]
 struct Obligation<'a> {
-    use_id: UseId,
+    use_id: Option<UseId>,
     predicate: Predicate<'a>,
     region: Region,
     action: ObligationAction<'a>,
@@ -784,6 +804,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.generalize_global(env, component.name);
             }
             ItemKind::Impl(impl_) => {
+                self.require_impl_superclasses(impl_, region);
                 for item in impl_.items {
                     if let alder_ast::ImplItem::Fn(function) = item {
                         self.infer_function(
@@ -1481,7 +1502,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         })
                         .collect();
                     self.obligations.push(Obligation {
-                        use_id,
+                        use_id: Some(use_id),
                         predicate: Predicate {
                             trait_: method.trait_,
                             args,
@@ -1773,7 +1794,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         action: ObligationAction<'a>,
     ) {
         self.obligations.push(Obligation {
-            use_id,
+            use_id: Some(use_id),
             predicate: Predicate {
                 trait_: builtin_trait_id(trait_name),
                 args: vec![subject],
@@ -2160,7 +2181,7 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) {
         for predicate in predicates {
             self.obligations.push(Obligation {
-                use_id,
+                use_id: Some(use_id),
                 predicate,
                 region,
                 action,
@@ -2301,6 +2322,71 @@ impl<'a, 'db> Infer<'a, 'db> {
                     },
                 });
             }
+        }
+    }
+
+    fn require_impl_superclasses(
+        &mut self,
+        implementation: &'a alder_ast::ImplDecl<'a>,
+        region: Region,
+    ) {
+        let Some(header) = self.database.trait_(implementation.trait_ref.trait_) else {
+            return;
+        };
+        let mut vars = BTreeMap::new();
+        let self_predicate = self.predicate_from_trait_ref(implementation.trait_ref, &mut vars);
+        let prerequisites = implementation
+            .trait_predicates
+            .iter()
+            .map(|predicate| self.predicate_from_trait_ref(*predicate, &mut vars))
+            .collect::<Vec<_>>();
+        let mut givens = prerequisites
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(index, predicate)| Given {
+                predicate,
+                evidence: Evidence::Param(index as u16),
+            })
+            .collect::<Vec<_>>();
+        for (parameter_index, prerequisite) in prerequisites.iter().enumerate() {
+            let Some(prerequisite_header) = self.database.trait_(prerequisite.trait_) else {
+                continue;
+            };
+            let mut prerequisite_vars = prerequisite_header
+                .params
+                .iter()
+                .zip(&prerequisite.args)
+                .map(|(parameter, argument)| (parameter.name.value, argument.clone()))
+                .collect::<BTreeMap<_, _>>();
+            for (slot, superclass) in prerequisite_header.superclasses.iter().enumerate() {
+                givens.push(Given {
+                    predicate: self.predicate_from_trait_ref(*superclass, &mut prerequisite_vars),
+                    evidence: Evidence::ParamSuper {
+                        param: parameter_index as u16,
+                        slot: slot as u16,
+                    },
+                });
+            }
+        }
+        let mut superclass_vars = header
+            .params
+            .iter()
+            .zip(&self_predicate.args)
+            .map(|(parameter, argument)| (parameter.name.value, argument.clone()))
+            .collect::<BTreeMap<_, _>>();
+        for (slot, superclass) in header.superclasses.iter().enumerate() {
+            let predicate = self.predicate_from_trait_ref(*superclass, &mut superclass_vars);
+            self.obligations.push(Obligation {
+                use_id: None,
+                predicate,
+                region,
+                action: ObligationAction::ImplSuperclass {
+                    implementation: implementation.id,
+                    slot: slot as u16,
+                },
+                givens: givens.clone(),
+            });
         }
     }
 

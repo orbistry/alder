@@ -529,6 +529,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             self_name,
             Some(self.js.object(self.js.vec())),
         ));
+        self.assign_superclasses(&mut dictionary_body, self_name, implementation.id);
         for (method, parameter_count, method_dictionary_count, helper, provided) in methods {
             let method_dictionary_args = (0..method_dictionary_count)
                 .map(|index| format!("$methodDict{index}"))
@@ -611,6 +612,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             self_name,
             Some(self.js.object(self.js.vec())),
         ));
+        self.assign_superclasses(&mut body, self_name, implementation.id);
         match kind {
             alder_ast::DeriveKind::Eq => {
                 self.derived_kernel_method(&mut body, self_name, "eq", "$equal", 2, None);
@@ -2178,6 +2180,33 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 properties.push(self.js.property("eq", self.js.arrow(&args, body, false)));
                 self.js.object(properties)
             }
+        }
+    }
+
+    fn assign_superclasses(
+        &mut self,
+        body: &mut ArenaVec<'js, Statement<'js>>,
+        self_name: &str,
+        implementation: alder_ast::ImplId<'src>,
+    ) {
+        let superclasses = self.solved.map_or_else(Vec::new, |solved| {
+            solved
+                .impl_superclasses
+                .iter()
+                .filter_map(|((candidate, slot), evidence)| {
+                    (*candidate == implementation).then_some((*slot, evidence.clone()))
+                })
+                .collect::<Vec<_>>()
+        });
+        for (slot, evidence) in superclasses {
+            let value = self.evidence(&evidence);
+            let target = self
+                .js
+                .member(self.js.identifier(self_name), &format!("$super{slot}"));
+            let assignment = self
+                .js
+                .assignment(target, AssignmentOperator::Assign, value);
+            body.push(self.js.expression_statement(assignment));
         }
     }
 
