@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use alder_ast::{
     Annotation, BinOp, BindingName, Block, Child, ChildBlock, ChildItem, Expr, FieldPresence,
     ItemKind, Module, ModuleId, PackageId, Pattern, QualifiedName, RecordField, RowExtension, Stmt,
-    Type, ValueRef,
+    Type, TypeSlot, ValueRef,
 };
 use alder_can::Annotations;
 use alder_constrain::{Constraints, Error, ErrorKind, UnionFind};
@@ -14,12 +14,19 @@ use bumpalo::Bump;
 enum Ty<'a> {
     Var(usize),
     Named(QualifiedName<'a>, Vec<Ty<'a>>),
+    Partial(QualifiedName<'a>, Vec<TySlot<'a>>),
     Fn(Vec<Ty<'a>>, Box<Ty<'a>>),
     Unit,
     Tuple(Vec<Ty<'a>>),
     Record(BTreeMap<&'a str, (FieldPresence, Ty<'a>)>, bool),
     ErrorRow,
     Any,
+}
+
+#[derive(Clone, Debug)]
+enum TySlot<'a> {
+    Hole(u16),
+    Fixed(Ty<'a>),
 }
 
 #[derive(Clone, Debug)]
@@ -1088,6 +1095,16 @@ impl<'a> Infer<'a> {
                 *reference,
                 args.iter().map(|arg| self.from_ast(arg, vars)).collect(),
             ),
+            Type::Partial { constructor, slots } => Ty::Partial(
+                *constructor,
+                slots
+                    .iter()
+                    .map(|slot| match slot {
+                        TypeSlot::Hole(index) => TySlot::Hole(*index),
+                        TypeSlot::Fixed(typ) => TySlot::Fixed(self.from_ast(typ, vars)),
+                    })
+                    .collect(),
+            ),
             Type::Fn { params, ret } => Ty::Fn(
                 params
                     .iter()
@@ -1128,6 +1145,22 @@ impl<'a> Infer<'a> {
             {
                 for (left, right) in left_args.into_iter().zip(right_args) {
                     self.unify(left, right, region)?;
+                }
+                Ok(())
+            }
+            (Ty::Partial(left, left_slots), Ty::Partial(right, right_slots))
+                if left == right && left_slots.len() == right_slots.len() =>
+            {
+                let actual = Ty::Partial(left, left_slots.clone());
+                let expected = Ty::Partial(right, right_slots.clone());
+                for (left_slot, right_slot) in left_slots.into_iter().zip(right_slots) {
+                    match (left_slot, right_slot) {
+                        (TySlot::Hole(left), TySlot::Hole(right)) if left == right => {}
+                        (TySlot::Fixed(left), TySlot::Fixed(right)) => {
+                            self.unify(left, right, region)?;
+                        }
+                        _ => return Err(self.mismatch(region, actual, expected)),
+                    }
                 }
                 Ok(())
             }
@@ -1231,6 +1264,10 @@ impl<'a> Infer<'a> {
         match self.prune(typ.clone()) {
             Ty::Var(id) => id == needle,
             Ty::Named(_, args) | Ty::Tuple(args) => args.iter().any(|arg| self.occurs(needle, arg)),
+            Ty::Partial(_, slots) => slots.iter().any(|slot| match slot {
+                TySlot::Hole(_) => false,
+                TySlot::Fixed(typ) => self.occurs(needle, typ),
+            }),
             Ty::Fn(args, ret) => {
                 args.iter().any(|arg| self.occurs(needle, arg)) || self.occurs(needle, &ret)
             }
@@ -1247,6 +1284,13 @@ impl<'a> Infer<'a> {
             Ty::Named(_, args) | Ty::Tuple(args) => {
                 for arg in &args {
                     self.free_vars(arg, result);
+                }
+            }
+            Ty::Partial(_, slots) => {
+                for slot in &slots {
+                    if let TySlot::Fixed(typ) = slot {
+                        self.free_vars(typ, result);
+                    }
                 }
             }
             Ty::Fn(args, ret) => {
@@ -1271,6 +1315,16 @@ impl<'a> Infer<'a> {
                 name,
                 args.iter()
                     .map(|arg| self.replace_vars(arg, replacements))
+                    .collect(),
+            ),
+            Ty::Partial(name, slots) => Ty::Partial(
+                name,
+                slots
+                    .iter()
+                    .map(|slot| match slot {
+                        TySlot::Hole(index) => TySlot::Hole(*index),
+                        TySlot::Fixed(typ) => TySlot::Fixed(self.replace_vars(typ, replacements)),
+                    })
                     .collect(),
             ),
             Ty::Fn(args, ret) => Ty::Fn(
@@ -1333,6 +1387,15 @@ impl<'a> Infer<'a> {
                 args: self
                     .bump
                     .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+            },
+            Ty::Partial(constructor, slots) => Type::Partial {
+                constructor,
+                slots: self
+                    .bump
+                    .alloc_slice_fill_iter(slots.iter().map(|slot| match slot {
+                        TySlot::Hole(index) => TypeSlot::Hole(*index),
+                        TySlot::Fixed(typ) => TypeSlot::Fixed(self.to_ast(typ, names)),
+                    })),
             },
             Ty::Fn(params, ret) => Type::Fn {
                 params: self
@@ -1436,6 +1499,18 @@ impl<'a> Infer<'a> {
                         },
                         self.render(typ)
                     ))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Ty::Partial(reference, slots) => format!(
+                "{}[{}]",
+                reference.name,
+                slots
+                    .into_iter()
+                    .map(|slot| match slot {
+                        TySlot::Hole(_) => "_".to_owned(),
+                        TySlot::Fixed(typ) => self.render(typ),
+                    })
                     .collect::<Vec<_>>()
                     .join(", ")
             ),

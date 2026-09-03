@@ -110,6 +110,7 @@ pub enum TypeError<'a> {
     UnusedParameter {
         name: &'a str,
     },
+    InvalidHole,
 }
 
 #[derive(Clone, Debug)]

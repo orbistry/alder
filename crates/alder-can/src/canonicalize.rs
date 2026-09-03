@@ -15,7 +15,7 @@ use bumpalo::Bump;
 use crate::environment::Env;
 use crate::expression::{canonicalize_block, canonicalize_expr};
 use crate::pattern::{BindingMode, canonicalize_pattern};
-use crate::types::{canonicalize_type, is_task_type};
+use crate::types::{canonicalize_impl_head_type, canonicalize_type, is_task_type};
 use crate::{AttributeError, Error, ErrorKind, ImportError, ItemError, NameError, Warning};
 
 /// All dependency information needed to canonicalize one source module.
@@ -867,7 +867,7 @@ fn canonicalize_impl<'a>(
     }
     let mut args = Vec::with_capacity(source.args.len());
     for arg in source.args {
-        args.push(canonicalize_type(bump, env, &variables, arg)?);
+        args.push(canonicalize_impl_head_type(bump, env, &variables, arg)?);
     }
     let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
     let mut items = Vec::with_capacity(source.items.len());
@@ -1290,6 +1290,7 @@ fn collect_type_variables<'a>(
     variables: &mut BTreeSet<&'a str>,
 ) {
     match source.value {
+        alder_source::Type::Hole => {}
         alder_source::Type::Var { name, args } => {
             variables.insert(name);
             for arg in args {

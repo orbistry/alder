@@ -147,6 +147,9 @@ fn contains_await_expr(expression: &Located<Expr<'_>>) -> bool {
 fn module_specifier(module: ModuleId<'_>) -> String {
     let mut result = match module.package {
         PackageId::Application => "alder://app".to_owned(),
+        PackageId::ApplicationMember(member) => {
+            format!("alder://app/{}", escaped(member))
+        }
         PackageId::Builtin => "alder://std".to_owned(),
         PackageId::Named(package) => format!(
             "alder://pkg/{}/{}",

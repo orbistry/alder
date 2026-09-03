@@ -9,6 +9,7 @@
 //! fn_type     = 'fn' '(' [ type { ',' type } [ ',' ] ] ')' '->' type ;
 //! type_term   = path [ type_args ]
 //!             | lower_ident [ type_args ]
+//!             | '_'
 //!             | '(' ')' | '(' type ')' | '(' type ',' type { ',' type } [ ',' ] ')'
 //!             | '{' [ lower_ident '|' ] [ field_type { ',' field_type } [ ',' ] ] '}'
 //!             | '[' [ tag_variant { '|' tag_variant } ] [ '|' lower_ident ] ']' ;
@@ -61,12 +62,23 @@ impl<'a> Parser<'a> {
         Ok(typ)
     }
 
-    /// path[args] | var[args] | ( ) | tuple | record | error row.
+    /// path[args] | var[args] | `_` | ( ) | tuple | record | error row.
     ///
     /// Dispatches on the first byte and reports `Start` itself. Does not chomp.
     pub(crate) fn type_term(&mut self) -> Result<&'a Located<Type<'a>>, error::Type<'a>> {
         let start = self.get_position();
         match self.peek() {
+            Some(b'_') => {
+                if self
+                    .peek_at(1)
+                    .is_some_and(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                {
+                    let (row, col) = self.position();
+                    return Err(error::Type::Start(row, col));
+                }
+                self.advance();
+                Ok(self.add_end(start, Type::Hole))
+            }
             Some(b) if b.is_ascii_uppercase() => {
                 let path = self.path(error::Type::Start, error::Type::PathMember)?;
                 // `path` stops before `::lower` (a value member); a type
@@ -528,6 +540,26 @@ mod tests {
     #[test]
     fn var_applied_nested() {
         assert_type_snapshot!("t[f[a]]");
+    }
+
+    #[test]
+    fn hole() {
+        assert_type_snapshot!("_");
+    }
+
+    #[test]
+    fn partial_constructor_hole() {
+        assert_type_snapshot!("Result[_, e]");
+    }
+
+    #[test]
+    fn partial_constructor_hole_order() {
+        assert_type_snapshot!("Map[_, Array[_]]");
+    }
+
+    #[test]
+    fn error_underscore_is_not_a_type_name() {
+        assert_type_error_snapshot!("_value");
     }
 
     #[test]

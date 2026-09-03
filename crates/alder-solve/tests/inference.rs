@@ -68,6 +68,18 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
+        Type::Partial { constructor, slots } => format!(
+            "{}[{}]",
+            constructor.name,
+            slots
+                .iter()
+                .map(|slot| match slot {
+                    alder_ast::TypeSlot::Hole(_) => "_".to_owned(),
+                    alder_ast::TypeSlot::Fixed(typ) => render_type(typ),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         Type::Fn { params, ret } => format!(
             "fn({}) -> {}",
             params

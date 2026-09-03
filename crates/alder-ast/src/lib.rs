@@ -25,6 +25,7 @@ pub struct PackageName<'a> {
 pub enum PackageId<'a> {
     Named(PackageName<'a>),
     Application,
+    ApplicationMember(&'a str),
     Builtin,
 }
 
@@ -48,6 +49,98 @@ pub struct ConstructorName<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalId(pub u32);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct UseId(pub u32);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TraitId<'a>(pub QualifiedName<'a>);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MethodId<'a> {
+    pub trait_: TraitId<'a>,
+    pub index: u16,
+    pub name: &'a str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AssocTypeId<'a> {
+    pub trait_: TraitId<'a>,
+    pub index: u16,
+    pub name: &'a str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ImplOrigin {
+    Source {
+        item_ordinal: u32,
+    },
+    Derived {
+        type_ordinal: u32,
+        derive_index: u16,
+    },
+    AutomaticEq {
+        type_ordinal: u32,
+    },
+    Builtin {
+        index: u16,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ImplId<'a> {
+    pub module: ModuleId<'a>,
+    pub origin: ImplOrigin,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Kind<'a> {
+    Type,
+    Arrow {
+        param: &'a Kind<'a>,
+        result: &'a Kind<'a>,
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TypeParam<'a> {
+    pub name: Name<'a>,
+    pub kind: Kind<'a>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TraitRef<'a> {
+    pub trait_: TraitId<'a>,
+    pub args: &'a [Node<'a, Type<'a>>],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProjectionType<'a> {
+    pub trait_ref: TraitRef<'a>,
+    pub assoc: AssocTypeId<'a>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProjectionEquality<'a> {
+    pub projection: ProjectionType<'a>,
+    pub typ: Node<'a, Type<'a>>,
+    pub region: Region,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DeriveKind {
+    Show,
+    Eq,
+    Ord,
+    Hash,
+    Json,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DictionaryKind {
+    Singleton,
+    Factory,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LocalName<'a> {
@@ -624,6 +717,10 @@ pub enum Type<'a> {
         reference: QualifiedName<'a>,
         args: &'a [Node<'a, Type<'a>>],
     },
+    Partial {
+        constructor: QualifiedName<'a>,
+        slots: &'a [TypeSlot<'a>],
+    },
     Fn {
         params: &'a [Node<'a, Type<'a>>],
         ret: Node<'a, Type<'a>>,
@@ -643,6 +740,12 @@ pub enum Type<'a> {
         arguments: &'a [AliasArgument<'a>],
         target: AliasType<'a>,
     },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum TypeSlot<'a> {
+    Hole(u16),
+    Fixed(Node<'a, Type<'a>>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

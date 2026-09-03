@@ -905,6 +905,8 @@ pub struct FieldPattern<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Type<'a> {
+    /// `_`, a partial-constructor slot whose legal context is checked later.
+    Hole,
     /// `a`, and applied higher-kinded variables `f[a]`, `t[f[a]]`.
     Var {
         name: &'a str,
