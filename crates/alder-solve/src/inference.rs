@@ -15,6 +15,11 @@ enum Ty<'a> {
     Var(usize),
     Named(QualifiedName<'a>, Vec<Ty<'a>>),
     Partial(QualifiedName<'a>, Vec<TySlot<'a>>),
+    Projection(
+        alder_ast::TraitId<'a>,
+        Vec<Ty<'a>>,
+        alder_ast::AssocTypeId<'a>,
+    ),
     Fn(Vec<Ty<'a>>, Box<Ty<'a>>),
     Unit,
     Tuple(Vec<Ty<'a>>),
@@ -1106,6 +1111,16 @@ impl<'a> Infer<'a> {
                     })
                     .collect(),
             ),
+            Type::Projection(projection) => Ty::Projection(
+                projection.trait_ref.trait_,
+                projection
+                    .trait_ref
+                    .args
+                    .iter()
+                    .map(|arg| self.from_ast(arg, vars))
+                    .collect(),
+                projection.assoc,
+            ),
             Type::Fn { params, ret } => Ty::Fn(
                 params
                     .iter()
@@ -1162,6 +1177,18 @@ impl<'a> Infer<'a> {
                         }
                         _ => return Err(self.mismatch(region, actual, expected)),
                     }
+                }
+                Ok(())
+            }
+            (
+                Ty::Projection(left_trait, left_args, left_assoc),
+                Ty::Projection(right_trait, right_args, right_assoc),
+            ) if left_trait == right_trait
+                && left_assoc == right_assoc
+                && left_args.len() == right_args.len() =>
+            {
+                for (left, right) in left_args.into_iter().zip(right_args) {
+                    self.unify(left, right, region)?;
                 }
                 Ok(())
             }
@@ -1269,6 +1296,7 @@ impl<'a> Infer<'a> {
                 TySlot::Hole(_) => false,
                 TySlot::Fixed(typ) => self.occurs(needle, typ),
             }),
+            Ty::Projection(_, args, _) => args.iter().any(|arg| self.occurs(needle, arg)),
             Ty::Fn(args, ret) => {
                 args.iter().any(|arg| self.occurs(needle, arg)) || self.occurs(needle, &ret)
             }
@@ -1292,6 +1320,11 @@ impl<'a> Infer<'a> {
                     if let TySlot::Fixed(typ) = slot {
                         self.free_vars(typ, result);
                     }
+                }
+            }
+            Ty::Projection(_, args, _) => {
+                for arg in &args {
+                    self.free_vars(arg, result);
                 }
             }
             Ty::Fn(args, ret) => {
@@ -1328,6 +1361,13 @@ impl<'a> Infer<'a> {
                     })
                     .collect(),
             ),
+            Ty::Projection(trait_, args, assoc) => Ty::Projection(
+                trait_,
+                args.iter()
+                    .map(|arg| self.replace_vars(arg, replacements))
+                    .collect(),
+                assoc,
+            ),
             Ty::Fn(args, ret) => Ty::Fn(
                 args.iter()
                     .map(|arg| self.replace_vars(arg, replacements))
@@ -1357,9 +1397,14 @@ impl<'a> Infer<'a> {
         let mut names = BTreeMap::new();
         let typ = self.to_ast(typ, &mut names);
         self.bump.alloc(Annotation {
-            free_vars: self
-                .bump
-                .alloc_slice_copy(&names.values().copied().collect::<Vec<_>>()),
+            params: self.bump.alloc_slice_fill_iter(names.values().map(|name| {
+                alder_ast::TypeParam {
+                    name: Located::at(Region::zero(), *name),
+                    kind: alder_ast::Kind::Type,
+                }
+            })),
+            trait_predicates: &[],
+            projection_equalities: &[],
             typ,
         })
     }
@@ -1398,6 +1443,15 @@ impl<'a> Infer<'a> {
                         TySlot::Fixed(typ) => TypeSlot::Fixed(self.to_ast(typ, names)),
                     })),
             },
+            Ty::Projection(trait_, args, assoc) => Type::Projection(alder_ast::ProjectionType {
+                trait_ref: alder_ast::TraitRef {
+                    trait_,
+                    args: self
+                        .bump
+                        .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+                },
+                assoc,
+            }),
             Ty::Fn(params, ret) => Type::Fn {
                 params: self
                     .bump
@@ -1514,6 +1568,15 @@ impl<'a> Infer<'a> {
                     })
                     .collect::<Vec<_>>()
                     .join(", ")
+            ),
+            Ty::Projection(trait_, args, assoc) => format!(
+                "{}[{}]::{}",
+                trait_.0.name,
+                args.into_iter()
+                    .map(|arg| self.render(arg))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                assoc.name
             ),
             Ty::ErrorRow => "[:_ | e]".to_owned(),
             Ty::Any => "_".to_owned(),

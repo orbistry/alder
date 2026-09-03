@@ -710,7 +710,12 @@ fn interface_constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
-        free_vars: enum_.params,
+        params: bump.alloc_slice_fill_iter(enum_.params.iter().map(|param| alder_ast::TypeParam {
+            name: Located::at(Region::zero(), *param),
+            kind: alder_ast::Kind::Type,
+        })),
+        trait_predicates: &[],
+        projection_equalities: &[],
         typ,
     })
 }

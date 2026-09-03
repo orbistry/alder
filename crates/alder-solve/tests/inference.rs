@@ -38,10 +38,18 @@ fn render_annotations(annotations: &Annotations<'_>) -> String {
 
 fn render_annotation(annotation: &Annotation<'_>) -> String {
     let typ = render_type(annotation.typ);
-    if annotation.free_vars.is_empty() {
+    if annotation.params.is_empty() {
         typ
     } else {
-        format!("forall {}. {typ}", annotation.free_vars.join(", "))
+        format!(
+            "forall {}. {typ}",
+            annotation
+                .params
+                .iter()
+                .map(|param| param.name.value)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
@@ -79,6 +87,18 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
                 })
                 .collect::<Vec<_>>()
                 .join(", ")
+        ),
+        Type::Projection(projection) => format!(
+            "{}[{}]::{}",
+            projection.trait_ref.trait_.0.name,
+            projection
+                .trait_ref
+                .args
+                .iter()
+                .map(|arg| render_type(arg))
+                .collect::<Vec<_>>()
+                .join(", "),
+            projection.assoc.name
         ),
         Type::Fn { params, ret } => format!(
             "fn({}) -> {}",

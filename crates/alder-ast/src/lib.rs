@@ -715,7 +715,9 @@ pub struct ArrayRest<'a> {
 
 #[derive(Debug)]
 pub struct Annotation<'a> {
-    pub free_vars: FreeVars<'a>,
+    pub params: &'a [TypeParam<'a>],
+    pub trait_predicates: &'a [TraitRef<'a>],
+    pub projection_equalities: &'a [ProjectionEquality<'a>],
     pub typ: Node<'a, Type<'a>>,
 }
 
@@ -733,6 +735,7 @@ pub enum Type<'a> {
         constructor: QualifiedName<'a>,
         slots: &'a [TypeSlot<'a>],
     },
+    Projection(ProjectionType<'a>),
     Fn {
         params: &'a [Node<'a, Type<'a>>],
         ret: Node<'a, Type<'a>>,
