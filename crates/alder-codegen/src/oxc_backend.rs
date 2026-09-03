@@ -191,9 +191,14 @@ impl<'src, 'js> Emitter<'src, 'js> {
                         {
                             let symbol =
                                 format!("$default${}${}", trait_.id.0.name, method.id.name);
+                            let mut leading = vec!["$self".to_owned()];
+                            leading.extend(
+                                (0..method.scheme.trait_predicates.len())
+                                    .map(|index| format!("$dict{index}")),
+                            );
                             declarations.push(self.lowered_function(
                                 &symbol,
-                                vec!["$self".to_owned()],
+                                leading,
                                 method.params,
                                 default,
                             )?);
@@ -207,7 +212,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                         implementation.trait_ref.trait_.0.name,
                         impl_origin_index(implementation.id.origin)
                     );
-                    declarations.extend(self.implementation(implementation, &symbol)?);
+                    declarations.extend(self.implementation(module, implementation, &symbol)?);
                     exports.push((symbol.clone(), symbol));
                 }
                 ItemKind::Test(test) if options.mode == super::EmitMode::Test => {
@@ -417,6 +422,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
 
     fn implementation(
         &mut self,
+        module: &Module<'src>,
         implementation: &alder_ast::ImplDecl<'src>,
         dictionary_symbol: &str,
     ) -> Result<ArenaVec<'js, Statement<'js>>, Error> {
@@ -424,29 +430,89 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let prerequisite_args = (0..implementation.trait_predicates.len())
             .map(|index| format!("$dict{index}"))
             .collect::<Vec<_>>();
+        let trait_declaration = module.items.iter().find_map(|item| match &item.value.kind {
+            ItemKind::Trait(trait_) if trait_.id == implementation.trait_ref.trait_ => {
+                Some(*trait_)
+            }
+            _ => None,
+        });
         let mut methods = Vec::new();
-        for item in implementation.items {
-            let alder_ast::ImplItem::Fn(method) = item else {
-                continue;
-            };
-            let helper = format!(
-                "$impl${}${}",
-                impl_origin_index(implementation.id.origin),
-                method.method.name
-            );
-            let mut leading = vec!["$self".to_owned()];
-            leading.extend(prerequisite_args.iter().cloned());
-            leading.extend(
-                (0..method.scheme.trait_predicates.len())
-                    .map(|index| format!("$dict{}", prerequisite_args.len() + index)),
-            );
-            declarations.push(self.lowered_function(
-                &helper,
-                leading,
-                method.params,
-                method.body,
-            )?);
-            methods.push((method, helper));
+        if let Some(trait_) = trait_declaration {
+            for trait_item in trait_.items {
+                let alder_ast::TraitItem::Fn(trait_method) = trait_item else {
+                    continue;
+                };
+                let provided = implementation.items.iter().find_map(|item| match item {
+                    alder_ast::ImplItem::Fn(method) if method.method == trait_method.id => {
+                        Some(*method)
+                    }
+                    _ => None,
+                });
+                if let Some(method) = provided {
+                    let helper = format!(
+                        "$impl${}${}",
+                        impl_origin_index(implementation.id.origin),
+                        method.method.name
+                    );
+                    let mut leading = vec!["$self".to_owned()];
+                    leading.extend(prerequisite_args.iter().cloned());
+                    leading.extend(
+                        (0..method.scheme.trait_predicates.len())
+                            .map(|index| format!("$dict{}", prerequisite_args.len() + index)),
+                    );
+                    declarations.push(self.lowered_function(
+                        &helper,
+                        leading,
+                        method.params,
+                        method.body,
+                    )?);
+                    methods.push((
+                        method.method,
+                        method.params.len(),
+                        method.scheme.trait_predicates.len(),
+                        helper,
+                        true,
+                    ));
+                } else if trait_method.body.is_some() {
+                    methods.push((
+                        trait_method.id,
+                        trait_method.params.len(),
+                        trait_method.scheme.trait_predicates.len(),
+                        format!("$default${}${}", trait_.id.0.name, trait_method.id.name),
+                        false,
+                    ));
+                }
+            }
+        } else {
+            for item in implementation.items {
+                let alder_ast::ImplItem::Fn(method) = item else {
+                    continue;
+                };
+                let helper = format!(
+                    "$impl${}${}",
+                    impl_origin_index(implementation.id.origin),
+                    method.method.name
+                );
+                let mut leading = vec!["$self".to_owned()];
+                leading.extend(prerequisite_args.iter().cloned());
+                leading.extend(
+                    (0..method.scheme.trait_predicates.len())
+                        .map(|index| format!("$dict{}", prerequisite_args.len() + index)),
+                );
+                declarations.push(self.lowered_function(
+                    &helper,
+                    leading,
+                    method.params,
+                    method.body,
+                )?);
+                methods.push((
+                    method.method,
+                    method.params.len(),
+                    method.scheme.trait_predicates.len(),
+                    helper,
+                    true,
+                ));
+            }
         }
 
         let self_name = if prerequisite_args.is_empty() {
@@ -460,11 +526,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
             self_name,
             Some(self.js.object(self.js.vec())),
         ));
-        for (method, helper) in methods {
-            let method_dictionary_args = (0..method.scheme.trait_predicates.len())
+        for (method, parameter_count, method_dictionary_count, helper, provided) in methods {
+            let method_dictionary_args = (0..method_dictionary_count)
                 .map(|index| format!("$methodDict{index}"))
                 .collect::<Vec<_>>();
-            let source_args = (0..method.params.len())
+            let source_args = (0..parameter_count)
                 .map(|index| format!("$a{index}"))
                 .collect::<Vec<_>>();
             let arrow_args = method_dictionary_args
@@ -474,11 +540,13 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 .collect::<Vec<_>>();
             let mut helper_args = self.js.vec();
             helper_args.push(self.js.identifier(self_name));
-            helper_args.extend(
-                prerequisite_args
-                    .iter()
-                    .map(|argument| self.js.identifier(argument)),
-            );
+            if provided {
+                helper_args.extend(
+                    prerequisite_args
+                        .iter()
+                        .map(|argument| self.js.identifier(argument)),
+                );
+            }
             helper_args.extend(
                 method_dictionary_args
                     .iter()
@@ -493,9 +561,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             let mut arrow_body = self.js.vec();
             arrow_body.push(self.js.return_statement(call));
             let arrow = self.js.arrow(&arrow_args, arrow_body, false);
-            let target = self
-                .js
-                .member(self.js.identifier(self_name), method.method.name);
+            let target = self.js.member(self.js.identifier(self_name), method.name);
             let assignment = self
                 .js
                 .assignment(target, AssignmentOperator::Assign, arrow);

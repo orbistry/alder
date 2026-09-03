@@ -2,6 +2,10 @@ pub fn main() {}
 
 trait Show[a] {
     fn show(value: a) -> String
+
+    fn render(value: a) -> String {
+        show(value)
+    }
 }
 
 impl Show[Number] {
@@ -20,6 +24,7 @@ test "arithmetic works" {
 
 test "trait dictionaries dispatch" {
     assert describe(1) == "number"
+    assert render(1) == "number"
 }
 
 tests {

@@ -357,4 +357,11 @@ mod tests {
             "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\nimpl Show[Array[a]] where a: Show { fn show(value: Array[a]) -> String { \"array\" } }\npub fn main() -> String { show([1]) }"
         ));
     }
+
+    #[test]
+    fn default_method_dictionary_entry() {
+        insta::assert_snapshot!(emit_solved(
+            "trait Show[a] { fn show(value: a) -> String\nfn render(value: a) -> String { show(value) } }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }\npub fn main() -> String { render(1) }"
+        ));
+    }
 }
