@@ -46,6 +46,9 @@ pub enum DriverError {
     #[error("failed to serialize interface: {0}")]
     SerializeError(#[from] bincode::Error),
 
+    #[error("incompatible interface: {reason}")]
+    IncompatibleInterface { reason: String },
+
     #[error("invalid module path: {path}")]
     InvalidModulePath { path: PathBuf },
 }

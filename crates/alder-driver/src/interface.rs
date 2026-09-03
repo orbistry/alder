@@ -1,81 +1,62 @@
-//! Interface file serialization for incremental compilation.
-//!
-//! Interfaces capture the public API of a module, allowing downstream
-//! modules to be skipped during recompilation if their dependencies'
-//! interfaces haven't changed.
+//! Owned, versioned semantic interfaces for incremental and package builds.
 
-use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+mod owned;
+
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use bumpalo::Bump;
+pub use owned::*;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
 use crate::error::DriverError;
 
-/// Module interface for incremental compilation.
-///
-/// Contains the public exports of a module and a fingerprint
-/// for change detection.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Interface {
-    /// Module name (e.g., "Json.Decode").
-    pub module_name: String,
+pub const INTERFACE_FORMAT_VERSION: u32 = 2;
 
-    /// Public exports from this module.
-    pub exports: Vec<Export>,
-
-    /// Hash of the interface content for change detection.
-    pub fingerprint: u64,
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InterfaceFile {
+    pub format_version: u32,
+    pub compiler_version: String,
+    pub module: OwnedModuleId,
+    pub values: Vec<OwnedValue>,
+    pub types: Vec<OwnedTypeDecl>,
+    pub traits: Vec<OwnedTrait>,
+    pub instances: Vec<OwnedImplHeader>,
+    pub modules: Vec<OwnedModuleExport>,
+    pub private_names: Vec<OwnedPrivateName>,
+    pub fingerprint: [u8; 32],
 }
 
-/// An exported item from a module.
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub enum Export {
-    /// A value export (function or constant).
-    Value {
-        name: String,
-        // Type signature would go here in a full implementation
-    },
-
-    /// A type export (type alias or custom type).
-    Type {
-        name: String,
-        /// Whether constructors are exposed.
-        constructors_exposed: bool,
-    },
-}
-
-impl Interface {
-    /// Create a new interface from exports.
-    pub fn new(module_name: String, exports: Vec<Export>) -> Self {
-        let fingerprint = compute_fingerprint(&exports);
-        Interface {
-            module_name,
-            exports,
-            fingerprint,
-        }
+impl InterfaceFile {
+    pub fn dehydrate(interface: &alder_ast::Interface<'_>) -> Result<Self, DriverError> {
+        let mut owned = owned::own_interface(interface);
+        owned.fingerprint = owned.compute_fingerprint()?;
+        Ok(owned)
     }
 
-    /// Load an interface from a file.
+    pub fn hydrate<'a>(&self, bump: &'a Bump) -> alder_ast::Interface<'a> {
+        owned::hydrate_interface(bump, self)
+    }
+
     pub fn load(path: &Path) -> Result<Self, DriverError> {
         let bytes = std::fs::read(path).map_err(|source| DriverError::ReadError {
             path: path.to_path_buf(),
             source,
         })?;
-
-        bincode::deserialize(&bytes).map_err(DriverError::SerializeError)
+        let interface: Self = bincode::deserialize(&bytes)?;
+        interface.validate()?;
+        Ok(interface)
     }
 
-    /// Save the interface to a file.
     pub fn save(&self, path: &Path) -> Result<(), DriverError> {
-        // Create parent directories if needed
+        self.validate()?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|source| DriverError::WriteError {
                 path: parent.to_path_buf(),
                 source,
             })?;
         }
-
         let bytes = bincode::serialize(self)?;
         std::fs::write(path, bytes).map_err(|source| DriverError::WriteError {
             path: path.to_path_buf(),
@@ -83,36 +64,146 @@ impl Interface {
         })
     }
 
-    /// Check if this interface differs from another.
-    pub fn differs_from(&self, other: &Interface) -> bool {
+    pub fn differs_from(&self, other: &Self) -> bool {
         self.fingerprint != other.fingerprint
+    }
+
+    fn validate(&self) -> Result<(), DriverError> {
+        if self.format_version != INTERFACE_FORMAT_VERSION {
+            return Err(DriverError::IncompatibleInterface {
+                reason: format!(
+                    "format version {} is not supported (expected {INTERFACE_FORMAT_VERSION})",
+                    self.format_version
+                ),
+            });
+        }
+        if self.compiler_version != env!("CARGO_PKG_VERSION") {
+            return Err(DriverError::IncompatibleInterface {
+                reason: format!(
+                    "compiler version {} does not match {}",
+                    self.compiler_version,
+                    env!("CARGO_PKG_VERSION")
+                ),
+            });
+        }
+        if self.compute_fingerprint()? != self.fingerprint {
+            return Err(DriverError::IncompatibleInterface {
+                reason: "semantic fingerprint does not match the interface contents".to_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    fn compute_fingerprint(&self) -> Result<[u8; 32], DriverError> {
+        let mut canonical = self.clone();
+        canonical.fingerprint = [0; 32];
+        Ok(Sha256::digest(bincode::serialize(&canonical)?).into())
     }
 }
 
-/// Compute a fingerprint hash for a set of exports.
-fn compute_fingerprint(exports: &[Export]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    exports.hash(&mut hasher);
-    hasher.finish()
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PackageInstanceIndexFile {
+    pub format_version: u32,
+    pub compiler_version: String,
+    pub package: OwnedPackageId,
+    pub modules: Vec<OwnedModuleId>,
+    pub instances: Vec<OwnedImplHeader>,
+    pub fingerprint: [u8; 32],
 }
 
-/// Metadata about a compiled module for caching decisions.
+impl PackageInstanceIndexFile {
+    pub fn new(
+        package: OwnedPackageId,
+        mut modules: Vec<OwnedModuleId>,
+        mut instances: Vec<OwnedImplHeader>,
+    ) -> Result<Self, DriverError> {
+        modules.sort();
+        modules.dedup();
+        instances.sort_by(|left, right| left.id.cmp(&right.id));
+        instances.dedup_by(|left, right| left.id == right.id);
+        if modules
+            .iter()
+            .any(|module| !belongs_to_package(&package, &module.package))
+        {
+            return Err(DriverError::IncompatibleInterface {
+                reason: "package instance index lists a module from another package".to_owned(),
+            });
+        }
+        if instances
+            .iter()
+            .any(|implementation| !modules.contains(&implementation.id.module))
+        {
+            return Err(DriverError::IncompatibleInterface {
+                reason: "package instance index contains an impl from an unlisted module"
+                    .to_owned(),
+            });
+        }
+        let mut index = Self {
+            format_version: INTERFACE_FORMAT_VERSION,
+            compiler_version: env!("CARGO_PKG_VERSION").to_owned(),
+            package,
+            modules,
+            instances,
+            fingerprint: [0; 32],
+        };
+        index.fingerprint = index.compute_fingerprint()?;
+        Ok(index)
+    }
+
+    pub fn validate(&self) -> Result<(), DriverError> {
+        if self.format_version != INTERFACE_FORMAT_VERSION
+            || self.compiler_version != env!("CARGO_PKG_VERSION")
+            || self.compute_fingerprint()? != self.fingerprint
+        {
+            return Err(DriverError::IncompatibleInterface {
+                reason: "package instance index is incompatible or corrupt".to_owned(),
+            });
+        }
+        if self
+            .modules
+            .iter()
+            .any(|module| !belongs_to_package(&self.package, &module.package))
+            || self
+                .instances
+                .iter()
+                .any(|implementation| !self.modules.contains(&implementation.id.module))
+        {
+            return Err(DriverError::IncompatibleInterface {
+                reason: "package instance index contains an impl from an unlisted module"
+                    .to_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    fn compute_fingerprint(&self) -> Result<[u8; 32], DriverError> {
+        let mut canonical = self.clone();
+        canonical.fingerprint = [0; 32];
+        Ok(Sha256::digest(bincode::serialize(&canonical)?).into())
+    }
+}
+
+fn belongs_to_package(package: &OwnedPackageId, module: &OwnedPackageId) -> bool {
+    package == module
+        || matches!(
+            (package, module),
+            (
+                OwnedPackageId::Application,
+                OwnedPackageId::ApplicationMember(_)
+            )
+        )
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleMeta {
-    /// Source file modification time.
     pub source_time: SystemTime,
-
-    /// Build ID when this module was last compiled.
     pub last_compile: u64,
-
-    /// Hash of the generated interface.
-    pub interface_hash: u64,
+    pub interface_hash: [u8; 32],
 }
 
 impl ModuleMeta {
-    /// Create metadata for a newly compiled module.
-    pub fn new(source_time: SystemTime, build_id: u64, interface_hash: u64) -> Self {
-        ModuleMeta {
+    pub fn new(source_time: SystemTime, build_id: u64, interface_hash: [u8; 32]) -> Self {
+        Self {
             source_time,
             last_compile: build_id,
             interface_hash,
@@ -120,120 +211,207 @@ impl ModuleMeta {
     }
 }
 
-/// Cache directory manager for interface files.
 pub struct InterfaceCache {
-    /// Root directory for cached interfaces (e.g., `.alder/interfaces/`).
     cache_dir: PathBuf,
-
-    /// Current build ID (incremented each build).
     build_id: u64,
 }
 
 impl InterfaceCache {
-    /// Create a new interface cache in the given directory.
     pub fn new(project_root: &Path) -> Self {
-        let cache_dir = project_root.join(".alder").join("interfaces");
-        InterfaceCache {
-            cache_dir,
+        Self {
+            cache_dir: project_root.join(".alder").join("interfaces"),
             build_id: 0,
         }
     }
 
-    /// Start a new build, incrementing the build ID.
     pub fn start_build(&mut self) -> u64 {
         self.build_id += 1;
         self.build_id
     }
 
-    /// Get the cache path for a module.
     pub fn cache_path(&self, module_name: &str) -> PathBuf {
-        // Convert module name to path: "Json.Decode" -> "Json/Decode.aldi"
-        let relative = module_name.replace('.', "/");
-        self.cache_dir.join(format!("{}.aldi", relative))
+        self.cache_dir
+            .join(format!("{}.aldi", module_name.replace('.', "/")))
     }
 
-    /// Load a cached interface for a module.
-    pub fn load(&self, module_name: &str) -> Option<Interface> {
-        let path = self.cache_path(module_name);
-        Interface::load(&path).ok()
+    pub fn load(&self, module_name: &str) -> Option<InterfaceFile> {
+        InterfaceFile::load(&self.cache_path(module_name)).ok()
     }
 
-    /// Save an interface to the cache.
-    pub fn save(&self, interface: &Interface) -> Result<(), DriverError> {
-        let path = self.cache_path(&interface.module_name);
-        interface.save(&path)
+    pub fn save(&self, interface: &InterfaceFile) -> Result<(), DriverError> {
+        interface.save(&self.cache_path(&interface.module.path.join(".")))
     }
 
-    /// Check if a module needs to be rebuilt.
-    ///
-    /// A module needs rebuilding if:
-    /// - Source file changed (mtime is newer)
-    /// - Any dependency's interface changed since last compile
     pub fn needs_rebuild(
         &self,
         meta: &ModuleMeta,
         current_source_time: SystemTime,
         dep_metas: &[&ModuleMeta],
     ) -> bool {
-        // Source file changed?
-        if current_source_time > meta.source_time {
-            return true;
-        }
-
-        // Any dependency interface changed after our last compile?
-        for dep in dep_metas {
-            if dep.last_compile > meta.last_compile {
-                return true;
-            }
-        }
-
-        false
+        current_source_time > meta.source_time
+            || dep_metas
+                .iter()
+                .any(|dependency| dependency.last_compile > meta.last_compile)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alder_ast::{ModuleId, PackageId};
 
-    #[test]
-    fn test_interface_fingerprint() {
-        let exports1 = vec![Export::Value {
-            name: "foo".to_string(),
-        }];
-        let exports2 = vec![Export::Value {
-            name: "bar".to_string(),
-        }];
+    fn compile_interface<'a>(bump: &'a Bump, source: &str) -> alder_ast::Interface<'a> {
+        let source = bump.alloc_str(source);
+        let parsed = alder_parse::parse_module(bump, source).expect("source parses");
+        let canonical = alder_can::canonicalize(
+            bump,
+            alder_can::Context {
+                home: ModuleId {
+                    package: PackageId::Application,
+                    path: &["Main"],
+                },
+                imports: &[],
+                interfaces: &[],
+            },
+            &parsed,
+        )
+        .expect("source canonicalizes");
+        let constraints = alder_constrain::constrain(bump, canonical.module);
+        let database = alder_solve::TraitDatabase::build(bump, canonical.module, &[]);
+        let solved = alder_solve::solve(bump, &constraints, &database).expect("source solves");
+        alder_can::from_module(bump, canonical.module, &solved.annotations)
+    }
 
-        let iface1 = Interface::new("Test".to_string(), exports1);
-        let iface2 = Interface::new("Test".to_string(), exports2);
-
-        assert!(iface1.differs_from(&iface2));
+    fn empty_interface<'a>() -> alder_ast::Interface<'a> {
+        alder_ast::Interface {
+            home: ModuleId {
+                package: PackageId::Application,
+                path: &["Main"],
+            },
+            values: &[],
+            types: &[],
+            enums: &[],
+            traits: &[],
+            instances: &[],
+            modules: &[],
+            private_names: &[],
+        }
     }
 
     #[test]
-    fn test_interface_same_fingerprint() {
-        let exports1 = vec![Export::Value {
-            name: "foo".to_string(),
-        }];
-        let exports2 = vec![Export::Value {
-            name: "foo".to_string(),
-        }];
+    fn semantic_interface_fingerprint_is_sha256_and_stable() {
+        let first = InterfaceFile::dehydrate(&empty_interface()).unwrap();
+        let second = InterfaceFile::dehydrate(&empty_interface()).unwrap();
+        assert_eq!(first.fingerprint.len(), 32);
+        assert_eq!(first.fingerprint, second.fingerprint);
+    }
 
-        let iface1 = Interface::new("Test".to_string(), exports1);
-        let iface2 = Interface::new("Test".to_string(), exports2);
+    #[test]
+    fn semantic_interface_round_trips_through_owned_storage() {
+        let source = Bump::new();
+        let interface = compile_interface(
+            &source,
+            indoc::indoc! {r#"
+                #[derive(Show, Json)]
+                pub enum Box[a] {
+                    Empty,
+                    Full { value: a },
+                }
 
-        assert!(!iface1.differs_from(&iface2));
+                pub trait Inspect[i] {
+                    type Item
+                }
+
+                impl Inspect[Box[a]] {
+                    type Item = a
+                }
+
+                pub fn identity(value: a) -> a { value }
+            "#},
+        );
+        let file = InterfaceFile::dehydrate(&interface).unwrap();
+        assert!(!file.values.is_empty());
+        assert!(!file.types.is_empty());
+        assert!(!file.traits.is_empty());
+        assert!(!file.instances.is_empty());
+        let bump = Bump::new();
+        let hydrated = file.hydrate(&bump);
+        let round_trip = InterfaceFile::dehydrate(&hydrated).unwrap();
+        assert_eq!(file, round_trip);
+    }
+
+    #[test]
+    fn trait_signature_changes_change_the_fingerprint() {
+        let first_bump = Bump::new();
+        let first = compile_interface(
+            &first_bump,
+            "pub trait Convert[a] { fn convert(value: a) -> String }",
+        );
+        let second_bump = Bump::new();
+        let second = compile_interface(
+            &second_bump,
+            "pub trait Convert[a] { fn convert(value: a) -> Number }",
+        );
+        let first = InterfaceFile::dehydrate(&first).unwrap();
+        let second = InterfaceFile::dehydrate(&second).unwrap();
+        assert!(first.differs_from(&second));
+    }
+
+    #[test]
+    fn incompatible_versions_and_tampering_are_rejected() {
+        let file = InterfaceFile::dehydrate(&empty_interface()).unwrap();
+        let mut wrong_version = file.clone();
+        wrong_version.format_version += 1;
+        assert!(matches!(
+            wrong_version.validate(),
+            Err(DriverError::IncompatibleInterface { .. })
+        ));
+
+        let mut tampered = file;
+        tampered.module.path.push("Changed".to_owned());
+        assert!(matches!(
+            tampered.validate(),
+            Err(DriverError::IncompatibleInterface { .. })
+        ));
+    }
+
+    #[test]
+    fn semantic_interface_saves_and_loads_with_validation() {
+        let interface = InterfaceFile::dehydrate(&empty_interface()).unwrap();
+        let directory = std::env::temp_dir().join(format!(
+            "alder-interface-test-{}-{}",
+            std::process::id(),
+            interface.fingerprint[0]
+        ));
+        let path = directory.join("Main.aldi");
+        interface.save(&path).unwrap();
+        let loaded = InterfaceFile::load(&path).unwrap();
+        assert_eq!(interface, loaded);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn package_index_rejects_foreign_modules() {
+        let result = PackageInstanceIndexFile::new(
+            OwnedPackageId::Application,
+            vec![OwnedModuleId {
+                package: OwnedPackageId::Named {
+                    author: "other".to_owned(),
+                    project: "package".to_owned(),
+                },
+                path: vec!["Foreign".to_owned()],
+            }],
+            vec![],
+        );
+        assert!(matches!(
+            result,
+            Err(DriverError::IncompatibleInterface { .. })
+        ));
     }
 
     #[test]
     fn test_cache_path() {
         let cache = InterfaceCache::new(Path::new("/project"));
-
-        assert_eq!(
-            cache.cache_path("Main"),
-            PathBuf::from("/project/.alder/interfaces/Main.aldi")
-        );
-
         assert_eq!(
             cache.cache_path("Json.Decode"),
             PathBuf::from("/project/.alder/interfaces/Json/Decode.aldi")

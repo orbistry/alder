@@ -374,8 +374,8 @@ available; reaching the same package through multiple paths deduplicates by
 import-closure semantics. Evidence-selected foreign dictionaries create ESM
 dependency edges even when no source-level value import refers to their module.
 
-The persistent format is an owned, versioned DTO rather than the current legacy
-`Export` cache:
+The persistent format is an owned, versioned DTO; the former export-name-only
+cache has been removed:
 
 ```rust
 pub struct InterfaceFile {

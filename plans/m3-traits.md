@@ -61,6 +61,10 @@ static resolution wherever the type is known.
   source is passed through `indoc!`, installed as insta's `description`, and
   `omit_expression` is enabled. Multiline Alder programs must not be hidden in
   escaped Rust expressions in snapshots.
+- Solved module interfaces cross arena and persistent-cache boundaries through
+  a complete owned DTO. Interface and package-instance-index files are versioned,
+  reject compiler-version mismatches, and fingerprint canonical bincode bytes
+  with SHA-256 rather than Rust's process-oriented `DefaultHasher`.
 
 ## Open decisions (recommendation in bold)
 

@@ -211,6 +211,7 @@ dependencies = [
  "insta",
  "miette",
  "serde",
+ "sha2",
  "thiserror 2.0.20",
  "tokio",
  "url",
@@ -252,6 +253,9 @@ dependencies = [
 [[package]]
 name = "alder-region"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "alder-report"
