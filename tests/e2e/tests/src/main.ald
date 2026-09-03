@@ -42,6 +42,18 @@ fn generic_sub(left: a, right: a) -> a where a: Num {
     left - right
 }
 
+fn generic_mul(left: a, right: a) -> a where a: Num {
+    left * right
+}
+
+fn generic_div(left: a, right: a) -> a where a: Num {
+    left / right
+}
+
+fn generic_rem(left: a, right: a) -> a where a: Num {
+    left % right
+}
+
 fn generic_negate(value: a) -> a where a: Num {
     -value
 }
@@ -54,8 +66,24 @@ fn generic_greater(left: a, right: a) -> Bool where a: Ord {
     left > right
 }
 
+fn generic_less(left: a, right: a) -> Bool where a: Ord {
+    left < right
+}
+
+fn generic_less_equal(left: a, right: a) -> Bool where a: Ord {
+    left <= right
+}
+
+fn generic_greater_equal(left: a, right: a) -> Bool where a: Ord {
+    left >= right
+}
+
 fn ordered_equal(left: a, right: a) -> Bool where a: Ord {
     left == right
+}
+
+fn ordered_not_equal(left: a, right: a) -> Bool where a: Ord {
+    left != right
 }
 
 trait Same[a] {
@@ -130,10 +158,19 @@ test "arithmetic works" {
     assert generic_equal(1, 1)
     assert generic_add(20, 22) == 42
     assert generic_sub(44, 2) == 42
+    assert generic_mul(6, 7) == 42
+    assert generic_div(84, 2) == 42
+    assert generic_rem(86, 44) == 42
     assert generic_negate(42) == -42
     assert numeric_equal(42, 42)
     assert generic_greater(2, 1)
+    assert generic_less(1, 2)
+    assert generic_less_equal(1, 1)
+    assert generic_less_equal(1, 2)
+    assert generic_greater_equal(2, 2)
+    assert generic_greater_equal(2, 1)
     assert ordered_equal(1, 1)
+    assert ordered_not_equal(1, 2)
     assert ranked_same(42, 42)
     assert scored_same(42, 42)
     assert [1, 2, 3] == [1, 2, 3]
