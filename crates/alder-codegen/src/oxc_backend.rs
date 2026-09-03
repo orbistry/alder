@@ -632,8 +632,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     })
                     .and_then(|reference| {
                         module.items.iter().find_map(|item| match &item.value.kind {
-                            ItemKind::Enum(enum_) if enum_.name == reference => {
-                                Some(enum_.variants)
+                            ItemKind::Enum(enum_) if enum_.name == reference => Some(
+                                enum_
+                                    .variants
+                                    .iter()
+                                    .map(|variant| variant.name.variant)
+                                    .collect::<Vec<_>>(),
+                            ),
+                            ItemKind::ErrorGroup(group) if group.name == reference => {
+                                Some(group.tags.iter().map(|tag| tag.name).collect::<Vec<_>>())
                             }
                             _ => None,
                         })
@@ -658,28 +665,28 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     &mut body,
                     self_name,
                     "lt",
-                    variants,
+                    variants.as_deref(),
                     BinaryOperator::LessThan,
                 );
                 self.derived_ord_method(
                     &mut body,
                     self_name,
                     "lte",
-                    variants,
+                    variants.as_deref(),
                     BinaryOperator::LessEqualThan,
                 );
                 self.derived_ord_method(
                     &mut body,
                     self_name,
                     "gt",
-                    variants,
+                    variants.as_deref(),
                     BinaryOperator::GreaterThan,
                 );
                 self.derived_ord_method(
                     &mut body,
                     self_name,
                     "gte",
-                    variants,
+                    variants.as_deref(),
                     BinaryOperator::GreaterEqualThan,
                 );
             }
@@ -746,17 +753,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
         body: &mut ArenaVec<'js, Statement<'js>>,
         dictionary: &str,
         method: &str,
-        variants: Option<&'src [alder_ast::Variant<'src>]>,
+        variants: Option<&[&'src str]>,
         operator: BinaryOperator,
     ) {
         let args = vec!["$a0".to_owned(), "$a1".to_owned()];
         let comparison = if let Some(variants) = variants {
             self.kernel.insert("$compareEnum");
-            let order = self.js.array(
-                variants
-                    .iter()
-                    .map(|variant| self.js.string(variant.name.variant)),
-            );
+            let order = self
+                .js
+                .array(variants.iter().map(|variant| self.js.string(variant)));
             self.js.call(
                 self.js.identifier("$compareEnum"),
                 [

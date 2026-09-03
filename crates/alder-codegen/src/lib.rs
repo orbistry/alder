@@ -373,6 +373,12 @@ mod tests {
     }
 
     #[test]
+    fn error_group_ord_preserves_declaration_order() {
+        let generated = emit("#[derive(Ord)]\npub error Failure { :later, :first(Number) }");
+        assert!(generated.contains("$compareEnum($a0, $a1, [\"later\", \"first\"])"));
+    }
+
+    #[test]
     fn compound_assignment_uses_the_selected_num_dictionary() {
         insta::assert_snapshot!(emit_solved(
             r#"enum Token { Token }

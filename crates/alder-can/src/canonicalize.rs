@@ -112,6 +112,60 @@ pub fn canonicalize<'a>(
                         }
                     }
                 }
+                if let ItemKind::ErrorGroup(group) = &canonical_item.value.kind {
+                    if error_group_supports_structural_derive(group) {
+                        automatic_impls.push(error_group_derive_impl(
+                            bump,
+                            context.home,
+                            group,
+                            canonical_item.region,
+                            alder_ast::DeriveKind::Eq,
+                            alder_ast::ImplOrigin::AutomaticEq {
+                                type_ordinal: item_ordinal as u32,
+                            },
+                        ));
+                    }
+                    for attribute in canonical_item.value.attributes {
+                        let Attribute::Derive { region, names } = attribute else {
+                            continue;
+                        };
+                        for (derive_index, name) in names.iter().enumerate() {
+                            let kind = derive_kind(name.name)
+                                .expect("derive attributes contain validated built-in names");
+                            if kind == alder_ast::DeriveKind::Eq {
+                                if !error_group_supports_structural_derive(group) {
+                                    errors.push(Error::new(
+                                        *region,
+                                        ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                            reason: "function-valued fields cannot derive Eq",
+                                        }),
+                                    ));
+                                }
+                                continue;
+                            }
+                            if !error_group_supports_structural_derive(group) {
+                                errors.push(Error::new(
+                                    *region,
+                                    ErrorKind::Attribute(AttributeError::InvalidDerive {
+                                        reason: "function-valued fields cannot use built-in derives",
+                                    }),
+                                ));
+                                continue;
+                            }
+                            automatic_impls.push(error_group_derive_impl(
+                                bump,
+                                context.home,
+                                group,
+                                canonical_item.region,
+                                kind,
+                                alder_ast::ImplOrigin::Derived {
+                                    type_ordinal: item_ordinal as u32,
+                                    derive_index: derive_index as u16,
+                                },
+                            ));
+                        }
+                    }
+                }
             }
             Err(mut item_errors) => errors.append(&mut item_errors),
         }
@@ -145,6 +199,14 @@ fn enum_supports_structural_derive(enum_: &EnumDecl<'_>) -> bool {
         VariantPayload::Record(fields) => fields
             .iter()
             .all(|field| type_supports_structural_derive(field.typ)),
+    })
+}
+
+fn error_group_supports_structural_derive(group: &ErrorGroup<'_>) -> bool {
+    group.tags.iter().all(|tag| {
+        tag.args
+            .iter()
+            .all(|typ| type_supports_structural_derive(typ))
     })
 }
 
@@ -261,6 +323,64 @@ fn enum_derive_impl<'a>(
                 params,
                 constraints: &[],
                 trait_predicates,
+                projection_equalities: &[],
+                assoc_bindings: &[],
+                items: &[],
+                synthetic: Some(kind),
+                region,
+            })),
+        },
+    ))
+}
+
+fn error_group_derive_impl<'a>(
+    bump: &'a Bump,
+    home: ModuleId<'a>,
+    group: &'a ErrorGroup<'a>,
+    region: Region,
+    kind: alder_ast::DeriveKind,
+    origin: alder_ast::ImplOrigin,
+) -> &'a Located<Item<'a>> {
+    let subject = bump.alloc(Located::at(
+        region,
+        Type::Named {
+            reference: group.name,
+            args: &[],
+        },
+    ));
+    let trait_ = alder_ast::TraitId(QualifiedName {
+        module: ModuleId {
+            package: alder_ast::PackageId::Builtin,
+            path: &[],
+        },
+        name: match kind {
+            alder_ast::DeriveKind::Show => "Show",
+            alder_ast::DeriveKind::Eq => "Eq",
+            alder_ast::DeriveKind::Ord => "Ord",
+            alder_ast::DeriveKind::Hash => "Hash",
+            alder_ast::DeriveKind::Json => "Json",
+        },
+    });
+    let trait_ref = alder_ast::TraitRef {
+        trait_,
+        args: bump.alloc_slice_copy(&[subject as &Located<Type<'a>>]),
+    };
+    bump.alloc(Located::at(
+        region,
+        Item {
+            visibility: Visibility::Private,
+            attributes: &[],
+            kind: ItemKind::Impl(bump.alloc(ImplDecl {
+                id: alder_ast::ImplId {
+                    module: home,
+                    origin,
+                },
+                trait_: trait_.0,
+                args: trait_ref.args,
+                trait_ref,
+                params: &[],
+                constraints: &[],
+                trait_predicates: &[],
                 projection_equalities: &[],
                 assoc_bindings: &[],
                 items: &[],
@@ -2903,6 +3023,44 @@ mod tests {
             };
             assert_eq!(name, "a");
         }
+    }
+
+    #[test]
+    fn error_groups_receive_automatic_and_explicit_derives() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            "#[derive(Show, Eq, Ord, Hash, Json)]\nerror Failure { :later, :first(Number) }",
+        );
+        let implementations = result
+            .module
+            .items
+            .iter()
+            .filter_map(|item| match item.value.kind {
+                ItemKind::Impl(implementation) => Some(implementation),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(implementations.len(), 5);
+        assert_eq!(
+            implementations
+                .iter()
+                .map(|implementation| implementation.synthetic.unwrap())
+                .collect::<Vec<_>>(),
+            vec![
+                alder_ast::DeriveKind::Eq,
+                alder_ast::DeriveKind::Show,
+                alder_ast::DeriveKind::Ord,
+                alder_ast::DeriveKind::Hash,
+                alder_ast::DeriveKind::Json,
+            ]
+        );
+        assert!(implementations.iter().all(|implementation| {
+            matches!(
+                implementation.trait_ref.args[0].value,
+                Type::Named { reference, args: [] } if reference.name == "Failure"
+            )
+        }));
     }
 
     #[test]
