@@ -883,6 +883,55 @@ fn functions_have_no_structural_eq_instance() {
 }
 
 #[test]
+fn closed_records_have_fieldwise_structural_eq_evidence() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn same(
+                left: { name: String, score: Number },
+                right: { name: String, score: Number },
+            ) -> Bool {
+                left == right
+            }
+        "#},
+    )
+    .expect("closed records have structural equality when every field does");
+
+    assert!(solved.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::Operator {
+            dictionary: alder_solve::Evidence::StructuralEq {
+                shape: alder_solve::StructuralEqShape::Record(fields),
+                fields: dictionaries,
+            },
+        } if fields == &["name", "score"] && dictionaries.len() == 2
+    )));
+}
+
+#[test]
+fn open_record_rows_have_no_structural_eq_instance() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            fn same(left: { r | name: String }, right: { r | name: String }) -> Bool {
+                left == right
+            }
+        "#},
+    )
+    .expect_err("an open row can hide fields without Eq instances");
+
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Trait(
+            alder_solve::SolveTraitError::MissingInstance { trait_, .. }
+                | alder_solve::SolveTraitError::UnsatisfiedBound { trait_, .. }
+        ) if trait_.0.name == "Eq"
+    )));
+}
+
+#[test]
 fn trait_errors_preserve_structured_missing_evidence() {
     let bump = Bump::new();
     let errors = solve_input(

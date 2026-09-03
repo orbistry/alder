@@ -1,0 +1,18 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn same(\n    left: { name: String, score: Number },\n    right: { name: String, score: Number },\n) -> Bool {\n    left == right\n}\n"
+---
+import { $equalStructural } from "alder:kernel";
+function $v_same($a0, $a1) {
+	let $l0_left = $a0;
+	let $l1_right = $a1;
+	const $t0 = $l0_left;
+	return { "eq": ($a, $b) => {
+		return $equalStructural($a, $b, "record", ["name", "score"], [{ "eq": ($a, $b) => {
+			return $a === $b;
+		} }, { "eq": ($a, $b) => {
+			return $a === $b;
+		} }]);
+	} }["eq"]($t0, $l1_right);
+}
+export { $v_same as same };

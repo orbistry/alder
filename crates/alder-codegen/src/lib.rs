@@ -398,6 +398,18 @@ mod tests {
     }
 
     #[test]
+    fn solved_record_equality_uses_field_dictionaries() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn same(
+                left: { name: String, score: Number },
+                right: { name: String, score: Number },
+            ) -> Bool {
+                left == right
+            }
+        "#};
+    }
+
+    #[test]
     fn generic_ordering_uses_the_compare_result_tag() {
         assert_solved_emit_snapshot! {r#"
             pub fn less_than(left: a, right: a) -> Bool where a: Ord {
