@@ -18,8 +18,38 @@ fn describe(value: a) -> String where a: Show {
     show(value)
 }
 
+fn generic_equal(left: a, right: a) -> Bool where a: Eq {
+    left == right
+}
+
+fn generic_add(left: a, right: a) -> a where a: Num {
+    left + right
+}
+
+fn generic_sub(left: a, right: a) -> a where a: Num {
+    left - right
+}
+
+fn generic_negate(value: a) -> a where a: Num {
+    -value
+}
+
+fn generic_greater(left: a, right: a) -> Bool where a: Ord {
+    left > right
+}
+
+fn ordered_equal(left: a, right: a) -> Bool where a: Ord {
+    left == right
+}
+
 test "arithmetic works" {
     assert 1 + 1 == 2
+    assert generic_equal(1, 1)
+    assert generic_add(20, 22) == 42
+    assert generic_sub(44, 2) == 42
+    assert generic_negate(42) == -42
+    assert generic_greater(2, 1)
+    assert ordered_equal(1, 1)
 }
 
 test "trait dictionaries dispatch" {

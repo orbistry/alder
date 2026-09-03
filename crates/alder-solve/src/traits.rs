@@ -302,15 +302,27 @@ impl<'a> TraitDatabase<'a> {
         for name in ["Show", "Eq", "Ord", "Hash", "Json", "Num"] {
             let id = builtin_trait_id(name);
             let params = bump.alloc_slice_copy(&[TypeParam {
-                name: builtin_name(name),
+                name: builtin_name("a"),
                 kind: Kind::Type,
             }]);
+            let superclasses: &'a [TraitRef<'a>] = if name == "Ord" {
+                let argument = bump.alloc(Located::at_zero(Type::Var {
+                    name: "a",
+                    args: &[],
+                }));
+                bump.alloc_slice_copy(&[TraitRef {
+                    trait_: builtin_trait_id("Eq"),
+                    args: bump.alloc_slice_copy(&[argument as &Located<Type<'a>>]),
+                }])
+            } else {
+                &[]
+            };
             self.traits.insert(
                 id,
                 TraitHeader {
                     id,
                     params,
-                    superclasses: &[],
+                    superclasses,
                     associated_types: &[],
                     methods: &[],
                 },

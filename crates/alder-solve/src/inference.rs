@@ -886,6 +886,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         match context {
             FunctionContext::Ordinary => {
                 self.add_parameter_givens(&predicates, 0);
+                self.add_parameter_superclass_givens(&predicates, 0);
             }
             FunctionContext::Impl(implementation) => {
                 let self_predicate =
@@ -901,7 +902,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                     .map(|predicate| self.predicate_from_trait_ref(*predicate, &mut vars))
                     .collect::<Vec<_>>();
                 self.add_parameter_givens(&prerequisites, 0);
+                self.add_parameter_superclass_givens(&prerequisites, 0);
                 self.add_parameter_givens(&predicates, prerequisites.len());
+                self.add_parameter_superclass_givens(&predicates, prerequisites.len());
             }
             FunctionContext::Default(trait_) => {
                 let self_predicate = Predicate {
@@ -922,6 +925,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 });
                 self.add_superclass_givens(&self_predicate);
                 self.add_parameter_givens(&predicates, 0);
+                self.add_parameter_superclass_givens(&predicates, 0);
             }
         }
         let body_result = match self.prune(result.clone()) {
@@ -2088,6 +2092,30 @@ impl<'a, 'db> Infer<'a, 'db> {
                 predicate,
                 evidence: Evidence::Super(index as u16),
             });
+        }
+    }
+
+    fn add_parameter_superclass_givens(&mut self, predicates: &[Predicate<'a>], offset: usize) {
+        for (parameter_index, predicate) in predicates.iter().enumerate() {
+            let Some(header) = self.database.trait_(predicate.trait_) else {
+                continue;
+            };
+            let mut vars = header
+                .params
+                .iter()
+                .zip(&predicate.args)
+                .map(|(parameter, argument)| (parameter.name.value, argument.clone()))
+                .collect::<BTreeMap<_, _>>();
+            for (slot, superclass) in header.superclasses.iter().enumerate() {
+                let predicate = self.predicate_from_trait_ref(*superclass, &mut vars);
+                self.givens.push(Given {
+                    predicate,
+                    evidence: Evidence::ParamSuper {
+                        param: (offset + parameter_index) as u16,
+                        slot: slot as u16,
+                    },
+                });
+            }
         }
     }
 

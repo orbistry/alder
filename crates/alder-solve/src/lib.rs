@@ -65,6 +65,10 @@ pub enum DirectTarget<'a> {
 #[derive(Clone, Debug)]
 pub enum Evidence<'a> {
     Param(u16),
+    ParamSuper {
+        param: u16,
+        slot: u16,
+    },
     SelfDictionary,
     Super(u16),
     Impl {

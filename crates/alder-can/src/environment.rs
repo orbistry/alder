@@ -110,6 +110,7 @@ impl<'a> Env<'a> {
             next_use: Rc::new(Cell::new(0)),
         };
         env.add_builtin_types();
+        env.add_builtin_traits();
         env.add_builtin_modules();
         env
     }
@@ -161,6 +162,27 @@ impl<'a> Env<'a> {
                     },
                     interface: None,
                     region: Region::zero(),
+                }),
+            );
+        }
+    }
+
+    fn add_builtin_traits(&mut self) {
+        for name in ["Eq", "Ord", "Num"] {
+            self.traits.insert(
+                name,
+                Candidate::Unique(TraitBinding {
+                    reference: QualifiedName {
+                        module: ModuleId {
+                            package: PackageId::Builtin,
+                            path: &[],
+                        },
+                        name,
+                    },
+                    arity: 1,
+                    region: Region::zero(),
+                    associated_types: &[],
+                    methods: &[],
                 }),
             );
         }

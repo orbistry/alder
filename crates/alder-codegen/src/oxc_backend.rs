@@ -792,8 +792,9 @@ impl<'src, 'js> Emitter<'src, 'js> {
             }
             Expr::Pin(expression) | Expr::State(expression) => self.expr(expression)?,
             Expr::Negate {
-                expr: expression, ..
-            } => self.unary(UnaryOperator::UnaryNegation, expression)?,
+                use_id,
+                expr: expression,
+            } => self.negate(*use_id, expression)?,
             Expr::Not(expression) => self.unary(UnaryOperator::LogicalNot, expression)?,
             Expr::Binop {
                 use_id,
@@ -899,6 +900,35 @@ impl<'src, 'js> Emitter<'src, 'js> {
         Ok(Value {
             prefix: value.prefix,
             expr: self.js.unary(operator, value.expr),
+        })
+    }
+
+    fn negate(
+        &mut self,
+        use_id: alder_ast::UseId,
+        expression: &Located<Expr<'src>>,
+    ) -> Result<Value<'js>, Error> {
+        let value = self.expr(expression)?;
+        let evidence = self
+            .solved
+            .and_then(|solved| solved.uses.get(&use_id))
+            .and_then(|action| match action {
+                UseAction::Operator { dictionary } => Some(dictionary.clone()),
+                _ => None,
+            });
+        let expr = match evidence {
+            Some(Evidence::Intrinsic(_)) | None => {
+                self.js.unary(UnaryOperator::UnaryNegation, value.expr)
+            }
+            Some(evidence) => {
+                let dictionary = self.evidence(&evidence);
+                self.js
+                    .call(self.js.member(dictionary, "negate"), [value.expr])
+            }
+        };
+        Ok(Value {
+            prefix: value.prefix,
+            expr,
         })
     }
 
@@ -1867,6 +1897,10 @@ impl<'src, 'js> Emitter<'src, 'js> {
     fn evidence(&mut self, evidence: &Evidence<'src>) -> Expression<'js> {
         match evidence {
             Evidence::Param(index) => self.js.identifier(&format!("$dict{index}")),
+            Evidence::ParamSuper { param, slot } => self.js.member(
+                self.js.identifier(&format!("$dict{param}")),
+                &format!("$super{slot}"),
+            ),
             Evidence::SelfDictionary => self.js.identifier("$self"),
             Evidence::Super(index) => self
                 .js
@@ -1917,17 +1951,58 @@ impl<'src, 'js> Emitter<'src, 'js> {
 
     fn intrinsic_dictionary(&self, intrinsic: Intrinsic) -> Expression<'js> {
         let mut properties = self.js.vec();
-        let (name, operator) = match intrinsic {
+        match intrinsic {
             Intrinsic::EqNumber
             | Intrinsic::EqString
             | Intrinsic::EqBool
             | Intrinsic::EqBigInt
-            | Intrinsic::EqUnit => ("eq", BinaryOperator::StrictEquality),
+            | Intrinsic::EqUnit => properties
+                .push(self.intrinsic_binary_property("eq", BinaryOperator::StrictEquality)),
             Intrinsic::OrdNumber | Intrinsic::OrdString | Intrinsic::OrdBigInt => {
-                ("lt", BinaryOperator::LessThan)
+                properties.push(self.intrinsic_binary_property("lt", BinaryOperator::LessThan));
+                properties
+                    .push(self.intrinsic_binary_property("lte", BinaryOperator::LessEqualThan));
+                properties.push(self.intrinsic_binary_property("gt", BinaryOperator::GreaterThan));
+                properties
+                    .push(self.intrinsic_binary_property("gte", BinaryOperator::GreaterEqualThan));
+                let equality = match intrinsic {
+                    Intrinsic::OrdNumber => Intrinsic::EqNumber,
+                    Intrinsic::OrdString => Intrinsic::EqString,
+                    Intrinsic::OrdBigInt => Intrinsic::EqBigInt,
+                    _ => unreachable!(),
+                };
+                properties.push(
+                    self.js
+                        .property("$super0", self.intrinsic_dictionary(equality)),
+                );
             }
-            Intrinsic::NumNumber | Intrinsic::NumBigInt => ("add", BinaryOperator::Addition),
-        };
+            Intrinsic::NumNumber | Intrinsic::NumBigInt => {
+                properties.push(self.intrinsic_binary_property("add", BinaryOperator::Addition));
+                properties.push(self.intrinsic_binary_property("sub", BinaryOperator::Subtraction));
+                properties
+                    .push(self.intrinsic_binary_property("mul", BinaryOperator::Multiplication));
+                properties.push(self.intrinsic_binary_property("div", BinaryOperator::Division));
+                properties.push(self.intrinsic_binary_property("rem", BinaryOperator::Remainder));
+                let args = vec!["$a".to_owned()];
+                let expression = self
+                    .js
+                    .unary(UnaryOperator::UnaryNegation, self.js.identifier(&args[0]));
+                let mut body = self.js.vec();
+                body.push(self.js.return_statement(expression));
+                properties.push(
+                    self.js
+                        .property("negate", self.js.arrow(&args, body, false)),
+                );
+            }
+        }
+        self.js.object(properties)
+    }
+
+    fn intrinsic_binary_property(
+        &self,
+        name: &str,
+        operator: BinaryOperator,
+    ) -> ObjectPropertyKind<'js> {
         let args = vec!["$a".to_owned(), "$b".to_owned()];
         let expression = self.js.binary(
             self.js.identifier(&args[0]),
@@ -1936,8 +2011,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         );
         let mut body = self.js.vec();
         body.push(self.js.return_statement(expression));
-        properties.push(self.js.property(name, self.js.arrow(&args, body, false)));
-        self.js.object(properties)
+        self.js.property(name, self.js.arrow(&args, body, false))
     }
 
     fn constructor_reference(
