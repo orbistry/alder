@@ -619,32 +619,16 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.derived_kernel_method(&mut body, self_name, "eq", "$equal", 2, None);
             }
             alder_ast::DeriveKind::Show => {
-                self.derived_kernel_method(&mut body, self_name, "show", "$show", 1, None);
+                self.derived_shaped_method(
+                    &mut body,
+                    self_name,
+                    "show",
+                    "$showDerived",
+                    module,
+                    implementation,
+                );
             }
             alder_ast::DeriveKind::Ord => {
-                let variants = implementation
-                    .trait_ref
-                    .args
-                    .first()
-                    .and_then(|subject| match subject.value {
-                        alder_ast::Type::Named { reference, .. } => Some(reference),
-                        _ => None,
-                    })
-                    .and_then(|reference| {
-                        module.items.iter().find_map(|item| match &item.value.kind {
-                            ItemKind::Enum(enum_) if enum_.name == reference => Some(
-                                enum_
-                                    .variants
-                                    .iter()
-                                    .map(|variant| variant.name.variant)
-                                    .collect::<Vec<_>>(),
-                            ),
-                            ItemKind::ErrorGroup(group) if group.name == reference => {
-                                Some(group.tags.iter().map(|tag| tag.name).collect::<Vec<_>>())
-                            }
-                            _ => None,
-                        })
-                    });
                 let equality = format!("$dict$Eq${}", impl_origin_index(implementation.id.origin));
                 let super_target = self.js.member(self.js.identifier(self_name), "$super0");
                 let equality = if prerequisite_args.is_empty() {
@@ -665,28 +649,32 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     &mut body,
                     self_name,
                     "lt",
-                    variants.as_deref(),
+                    module,
+                    implementation,
                     BinaryOperator::LessThan,
                 );
                 self.derived_ord_method(
                     &mut body,
                     self_name,
                     "lte",
-                    variants.as_deref(),
+                    module,
+                    implementation,
                     BinaryOperator::LessEqualThan,
                 );
                 self.derived_ord_method(
                     &mut body,
                     self_name,
                     "gt",
-                    variants.as_deref(),
+                    module,
+                    implementation,
                     BinaryOperator::GreaterThan,
                 );
                 self.derived_ord_method(
                     &mut body,
                     self_name,
                     "gte",
-                    variants.as_deref(),
+                    module,
+                    implementation,
                     BinaryOperator::GreaterEqualThan,
                 );
             }
@@ -694,7 +682,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.derived_kernel_method(&mut body, self_name, "hash", "$hash", 1, None);
             }
             alder_ast::DeriveKind::Json => {
-                self.derived_json_method(
+                self.derived_shaped_method(
                     &mut body,
                     self_name,
                     "encode",
@@ -702,7 +690,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     module,
                     implementation,
                 );
-                self.derived_json_method(
+                self.derived_shaped_method(
                     &mut body,
                     self_name,
                     "decode",
@@ -762,7 +750,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         body.push(self.js.expression_statement(assignment));
     }
 
-    fn derived_json_method(
+    fn derived_shaped_method(
         &mut self,
         body: &mut ArenaVec<'js, Statement<'js>>,
         dictionary: &str,
@@ -772,7 +760,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         implementation: &alder_ast::ImplDecl<'src>,
     ) {
         self.kernel.insert(kernel);
-        let shape = self.derived_json_shape(module, implementation);
+        let shape = self.derived_variant_shape(module, implementation);
         let call = self.js.call(
             self.js.identifier(kernel),
             [self.js.identifier("$a0"), shape],
@@ -788,7 +776,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         body.push(self.js.expression_statement(assignment));
     }
 
-    fn derived_json_shape(
+    fn derived_variant_shape(
         &self,
         module: &Module<'src>,
         implementation: &alder_ast::ImplDecl<'src>,
@@ -829,7 +817,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                             };
                             variants.push(self.js.property(
                                 variant.name.variant,
-                                self.json_variant_shape(record, &fields, &optional),
+                                self.variant_shape(record, &fields, &optional),
                             ));
                         }
                     }
@@ -839,10 +827,8 @@ impl<'src, 'js> Emitter<'src, 'js> {
                                 .map(|index| format!("_{index}"))
                                 .collect::<Vec<_>>();
                             variants.push(
-                                self.js.property(
-                                    tag.name,
-                                    self.json_variant_shape(false, &fields, &[]),
-                                ),
+                                self.js
+                                    .property(tag.name, self.variant_shape(false, &fields, &[])),
                             );
                         }
                     }
@@ -853,7 +839,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         self.js.object(variants)
     }
 
-    fn json_variant_shape(
+    fn variant_shape(
         &self,
         record: bool,
         fields: &[String],
@@ -883,30 +869,21 @@ impl<'src, 'js> Emitter<'src, 'js> {
         body: &mut ArenaVec<'js, Statement<'js>>,
         dictionary: &str,
         method: &str,
-        variants: Option<&[&'src str]>,
+        module: &Module<'src>,
+        implementation: &alder_ast::ImplDecl<'src>,
         operator: BinaryOperator,
     ) {
         let args = vec!["$a0".to_owned(), "$a1".to_owned()];
-        let comparison = if let Some(variants) = variants {
-            self.kernel.insert("$compareEnum");
-            let order = self
-                .js
-                .array(variants.iter().map(|variant| self.js.string(variant)));
-            self.js.call(
-                self.js.identifier("$compareEnum"),
-                [
-                    self.js.identifier(&args[0]),
-                    self.js.identifier(&args[1]),
-                    order,
-                ],
-            )
-        } else {
-            self.kernel.insert("$compare");
-            self.js.call(
-                self.js.identifier("$compare"),
-                args.iter().map(|argument| self.js.identifier(argument)),
-            )
-        };
+        let shape = self.derived_variant_shape(module, implementation);
+        self.kernel.insert("$compareDerived");
+        let comparison = self.js.call(
+            self.js.identifier("$compareDerived"),
+            [
+                self.js.identifier(&args[0]),
+                self.js.identifier(&args[1]),
+                shape,
+            ],
+        );
         let result = self.js.binary(comparison, operator, self.js.number(0.0));
         let mut method_body = self.js.vec();
         method_body.push(self.js.return_statement(result));

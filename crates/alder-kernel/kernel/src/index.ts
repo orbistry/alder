@@ -23,6 +23,19 @@ export function $show(value) {
     return String(value);
 }
 
+export function $showDerived(value, variants) {
+    const shape = value && variants[value.$];
+    if (!shape) throw new TypeError("$: unknown derived Show variant");
+    if (shape.record) {
+        const fields = shape.fields
+            .filter((field) => Object.hasOwn(value, field))
+            .map((field) => `${field}: ${$show(value[field])}`);
+        return `${value.$} { ${fields.join(", ")} }`;
+    }
+    const fields = shape.fields.map((field) => $show(value[field]));
+    return fields.length === 0 ? value.$ : `${value.$}(${fields.join(", ")})`;
+}
+
 export function $compare(left, right) {
     if ($equal(left, right)) return 0;
     if ((typeof left === "number" && typeof right === "number")
@@ -42,6 +55,21 @@ export function $compareEnum(left, right, variants) {
         }
     }
     return $compare(left, right);
+}
+
+export function $compareDerived(left, right, variants) {
+    const names = Object.keys(variants);
+    const leftIndex = names.indexOf(left?.$);
+    const rightIndex = names.indexOf(right?.$);
+    if (leftIndex < 0 || rightIndex < 0) {
+        throw new TypeError("$: unknown derived Ord variant");
+    }
+    if (leftIndex !== rightIndex) return leftIndex < rightIndex ? -1 : 1;
+    for (const field of variants[left.$].fields) {
+        const ordering = $compare(left[field], right[field]);
+        if (ordering !== 0) return ordering;
+    }
+    return 0;
 }
 
 export function $arrayPure(value) {

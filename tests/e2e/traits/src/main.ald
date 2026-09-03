@@ -10,6 +10,11 @@ enum Config {
     Config { name: String, note?: String },
 }
 
+#[derive(Ord)]
+enum OrderProbe {
+    Value { zed: Number, alpha: Number },
+}
+
 trait Describe[a] {
     fn describe(value: a) -> String
 }
@@ -36,7 +41,9 @@ pub fn main() {
     assert(describe_generic([1, 2]) == "array")
 
     assert(show(Status::Failed("oops")) == "Failed(\"oops\")")
+    assert(show(Status::Meta { code: 7, note: "same" }) == "Meta { code: 7, note: \"same\" }")
     assert(Status::Ready < Status::Failed("later"))
+    assert(OrderProbe::Value { zed: 0, alpha: 9 } < OrderProbe::Value { zed: 1, alpha: 0 })
     assert(hash(Status::Meta { code: 7, note: "same" }) == hash(Status::Meta { code: 7, note: "same" }))
 
     let encoded = encode(Status::Meta { code: 42, note: "answer" })

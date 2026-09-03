@@ -440,12 +440,24 @@ mod tests {
     }
 
     #[test]
+    fn derived_show_uses_record_payload_source_order() {
+        assert_emit_snapshot! {r#"
+            #[derive(Show)]
+            pub enum Status {
+                Meta { code: Number, note: String },
+            }
+        "#};
+    }
+
+    #[test]
     fn error_group_ord_preserves_declaration_order() {
         let generated = emit(indoc::indoc! {r#"
             #[derive(Ord)]
             pub error Failure { :later, :first(Number) }
         "#});
-        assert!(generated.contains("$compareEnum($a0, $a1, [\"later\", \"first\"])"));
+        assert!(generated.contains("\"later\": {"));
+        assert!(generated.contains("\"first\": {"));
+        assert!(generated.contains("$compareDerived($a0, $a1"));
     }
 
     #[test]

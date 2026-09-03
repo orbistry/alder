@@ -12,8 +12,10 @@ mod tests {
         for symbol in [
             "$equal",
             "$show",
+            "$showDerived",
             "$compare",
             "$compareEnum",
+            "$compareDerived",
             "$arrayApply",
             "$optionFlatMap",
             "$resultPure",

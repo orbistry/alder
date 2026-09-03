@@ -6,4 +6,5 @@ cargo/alder-kernel: patch
 ---
 
 Preserve optional enum payload fields through canonicalization and inference,
-omit them from derived JSON, and accept them as absent when decoding.
+omit them from derived JSON, and accept them as absent when decoding. Render
+derived record-payload constructors in Alder syntax and source field order.
