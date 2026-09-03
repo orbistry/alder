@@ -1080,6 +1080,23 @@ fn polymorphic_identity() {
 }
 
 #[test]
+fn partial_annotations_share_variables_with_inferred_positions() {
+    assert_inference_snapshot! {r#"
+        fn apply(value: a, transform) { transform(value) }
+    "#};
+}
+
+#[test]
+fn unresolved_local_trait_obligations_are_not_generalized() {
+    assert_solve_error_snapshot! {r#"
+        fn ambiguous() {
+            let equal = fn(left, right) { left == right }
+            ()
+        }
+    "#};
+}
+
+#[test]
 fn dependency_scc_generalizes_before_earlier_source_use() {
     let bump = Bump::new();
     let annotations = infer(

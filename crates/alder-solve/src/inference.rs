@@ -48,6 +48,7 @@ fn resolve_obligations<'a>(
     result: InferenceResult<'a>,
 ) -> Result<SolveOutput<'a>, Vec<SolveError<'a>>> {
     let variable_names = result.variable_names;
+    let generalized_variables = result.generalized_variables;
     let mut uses = BTreeMap::new();
     let mut impl_superclasses = BTreeMap::new();
     let mut errors = Vec::new();
@@ -62,6 +63,7 @@ fn resolve_obligations<'a>(
             &mut stack,
             ResolutionStep {
                 variable_names: &variable_names,
+                generalized_variables: &generalized_variables,
                 required_by: None,
             },
         ) {
@@ -284,7 +286,8 @@ fn resolve_derived_variant_fields<'a, 'field>(
                 Ty::Var(id) => Some((*id, *name)),
                 _ => None,
             })
-            .collect();
+            .collect::<BTreeMap<_, _>>();
+        let generalized_variables = variable_names.keys().copied().collect();
         match resolve_predicate(
             bump,
             database,
@@ -294,6 +297,7 @@ fn resolve_derived_variant_fields<'a, 'field>(
             &mut stack,
             ResolutionStep {
                 variable_names: &variable_names,
+                generalized_variables: &generalized_variables,
                 required_by: None,
             },
         ) {
@@ -399,6 +403,7 @@ fn ty_from_ast<'a>(typ: &Located<Type<'a>>, vars: &mut BTreeMap<&'a str, Ty<'a>>
 #[derive(Clone, Copy)]
 struct ResolutionStep<'a, 'names> {
     variable_names: &'names BTreeMap<usize, &'a str>,
+    generalized_variables: &'names BTreeSet<usize>,
     required_by: Option<ImplId<'a>>,
 }
 
@@ -530,12 +535,28 @@ fn resolve_predicate<'a>(
             }),
         }),
         _ if nested_error.is_some() => Err(nested_error.expect("checked above")),
-        _ if contains_variable(&subject) => Err(SolveTraitError::UnsatisfiedBound {
-            trait_: predicate.trait_,
-            subject: bump.alloc_str(&rendered),
-            origin,
-            chain,
-        }),
+        _ if has_variable_head(&subject) => {
+            let mut variables = BTreeSet::new();
+            collect_variables(&subject, &mut variables);
+            if variables
+                .iter()
+                .all(|variable| step.generalized_variables.contains(variable))
+            {
+                Err(SolveTraitError::UnsatisfiedBound {
+                    trait_: predicate.trait_,
+                    subject: bump.alloc_str(&rendered),
+                    origin,
+                    chain,
+                })
+            } else {
+                Err(SolveTraitError::AmbiguousTypeVariable {
+                    trait_: predicate.trait_,
+                    subject: bump.alloc_str(&rendered),
+                    origin,
+                    chain,
+                })
+            }
+        }
         _ => Err(SolveTraitError::MissingInstance {
             trait_: predicate.trait_,
             subject: bump.alloc_str(&rendered),
@@ -779,18 +800,49 @@ fn nominal_name<'a>(typ: &Ty<'a>) -> Option<&'a str> {
     nominal_parts(typ).map(|(name, _)| name.name)
 }
 
-fn contains_variable(typ: &Ty<'_>) -> bool {
+fn has_variable_head(typ: &Ty<'_>) -> bool {
     match typ {
         Ty::Var(_) => true,
-        Ty::App(head, args) => contains_variable(head) || args.iter().any(contains_variable),
-        Ty::Partial(_, slots) => slots.iter().any(|slot| match slot {
-            TySlot::Hole(_) => false,
-            TySlot::Fixed(typ) => contains_variable(typ),
-        }),
-        Ty::Projection(_, args, _) | Ty::Tuple(args) => args.iter().any(contains_variable),
-        Ty::Fn(params, ret) => params.iter().any(contains_variable) || contains_variable(ret),
-        Ty::Record(fields, _) => fields.values().any(|(_, typ)| contains_variable(typ)),
-        Ty::Con(_) | Ty::Unit | Ty::ErrorRow | Ty::Any => false,
+        Ty::App(head, _) => has_variable_head(head),
+        _ => false,
+    }
+}
+
+fn collect_variables(typ: &Ty<'_>, variables: &mut BTreeSet<usize>) {
+    match typ {
+        Ty::Var(variable) => {
+            variables.insert(*variable);
+        }
+        Ty::App(head, arguments) => {
+            collect_variables(head, variables);
+            for argument in arguments {
+                collect_variables(argument, variables);
+            }
+        }
+        Ty::Partial(_, slots) => {
+            for slot in slots {
+                if let TySlot::Fixed(typ) = slot {
+                    collect_variables(typ, variables);
+                }
+            }
+        }
+        Ty::Projection(_, arguments, _) | Ty::Tuple(arguments) => {
+            for argument in arguments {
+                collect_variables(argument, variables);
+            }
+        }
+        Ty::Fn(arguments, result) => {
+            for argument in arguments {
+                collect_variables(argument, variables);
+            }
+            collect_variables(result, variables);
+        }
+        Ty::Record(fields, _) => {
+            for (_, typ) in fields.values() {
+                collect_variables(typ, variables);
+            }
+        }
+        Ty::Con(_) | Ty::Unit | Ty::ErrorRow | Ty::Any => {}
     }
 }
 
@@ -904,6 +956,7 @@ struct InferenceResult<'a> {
     obligations: Vec<Obligation<'a>>,
     calls: Vec<CallSite<'a>>,
     variable_names: BTreeMap<usize, &'a str>,
+    generalized_variables: BTreeSet<usize>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -949,6 +1002,7 @@ struct Infer<'a, 'db> {
     calls: Vec<CallSite<'a>>,
     requirement_seeds: BTreeMap<UseId, RequirementSeed<'a>>,
     variable_names: BTreeMap<usize, &'a str>,
+    generalized_variables: BTreeSet<usize>,
 }
 
 pub fn run<'a>(
@@ -1000,6 +1054,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 .map(|seed| (seed.use_id, *seed))
                 .collect(),
             variable_names: BTreeMap::new(),
+            generalized_variables: BTreeSet::new(),
         }
     }
 
@@ -1109,6 +1164,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             obligations,
             calls: std::mem::take(&mut self.calls),
             variable_names: std::mem::take(&mut self.variable_names),
+            generalized_variables: std::mem::take(&mut self.generalized_variables),
         })
     }
 
@@ -2560,6 +2616,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         } else {
             vars.clear();
         }
+        self.generalized_variables.extend(vars.iter().copied());
         env.globals.insert(
             name,
             Scheme {

@@ -1,0 +1,45 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn ambiguous() {\n    let equal = fn(left, right) { left == right }\n    ()\n}\n"
+---
+[
+    Trait(
+        AmbiguousTypeVariable {
+            trait_: TraitId(
+                QualifiedName {
+                    module: ModuleId {
+                        package: Builtin,
+                        path: [],
+                    },
+                    name: "Eq",
+                },
+            ),
+            subject: "a",
+            origin: Region {
+                start: Position {
+                    line: 2,
+                    column: 40,
+                },
+                end: Position {
+                    line: 2,
+                    column: 42,
+                },
+            },
+            chain: [
+                ObligationFrame {
+                    trait_: TraitId(
+                        QualifiedName {
+                            module: ModuleId {
+                                package: Builtin,
+                                path: [],
+                            },
+                            name: "Eq",
+                        },
+                    ),
+                    subject: "a",
+                    required_by: None,
+                },
+            ],
+        },
+    ),
+]

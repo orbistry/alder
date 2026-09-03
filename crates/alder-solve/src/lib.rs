@@ -178,6 +178,12 @@ pub enum SolveTraitError<'a> {
         origin: Region,
         chain: &'a [ObligationFrame<'a>],
     },
+    AmbiguousTypeVariable {
+        trait_: TraitId<'a>,
+        subject: &'a str,
+        origin: Region,
+        chain: &'a [ObligationFrame<'a>],
+    },
     InstanceCycle {
         trait_: TraitId<'a>,
         subject: &'a str,

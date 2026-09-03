@@ -1341,6 +1341,24 @@ fn trait_error(source: Source, module: &Module<'_>, error: &SolveTraitError<'_>)
             ),
             chain,
         )),
+        SolveTraitError::AmbiguousTypeVariable {
+            trait_,
+            subject,
+            origin,
+            chain,
+        } => Diagnostic::error(
+            source,
+            format!(
+                "cannot determine which type must implement `{}[{subject}]`",
+                trait_.0.name
+            ),
+        )
+        .with_code("alder::trait::ambiguous_type_variable")
+        .with_primary_label(*origin, "this trait use has no determining type")
+        .with_help(with_obligation_chain(
+            "add a type annotation that fixes the operand type".to_owned(),
+            chain,
+        )),
         SolveTraitError::InstanceCycle {
             trait_,
             subject,

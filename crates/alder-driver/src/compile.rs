@@ -990,6 +990,16 @@ mod tests {
         "#};
     }
 
+    #[tokio::test]
+    async fn renders_ambiguous_local_trait_variable_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            fn ambiguous() {
+                let equal = fn(left, right) { left == right }
+                ()
+            }
+        "#};
+    }
+
     #[test]
     fn renders_ambiguous_instance_candidates_with_source() {
         let source = indoc::indoc! {r#"
