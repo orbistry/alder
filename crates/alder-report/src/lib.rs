@@ -206,7 +206,8 @@ mod tests {
 
     #[test]
     fn renders_named_source_and_help() {
-        let source = Source::new("src/main.ald", "fn main() { missing(1) }\n");
+        let source_text = "fn main() { missing(1) }\n";
+        let source = Source::new("src/main.ald", source_text);
         let diagnostic = Diagnostic::error(source, "missing trait implementation")
             .with_code("alder::trait::missing_instance")
             .with_primary_label(
@@ -219,6 +220,8 @@ mod tests {
             .with_width(80)
             .render_report(&mut rendered, &diagnostic)
             .unwrap();
-        insta::assert_snapshot!(rendered);
+        insta::with_settings!({ description => source_text, omit_expression => true }, {
+            insta::assert_snapshot!(rendered);
+        });
     }
 }

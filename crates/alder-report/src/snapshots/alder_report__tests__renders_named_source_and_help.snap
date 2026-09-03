@@ -1,6 +1,6 @@
 ---
 source: crates/alder-report/src/lib.rs
-expression: rendered
+description: "fn main() { missing(1) }\n"
 ---
 alder::trait::missing_instance
 

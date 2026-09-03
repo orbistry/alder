@@ -3161,8 +3161,11 @@ mod tests {
 
     #[test]
     fn unavailable_feature_errors() {
-        insta::assert_snapshot!(can_error("#[derive(Eq)]\ntype Id = Number"));
-        insta::assert_snapshot!(can_error("fn expand() { generated!() }"));
+        assert_can_error_snapshot! {r#"
+            #[derive(Eq)]
+            type Id = Number
+        "#};
+        assert_can_error_snapshot!("fn expand() { generated!() }");
     }
 
     #[test]
