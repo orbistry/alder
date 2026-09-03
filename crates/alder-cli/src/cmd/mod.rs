@@ -63,6 +63,7 @@ mod tests {
             "enums",
             "loops",
             "modules",
+            "errors",
             "traits",
             "docs_traits",
         ] {

@@ -41,7 +41,7 @@ pub fn main() {
     assert(Status::Ready < failed)
     assert(hash(failed) == hash(Status::Failed("network unavailable")))
 
-    let decoded: Result[Status, String] = decode(encode(failed))
+    let decoded: Result[Status, [:invalid_json(String)]] = decode(encode(failed))
     assert(decoded == Result.ok(failed))
 
     let identity = { value: 42 }

@@ -568,7 +568,8 @@ comptime {
 `test` is a declaration. `assert` is compiler-known so failures show both
 sides of a comparison (power-assert style). A module-level `tests` block
 only exists under `alder test`; its imports and helpers are pruned from
-every other build.
+every other build. A test body has an implicit open `Result` failure context,
+so it may use `?`; returning an `Err` fails that test and reports its value.
 
 ```alder
 tests {

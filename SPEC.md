@@ -273,9 +273,9 @@ then, by design.
 
 ### M4: Errors and async
 
-- [ ] Row-typed `:tag` errors in `Result`'s error position, `?` row merging, inferred rows for `Result[a]`
-- [ ] `error` groups and their unification with open rows
-- [ ] Exhaustiveness on closed groups, `_` requirement on open rows
+- [x] Row-typed `:tag` errors in `Result`'s error position, `?` row merging, inferred rows for `Result[a]`
+- [x] `error` groups and their unification with open rows
+- [x] Exhaustiveness on closed groups, `_` requirement on open rows
 - [ ] Inferred `Task` from `.await`; generator codegen; fiber scheduler in the kernel
 - [ ] `provide`/`use` context resolution and compile-time provider checking
 

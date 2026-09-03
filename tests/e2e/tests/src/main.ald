@@ -148,8 +148,8 @@ impl Functor[Maybe] {
     }
 }
 
-fn mapped_result() Result[Number, String] {
-    let initial: Result[Number, String] = Result.ok(41)
+fn mapped_result() Result[Number, [:test(String)]] {
+    let initial: Result[Number, [:test(String)]] = Result.ok(41)
     map(initial, (value) -> { value + 1 })
 }
 
@@ -177,8 +177,8 @@ test "arithmetic works" {
     let some: Option[Number] = Option.some(42)
     let also_some: Option[Number] = Option.some(42)
     assert some == also_some
-    let ok: Result[Number, String] = Result.ok(42)
-    let also_ok: Result[Number, String] = Result.ok(42)
+    let ok: Result[Number, [:test(String)]] = Result.ok(42)
+    let also_ok: Result[Number, [:test(String)]] = Result.ok(42)
     assert ok == also_ok
     let record = { name: "Alder", scores: [40, 2] }
     let same_record = { name: "Alder", scores: [40, 2] }
@@ -220,7 +220,10 @@ test "higher-kinded trait dictionaries dispatch" {
     assert traversed == Option.some([41, 42])
     let first: Option[Number] = next([42])
     assert first == Option.some(42)
-    let result = mapped_result()?
+    let result = match mapped_result() {
+        Ok(value) => value,
+        Err(:test(message)) => 0,
+    }
     assert result == 42
 }
 

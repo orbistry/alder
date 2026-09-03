@@ -1,0 +1,22 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "error Failure {\n    :known(String)\n}\n\nfn invalid() Result[(), Failure] {\n    Err(:other)\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 5,
+                column: 1,
+            },
+            end: Position {
+                line: 7,
+                column: 2,
+            },
+        },
+        kind: Mismatch {
+            actual: "[:other]",
+            expected: "[:known(String)]",
+        },
+    },
+]

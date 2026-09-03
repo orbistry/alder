@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn invalid() {\n    let failure = :not_found(42)\n    failure\n}\n"
+---
+alder::type::invalid_error_tag_placement
+
+  × error tags are only values inside `Err`
+   ╭─[/project/src/main.ald:2:19]
+ 1 │ fn invalid() {
+ 2 │     let failure = :not_found(42)
+   ·                   ───────┬──────
+   ·                          ╰── this tag is used as an ordinary value
+ 3 │     failure
+   ╰────
+  help: construct a Result error with `Err(:tag(...))`

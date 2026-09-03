@@ -104,16 +104,18 @@ error LookupError {
 }
 ```
 
-Before row solving, `LookupError` normalizes to:
+When it appears in a `Result` error slot, `LookupError` normalizes to:
 
 ```text
 [:not_found(Id) | :unavailable(String)]
 ```
 
-Normalization consults local declarations and imported interfaces. It keeps a
-visited stack so alias/group cycles become structured diagnostics. Flattening
-a group through `?` includes all of its tags in an open enclosing row. Writing
-the group explicitly as the enclosing error type keeps that row closed.
+Normalization consults local declarations and imported interfaces. A group
+used as an ordinary value type remains nominal long enough for its compiler-
+derived trait dictionaries to resolve; this is compile-time identity only and
+does not add a runtime wrapper. Flattening a group through `?` includes all of
+its tags in an open enclosing row. Writing the group explicitly as the
+enclosing error type keeps that row closed.
 
 ## 4. Solver representation
 
@@ -282,9 +284,16 @@ Rows erase completely. Tags keep the established representation:
 ```
 
 Tag patterns compare `$` and bind `_0`, `_1`, and so on. `Result` keeps its
-existing `Ok`/`Err` representation. `?` evaluates its operand once, returns the
-same `Err` object unchanged, and extracts `_0` from `Ok`. Codegen constructs
-these forms as Oxc nodes owned by the Rolldown AST container.
+existing `Ok`/`Err` representation. The canonical environment supplies these
+constructors as built-ins, and codegen imports their kernel implementations
+directly. `?` evaluates its operand once, returns the same `Err` object
+unchanged, and extracts `_0` from `Ok`. Codegen constructs these forms as Oxc
+nodes owned by the Rolldown AST container.
+
+The built-in `Json.decode` contract returns the closed row
+`[:invalid_json(String)]`. Kernel decoders construct that tag, including path
+context in its payload, so JSON failures participate in the same typed row
+machinery as user errors.
 
 ## 11. Async contract
 

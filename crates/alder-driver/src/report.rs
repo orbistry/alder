@@ -1205,6 +1205,40 @@ pub fn codegen(source: Source, error: &alder_codegen::Error) -> Diagnostic {
 
 fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
     use alder_constrain::ErrorKind;
+    match &error.kind {
+        ErrorKind::NonExhaustiveErrorMatch { missing, open } => {
+            let label = if missing.is_empty() {
+                "this open error row may contain more tags".to_owned()
+            } else {
+                format!("missing {}", missing.join(", "))
+            };
+            let help = if *open {
+                "add `Err(_)` to handle every remaining error tag"
+            } else {
+                "add an arm for each missing Result case"
+            };
+            return Diagnostic::error(source, "this match does not cover every Result")
+                .with_code("alder::type::non_exhaustive_error_match")
+                .with_primary_label(error.region, label)
+                .with_help(help);
+        }
+        ErrorKind::ImpossibleErrorPattern { tag } => {
+            return Diagnostic::error(
+                source,
+                format!("`:{tag}` is not part of this closed error row"),
+            )
+            .with_code("alder::type::impossible_error_pattern")
+            .with_primary_label(error.region, "this pattern can never match")
+            .with_help("remove this arm or add the tag to the Result error type");
+        }
+        ErrorKind::InvalidErrorTagPlacement => {
+            return Diagnostic::error(source, "error tags are only values inside `Err`")
+                .with_code("alder::type::invalid_error_tag_placement")
+                .with_primary_label(error.region, "this tag is used as an ordinary value")
+                .with_help("construct a Result error with `Err(:tag(...))`");
+        }
+        _ => {}
+    }
     let (code, message) = match &error.kind {
         ErrorKind::Mismatch { actual, expected } => (
             "type_mismatch",
@@ -1238,6 +1272,9 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             "return_mismatch",
             "return value does not match the function result".to_owned(),
         ),
+        ErrorKind::NonExhaustiveErrorMatch { .. }
+        | ErrorKind::ImpossibleErrorPattern { .. }
+        | ErrorKind::InvalidErrorTagPlacement => unreachable!("handled above"),
     };
     Diagnostic::error(source, message)
         .with_code(format!("alder::type::{code}"))

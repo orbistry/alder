@@ -383,6 +383,38 @@ mod tests {
     }
 
     #[test]
+    fn tags_and_try_lower_directly_and_preserve_the_err_object() {
+        assert_solved_emit_snapshot! {r#"
+            fn source() Result[Number, [:invalid(String)]] {
+                Err(:invalid("number"))
+            }
+
+            pub fn load() Result[Number] {
+                let value = source()?
+                Ok(value + 1)
+            }
+        "#};
+    }
+
+    #[test]
+    fn result_and_tag_patterns_lower_directly() {
+        assert_solved_emit_snapshot! {r#"
+            error Failure {
+                :invalid(String),
+                :missing
+            }
+
+            pub fn render(value: Result[Number, Failure]) String {
+                match value {
+                    Ok(number) => "ok",
+                    Err(:invalid(message)) => message,
+                    Err(:missing) => "missing",
+                }
+            }
+        "#};
+    }
+
+    #[test]
     fn pipe_forwards_into_first_call_argument() {
         assert_solved_emit_snapshot! {r#"
             fn subtract(left: Number, right: Number) Number { left - right }

@@ -111,6 +111,7 @@ impl<'a> Env<'a> {
         };
         env.add_builtin_types();
         env.add_builtin_ordering(bump);
+        env.add_builtin_result(bump);
         env.add_builtin_traits(bump);
         env.add_builtin_modules();
         env
@@ -180,6 +181,68 @@ impl<'a> Env<'a> {
                     annotation,
                 },
             ));
+        self.register_enum(reference, variants);
+    }
+
+    fn add_builtin_result(&mut self, bump: &'a Bump) {
+        let reference = QualifiedName {
+            module: ModuleId {
+                package: PackageId::Builtin,
+                path: &[],
+            },
+            name: "Result",
+        };
+        let a = Located::at_zero("a");
+        let e = Located::at_zero("e");
+        let params = bump.alloc_slice_copy(&[
+            alder_ast::TypeParam {
+                name: a,
+                kind: alder_ast::Kind::Type,
+            },
+            alder_ast::TypeParam {
+                name: e,
+                kind: alder_ast::Kind::Type,
+            },
+        ]);
+        let a_type: &'a Located<Type<'a>> = bump.alloc(Located::at_zero(Type::Var {
+            name: "a",
+            args: &[],
+        }));
+        let e_type: &'a Located<Type<'a>> = bump.alloc(Located::at_zero(Type::Var {
+            name: "e",
+            args: &[],
+        }));
+        let result_args = bump.alloc_slice_copy(&[a_type, e_type]);
+        let result = bump.alloc(Located::at_zero(Type::Named {
+            reference,
+            args: result_args,
+        }));
+        let variants = bump.alloc_slice_fill_iter(
+            [("Ok", a_type), ("Err", e_type)]
+                .into_iter()
+                .enumerate()
+                .map(|(index, (variant, payload))| {
+                    let payloads = bump.alloc_slice_copy(&[payload]);
+                    ConstructorRef {
+                        name: ConstructorName {
+                            enum_: reference,
+                            variant,
+                        },
+                        index: index as u16,
+                        alternatives: 2,
+                        payload: VariantPayload::Tuple(payloads),
+                        annotation: bump.alloc(Annotation {
+                            params,
+                            trait_predicates: &[],
+                            projection_equalities: &[],
+                            typ: bump.alloc(Located::at_zero(Type::Fn {
+                                params: payloads,
+                                ret: result,
+                            })),
+                        }),
+                    }
+                }),
+        );
         self.register_enum(reference, variants);
     }
 
@@ -259,6 +322,14 @@ impl<'a> Env<'a> {
                                 params.iter().map(|parameter| type_node(parameter)),
                             ),
                             ret: if name == "Json" && *method_name == "decode" {
+                                let json_error = bump.alloc(Located::at_zero(Type::ErrorRow {
+                                    tags: bump.alloc_slice_copy(&[alder_ast::ErrorTagType {
+                                        index: 0,
+                                        name: "invalid_json",
+                                        args: bump.alloc_slice_copy(&[type_node("String")]),
+                                    }]),
+                                    ext: alder_ast::RowExtension::Closed,
+                                }));
                                 bump.alloc(Located::at_zero(Type::Named {
                                     reference: QualifiedName {
                                         module: ModuleId {
@@ -267,8 +338,7 @@ impl<'a> Env<'a> {
                                         },
                                         name: "Result",
                                     },
-                                    args: bump
-                                        .alloc_slice_copy(&[type_node("a"), type_node("String")]),
+                                    args: bump.alloc_slice_copy(&[type_node("a"), json_error]),
                                 }))
                             } else {
                                 type_node(ret)

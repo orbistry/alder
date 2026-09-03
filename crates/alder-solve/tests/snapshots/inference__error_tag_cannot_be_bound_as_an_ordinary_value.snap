@@ -1,0 +1,19 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn invalid() {\n    let failure = :not_found(42)\n    failure\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 19,
+            },
+            end: Position {
+                line: 2,
+                column: 33,
+            },
+        },
+        kind: InvalidErrorTagPlacement,
+    },
+]

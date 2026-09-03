@@ -1,0 +1,26 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "fn source() Result[Number, [:invalid(String)]] {\n    Err(:invalid(\"number\"))\n}\n\npub fn load() Result[Number] {\n    let value = source()?\n    Ok(value + 1)\n}\n"
+---
+import { $resultErr as $x_alder_3Akernel__24resultErr } from "alder:kernel";
+import { $resultOk as $x_alder_3Akernel__24resultOk } from "alder:kernel";
+function $v_source() {
+	const $t0 = $x_alder_3Akernel__24resultErr;
+	return $t0({
+		"$": ":invalid",
+		"_0": "number"
+	});
+}
+function $v_load() {
+	const $t1 = $v_source;
+	const $t2 = $t1();
+	if ($t2["$"] === "Err") {
+		return $t2;
+	}
+	const $t3 = $t2["_0"];
+	let $l0_value = $t3;
+	const $t4 = $x_alder_3Akernel__24resultOk;
+	const $t5 = $l0_value;
+	return $t4($t5 + 1);
+}
+export { $v_load as load };

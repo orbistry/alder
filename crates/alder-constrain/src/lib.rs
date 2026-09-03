@@ -59,6 +59,14 @@ pub enum ErrorKind {
     InvalidAwait,
     InvalidTry,
     ReturnMismatch,
+    NonExhaustiveErrorMatch {
+        missing: Vec<String>,
+        open: bool,
+    },
+    ImpossibleErrorPattern {
+        tag: String,
+    },
+    InvalidErrorTagPlacement,
 }
 
 pub fn constrain<'a>(bump: &'a bumpalo::Bump, module: &'a Module<'a>) -> Constraints<'a> {

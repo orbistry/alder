@@ -163,7 +163,30 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
                 RowExtension::Open(row) => format!("{{ {fields} | {row} }}"),
             }
         }
-        Type::ErrorRow { .. } => "[:_ | e]".to_owned(),
+        Type::ErrorRow { tags, ext } => {
+            let mut parts = tags
+                .iter()
+                .map(|tag| {
+                    if tag.args.is_empty() {
+                        format!(":{}", tag.name)
+                    } else {
+                        format!(
+                            ":{}({})",
+                            tag.name,
+                            tag.args
+                                .iter()
+                                .map(|arg| render_type(arg))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    }
+                })
+                .collect::<Vec<_>>();
+            if let RowExtension::Open(row) = ext {
+                parts.push((*row).to_owned());
+            }
+            format!("[{}]", parts.join(" | "))
+        }
         Type::Alias { reference, .. } => reference.name.to_owned(),
     }
 }
@@ -1369,7 +1392,7 @@ fn builtin_functor_instances_cover_array_option_and_partial_result() {
             fn option(value: Option[Number]) Option[Number] {
                 map(value, (item) -> { item + 1 })
             }
-            fn result(value: Result[Number, String]) Result[Number, String] {
+            fn result(value: Result[Number, [:failure(String)]]) Result[Number, [:failure(String)]] {
                 map(value, (item) -> { item + 1 })
             }
         "#},
@@ -1407,7 +1430,9 @@ fn builtin_applicative_and_monad_instances_preserve_the_hkt_hierarchy() {
                 functions: Array[fn(Number) String],
                 values: Array[Number],
             ) Array[String] { apply(functions, values) }
-            fn result_bind(value: Result[Number, String]) Result[String, String] {
+            fn result_bind(
+                value: Result[Number, [:failure(String)]],
+            ) Result[String, [:failure(String)]] {
                 flat_map(value, (item) -> { Result.ok("done") })
             }
             fn monad_map(value: f[Number]) f[Number] where f: Monad {
@@ -1636,11 +1661,219 @@ fn nested_optional_record_rows() {
 fn try_unwraps_result_value() {
     assert_inference_snapshot!(
         r#"
-        fn unwrap(value: Result[Number, String]) Result[Number, String] {
+        fn unwrap(
+            value: Result[Number, [:failure(String)]],
+        ) Result[Number, [:failure(String)]] {
             Result.ok(value? + 1)
         }
     "#
     );
+}
+
+#[test]
+fn result_shorthand_infers_an_open_tag_row_with_payloads() {
+    assert_inference_snapshot! {r#"
+        fn fail(id: Number) Result[String] {
+            Err(:not_found(id))
+        }
+    "#};
+}
+
+#[test]
+fn try_merges_three_error_rows_into_the_enclosing_result() {
+    assert_inference_snapshot! {r#"
+        fn read() Result[Number, [:storage(String)]] {
+            Err(:storage("disk"))
+        }
+
+        fn decode() Result[Number, [:invalid(String)]] {
+            Err(:invalid("number"))
+        }
+
+        fn authorize() Result[Number, [:forbidden]] {
+            Err(:forbidden)
+        }
+
+        fn load() Result[Number] {
+            let first = read()?
+            let second = decode()?
+            let third = authorize()?
+            Ok(first + second + third)
+        }
+    "#};
+}
+
+#[test]
+fn repeated_tag_payloads_must_have_the_same_type() {
+    assert_inference_error_snapshot! {r#"
+        fn invalid(flag: Bool) Result[()] {
+            if flag {
+                Err(:invalid("text"))
+            } else {
+                Err(:invalid(1))
+            }
+        }
+    "#};
+}
+
+#[test]
+fn named_error_group_closes_the_result_row() {
+    assert_inference_error_snapshot! {r#"
+        error Failure {
+            :known(String)
+        }
+
+        fn invalid() Result[(), Failure] {
+            Err(:other)
+        }
+    "#};
+}
+
+#[test]
+fn try_rejects_a_tag_missing_from_the_closed_result_row() {
+    assert_inference_error_snapshot! {r#"
+        fn read() Result[Number, [:storage]] {
+            Err(:storage)
+        }
+
+        fn load() Result[Number, [:invalid]] {
+            read()?
+        }
+    "#};
+}
+
+#[test]
+fn repeated_tag_payloads_must_have_the_same_arity() {
+    assert_inference_error_snapshot! {r#"
+        fn invalid(flag: Bool) Result[()] {
+            if flag {
+                Err(:invalid("text"))
+            } else {
+                Err(:invalid("text", 1))
+            }
+        }
+    "#};
+}
+
+#[test]
+fn closed_error_match_is_exhaustive_with_every_result_case() {
+    assert_inference_snapshot! {r#"
+        error Failure {
+            :invalid(String),
+            :missing
+        }
+
+        fn render(value: Result[Number, Failure]) String {
+            match value {
+                Ok(number) => "ok",
+                Err(:invalid(message)) => message,
+                Err(:missing) => "missing",
+            }
+        }
+    "#};
+}
+
+#[test]
+fn closed_error_match_reports_missing_cases() {
+    assert_inference_error_snapshot! {r#"
+        error Failure {
+            :invalid(String),
+            :missing
+        }
+
+        fn render(value: Result[Number, Failure]) String {
+            match value {
+                Ok(number) => "ok",
+                Err(:invalid(message)) => message,
+            }
+        }
+    "#};
+}
+
+#[test]
+fn wildcard_makes_a_closed_error_match_exhaustive() {
+    assert_inference_snapshot! {r#"
+        error Failure {
+            :invalid(String),
+            :missing
+        }
+
+        fn render(value: Result[Number, Failure]) String {
+            match value {
+                Ok(number) => "ok",
+                Err(:invalid(message)) => message,
+                _ => "other",
+            }
+        }
+    "#};
+}
+
+#[test]
+fn open_error_match_requires_an_error_catch_all() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: Result[Number]) String {
+            match value {
+                Ok(number) => "ok",
+                Err(:invalid(message)) => message,
+            }
+        }
+    "#};
+}
+
+#[test]
+fn open_error_match_accepts_an_error_catch_all() {
+    assert_inference_snapshot! {r#"
+        fn render(value: Result[Number]) String {
+            match value {
+                Ok(number) => "ok",
+                Err(:invalid(message)) => message,
+                Err(_) => "other",
+            }
+        }
+    "#};
+}
+
+#[test]
+fn guarded_error_arm_does_not_complete_coverage() {
+    assert_inference_error_snapshot! {r#"
+        error Failure {
+            :invalid(String)
+        }
+
+        fn render(value: Result[Number, Failure]) String {
+            match value {
+                Ok(number) => "ok",
+                Err(:invalid(message)) if message == "special" => message,
+            }
+        }
+    "#};
+}
+
+#[test]
+fn closed_error_match_rejects_an_impossible_tag() {
+    assert_inference_error_snapshot! {r#"
+        error Failure {
+            :known
+        }
+
+        fn render(value: Result[Number, Failure]) String {
+            match value {
+                Ok(number) => "ok",
+                Err(:other) => "other",
+                Err(:known) => "known",
+            }
+        }
+    "#};
+}
+
+#[test]
+fn error_tag_cannot_be_bound_as_an_ordinary_value() {
+    assert_inference_error_snapshot! {r#"
+        fn invalid() {
+            let failure = :not_found(42)
+            failure
+        }
+    "#};
 }
 
 #[test]

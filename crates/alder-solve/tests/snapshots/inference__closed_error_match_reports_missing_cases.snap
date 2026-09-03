@@ -1,0 +1,24 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "error Failure {\n    :invalid(String),\n    :missing\n}\n\nfn render(value: Result[Number, Failure]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) => message,\n    }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 7,
+                column: 5,
+            },
+            end: Position {
+                line: 10,
+                column: 6,
+            },
+        },
+        kind: NonExhaustiveErrorMatch {
+            missing: [
+                ":missing",
+            ],
+            open: false,
+        },
+    },
+]

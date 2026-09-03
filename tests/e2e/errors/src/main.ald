@@ -1,0 +1,67 @@
+fn storage() Result[Number, [:storage(String)]] {
+    Err(:storage("disk"))
+}
+
+fn decode() Result[Number, [:invalid(String)]] {
+    Err(:invalid("number"))
+}
+
+error AccessFailure {
+    :forbidden
+}
+
+fn authorize() Result[Number, AccessFailure] {
+    Err(:forbidden)
+}
+
+error ClosedFailure {
+    :invalid(String),
+    :missing
+}
+
+fn closed_failure(which: Number) Result[Number, ClosedFailure] {
+    if which == 0 {
+        return Err(:invalid("closed"))
+    }
+    Err(:missing)
+}
+
+fn closed_match(which: Number) Bool {
+    match closed_failure(which) {
+        Ok(value) => false,
+        Err(:invalid(message)) => message == "closed",
+        Err(:missing) => true,
+    }
+}
+
+fn load(which: Number) Result[Number] {
+    if which == 0 {
+        let value = storage()?
+        Ok(value)
+    } else if which == 1 {
+        let value = decode()?
+        Ok(value)
+    } else {
+        let value = authorize()?
+        Ok(value)
+    }
+}
+
+fn is_expected(which: Number) Bool {
+    match load(which) {
+        Ok(value) => false,
+        Err(:storage(message)) => message == "disk",
+        Err(:invalid(message)) => message == "number",
+        Err(:forbidden) => true,
+        Err(_) => false,
+    }
+}
+
+pub fn main() Result[()] {
+    assert(is_expected(0))
+    assert(is_expected(1))
+    assert(is_expected(2))
+    assert(closed_match(0))
+    assert(closed_match(1))
+    Ok(())
+}

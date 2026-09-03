@@ -1,0 +1,17 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "error Failure {\n    :invalid(String),\n    :missing\n}\n\nfn render(value: Result[Number, Failure]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) => message,\n    }\n}\n"
+---
+alder::type::non_exhaustive_error_match
+
+  × this match does not cover every Result
+    ╭─[/project/src/main.ald:7:5]
+  6 │     fn render(value: Result[Number, Failure]) String {
+  7 │ ╭─▶     match value {
+  8 │ │           Ok(number) => "ok",
+  9 │ │           Err(:invalid(message)) => message,
+ 10 │ ├─▶     }
+    · ╰──── missing :missing
+ 11 │     }
+    ╰────
+  help: add an arm for each missing Result case

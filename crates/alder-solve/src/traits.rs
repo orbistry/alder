@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{
-    AssocBinding, AssocTypeDecl, DictionaryKind, ImplDecl, ImplId, Interface, InterfaceImpl,
-    InterfaceMethod, ItemKind, Kind, MethodId, Module, ModuleId, PackageId, QualifiedName,
-    TraitDecl, TraitId, TraitRef, Type, TypeParam, TypeSlot,
+    AssocBinding, AssocTypeDecl, DictionaryKind, ErrorTagType, ImplDecl, ImplId, Interface,
+    InterfaceImpl, InterfaceMethod, ItemKind, Kind, MethodId, Module, ModuleId, PackageId,
+    PublicTypeBody, QualifiedName, TraitDecl, TraitId, TraitRef, Type, TypeParam, TypeSlot,
 };
 use alder_region::Located;
 use bumpalo::Bump;
@@ -88,6 +88,7 @@ impl<'a> InstanceHeader<'a> {
 pub struct TraitDatabase<'a> {
     traits: BTreeMap<TraitId<'a>, TraitHeader<'a>>,
     instances: BTreeMap<TraitId<'a>, Vec<InstanceHeader<'a>>>,
+    error_groups: BTreeMap<QualifiedName<'a>, &'a [ErrorTagType<'a>]>,
 }
 
 #[derive(Clone, Debug)]
@@ -141,6 +142,7 @@ impl<'a> TraitDatabase<'a> {
         let mut database = Self {
             traits: BTreeMap::new(),
             instances: BTreeMap::new(),
+            error_groups: BTreeMap::new(),
         };
         let builtins = alder_can::builtin_trait_interface(bump);
         database.insert_interface(&builtins);
@@ -162,6 +164,9 @@ impl<'a> TraitDatabase<'a> {
                     .entry(implementation.trait_ref.trait_)
                     .or_default()
                     .push(InstanceHeader::Local(implementation)),
+                ItemKind::ErrorGroup(group) => {
+                    database.error_groups.insert(group.name, group.tags);
+                }
                 _ => {}
             }
         }
@@ -173,6 +178,11 @@ impl<'a> TraitDatabase<'a> {
     }
 
     fn insert_interface(&mut self, interface: &Interface<'a>) {
+        for typ in interface.types {
+            if let PublicTypeBody::ErrorGroup(tags) = typ.body {
+                self.error_groups.insert(typ.reference, tags);
+            }
+        }
         for trait_ in interface.traits {
             self.traits.insert(
                 trait_.id,
@@ -207,6 +217,10 @@ impl<'a> TraitDatabase<'a> {
             .iter()
             .find(|method| method.id == id)
             .copied()
+    }
+
+    pub fn error_group(&self, name: QualifiedName<'a>) -> Option<&'a [ErrorTagType<'a>]> {
+        self.error_groups.get(&name).copied()
     }
 
     pub fn validate(&self, bump: &'a Bump) -> Vec<CoherenceError<'a>> {

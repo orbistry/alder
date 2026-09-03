@@ -45,6 +45,19 @@ export function $equalStructural(left, right, kind, fields, dictionaries) {
     if (kind === "record") {
         return fields.every((field, index) => dictionaries[index].eq(left[field], right[field]));
     }
+    if (kind === "error_row") {
+        if (left?.$ !== right?.$) return false;
+        return fields.every((field, dictionaryIndex) => {
+            const separator = field.lastIndexOf(":");
+            const tag = field.slice(0, separator);
+            if (tag !== left.$) return true;
+            const payloadIndex = Number(field.slice(separator + 1));
+            return dictionaries[dictionaryIndex].eq(
+                left[`_${payloadIndex}`],
+                right[`_${payloadIndex}`],
+            );
+        });
+    }
     throw new TypeError(`unknown structural Eq shape: ${kind}`);
 }
 
@@ -424,7 +437,7 @@ export function $setAdd(values, value) { values.add(value); }
 export function $jsonEncode(value) { return JSON.stringify(value); }
 export function $jsonDecode(value) {
     try { return $resultOk(JSON.parse(value)); }
-    catch (error) { return $resultErr(String(error)); }
+    catch (error) { return $jsonErr(String(error)); }
 }
 export function $jsonEncodeContainer(value, kind, dictionaries) {
     const encode = (dictionary, item) => JSON.parse(dictionary.encode(item));
@@ -443,10 +456,10 @@ export function $jsonDecodeContainer(value, kind, dictionaries) {
         const parsed = JSON.parse(value);
         const decode = (dictionary, item, path) => {
             const result = dictionary.decode(JSON.stringify(item));
-            return result.$ === "Ok" ? result : $resultErr(prefixJsonPath(path, result._0));
+            return result.$ === "Ok" ? result : $jsonErr(prefixJsonPath(path, result._0));
         };
         if (kind === "array") {
-            if (!Array.isArray(parsed)) return $resultErr("$: expected an array");
+            if (!Array.isArray(parsed)) return $jsonErr("$: expected an array");
             const result = [];
             for (const [index, item] of parsed.entries()) {
                 const decoded = decode(dictionaries[0], item, `$[${index}]`);
@@ -461,15 +474,15 @@ export function $jsonDecodeContainer(value, kind, dictionaries) {
         }
         if (kind === "result") {
             if (!parsed || typeof parsed !== "object" || !["Ok", "Err"].includes(parsed.$)) {
-                return $resultErr("$: expected an `Ok` or `Err` result");
+                return $jsonErr("$: expected an `Ok` or `Err` result");
             }
             const index = parsed.$ === "Ok" ? 0 : 1;
             const decoded = decode(dictionaries[index], parsed._0, "$._0");
             return decoded.$ === "Ok" ? $resultOk({ $: parsed.$, _0: decoded._0 }) : decoded;
         }
-        return $resultErr(`$: unknown Json container: ${kind}`);
+        return $jsonErr(`$: unknown Json container: ${kind}`);
     } catch (error) {
-        return $resultErr(`$: ${String(error)}`);
+        return $jsonErr(`$: ${String(error)}`);
     }
 }
 export function $jsonEncodeDerived(value, variants) {
@@ -498,27 +511,27 @@ export function $jsonDecodeDerived(value, variants) {
     try {
         const parsed = JSON.parse(value);
         if (!parsed || typeof parsed !== "object" || typeof parsed.tag !== "string") {
-            return $resultErr("$: expected an object with a string `tag`");
+            return $jsonErr("$: expected an object with a string `tag`");
         }
         const shape = variants[parsed.tag];
-        if (!shape) return $resultErr(`$.tag: unknown variant ${JSON.stringify(parsed.tag)}`);
+        if (!shape) return $jsonErr(`$.tag: unknown variant ${JSON.stringify(parsed.tag)}`);
         const result = { $: parsed.tag };
         if (shape.record) {
             if (Object.keys(parsed).some((key) => key !== "tag" && key !== "value")) {
-                return $resultErr("$: expected only `tag` and `value`");
+                return $jsonErr("$: expected only `tag` and `value`");
             }
             if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
-                return $resultErr("$.value: expected an object");
+                return $jsonErr("$.value: expected an object");
             }
             const optional = new Set(shape.optional ?? []);
             const expected = new Set(shape.fields);
             for (const field of Object.keys(parsed.value)) {
-                if (!expected.has(field)) return $resultErr(`$.value.${field}: unexpected field`);
+                if (!expected.has(field)) return $jsonErr(`$.value.${field}: unexpected field`);
             }
             for (const field of shape.fields) {
                 if (!Object.hasOwn(parsed.value, field)) {
                     if (optional.has(field)) continue;
-                    return $resultErr(`$.value.${field}: missing field`);
+                    return $jsonErr(`$.value.${field}: missing field`);
                 }
                 const index = shape.fields.indexOf(field);
                 const dictionary = shape.dictionaries?.[index];
@@ -528,16 +541,16 @@ export function $jsonDecodeDerived(value, variants) {
                 }
                 const decoded = dictionary.decode(JSON.stringify(parsed.value[field]));
                 if (decoded.$ !== "Ok") {
-                    return $resultErr(prefixJsonPath(`$.value.${field}`, decoded._0));
+                    return $jsonErr(prefixJsonPath(`$.value.${field}`, decoded._0));
                 }
                 result[field] = decoded._0;
             }
         } else {
             if (Object.keys(parsed).some((key) => key !== "tag" && key !== "fields")) {
-                return $resultErr("$: expected only `tag` and `fields`");
+                return $jsonErr("$: expected only `tag` and `fields`");
             }
             if (!Array.isArray(parsed.fields) || parsed.fields.length !== shape.fields.length) {
-                return $resultErr(`$.fields: expected ${shape.fields.length} values`);
+                return $jsonErr(`$.fields: expected ${shape.fields.length} values`);
             }
             for (const [index, field] of shape.fields.entries()) {
                 const dictionary = shape.dictionaries?.[index];
@@ -547,18 +560,23 @@ export function $jsonDecodeDerived(value, variants) {
                 }
                 const decoded = dictionary.decode(JSON.stringify(parsed.fields[index]));
                 if (decoded.$ !== "Ok") {
-                    return $resultErr(prefixJsonPath(`$.fields.${index}`, decoded._0));
+                    return $jsonErr(prefixJsonPath(`$.fields.${index}`, decoded._0));
                 }
                 result[field] = decoded._0;
             }
         }
         return $resultOk(result);
     } catch (error) {
-        return $resultErr(`$: ${String(error)}`);
+        return $jsonErr(`$: ${String(error)}`);
     }
 }
 
+function $jsonErr(message) {
+    return $resultErr({ $: ":invalid_json", _0: String(message) });
+}
+
 function prefixJsonPath(prefix, message) {
+    if (message?.$ === ":invalid_json") message = message._0;
     if (typeof message !== "string") return `${prefix}: ${String(message)}`;
     if (message.startsWith("$:")) return `${prefix}${message.slice(1)}`;
     return `${prefix}: ${message}`;
@@ -627,7 +645,8 @@ export async function $runTests(report = console.log) {
     let failed = 0;
     for (const test of tests) {
         try {
-            await test.run();
+            const result = await test.run();
+            if (result?.$ === "Err") throw result._0;
             report(`pass ${test.moduleName} — ${test.name}`);
         } catch (error) {
             failed += 1;

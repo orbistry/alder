@@ -37,7 +37,7 @@ impl Hash[Secret] {
 
 impl Json[Secret] {
     fn encode(value: Secret) String { "\"secret\"" }
-    fn decode(value: String) Result[Secret, String] { Result.ok(Secret::Secret) }
+    fn decode(value: String) Result[Secret, [:invalid_json(String)]] { Result.ok(Secret::Secret) }
 }
 
 #[derive(Show)]
@@ -76,7 +76,7 @@ enum JsonSecret { JsonSecret }
 
 impl Json[JsonSecret] {
     fn encode(value: JsonSecret) String { "\"secret\"" }
-    fn decode(value: String) Result[JsonSecret, String] { Result.ok(JsonSecret::JsonSecret) }
+    fn decode(value: String) Result[JsonSecret, [:invalid_json(String)]] { Result.ok(JsonSecret::JsonSecret) }
 }
 
 #[derive(Json)]
@@ -134,7 +134,7 @@ fn less_than(left: a, right: a) Bool where a: Ord {
     left < right
 }
 
-fn verify_error_group_derives() Result[(), String] {
+fn verify_error_group_derives() Result[(), [:invalid_json(String)]] {
     let failure: Failure = decode("{\"tag\":\":first\",\"fields\":[42]}")?
     let same_failure: Failure = decode("{\"tag\":\":first\",\"fields\":[42]}")?
     let later: Failure = decode("{\"tag\":\":later\",\"fields\":[]}")?
@@ -143,7 +143,7 @@ fn verify_error_group_derives() Result[(), String] {
     assert(show(failure) == ":first(42)")
     assert(hash(failure) == hash(same_failure))
     assert(encode(failure) == "{\"tag\":\":first\",\"fields\":[42]}")
-    let decoded_failure: Result[Failure, String] = decode(encode(failure))
+    let decoded_failure: Result[Failure, [:invalid_json(String)]] = decode(encode(failure))
     assert(decoded_failure == Result.ok(failure))
     Result.ok(())
 }
@@ -177,7 +177,7 @@ pub fn main() {
     let nested_secret = NestedSecretBox::NestedSecretBox([Option.some(Secret::Secret), Option.none()])
     assert(show(nested_secret) == "NestedSecretBox([Some(redacted), None])")
     assert(encode(nested_secret) == "{\"tag\":\"NestedSecretBox\",\"fields\":[[\"secret\",null]]}")
-    let decoded_nested_secret: Result[NestedSecretBox, String] = decode(encode(nested_secret))
+    let decoded_nested_secret: Result[NestedSecretBox, [:invalid_json(String)]] = decode(encode(nested_secret))
     assert(decoded_nested_secret == Result.ok(nested_secret))
     assert(hash(nested_secret) == hash(NestedSecretBox::NestedSecretBox([Option.some(Secret::Secret), Option.none()])))
     assert(ReverseBox::ReverseBox(Reverse::High) < ReverseBox::ReverseBox(Reverse::Low))
@@ -185,7 +185,7 @@ pub fn main() {
 
     let secret_json = encode(JsonSecretBox::JsonSecretBox(JsonSecret::JsonSecret))
     assert(secret_json == "{\"tag\":\"JsonSecretBox\",\"fields\":[\"secret\"]}")
-    let decoded_secret: Result[JsonSecretBox, String] = decode(secret_json)
+    let decoded_secret: Result[JsonSecretBox, [:invalid_json(String)]] = decode(secret_json)
     assert(decoded_secret == Result.ok(JsonSecretBox::JsonSecretBox(JsonSecret::JsonSecret)))
 
     assert(verify_error_group_derives() == Result.ok(()))
@@ -196,22 +196,22 @@ pub fn main() {
     assert(show(chain) == "Link(1, Link(2, End))")
     assert(chain > Chain::End)
     assert(hash(chain) == hash(same_chain))
-    let decoded_chain: Result[Chain, String] = decode(encode(chain))
+    let decoded_chain: Result[Chain, [:invalid_json(String)]] = decode(encode(chain))
     assert(decoded_chain == Result.ok(chain))
 
     let encoded = encode(Status::Meta { code: 42, note: "answer" })
-    let decoded: Result[Status, String] = decode(encoded)
+    let decoded: Result[Status, [:invalid_json(String)]] = decode(encoded)
     assert(decoded == Result.ok(Status::Meta { code: 42, note: "answer" }))
 
     let config = Config::Config { name: "alder" }
     let config_json = encode(config)
     assert(config_json == "{\"tag\":\"Config\",\"value\":{\"name\":\"alder\"}}")
-    let decoded_config: Result[Config, String] = decode(config_json)
+    let decoded_config: Result[Config, [:invalid_json(String)]] = decode(config_json)
     assert(decoded_config == Result.ok(config))
-    let extra_config_field: Result[Config, String] = decode("{\"tag\":\"Config\",\"value\":{\"name\":\"alder\",\"extra\":true}}")
-    assert(extra_config_field == Result.err("$.value.extra: unexpected field"))
-    let extra_config_envelope: Result[Config, String] = decode("{\"tag\":\"Config\",\"value\":{\"name\":\"alder\"},\"extra\":true}")
-    assert(extra_config_envelope == Result.err("$: expected only `tag` and `value`"))
+    let extra_config_field: Result[Config, [:invalid_json(String)]] = decode("{\"tag\":\"Config\",\"value\":{\"name\":\"alder\",\"extra\":true}}")
+    assert(extra_config_field == Result.err(:invalid_json("$.value.extra: unexpected field")))
+    let extra_config_envelope: Result[Config, [:invalid_json(String)]] = decode("{\"tag\":\"Config\",\"value\":{\"name\":\"alder\"},\"extra\":true}")
+    assert(extra_config_envelope == Result.err(:invalid_json("$: expected only `tag` and `value`")))
 
     let mapped: Option[Number] = map(Option.some(1), (value) -> { value + 1 })
     assert(mapped == Option.some(2))
@@ -219,8 +219,8 @@ pub fn main() {
     let mapped_array: Array[Number] = map([1, 2], (value) -> { value + 1 })
     assert(mapped_array == [2, 3])
 
-    let result: Result[Number, String] = Result.ok(1)
-    let mapped_result: Result[Number, String] = map(result, (value) -> { value + 1 })
+    let result: Result[Number, [:test(String)]] = Result.ok(1)
+    let mapped_result: Result[Number, [:test(String)]] = map(result, (value) -> { value + 1 })
     assert(mapped_result == Result.ok(2))
 
     let pure_option: Option[Number] = lift(4)

@@ -577,16 +577,18 @@ fn canonicalize_path_expr<'a>(
                 reference: ValueRef::Module(module.module),
             });
         }
-        if let Some((enum_name, variant)) = env.enums.values().find_map(|candidate| {
-            let crate::environment::Candidate::Unique(enum_) = candidate else {
-                return None;
-            };
-            enum_
-                .variants
-                .iter()
-                .find(|variant| variant.name.variant == name)
-                .map(|variant| (enum_.reference.name, variant.name.variant))
-        }) {
+        if !matches!(name, "Some" | "None" | "Ok" | "Err")
+            && let Some((enum_name, variant)) = env.enums.values().find_map(|candidate| {
+                let crate::environment::Candidate::Unique(enum_) = candidate else {
+                    return None;
+                };
+                enum_
+                    .variants
+                    .iter()
+                    .find(|variant| variant.name.variant == name)
+                    .map(|variant| (enum_.reference.name, variant.name.variant))
+            })
+        {
             return Err(vec![Error::new(
                 region,
                 ErrorKind::Expr(ExprError::UnqualifiedConstructor { enum_name, variant }),

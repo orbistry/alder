@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn render(value: Result[Number]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) => message,\n        Err(_) => \"other\",\n    }\n}\n"
+---
+render: forall a. fn(Result[Number, [:invalid(String) | a]]) String

@@ -118,6 +118,7 @@ pub enum StructuralEqShape<'a> {
     Result,
     Tuple,
     Record(Vec<&'a str>),
+    ErrorRow(Vec<(&'a str, usize)>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

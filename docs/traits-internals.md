@@ -841,9 +841,9 @@ and binds `f` to the resulting `Partial`. This matches Alder's standard
 `Result[_, e]` orientation. The rule is symmetric. For example:
 
 ```text
-f[a] ~ Result[Number, String]
+f[a] ~ Result[Number, [:invalid(String)]]
 => a ~ Number
-=> f ~ Result[_, String]
+=> f ~ Result[_, [:invalid(String)]]
 ```
 
 Arguments that repeat, are not variables, or create an occurs/kind cycle make
@@ -1375,7 +1375,7 @@ trait Num[a] where a: Eq + Ord {
 }
 trait Json[a] {
     fn encode(value: a) String
-    fn decode(text: String) Result[a, String]
+    fn decode(text: String) Result[a, [:invalid_json(String)]]
 }
 trait Functor[f] { fn map(value: f[a], transform: fn(a) b) f[b] }
 trait Applicative[f] where f: Functor {
@@ -1672,7 +1672,7 @@ Granular success and error snapshots are required alongside runtime tests.
 | Associated equality | normalization success plus ambiguous-name error |
 | HKT | Option, Array, and `Result[_, e]`; `Functor[Number]` kind error |
 | Applicative | `pure` and `apply` compile and run through generic and ground calls |
-| HKT unification | recover `Result[_, String]`; two-hole order; partial mismatch; occurs/kind and alias cases |
+| HKT unification | recover `Result[_, [:invalid(String)]]`; two-hole order; partial mismatch; occurs/kind and alias cases |
 | Nested resolution | `Show[Array[Option[a]]]` and nested missing chain |
 | Coherence | cross-module/package orphan and overlap tests, reordered modules |
 | Defaults | omitted method, mutual/default recursion, static specialization |

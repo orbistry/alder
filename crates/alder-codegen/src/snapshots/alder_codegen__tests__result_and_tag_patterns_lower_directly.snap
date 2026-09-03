@@ -1,0 +1,49 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "error Failure {\n    :invalid(String),\n    :missing\n}\n\npub fn render(value: Result[Number, Failure]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) => message,\n        Err(:missing) => \"missing\",\n    }\n}\n"
+---
+import { $equalDerived, $matchFailure } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, {
+		":invalid": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [{ "eq": ($a, $b) => {
+				return $a === $b;
+			} }]
+		},
+		":missing": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		}
+	});
+};
+Object["freeze"]($dict$Eq$0);
+function $v_render($a0) {
+	let $l0_value = $a0;
+	const $t0 = $l0_value;
+	let $t1;
+	$match2: {
+		if ($t0 != null && $t0["$"] === "Ok" && true) {
+			let $l1_number = $t0["_0"];
+			$t1 = "ok";
+			break $match2;
+		}
+		if ($t0 != null && $t0["$"] === "Err" && $t0["_0"] != null && $t0["_0"]["$"] === ":invalid" && true) {
+			let $l2_message = $t0["_0"]["_0"];
+			$t1 = $l2_message;
+			break $match2;
+		}
+		if ($t0 != null && $t0["$"] === "Err" && $t0["_0"] != null && $t0["_0"]["$"] === ":missing") {
+			$t1 = "missing";
+			break $match2;
+		}
+		$matchFailure("alder://app/main.mjs", "7:5", $t0);
+	}
+	return $t1;
+}
+export { $dict$Eq$0, $v_render as render };

@@ -433,6 +433,42 @@ mod tests {
     }
 
     #[test]
+    fn inferred_error_rows_round_trip_with_payloads_and_an_open_tail() {
+        let source = Bump::new();
+        let interface = compile_interface(
+            &source,
+            indoc::indoc! {r#"
+                pub fn fail(id: Number) Result[String] {
+                    Err(:not_found(id))
+                }
+            "#},
+        );
+        let file = InterfaceFile::dehydrate(&interface).unwrap();
+        let value = file
+            .values
+            .iter()
+            .find(|value| value.exported_as == "fail")
+            .expect("public function is exported");
+        let owned::OwnedType::Fn { ret, .. } = &value.scheme.typ.typ else {
+            panic!("function interface has a function type")
+        };
+        let owned::OwnedType::Named { args, .. } = &ret.typ else {
+            panic!("function returns Result")
+        };
+        let owned::OwnedType::ErrorRow { tags, ext } = &args[1].typ else {
+            panic!("Result error argument is an error row")
+        };
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].name, "not_found");
+        assert_eq!(tags[0].args.len(), 1);
+        assert!(ext.is_some(), "inferred Result shorthand remains open");
+
+        let hydrated_arena = Bump::new();
+        let hydrated = file.hydrate(&hydrated_arena);
+        assert_eq!(file, InterfaceFile::dehydrate(&hydrated).unwrap());
+    }
+
+    #[test]
     fn trait_signature_changes_change_the_fingerprint() {
         let first_bump = Bump::new();
         let first = compile_interface(

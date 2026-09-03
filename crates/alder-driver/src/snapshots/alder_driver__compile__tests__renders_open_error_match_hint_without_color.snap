@@ -1,0 +1,17 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn render(value: Result[Number]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) => message,\n    }\n}\n"
+---
+alder::type::non_exhaustive_error_match
+
+  × this match does not cover every Result
+   ╭─[/project/src/main.ald:2:5]
+ 1 │     fn render(value: Result[Number]) String {
+ 2 │ ╭─▶     match value {
+ 3 │ │           Ok(number) => "ok",
+ 4 │ │           Err(:invalid(message)) => message,
+ 5 │ ├─▶     }
+   · ╰──── this open error row may contain more tags
+ 6 │     }
+   ╰────
+  help: add `Err(_)` to handle every remaining error tag

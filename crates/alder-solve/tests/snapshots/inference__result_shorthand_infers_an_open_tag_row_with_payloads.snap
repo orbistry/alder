@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn fail(id: Number) Result[String] {\n    Err(:not_found(id))\n}\n"
+---
+fail: forall a. fn(Number) Result[String, [:not_found(Number) | a]]

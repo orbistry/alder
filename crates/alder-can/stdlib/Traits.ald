@@ -18,7 +18,7 @@ pub trait Hash[a] where a: Eq {
 
 pub trait Json[a] {
     fn encode(value: a) String
-    fn decode(value: String) Result[a, String]
+    fn decode(value: String) Result[a, [:invalid_json(String)]]
 }
 
 pub trait Num[a] where a: Eq + Ord {
@@ -91,35 +91,35 @@ impl Hash[Result[a, e]] where a: Hash, e: Hash { fn hash(value: Result[a, e]) Bi
 
 impl Json[Number] {
     fn encode(value: Number) String
-    fn decode(value: String) Result[Number, String]
+    fn decode(value: String) Result[Number, [:invalid_json(String)]]
 }
 impl Json[String] {
     fn encode(value: String) String
-    fn decode(value: String) Result[String, String]
+    fn decode(value: String) Result[String, [:invalid_json(String)]]
 }
 impl Json[Bool] {
     fn encode(value: Bool) String
-    fn decode(value: String) Result[Bool, String]
+    fn decode(value: String) Result[Bool, [:invalid_json(String)]]
 }
 impl Json[BigInt] {
     fn encode(value: BigInt) String
-    fn decode(value: String) Result[BigInt, String]
+    fn decode(value: String) Result[BigInt, [:invalid_json(String)]]
 }
 impl Json[()] {
     fn encode(value: ()) String
-    fn decode(value: String) Result[(), String]
+    fn decode(value: String) Result[(), [:invalid_json(String)]]
 }
 impl Json[Array[a]] where a: Json {
     fn encode(value: Array[a]) String
-    fn decode(value: String) Result[Array[a], String]
+    fn decode(value: String) Result[Array[a], [:invalid_json(String)]]
 }
 impl Json[Option[a]] where a: Json {
     fn encode(value: Option[a]) String
-    fn decode(value: String) Result[Option[a], String]
+    fn decode(value: String) Result[Option[a], [:invalid_json(String)]]
 }
 impl Json[Result[a, e]] where a: Json, e: Json {
     fn encode(value: Result[a, e]) String
-    fn decode(value: String) Result[Result[a, e], String]
+    fn decode(value: String) Result[Result[a, e], [:invalid_json(String)]]
 }
 
 impl Num[Number] {

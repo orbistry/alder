@@ -105,31 +105,31 @@ vertical slice; async and context follow without weakening that slice.
 
 ### Wave 1: error-row model and inference
 
-- [ ] Add kinded error-row variables, structural tag maps, payload vectors,
+- [x] Add kinded error-row variables, structural tag maps, payload vectors,
   closed/open tails, pruning, occurs checks, generalization, instantiation,
   and deterministic AST conversion in `alder-solve`.
-- [ ] Normalize local and imported named error groups to closed rows.
-- [ ] Infer singleton tag rows, enforce legal placement, and type tag-pattern
+- [x] Normalize local and imported named error groups to closed rows.
+- [x] Infer singleton tag rows, enforce legal placement, and type tag-pattern
   payloads from the expected row.
-- [ ] Implement row equality plus row inclusion for `?`, including multiple
+- [x] Implement row equality plus row inclusion for `?`, including multiple
   propagated calls and closed-row rejection.
-- [ ] Preserve inferred rows through public interfaces and `.aldi` hydration.
+- [x] Preserve inferred rows through public interfaces and `.aldi` hydration.
 
 ### Wave 2: checking and reporting
 
-- [ ] Add the post-solve match checker for closed and open error rows, treating
+- [x] Add the post-solve match checker for closed and open error rows, treating
   guarded arms as non-covering.
-- [ ] Add structured canonicalization/solve errors and Elm-quality wording,
+- [x] Add structured canonicalization/solve errors and Elm-quality wording,
   labels, hints, and related spans through `alder-report`.
-- [ ] Snapshot semantic values with the project source-aware macros and
+- [x] Snapshot semantic values with the project source-aware macros and
   `indoc`; snapshot rendered miette output with color disabled.
 
 ### Wave 3: runtime vertical slice
 
-- [ ] Audit/update `Result` stdlib annotations and helpers for inferred rows.
-- [ ] Verify Oxc AST lowering for tags, tag patterns, and one-evaluation `?`;
+- [x] Audit/update `Result` stdlib annotations and helpers for inferred rows.
+- [x] Verify Oxc AST lowering for tags, tag patterns, and one-evaluation `?`;
   add missing direct-AST cases without source-string code generation.
-- [ ] Add runtime/e2e projects covering tag payloads, three-way `?` merging,
+- [x] Add runtime/e2e projects covering tag payloads, three-way `?` merging,
   group flattening, closed matching, and propagated `Err` identity.
 
 ### Wave 4: async and context
@@ -142,9 +142,9 @@ vertical slice; async and context follow without weakening that slice.
 
 ### Wave 5: sweep
 
-- [ ] Update `SPEC.md`, language/runtime/tooling docs, and milestone checkboxes.
-- [ ] Add granular Sampo changesets for every changed publishable crate.
-- [ ] Run `cargo fmt --all`, full Clippy with warnings denied, full tests,
+- [x] Update `SPEC.md`, language/runtime/tooling docs, and milestone checkboxes.
+- [x] Add granular Sampo changesets for every changed publishable crate.
+- [x] Run `cargo fmt --all`, full Clippy with warnings denied, full tests,
   package verification for changed crates, and standalone e2e execution.
 
 ## Required error-row tests

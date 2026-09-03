@@ -1,0 +1,8 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn read() Result[Number, [:storage(String)]] {\n    Err(:storage(\"disk\"))\n}\n\nfn decode() Result[Number, [:invalid(String)]] {\n    Err(:invalid(\"number\"))\n}\n\nfn authorize() Result[Number, [:forbidden]] {\n    Err(:forbidden)\n}\n\nfn load() Result[Number] {\n    let first = read()?\n    let second = decode()?\n    let third = authorize()?\n    Ok(first + second + third)\n}\n"
+---
+authorize: fn() Result[Number, [:forbidden]]
+decode: fn() Result[Number, [:invalid(String)]]
+load: forall a. fn() Result[Number, [:forbidden | :invalid(String) | :storage(String) | a]]
+read: fn() Result[Number, [:storage(String)]]

@@ -1,0 +1,21 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "error Failure {\n    :known\n}\n\nfn render(value: Result[Number, Failure]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:other) => \"other\",\n        Err(:known) => \"known\",\n    }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 8,
+                column: 13,
+            },
+            end: Position {
+                line: 8,
+                column: 19,
+            },
+        },
+        kind: ImpossibleErrorPattern {
+            tag: "other",
+        },
+    },
+]

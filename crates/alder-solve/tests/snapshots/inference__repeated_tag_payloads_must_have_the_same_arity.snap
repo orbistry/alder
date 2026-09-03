@@ -1,0 +1,22 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn invalid(flag: Bool) Result[()] {\n    if flag {\n        Err(:invalid(\"text\"))\n    } else {\n        Err(:invalid(\"text\", 1))\n    }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 4,
+                column: 12,
+            },
+            end: Position {
+                line: 6,
+                column: 6,
+            },
+        },
+        kind: Arity {
+            expected: 1,
+            actual: 2,
+        },
+    },
+]

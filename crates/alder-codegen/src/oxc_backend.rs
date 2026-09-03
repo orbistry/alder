@@ -2519,12 +2519,23 @@ impl<'src, 'js> Emitter<'src, 'js> {
             Evidence::StructuralEq { shape, fields } => {
                 self.kernel.insert("$equalStructural");
                 let args = vec!["$a".to_owned(), "$b".to_owned()];
-                let (kind, names) = match shape {
+                let (kind, names): (&str, Vec<String>) = match shape {
                     StructuralEqShape::Array => ("array", Vec::new()),
                     StructuralEqShape::Option => ("option", Vec::new()),
                     StructuralEqShape::Result => ("result", Vec::new()),
                     StructuralEqShape::Tuple => ("tuple", Vec::new()),
-                    StructuralEqShape::Record(names) => ("record", names.clone()),
+                    StructuralEqShape::Record(names) => (
+                        "record",
+                        names.iter().map(|name| (*name).to_owned()).collect(),
+                    ),
+                    StructuralEqShape::ErrorRow(tags) => (
+                        "error_row",
+                        tags.iter()
+                            .flat_map(|(tag, arity)| {
+                                (0..*arity).map(move |index| format!("{tag}:{index}"))
+                            })
+                            .collect(),
+                    ),
                 };
                 let dictionaries = fields
                     .iter()
@@ -2917,6 +2928,17 @@ impl<'src, 'js> Emitter<'src, 'js> {
             && constructor.name.enum_.name == "Ordering"
         {
             return self.ordering(constructor.name.variant);
+        }
+        if constructor.name.enum_.module.package == alder_ast::PackageId::Builtin
+            && constructor.name.enum_.name == "Result"
+        {
+            let symbol = match constructor.name.variant {
+                "Ok" => "$resultOk",
+                "Err" => "$resultErr",
+                _ => unreachable!("Result only has Ok and Err constructors"),
+            };
+            let local = self.extern_import("alder:kernel", symbol);
+            return self.js.identifier(&local);
         }
         let exported =
             constructor_name_from_parts(constructor.name.enum_.name, constructor.name.variant);

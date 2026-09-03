@@ -2,4 +2,4 @@
 pub fn encode(value: a) String
 
 #[extern("alder:kernel", "$jsonDecode")]
-pub fn decode(value: String) Result[a, String]
+pub fn decode(value: String) Result[a, [:invalid_json(String)]]

@@ -1603,6 +1603,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn imported_error_group_is_flattened_as_a_closed_row() {
+        let errors = dependency_interface(
+            indoc::indoc! {r#"
+                pub error Failure {
+                    :invalid(String),
+                    :missing
+                }
+            "#},
+            &["errors"],
+            &[],
+        );
+        let mem = InMemorySource::new();
+        let consumer = url("project/src/main.ald");
+        mem.insert(
+            consumer.clone(),
+            indoc::indoc! {r#"
+                import @vendor/widgets/errors.{ Failure }
+
+                pub fn invalid() Result[Number, Failure] {
+                    Err(:other)
+                }
+            "#}
+            .to_owned(),
+        );
+        let db = Arc::new(Mutex::new(Database::new(mem)));
+        let graph = build_graph(db.clone(), std::slice::from_ref(&consumer))
+            .await
+            .unwrap();
+        let result = build_with_dependencies(
+            db,
+            &graph,
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![errors],
+                ..BuildDependencies::default()
+            },
+        )
+        .await;
+
+        let ModuleResult::Failed { diagnostics } = &result.modules[&consumer] else {
+            panic!("imported closed group must reject an unknown tag")
+        };
+        assert!(diagnostics[0].message().contains("type mismatch"));
+    }
+
+    #[tokio::test]
     async fn test_cross_module_type_error() {
         let mem = InMemorySource::new();
 
@@ -1726,6 +1772,45 @@ mod tests {
                 diagnostic.message() == "overlapping implementations of `Display` are not allowed"
             }));
         }
+    }
+
+    #[tokio::test]
+    async fn renders_invalid_error_tag_placement_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn invalid() {
+                let failure = :not_found(42)
+                failure
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_missing_closed_error_match_case_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            error Failure {
+                :invalid(String),
+                :missing
+            }
+
+            fn render(value: Result[Number, Failure]) String {
+                match value {
+                    Ok(number) => "ok",
+                    Err(:invalid(message)) => message,
+                }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_open_error_match_hint_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn render(value: Result[Number]) String {
+                match value {
+                    Ok(number) => "ok",
+                    Err(:invalid(message)) => message,
+                }
+            }
+        "#};
     }
 
     /// Unannotated mutually recursive exports used from another module:
