@@ -1063,6 +1063,17 @@ macro_rules! assert_inference_error_snapshot {
     }};
 }
 
+macro_rules! assert_solve_error_snapshot {
+    ($source:expr) => {{
+        let source = indoc!($source);
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source).expect_err("solving fails");
+        insta::with_settings!({ description => source, omit_expression => true }, {
+            insta::assert_debug_snapshot!(errors);
+        });
+    }};
+}
+
 #[test]
 fn polymorphic_identity() {
     assert_inference_snapshot!("fn identity(value) { value }");
@@ -1130,6 +1141,58 @@ fn mutually_recursive_calls_receive_preseeded_dictionary_arguments() {
             ..
         } if name.name == "second" && dictionaries.len() == 1
     )));
+}
+
+#[test]
+fn three_member_predicate_fixpoint_is_source_order_independent() {
+    fn solve_order(source: &str) {
+        let bump = Bump::new();
+        let output = solve_input(&bump, source).expect("all recursive peers share the bound ABI");
+        let calls = output
+            .uses
+            .values()
+            .filter_map(|action| match action {
+                alder_solve::UseAction::DirectCall {
+                    dictionaries,
+                    target: Some(alder_solve::DirectTarget::Binding(name)),
+                    ..
+                } if matches!(name.name, "first" | "second" | "third") => {
+                    Some((name.name, dictionaries.len()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(calls.len(), 3);
+        assert!(calls.iter().all(|(_, dictionaries)| *dictionaries == 1));
+    }
+
+    solve_order(indoc! {r#"
+        trait Display[a] { fn display(value: a) -> String }
+        fn first(value: a) -> String where a: Display { second(value) }
+        fn second(value: a) -> String where a: Display { third(value) }
+        fn third(value: a) -> String where a: Display {
+            if true { display(value) } else { first(value) }
+        }
+    "#});
+    solve_order(indoc! {r#"
+        trait Display[a] { fn display(value: a) -> String }
+        fn third(value: a) -> String where a: Display {
+            if true { display(value) } else { first(value) }
+        }
+        fn first(value: a) -> String where a: Display { second(value) }
+        fn second(value: a) -> String where a: Display { third(value) }
+    "#});
+}
+
+#[test]
+fn recursive_peers_cannot_hide_mismatched_bounds() {
+    assert_solve_error_snapshot! {r#"
+        trait Display[a] { fn display(value: a) -> String }
+        trait Hashable[a] { fn hash(value: a) -> BigInt }
+
+        fn first(value: a) -> String where a: Display { second(value) }
+        fn second(value: a) -> String where a: Hashable { first(value) }
+    "#};
 }
 
 #[test]
