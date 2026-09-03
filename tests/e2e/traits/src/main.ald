@@ -82,6 +82,18 @@ impl Json[JsonSecret] {
 #[derive(Json)]
 enum JsonSecretBox { JsonSecretBox(JsonSecret) }
 
+#[derive(Show, Ord, Hash, Json)]
+error Failure {
+    :later,
+    :first(Number),
+}
+
+#[derive(Show, Ord, Hash, Json)]
+enum Chain {
+    End,
+    Link(Number, Chain),
+}
+
 trait Describe[a] {
     fn describe(value: a) -> String
 }
@@ -122,6 +134,20 @@ fn less_than(left: a, right: a) -> Bool where a: Ord {
     left < right
 }
 
+fn verify_error_group_derives() -> Result[(), String] {
+    let failure: Failure = decode("{\"tag\":\":first\",\"fields\":[42]}")?
+    let same_failure: Failure = decode("{\"tag\":\":first\",\"fields\":[42]}")?
+    let later: Failure = decode("{\"tag\":\":later\",\"fields\":[]}")?
+    assert(failure == same_failure)
+    assert(later < failure)
+    assert(show(failure) == ":first(42)")
+    assert(hash(failure) == hash(same_failure))
+    assert(encode(failure) == "{\"tag\":\":first\",\"fields\":[42]}")
+    let decoded_failure: Result[Failure, String] = decode(encode(failure))
+    assert(decoded_failure == Result.ok(failure))
+    Result.ok(())
+}
+
 pub fn main() {
     assert(describe_generic(1) == "number")
     assert(describe_generic("text") == "text")
@@ -156,6 +182,17 @@ pub fn main() {
     assert(secret_json == "{\"tag\":\"JsonSecretBox\",\"fields\":[\"secret\"]}")
     let decoded_secret: Result[JsonSecretBox, String] = decode(secret_json)
     assert(decoded_secret == Result.ok(JsonSecretBox::JsonSecretBox(JsonSecret::JsonSecret)))
+
+    assert(verify_error_group_derives() == Result.ok(()))
+
+    let chain = Chain::Link(1, Chain::Link(2, Chain::End))
+    let same_chain = Chain::Link(1, Chain::Link(2, Chain::End))
+    assert(chain == same_chain)
+    assert(show(chain) == "Link(1, Link(2, End))")
+    assert(chain > Chain::End)
+    assert(hash(chain) == hash(same_chain))
+    let decoded_chain: Result[Chain, String] = decode(encode(chain))
+    assert(decoded_chain == Result.ok(chain))
 
     let encoded = encode(Status::Meta { code: 42, note: "answer" })
     let decoded: Result[Status, String] = decode(encoded)

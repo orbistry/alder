@@ -494,13 +494,20 @@ mod tests {
 
     #[test]
     fn error_group_ord_preserves_declaration_order() {
-        let generated = emit(indoc::indoc! {r#"
+        assert_solved_emit_snapshot! {r#"
             #[derive(Ord)]
             pub error Failure { :later, :first(Number) }
-        "#});
-        assert!(generated.contains("\"later\": {"));
-        assert!(generated.contains("\"first\": {"));
-        assert!(generated.contains("$compareDerived($a0, $a1"));
+        "#};
+    }
+
+    #[test]
+    fn recursive_derived_dictionary_references_its_emitted_binding() {
+        assert_solved_emit_snapshot! {r#"
+            #[derive(Show)]
+            pub enum Chain { End, Link(Number, Chain) }
+
+            pub fn render(value: Chain) -> String { show(value) }
+        "#};
     }
 
     #[test]

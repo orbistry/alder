@@ -1,0 +1,53 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "#[derive(Ord)]\npub error Failure { :later, :first(Number) }\n"
+---
+import { $compareDerived, $equalDerived } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, {
+		":later": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		":first": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [{ "eq": ($a, $b) => {
+				return $a === $b;
+			} }]
+		}
+	});
+};
+Object["freeze"]($dict$Eq$0);
+const $dict$Ord$0 = {};
+$dict$Ord$0["$super0"] = $dict$Eq$0;
+$dict$Ord$0["compare"] = ($a0, $a1) => {
+	const $ordering = $compareDerived($a0, $a1, {
+		":later": {
+			"record": false,
+			"fields": [],
+			"optional": [],
+			"dictionaries": []
+		},
+		":first": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [{
+				"compare": ($a, $b) => {
+					return $a < $b ? { "$": "Less" } : $a > $b ? { "$": "Greater" } : { "$": "Equal" };
+				},
+				"$super0": { "eq": ($a, $b) => {
+					return $a === $b;
+				} }
+			}]
+		}
+	});
+	return $ordering < 0 ? { "$": "Less" } : $ordering > 0 ? { "$": "Greater" } : { "$": "Equal" };
+};
+Object["freeze"]($dict$Ord$0);
+export { $dict$Eq$0, $dict$Ord$0 };

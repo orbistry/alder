@@ -725,7 +725,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         implementation: &alder_ast::ImplDecl<'src>,
     ) {
         self.kernel.insert(kernel);
-        let shape = self.derived_variant_shape(module, implementation);
+        let shape = self.derived_variant_shape(module, implementation, dictionary);
         let call = self.js.call(
             self.js.identifier(kernel),
             [self.js.identifier("$a0"), shape],
@@ -749,7 +749,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         implementation: &alder_ast::ImplDecl<'src>,
     ) {
         self.kernel.insert("$hashDerived");
-        let shape = self.derived_variant_shape(module, implementation);
+        let shape = self.derived_variant_shape(module, implementation, dictionary);
         let type_name = implementation
             .trait_ref
             .args
@@ -778,6 +778,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         &mut self,
         module: &Module<'src>,
         implementation: &alder_ast::ImplDecl<'src>,
+        dictionary: &str,
     ) -> Expression<'js> {
         let reference =
             implementation
@@ -817,6 +818,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                                 implementation,
                                 variant.index,
                                 fields.len(),
+                                dictionary,
                             );
                             variants.push(self.js.property(
                                 variant.name.variant,
@@ -833,9 +835,10 @@ impl<'src, 'js> Emitter<'src, 'js> {
                                 implementation,
                                 tag.index,
                                 fields.len(),
+                                dictionary,
                             );
                             variants.push(self.js.property(
-                                tag.name,
+                                &format!(":{}", tag.name),
                                 self.variant_shape(false, &fields, &[], dictionaries),
                             ));
                         }
@@ -882,6 +885,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         implementation: &alder_ast::ImplDecl<'src>,
         variant: u16,
         fields: usize,
+        dictionary: &str,
     ) -> Vec<Expression<'js>> {
         let evidence = (0..fields)
             .map(|field| {
@@ -900,6 +904,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
         evidence
             .iter()
             .map(|evidence| match evidence {
+                Some(Evidence::SelfDictionary) => self.js.identifier(dictionary),
+                Some(Evidence::Super(index)) => self
+                    .js
+                    .member(self.js.identifier(dictionary), &format!("$super{index}")),
+                Some(Evidence::SuperPath(path)) => path
+                    .iter()
+                    .fold(self.js.identifier(dictionary), |dictionary, slot| {
+                        self.js.member(dictionary, &format!("$super{slot}"))
+                    }),
                 Some(evidence) => self.evidence(evidence),
                 None => self.js.undefined(),
             })
@@ -917,7 +930,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
     ) {
         self.kernel.insert(kernel);
         let args = vec!["$a0".to_owned(), "$a1".to_owned()];
-        let shape = self.derived_variant_shape(module, implementation);
+        let shape = self.derived_variant_shape(module, implementation, dictionary);
         let call = self.js.call(
             self.js.identifier(kernel),
             [
@@ -945,7 +958,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         implementation: &alder_ast::ImplDecl<'src>,
     ) {
         let args = vec!["$a0".to_owned(), "$a1".to_owned()];
-        let shape = self.derived_variant_shape(module, implementation);
+        let shape = self.derived_variant_shape(module, implementation, dictionary);
         self.kernel.insert("$compareDerived");
         let comparison = self.js.call(
             self.js.identifier("$compareDerived"),
