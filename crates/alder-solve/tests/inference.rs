@@ -1098,6 +1098,36 @@ fn dependency_scc_generalizes_before_earlier_source_use() {
 }
 
 #[test]
+fn mutable_top_level_bindings_do_not_generalize() {
+    assert_inference_error_snapshot! {r#"
+        let mut identity = fn(value) { value }
+        fn number() { identity(1) }
+        fn text() { identity("text") }
+    "#};
+}
+
+#[test]
+fn generalization_subtracts_mutable_environment_variables() {
+    assert_inference_error_snapshot! {r#"
+        let mut identity = fn(value) { value }
+        fn forward(value) { identity(value) }
+        fn number() { forward(1) }
+        fn text() { forward("text") }
+    "#};
+}
+
+#[test]
+fn local_let_bindings_remain_monomorphic() {
+    assert_inference_error_snapshot! {r#"
+        fn invalid() {
+            let identity = fn(value) { value }
+            let number = identity(1)
+            identity("text")
+        }
+    "#};
+}
+
+#[test]
 fn mutually_recursive_scc_is_unified_before_generalization() {
     let bump = Bump::new();
     let annotations = infer(

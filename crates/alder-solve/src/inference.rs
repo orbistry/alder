@@ -1058,7 +1058,13 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
             }
             for member in group.members {
-                self.generalize_global(&mut env, *member);
+                let outer_free =
+                    self.environment_free_vars(&env, &group.members.iter().copied().collect());
+                let generalizable = !matches!(
+                    value_items[member].value.kind,
+                    ItemKind::Let(decl) if decl.mutable
+                );
+                self.generalize_global(&mut env, *member, &outer_free, generalizable);
             }
         }
 
@@ -1178,21 +1184,29 @@ impl<'a, 'db> Infer<'a, 'db> {
         match item {
             ItemKind::Fn(function) => {
                 self.infer_value_item(env, item, region)?;
-                self.generalize_global(env, function.name);
+                let excluded = BTreeSet::from([function.name]);
+                let outer_free = self.environment_free_vars(env, &excluded);
+                self.generalize_global(env, function.name, &outer_free, true);
             }
             ItemKind::Extern(alder_ast::ExternDecl::Fn { name, .. }) => {
                 self.infer_value_item(env, item, region)?;
-                self.generalize_global(env, *name);
+                let excluded = BTreeSet::from([*name]);
+                let outer_free = self.environment_free_vars(env, &excluded);
+                self.generalize_global(env, *name, &outer_free, true);
             }
             ItemKind::Let(decl) => {
                 self.infer_value_item(env, item, region)?;
+                let excluded = decl.bindings.iter().copied().collect();
+                let outer_free = self.environment_free_vars(env, &excluded);
                 for binding in decl.bindings {
-                    self.generalize_global(env, *binding);
+                    self.generalize_global(env, *binding, &outer_free, !decl.mutable);
                 }
             }
             ItemKind::Component(component) => {
                 self.infer_value_item(env, item, region)?;
-                self.generalize_global(env, component.name);
+                let excluded = BTreeSet::from([component.name]);
+                let outer_free = self.environment_free_vars(env, &excluded);
+                self.generalize_global(env, component.name, &outer_free, true);
             }
             ItemKind::Impl(impl_) => {
                 self.require_impl_superclasses(impl_, region);
@@ -2516,7 +2530,13 @@ impl<'a, 'db> Infer<'a, 'db> {
         self.unify(env.globals[&name].typ.clone(), typ, region)
     }
 
-    fn generalize_global(&mut self, env: &mut Env<'a>, name: QualifiedName<'a>) {
+    fn generalize_global(
+        &mut self,
+        env: &mut Env<'a>,
+        name: QualifiedName<'a>,
+        outer_free: &BTreeSet<usize>,
+        generalizable: bool,
+    ) {
         let typ = self.prune(env.globals[&name].typ.clone());
         let mut predicates = env.globals[&name].predicates.clone();
         for predicate in &mut predicates {
@@ -2535,6 +2555,11 @@ impl<'a, 'db> Infer<'a, 'db> {
             self.free_vars(&equation.projection, &mut vars);
             self.free_vars(&equation.typ, &mut vars);
         }
+        if generalizable {
+            vars.retain(|variable| !outer_free.contains(variable));
+        } else {
+            vars.clear();
+        }
         env.globals.insert(
             name,
             Scheme {
@@ -2544,6 +2569,37 @@ impl<'a, 'db> Infer<'a, 'db> {
                 typ,
             },
         );
+    }
+
+    fn environment_free_vars(
+        &mut self,
+        env: &Env<'a>,
+        excluded: &BTreeSet<QualifiedName<'a>>,
+    ) -> BTreeSet<usize> {
+        let schemes = env
+            .globals
+            .iter()
+            .filter(|(name, _)| !excluded.contains(name))
+            .map(|(_, scheme)| scheme.clone())
+            .chain(env.locals.values().cloned())
+            .collect::<Vec<_>>();
+        let mut result = BTreeSet::new();
+        for scheme in schemes {
+            let mut free = BTreeSet::new();
+            self.free_vars(&scheme.typ, &mut free);
+            for predicate in &scheme.predicates {
+                for argument in &predicate.args {
+                    self.free_vars(argument, &mut free);
+                }
+            }
+            for equation in &scheme.projection_eqs {
+                self.free_vars(&equation.projection, &mut free);
+                self.free_vars(&equation.typ, &mut free);
+            }
+            free.retain(|variable| !scheme.quantified.contains(variable));
+            result.extend(free);
+        }
+        result
     }
 
     fn instantiate(&mut self, scheme: &Scheme<'a>) -> Ty<'a> {
