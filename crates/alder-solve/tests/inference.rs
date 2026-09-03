@@ -736,6 +736,34 @@ fn mutually_recursive_scc_is_unified_before_generalization() {
 }
 
 #[test]
+fn mutually_recursive_calls_receive_preseeded_dictionary_arguments() {
+    let bump = Bump::new();
+    let output = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Display[a] { fn display(value: a) -> String }
+            impl Display[Number] {
+                fn display(value: Number) -> String { "number" }
+            }
+            fn first(value: a) -> String where a: Display { second(value) }
+            fn second(value: a) -> String where a: Display {
+                if true { display(value) } else { first(value) }
+            }
+            fn main() -> String { first(1) }
+        "#},
+    )
+    .expect("recursive peers should see each other's declared predicates");
+    assert!(output.uses.values().any(|action| matches!(
+        action,
+        alder_solve::UseAction::DirectCall {
+            dictionaries,
+            target: Some(alder_solve::DirectTarget::Binding(name)),
+            ..
+        } if name.name == "second" && dictionaries.len() == 1
+    )));
+}
+
+#[test]
 fn higher_kinded_application_is_preserved_and_specialized() {
     let bump = Bump::new();
     let annotations = infer(

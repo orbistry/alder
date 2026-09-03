@@ -627,6 +627,16 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
 
         for group in module.value_sccs {
+            let mut seeded_items = BTreeSet::new();
+            for member in group.members {
+                let item = value_items
+                    .get(member)
+                    .expect("each value SCC member has a declaration");
+                let identity: *const Located<alder_ast::Item<'a>> = *item;
+                if seeded_items.insert(identity) {
+                    self.seed_value_item(&mut env, &item.value.kind, item.region)?;
+                }
+            }
             let mut inferred_items = BTreeSet::new();
             for member in group.members {
                 let item = value_items
@@ -696,6 +706,56 @@ impl<'a, 'db> Infer<'a, 'db> {
                 typ,
             },
         );
+    }
+
+    fn seed_value_item(
+        &mut self,
+        env: &mut Env<'a>,
+        item: &'a ItemKind<'a>,
+        region: Region,
+    ) -> Result<(), Error> {
+        let (name, params, ret, constraints) = match item {
+            ItemKind::Fn(function) => (
+                function.name,
+                function.params,
+                function.ret,
+                function.constraints,
+            ),
+            ItemKind::Extern(alder_ast::ExternDecl::Fn {
+                name,
+                params,
+                ret,
+                constraints,
+                ..
+            }) => (*name, *params, Some(*ret), *constraints),
+            ItemKind::Let(_) | ItemKind::Component(_) => return Ok(()),
+            _ => unreachable!("only value items belong to value SCCs"),
+        };
+        let mut vars = BTreeMap::new();
+        let mut args = Vec::with_capacity(params.len());
+        for parameter in params {
+            args.push(match parameter.annotation {
+                Some(typ) => self.from_ast(typ, &mut vars),
+                None => self.fresh(),
+            });
+        }
+        let ret = match ret {
+            Some(typ) => self.from_ast(typ, &mut vars),
+            None => self.fresh(),
+        };
+        let predicates = self.predicates_from_constraints(constraints, &vars);
+        let projection_eqs = self.projection_equations_from_constraints(constraints, &vars);
+        let placeholder = env
+            .globals
+            .get(&name)
+            .expect("value was predeclared")
+            .typ
+            .clone();
+        self.unify(placeholder, Ty::Fn(args, Box::new(ret)), region)?;
+        let scheme = env.globals.get_mut(&name).expect("value was predeclared");
+        scheme.predicates = predicates;
+        scheme.projection_eqs = projection_eqs;
+        Ok(())
     }
 
     fn infer_item(

@@ -18,6 +18,14 @@ fn describe(value: a) -> String where a: Display {
     display(value)
 }
 
+fn recursive_left(value: a) -> String where a: Display {
+    recursive_right(value)
+}
+
+fn recursive_right(value: a) -> String where a: Display {
+    if true { display(value) } else { recursive_left(value) }
+}
+
 fn generic_equal(left: a, right: a) -> Bool where a: Eq {
     left == right
 }
@@ -79,6 +87,7 @@ test "arithmetic works" {
 test "trait dictionaries dispatch" {
     assert describe(1) == "number"
     assert render(1) == "number"
+    assert recursive_left(1) == "number"
 }
 
 test "higher-kinded trait dictionaries dispatch" {
