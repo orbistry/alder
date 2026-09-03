@@ -1,6 +1,6 @@
 ---
 source: crates/alder-can/src/canonicalize.rs
-expression: "can_error(\"#[derive(Missing)]\\nenum Status { Ready }\")"
+description: "#[derive(Missing)]\nenum Status { Ready }\n"
 ---
 [
     Error {

@@ -1,0 +1,41 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "enum Token { Token }\n\nimpl Eq[Token] {\n    fn eq(left: Token, right: Token) -> Bool { true }\n}\n"
+---
+[
+    Coherence(
+        OverlappingImpl {
+            first: ImplId {
+                module: ModuleId {
+                    package: Application,
+                    path: [
+                        "Main",
+                    ],
+                },
+                origin: Source {
+                    item_ordinal: 1,
+                },
+            },
+            second: ImplId {
+                module: ModuleId {
+                    package: Application,
+                    path: [
+                        "Main",
+                    ],
+                },
+                origin: AutomaticEq {
+                    type_ordinal: 0,
+                },
+            },
+            trait_: TraitId(
+                QualifiedName {
+                    module: ModuleId {
+                        package: Builtin,
+                        path: [],
+                    },
+                    name: "Eq",
+                },
+            ),
+        },
+    ),
+]

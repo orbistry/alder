@@ -1087,6 +1087,17 @@ fn cross_trait_non_decreasing_instance_prerequisite_is_rejected() {
 }
 
 #[test]
+fn explicit_equality_overlaps_automatic_enum_equality() {
+    assert_solve_error_snapshot! {r#"
+        enum Token { Token }
+
+        impl Eq[Token] {
+            fn eq(left: Token, right: Token) -> Bool { true }
+        }
+    "#};
+}
+
+#[test]
 fn polymorphic_identity() {
     assert_inference_snapshot!("fn identity(value) { value }");
 }

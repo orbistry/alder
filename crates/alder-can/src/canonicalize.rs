@@ -2928,19 +2928,17 @@ mod tests {
 
     #[test]
     fn trait_method_parameters_require_annotations() {
-        insta::assert_snapshot!(can_error("trait Show[a] { fn show(value) -> String }"));
+        assert_can_error_snapshot!("trait Show[a] { fn show(value) -> String }");
     }
 
     #[test]
     fn trait_parameters_must_be_unique() {
-        insta::assert_snapshot!(can_error(
-            "trait Convert[a, a] { fn convert(value: a) -> a }"
-        ));
+        assert_can_error_snapshot!("trait Convert[a, a] { fn convert(value: a) -> a }");
     }
 
     #[test]
     fn trait_method_returns_require_annotations() {
-        insta::assert_snapshot!(can_error("trait Show[a] { fn show(value: a) }"));
+        assert_can_error_snapshot!("trait Show[a] { fn show(value: a) }");
     }
 
     #[test]
@@ -3298,12 +3296,22 @@ mod tests {
 
     #[test]
     fn invalid_derive_arguments_are_structured() {
-        insta::assert_snapshot!(can_error("#[derive(Missing)]\nenum Status { Ready }"));
-        insta::assert_snapshot!(can_error("#[derive(\"Eq\")]\nenum Status { Ready }"));
-        insta::assert_snapshot!(can_error("#[derive(Eq, Eq)]\nenum Status { Ready }"));
-        insta::assert_snapshot!(can_error(
-            "#[derive(Eq)]\nenum Callback { Callback(fn() -> ()) }"
-        ));
+        assert_can_error_snapshot! {r#"
+            #[derive(Missing)]
+            enum Status { Ready }
+        "#};
+        assert_can_error_snapshot! {r#"
+            #[derive("Eq")]
+            enum Status { Ready }
+        "#};
+        assert_can_error_snapshot! {r#"
+            #[derive(Eq, Eq)]
+            enum Status { Ready }
+        "#};
+        assert_can_error_snapshot! {r#"
+            #[derive(Eq)]
+            enum Callback { Callback(fn() -> ()) }
+        "#};
     }
 
     #[test]

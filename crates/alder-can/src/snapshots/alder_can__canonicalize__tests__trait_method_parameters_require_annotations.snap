@@ -1,6 +1,6 @@
 ---
 source: crates/alder-can/src/canonicalize.rs
-expression: "can_error(\"trait Show[a] { fn show(value) -> String }\")"
+description: "trait Show[a] { fn show(value) -> String }"
 ---
 [
     Error {
