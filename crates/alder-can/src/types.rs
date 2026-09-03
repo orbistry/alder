@@ -126,15 +126,26 @@ pub fn canonicalize_impl_head_type<'a>(
     let SourceType::Named { path, args } = source.value else {
         return canonicalize_type(bump, env, variables, source);
     };
-    if !args.iter().any(|arg| matches!(arg.value, SourceType::Hole)) {
-        return canonicalize_type(bump, env, variables, source);
-    }
 
     let last = path.segments.last().expect("source paths are nonempty");
     let qualifier = (path.segments.len() > 1).then(|| path.segments[0].value);
     let binding = env
         .find_type(bump, path.region(), qualifier, last.value)
         .map_err(|error| vec![error])?;
+    if args.is_empty() && binding.arity > 0 {
+        let slots = bump
+            .alloc_slice_fill_iter((0..binding.arity).map(|index| TypeSlot::Hole(index as u16)));
+        return Ok(bump.alloc(Located::at(
+            source.region,
+            CanType::Partial {
+                constructor: binding.reference,
+                slots,
+            },
+        )));
+    }
+    if !args.iter().any(|arg| matches!(arg.value, SourceType::Hole)) {
+        return canonicalize_type(bump, env, variables, source);
+    }
     if args.len() != binding.arity {
         return Err(vec![Error::new(
             source.region,
@@ -323,6 +334,20 @@ mod tests {
         assert_eq!(constructor.name, "Result");
         assert!(matches!(slots[0], TypeSlot::Hole(0)));
         assert!(matches!(slots[1], TypeSlot::Fixed(_)));
+    }
+
+    #[test]
+    fn bare_constructor_impl_head_becomes_a_partial_type() {
+        let bump = Bump::new();
+        let source = bump.alloc_str("Option");
+        let typ =
+            canonicalize_impl_head_type(&bump, &env(), &BTreeSet::new(), parse_type(&bump, source))
+                .expect("bare constructor impl head canonicalizes");
+        let CanType::Partial { constructor, slots } = &typ.value else {
+            panic!("expected partial constructor")
+        };
+        assert_eq!(constructor.name, "Option");
+        assert!(matches!(slots, [TypeSlot::Hole(0)]));
     }
 
     #[test]

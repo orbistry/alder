@@ -877,9 +877,6 @@ fn canonicalize_impl<'a>(
     for arg in source.args {
         collect_type_variables(arg, &mut variables);
     }
-    for constraint in source.where_clause {
-        collect_constraint_variables(constraint, &mut variables);
-    }
     let mut args = Vec::with_capacity(source.args.len());
     for arg in source.args {
         args.push(canonicalize_impl_head_type(bump, env, &variables, arg)?);
@@ -1380,21 +1377,6 @@ fn collect_type_variables<'a>(
     }
 }
 
-fn collect_constraint_variables<'a>(
-    constraint: &'a alder_source::Constraint<'a>,
-    variables: &mut BTreeSet<&'a str>,
-) {
-    match constraint {
-        alder_source::Constraint::Bound { var, .. } => {
-            variables.insert(var.value);
-        }
-        alder_source::Constraint::AssocEq { var, typ, .. } => {
-            variables.insert(var.value);
-            collect_type_variables(typ, variables);
-        }
-    }
-}
-
 fn collect_pattern_names<'a>(
     pattern: &'a Located<alder_source::Pattern<'a>>,
     names: &mut Vec<alder_source::Name<'a>>,
@@ -1776,6 +1758,16 @@ mod tests {
         insta::assert_snapshot!(can_error(indoc::indoc! {r#"
             trait Convert[a, b] { fn convert(value: a) -> b }
             fn bad(value: a) where a: Convert { value }
+        "#}));
+    }
+
+    #[test]
+    fn impl_where_variable_must_occur_in_the_impl_head() {
+        insta::assert_snapshot!(can_error(indoc::indoc! {r#"
+            trait Show[a] { fn show(value: a) -> String }
+            impl Show[Array[a]] where b: Show {
+                fn show(value: Array[a]) -> String { "array" }
+            }
         "#}));
     }
 
