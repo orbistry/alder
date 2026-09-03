@@ -283,6 +283,92 @@ impl<'a> Env<'a> {
                 );
             }
         }
+        self.add_builtin_functor(bump);
+    }
+
+    fn add_builtin_functor(&mut self, bump: &'a Bump) {
+        let trait_id = alder_ast::TraitId(QualifiedName {
+            module: ModuleId {
+                package: PackageId::Builtin,
+                path: &[],
+            },
+            name: "Functor",
+        });
+        let type_kind = bump.alloc(alder_ast::Kind::Type);
+        let constructor_kind = alder_ast::Kind::Arrow {
+            param: type_kind,
+            result: type_kind,
+        };
+        let variable = |name: &'a str| {
+            bump.alloc(Located::at_zero(Type::Var { name, args: &[] })) as &'a Located<Type<'a>>
+        };
+        let applied = |name: &'a str, argument: &'a Located<Type<'a>>| {
+            bump.alloc(Located::at_zero(Type::Var {
+                name,
+                args: bump.alloc_slice_copy(&[argument]),
+            })) as &'a Located<Type<'a>>
+        };
+        let a = variable("a");
+        let b = variable("b");
+        let transform = bump.alloc(Located::at_zero(Type::Fn {
+            params: bump.alloc_slice_copy(&[a]),
+            ret: b,
+        }));
+        let annotation = bump.alloc(Annotation {
+            params: bump.alloc_slice_copy(&[
+                alder_ast::TypeParam {
+                    name: Located::at_zero("f"),
+                    kind: constructor_kind,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("a"),
+                    kind: alder_ast::Kind::Type,
+                },
+                alder_ast::TypeParam {
+                    name: Located::at_zero("b"),
+                    kind: alder_ast::Kind::Type,
+                },
+            ]),
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Fn {
+                params: bump.alloc_slice_copy(&[applied("f", a), transform]),
+                ret: applied("f", b),
+            })),
+        });
+        let method = MethodBinding {
+            id: MethodId {
+                trait_: trait_id,
+                index: 0,
+                name: "map",
+            },
+            annotation,
+            region: Region::zero(),
+            has_default: false,
+        };
+        let methods = bump.alloc_slice_copy(&[method]);
+        self.traits.insert(
+            "Functor",
+            Candidate::Unique(TraitBinding {
+                reference: trait_id.0,
+                arity: 1,
+                region: Region::zero(),
+                associated_types: &[],
+                methods,
+            }),
+        );
+        self.scopes[0].values.insert(
+            "map",
+            ValueBinding {
+                reference: ValueRef::TraitMethod {
+                    method: method.id,
+                    annotation,
+                },
+                region: Region::zero(),
+                mutable: false,
+                annotation: Some(annotation),
+            },
+        );
     }
 
     pub fn push_scope(&mut self) {

@@ -2256,7 +2256,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         self.js.call(bind, arguments)
     }
 
-    fn intrinsic_dictionary(&self, intrinsic: Intrinsic) -> Expression<'js> {
+    fn intrinsic_dictionary(&mut self, intrinsic: Intrinsic) -> Expression<'js> {
         let mut properties = self.js.vec();
         match intrinsic {
             Intrinsic::EqNumber
@@ -2278,10 +2278,8 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     Intrinsic::OrdBigInt => Intrinsic::EqBigInt,
                     _ => unreachable!(),
                 };
-                properties.push(
-                    self.js
-                        .property("$super0", self.intrinsic_dictionary(equality)),
-                );
+                let equality = self.intrinsic_dictionary(equality);
+                properties.push(self.js.property("$super0", equality));
             }
             Intrinsic::NumNumber | Intrinsic::NumBigInt => {
                 properties.push(self.intrinsic_binary_property("add", BinaryOperator::Addition));
@@ -2300,6 +2298,16 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     self.js
                         .property("negate", self.js.arrow(&args, body, false)),
                 );
+            }
+            Intrinsic::FunctorArray | Intrinsic::FunctorOption | Intrinsic::FunctorResult => {
+                let symbol = match intrinsic {
+                    Intrinsic::FunctorArray => "$arrayMap",
+                    Intrinsic::FunctorOption => "$optionMap",
+                    Intrinsic::FunctorResult => "$resultMap",
+                    _ => unreachable!(),
+                };
+                self.kernel.insert(symbol);
+                properties.push(self.js.property("map", self.js.identifier(symbol)));
             }
         }
         self.js.object(properties)

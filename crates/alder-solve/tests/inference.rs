@@ -899,6 +899,45 @@ fn higher_kinded_application_is_preserved_and_specialized() {
 }
 
 #[test]
+fn builtin_functor_instances_cover_array_option_and_partial_result() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+            fn array(value: Array[Number]) -> Array[Number] {
+                map(value, fn(item) { item + 1 })
+            }
+            fn option(value: Option[Number]) -> Option[Number] {
+                map(value, fn(item) { item + 1 })
+            }
+            fn result(value: Result[Number, String]) -> Result[Number, String] {
+                map(value, fn(item) { item + 1 })
+            }
+        "#},
+    )
+    .expect("all three first-party Functor instances resolve");
+    let mut found = [false; 3];
+    for action in solved.uses.values() {
+        let alder_solve::UseAction::Reference { dictionaries, .. } = action else {
+            continue;
+        };
+        match dictionaries.first() {
+            Some(alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::FunctorArray)) => {
+                found[0] = true;
+            }
+            Some(alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::FunctorOption)) => {
+                found[1] = true;
+            }
+            Some(alder_solve::Evidence::Intrinsic(alder_solve::Intrinsic::FunctorResult)) => {
+                found[2] = true;
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(found, [true, true, true]);
+}
+
+#[test]
 fn repeated_higher_kinded_pattern_argument_is_rejected() {
     let bump = Bump::new();
     let errors = infer(

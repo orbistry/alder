@@ -85,22 +85,12 @@ enum Phase {
     Beta,
 }
 
-trait Mapper[f] {
-    fn map(value: f[a], transform: fn(a) -> b) -> f[b]
-}
-
-impl Mapper[Maybe] {
+impl Functor[Maybe] {
     fn map(value: Maybe[a], transform: fn(a) -> b) -> Maybe[b] {
         match value {
             Maybe::None => Maybe::None,
             Maybe::Some(item) => Maybe::Some(transform(item)),
         }
-    }
-}
-
-impl Mapper[Result[_, e]] {
-    fn map(value: Result[a, e], transform: fn(a) -> b) -> Result[b, e] {
-        Result.map(value, transform)
     }
 }
 
@@ -142,6 +132,11 @@ test "higher-kinded trait dictionaries dispatch" {
         Maybe::Some(value) => value == 42,
         Maybe::None => false,
     }
+    let mapped_array = map([40, 41], fn(value) { value + 1 })
+    assert mapped_array == [41, 42]
+    let option: Option[Number] = Option.some(41)
+    let mapped_option: Option[Number] = map(option, fn(value) { value + 1 })
+    assert mapped_option == Option.some(42)
     let result = mapped_result()?
     assert result == 42
 }

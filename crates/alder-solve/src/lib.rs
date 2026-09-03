@@ -95,6 +95,9 @@ pub enum Intrinsic {
     OrdBigInt,
     NumNumber,
     NumBigInt,
+    FunctorArray,
+    FunctorOption,
+    FunctorResult,
 }
 
 #[derive(Clone, Debug)]

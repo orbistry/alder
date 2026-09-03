@@ -272,6 +272,24 @@ fn resolve_intrinsic<'a>(
         ("Ord", Some("BigInt")) => Some(Intrinsic::OrdBigInt),
         ("Num", Some("Number")) => Some(Intrinsic::NumNumber),
         ("Num", Some("BigInt")) => Some(Intrinsic::NumBigInt),
+        ("Functor", _) => match subject {
+            Ty::Partial(reference, slots)
+                if reference.module.package == PackageId::Builtin
+                    && slots
+                        .iter()
+                        .filter(|slot| matches!(slot, TySlot::Hole(_)))
+                        .count()
+                        == 1 =>
+            {
+                match reference.name {
+                    "Array" => Some(Intrinsic::FunctorArray),
+                    "Option" => Some(Intrinsic::FunctorOption),
+                    "Result" => Some(Intrinsic::FunctorResult),
+                    _ => None,
+                }
+            }
+            _ => None,
+        },
         _ => None,
     };
     if let Some(intrinsic) = intrinsic {

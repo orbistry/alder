@@ -337,11 +337,19 @@ impl<'a> TraitDatabase<'a> {
     }
 
     fn insert_builtins(&mut self, bump: &'a Bump) {
-        for name in ["Show", "Eq", "Ord", "Hash", "Json", "Num"] {
+        for name in ["Show", "Eq", "Ord", "Hash", "Json", "Num", "Functor"] {
             let id = builtin_trait_id(name);
+            let parameter_kind = if name == "Functor" {
+                Kind::Arrow {
+                    param: bump.alloc(Kind::Type),
+                    result: bump.alloc(Kind::Type),
+                }
+            } else {
+                Kind::Type
+            };
             let params = bump.alloc_slice_copy(&[TypeParam {
-                name: builtin_name("a"),
-                kind: Kind::Type,
+                name: builtin_name(if name == "Functor" { "f" } else { "a" }),
+                kind: parameter_kind,
             }]);
             let superclasses: &'a [TraitRef<'a>] = if name == "Ord" {
                 let argument = bump.alloc(Located::at_zero(Type::Var {
