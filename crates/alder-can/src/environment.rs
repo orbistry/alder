@@ -1,8 +1,10 @@
+use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use alder_ast::{
     Annotation, ConstructorRef, Interface, InterfaceEnum, LocalId, LocalName, ModuleId, Namespace,
-    PackageId, QualifiedName, Type, ValueRef, Variant, VariantPayload,
+    PackageId, QualifiedName, Type, UseId, ValueRef, Variant, VariantPayload,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -76,7 +78,8 @@ pub struct Env<'a> {
     pub modules: BTreeMap<&'a str, Candidate<'a, ModuleBinding<'a>>>,
     pub providers: Vec<BTreeMap<&'a str, QualifiedName<'a>>>,
     pub control: ControlContext,
-    next_local: u32,
+    next_local: Rc<Cell<u32>>,
+    next_use: Rc<Cell<u32>>,
 }
 
 impl<'a> Env<'a> {
@@ -90,7 +93,8 @@ impl<'a> Env<'a> {
             modules: BTreeMap::new(),
             providers: Vec::new(),
             control: ControlContext::default(),
-            next_local: 0,
+            next_local: Rc::new(Cell::new(0)),
+            next_use: Rc::new(Cell::new(0)),
         };
         env.add_builtin_types();
         env.add_builtin_modules();
@@ -159,12 +163,21 @@ impl<'a> Env<'a> {
     }
 
     pub fn fresh_local(&mut self, text: &'a str) -> LocalName<'a> {
+        let id = self.next_local.get();
         let local = LocalName {
-            id: LocalId(self.next_local),
+            id: LocalId(id),
             text,
         };
-        self.next_local += 1;
+        self.next_local
+            .set(id.checked_add(1).expect("local ID overflow"));
         local
+    }
+
+    pub fn fresh_use(&self) -> UseId {
+        let id = self.next_use.get();
+        self.next_use
+            .set(id.checked_add(1).expect("use ID overflow"));
+        UseId(id)
     }
 
     pub fn insert_local(
@@ -793,5 +806,19 @@ mod tests {
         let inner_x = env.insert_local("x", Region::zero(), true).unwrap();
         assert_ne!(x.id, inner_x.id);
         assert!(env.find_value("x").unwrap().mutable);
+    }
+
+    #[test]
+    fn cloned_environments_share_id_allocators() {
+        let mut env = Env::new(ModuleId {
+            package: PackageId::Application,
+            path: &[],
+        });
+        let mut branch = env.clone();
+
+        assert_eq!(env.fresh_use(), UseId(0));
+        assert_eq!(branch.fresh_use(), UseId(1));
+        assert_eq!(env.fresh_local("left").id, LocalId(0));
+        assert_eq!(branch.fresh_local("right").id, LocalId(1));
     }
 }

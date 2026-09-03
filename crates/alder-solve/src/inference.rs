@@ -354,7 +354,7 @@ impl<'a> Infer<'a> {
             }
             Expr::Bool(_) => Ok(self.named("Bool", Vec::new())),
             Expr::Unit => Ok(Ty::Unit),
-            Expr::Var(reference) => self.infer_reference(env, *reference, region),
+            Expr::Var { reference, .. } => self.infer_reference(env, *reference, region),
             Expr::Constructor(constructor) => {
                 Ok(self.instantiate_annotation(constructor.annotation))
             }
@@ -386,6 +386,7 @@ impl<'a> Infer<'a> {
             Expr::Call {
                 function,
                 arguments,
+                ..
             } => {
                 let function_type = self.infer_expr(env, function, return_type.clone())?;
                 let mut args = Vec::with_capacity(arguments.len());
@@ -453,7 +454,7 @@ impl<'a> Infer<'a> {
                 Ok(self.prune(value))
             }
             Expr::Pin(expr) | Expr::State(expr) => self.infer_expr(env, expr, return_type),
-            Expr::Negate(expr) => {
+            Expr::Negate { expr, .. } => {
                 let actual = self.infer_expr(env, expr, return_type)?;
                 self.unify(actual, self.named("Number", Vec::new()), region)?;
                 Ok(self.named("Number", Vec::new()))
@@ -463,9 +464,9 @@ impl<'a> Infer<'a> {
                 self.unify(actual, self.named("Bool", Vec::new()), region)?;
                 Ok(self.named("Bool", Vec::new()))
             }
-            Expr::Binop { op, left, right } => {
-                self.infer_binop(env, op.value, left, right, return_type)
-            }
+            Expr::Binop {
+                op, left, right, ..
+            } => self.infer_binop(env, op.value, left, right, return_type),
             Expr::Block(block) => self.infer_block(&mut env.clone(), block, return_type),
             Expr::Lambda { params, ret, body } => {
                 let mut local = env.clone();
@@ -630,7 +631,7 @@ impl<'a> Infer<'a> {
                     }
                 }
             },
-            Pattern::Pin(expr) => {
+            Pattern::Pin { value: expr, .. } => {
                 let actual = self.infer_expr(env, expr, None)?;
                 self.unify(actual, expected, pattern.region)?;
             }

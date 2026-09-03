@@ -45,25 +45,37 @@ pub fn canonicalize_expr<'a>(
             if env.control.query_depth > 0 {
                 return Ok(bump.alloc(Located::at(
                     source.region,
-                    CanExpr::Var(ValueRef::QueryName(name)),
+                    CanExpr::Var {
+                        use_id: env.fresh_use(),
+                        reference: ValueRef::QueryName(name),
+                    },
                 )));
             }
             if let Some(module) = env.find_module(name) {
                 return Ok(bump.alloc(Located::at(
                     source.region,
-                    CanExpr::Var(ValueRef::Module(module.module)),
+                    CanExpr::Var {
+                        use_id: env.fresh_use(),
+                        reference: ValueRef::Module(module.module),
+                    },
                 )));
             }
             if env.control.opaque_names_depth > 0 {
                 return Ok(bump.alloc(Located::at(
                     source.region,
-                    CanExpr::Var(ValueRef::Opaque(name)),
+                    CanExpr::Var {
+                        use_id: env.fresh_use(),
+                        reference: ValueRef::Opaque(name),
+                    },
                 )));
             }
             let Some(binding) = env.find_value(name) else {
                 return Err(vec![unknown_value(source.region, name)]);
             };
-            CanExpr::Var(binding.reference)
+            CanExpr::Var {
+                use_id: env.fresh_use(),
+                reference: binding.reference,
+            }
         }
         SourceExpr::Path(path) => canonicalize_path_expr(bump, env, source.region, path)?,
         SourceExpr::PathVar { path, name } => {
@@ -80,23 +92,32 @@ pub fn canonicalize_expr<'a>(
                     .iter()
                     .find(|value| value.exported_as == name.value)
                 {
-                    CanExpr::Var(ValueRef::Foreign {
-                        reference: value.reference,
-                        annotation: value.annotation,
-                    })
+                    CanExpr::Var {
+                        use_id: env.fresh_use(),
+                        reference: ValueRef::Foreign {
+                            reference: value.reference,
+                            annotation: value.annotation,
+                        },
+                    }
                 } else {
                     return Err(vec![unknown_value(name.region, name.value)]);
                 }
             } else if module.module.package == alder_ast::PackageId::Builtin {
-                CanExpr::Var(ValueRef::Builtin(alder_ast::QualifiedName {
-                    module: module.module,
-                    name: name.value,
-                }))
+                CanExpr::Var {
+                    use_id: env.fresh_use(),
+                    reference: ValueRef::Builtin(alder_ast::QualifiedName {
+                        module: module.module,
+                        name: name.value,
+                    }),
+                }
             } else {
                 CanExpr::Access {
                     record: bump.alloc(Located::at(
                         path.region(),
-                        CanExpr::Var(ValueRef::Module(module.module)),
+                        CanExpr::Var {
+                            use_id: env.fresh_use(),
+                            reference: ValueRef::Module(module.module),
+                        },
                     )),
                     field: name,
                 }
@@ -158,18 +179,24 @@ pub fn canonicalize_expr<'a>(
                         .iter()
                         .find(|value| value.exported_as == field.value)
                     {
-                        CanExpr::Var(ValueRef::Foreign {
-                            reference: value.reference,
-                            annotation: value.annotation,
-                        })
+                        CanExpr::Var {
+                            use_id: env.fresh_use(),
+                            reference: ValueRef::Foreign {
+                                reference: value.reference,
+                                annotation: value.annotation,
+                            },
+                        }
                     } else {
                         return Err(vec![unknown_value(field.region, field.value)]);
                     }
                 } else if module.module.package == alder_ast::PackageId::Builtin {
-                    CanExpr::Var(ValueRef::Builtin(alder_ast::QualifiedName {
-                        module: module.module,
-                        name: field.value,
-                    }))
+                    CanExpr::Var {
+                        use_id: env.fresh_use(),
+                        reference: ValueRef::Builtin(alder_ast::QualifiedName {
+                            module: module.module,
+                            name: field.value,
+                        }),
+                    }
                 } else {
                     CanExpr::Access {
                         record: canonicalize_expr(bump, env, record)?,
@@ -201,7 +228,10 @@ pub fn canonicalize_expr<'a>(
             CanExpr::Await(canonicalize_expr(bump, env, expr)?)
         }
         SourceExpr::Try(expr) => CanExpr::Try(canonicalize_expr(bump, env, expr)?),
-        SourceExpr::Negate(expr) => CanExpr::Negate(canonicalize_expr(bump, env, expr)?),
+        SourceExpr::Negate(expr) => CanExpr::Negate {
+            use_id: env.fresh_use(),
+            expr: canonicalize_expr(bump, env, expr)?,
+        },
         SourceExpr::Not(expr) => CanExpr::Not(canonicalize_expr(bump, env, expr)?),
         SourceExpr::Pin(expr) => {
             if env.control.query_depth == 0 {
@@ -427,7 +457,10 @@ pub(crate) fn canonicalize_stmt<'a>(
                     }
                 });
             }
+            let use_id =
+                (!matches!(op.value, alder_source::AssignOp::Set)).then(|| env.fresh_use());
             CanStmt::Assign {
+                use_id,
                 place: bump.alloc(CanPlace {
                     root,
                     root_region: place.value.root.region,
@@ -512,10 +545,16 @@ fn canonicalize_path_expr<'a>(
     if path.segments.len() == 1 {
         let name = path.segments[0].value;
         if let Some(provider) = env.find_provider(name) {
-            return Ok(CanExpr::Var(ValueRef::Provider(provider)));
+            return Ok(CanExpr::Var {
+                use_id: env.fresh_use(),
+                reference: ValueRef::Provider(provider),
+            });
         }
         if let Some(module) = env.find_module(name) {
-            return Ok(CanExpr::Var(ValueRef::Module(module.module)));
+            return Ok(CanExpr::Var {
+                use_id: env.fresh_use(),
+                reference: ValueRef::Module(module.module),
+            });
         }
         if let Some((enum_name, variant)) = env.enums.values().find_map(|candidate| {
             let crate::environment::Candidate::Unique(enum_) = candidate else {
@@ -546,6 +585,7 @@ fn canonicalize_call<'a>(
     arguments: &'a [&'a Located<SourceExpr<'a>>],
 ) -> Result<&'a Located<CanExpr<'a>>, Vec<Error<'a>>> {
     let function = canonicalize_expr(bump, env, function)?;
+    let use_id = env.fresh_use();
     let mut params = Vec::new();
     let mut args: Vec<&'a Located<CanExpr<'a>>> = Vec::with_capacity(arguments.len());
     for argument in arguments {
@@ -563,7 +603,10 @@ fn canonicalize_call<'a>(
             });
             let argument: &'a Located<CanExpr<'a>> = bump.alloc(Located::at(
                 argument.region,
-                CanExpr::Var(ValueRef::Local(local)),
+                CanExpr::Var {
+                    use_id: env.fresh_use(),
+                    reference: ValueRef::Local(local),
+                },
             ));
             args.push(argument);
         } else {
@@ -573,6 +616,7 @@ fn canonicalize_call<'a>(
     let call = bump.alloc(Located::at(
         region,
         CanExpr::Call {
+            use_id,
             function,
             arguments: bump.alloc_slice_copy(&args),
         },
@@ -693,7 +737,13 @@ fn canonicalize_record_fields<'a>(
                         let Some(binding) = env.find_value(name.value) else {
                             return Err(vec![unknown_value(name.region, name.value)]);
                         };
-                        bump.alloc(Located::at(name.region, CanExpr::Var(binding.reference)))
+                        bump.alloc(Located::at(
+                            name.region,
+                            CanExpr::Var {
+                                use_id: env.fresh_use(),
+                                reference: binding.reference,
+                            },
+                        ))
                     }
                 };
                 CanRecordField::Field { name: *name, value }
@@ -1065,11 +1115,12 @@ fn canonicalize_binops<'a>(
     last: &'a Located<SourceExpr<'a>>,
 ) -> Result<&'a Located<CanExpr<'a>>, Vec<Error<'a>>> {
     let mut expressions = Vec::with_capacity(operands.len() + 1);
-    let mut operators: Vec<Located<alder_source::BinOp>> = Vec::new();
+    let mut operators: Vec<(Located<alder_source::BinOp>, alder_ast::UseId)> = Vec::new();
     for operand in operands {
         expressions.push(canonicalize_expr(bump, env, operand.expr)?);
         let (precedence, associativity) = operand.op.value.precedence();
-        while let Some(top) = operators.last().copied() {
+        let use_id = env.fresh_use();
+        while let Some((top, _)) = operators.last().copied() {
             let (top_precedence, top_associativity) = top.value.precedence();
             if top_precedence == precedence
                 && (matches!(associativity, alder_source::Associativity::None)
@@ -1089,13 +1140,14 @@ fn canonicalize_binops<'a>(
             if !reduce {
                 break;
             }
-            reduce_binop(bump, &mut expressions, operators.pop().unwrap());
+            let (operator, operator_use_id) = operators.pop().unwrap();
+            reduce_binop(bump, &mut expressions, operator_use_id, operator);
         }
-        operators.push(operand.op);
+        operators.push((operand.op, use_id));
     }
     expressions.push(canonicalize_expr(bump, env, last)?);
-    while let Some(operator) = operators.pop() {
-        reduce_binop(bump, &mut expressions, operator);
+    while let Some((operator, use_id)) = operators.pop() {
+        reduce_binop(bump, &mut expressions, use_id, operator);
     }
     let expression = expressions.pop().expect("binop has an expression");
     debug_assert_eq!(expression.region, region);
@@ -1105,13 +1157,19 @@ fn canonicalize_binops<'a>(
 fn reduce_binop<'a>(
     bump: &'a Bump,
     expressions: &mut Vec<&'a Located<CanExpr<'a>>>,
+    use_id: alder_ast::UseId,
     op: Located<alder_source::BinOp>,
 ) {
     let right = expressions.pop().expect("operator has right operand");
     let left = expressions.pop().expect("operator has left operand");
     expressions.push(bump.alloc(Located::at(
         Region::span_across(&left.region, &right.region),
-        CanExpr::Binop { op, left, right },
+        CanExpr::Binop {
+            use_id,
+            op,
+            left,
+            right,
+        },
     )));
 }
 

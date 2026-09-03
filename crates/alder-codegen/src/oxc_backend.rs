@@ -403,7 +403,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     expr: self.js.call(tag, arguments),
                 }
             }
-            Expr::Var(reference) => {
+            Expr::Var { reference, .. } => {
                 let expression = self.reference(*reference);
                 self.pure(expression)
             }
@@ -441,6 +441,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             Expr::Call {
                 function,
                 arguments,
+                ..
             } => {
                 let function = self.expr(function)?;
                 let mut prefix = function.prefix;
@@ -509,9 +510,13 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 }
             }
             Expr::Pin(expression) | Expr::State(expression) => self.expr(expression)?,
-            Expr::Negate(expression) => self.unary(UnaryOperator::UnaryNegation, expression)?,
+            Expr::Negate {
+                expr: expression, ..
+            } => self.unary(UnaryOperator::UnaryNegation, expression)?,
             Expr::Not(expression) => self.unary(UnaryOperator::LogicalNot, expression)?,
-            Expr::Binop { op, left, right } => self.binop(op.value, left, right)?,
+            Expr::Binop {
+                op, left, right, ..
+            } => self.binop(op.value, left, right)?,
             Expr::Block(block) => self.block_value(block)?,
             Expr::Lambda { params, body, .. } => self.lambda(params, body)?,
             Expr::If {
@@ -1107,7 +1112,9 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 );
                 statements.push(self.js.expression_statement(call));
             }
-            alder_ast::Stmt::Assign { place, op, value } => {
+            alder_ast::Stmt::Assign {
+                place, op, value, ..
+            } => {
                 let value = self.expr(value)?;
                 statements.extend(value.prefix);
                 let target = self.place(place)?;
@@ -1268,7 +1275,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 }
             }
             Pattern::Anything
-            | Pattern::Pin(_)
+            | Pattern::Pin { .. }
             | Pattern::Number { .. }
             | Pattern::BigInt(_)
             | Pattern::Str(_)
@@ -1297,7 +1304,9 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let value = match &pattern.value {
             Pattern::Anything | Pattern::Bind(_) => self.pure(self.js.boolean(true)),
             Pattern::Alias { pattern, .. } => self.pattern_test(pattern, root, steps)?,
-            Pattern::Pin(expression) => {
+            Pattern::Pin {
+                value: expression, ..
+            } => {
                 self.kernel.insert("$equal");
                 let mut pin = self.expr(expression)?;
                 let value = self.materialize(pin.expr, &mut pin.prefix);

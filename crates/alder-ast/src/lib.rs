@@ -464,6 +464,7 @@ pub enum Stmt<'a> {
         provider: QualifiedName<'a>,
     },
     Assign {
+        use_id: Option<UseId>,
         place: &'a Place<'a>,
         op: Located<AssignOp>,
         value: Node<'a, Expr<'a>>,
@@ -541,7 +542,10 @@ pub enum Expr<'a> {
         parts: &'a [TemplatePart<'a>],
     },
     Unit,
-    Var(ValueRef<'a>),
+    Var {
+        use_id: UseId,
+        reference: ValueRef<'a>,
+    },
     Constructor(ConstructorRef<'a>),
     Tag {
         group: Option<QualifiedName<'a>>,
@@ -556,6 +560,7 @@ pub enum Expr<'a> {
         fields: &'a [RecordField<'a>],
     },
     Call {
+        use_id: UseId,
         function: Node<'a, Expr<'a>>,
         arguments: &'a [Node<'a, Expr<'a>>],
     },
@@ -574,9 +579,13 @@ pub enum Expr<'a> {
     Await(Node<'a, Expr<'a>>),
     Try(Node<'a, Expr<'a>>),
     Pin(Node<'a, Expr<'a>>),
-    Negate(Node<'a, Expr<'a>>),
+    Negate {
+        use_id: UseId,
+        expr: Node<'a, Expr<'a>>,
+    },
     Not(Node<'a, Expr<'a>>),
     Binop {
+        use_id: UseId,
         op: Located<BinOp>,
         left: Node<'a, Expr<'a>>,
         right: Node<'a, Expr<'a>>,
@@ -647,7 +656,10 @@ pub struct MatchArm<'a> {
 pub enum Pattern<'a> {
     Anything,
     Bind(BindingName<'a>),
-    Pin(Node<'a, Expr<'a>>),
+    Pin {
+        use_id: UseId,
+        value: Node<'a, Expr<'a>>,
+    },
     Number {
         value: f64,
         text: &'a str,

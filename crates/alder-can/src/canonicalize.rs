@@ -1414,7 +1414,7 @@ mod tests {
     use std::fs;
 
     use super::*;
-    use alder_ast::{Expr, PackageId};
+    use alder_ast::{Expr, PackageId, Pattern, Stmt, UseId};
 
     fn context() -> Context<'static> {
         Context {
@@ -1462,7 +1462,136 @@ mod tests {
         };
         assert!(matches!(
             body.value,
-            Expr::Var(alder_ast::ValueRef::Local(_))
+            Expr::Var {
+                reference: alder_ast::ValueRef::Local(_),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn evidence_sites_receive_stable_lexical_use_ids() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                fn evidence(mut x, y, f) {
+                    x = y
+                    x += f(-y)
+                    match x { ^y => x + y, _ => x }
+                }
+            "#},
+        );
+        let ItemKind::Fn(function) = &result.module.items[0].value.kind else {
+            panic!("expected function")
+        };
+
+        let Stmt::Assign {
+            use_id: None,
+            value: set_value,
+            ..
+        } = function.body.value.statements[0].value
+        else {
+            panic!("expected plain assignment")
+        };
+        assert!(matches!(
+            set_value.value,
+            Expr::Var {
+                use_id: UseId(0),
+                ..
+            }
+        ));
+
+        let Stmt::Assign {
+            use_id: Some(UseId(1)),
+            value: add_value,
+            ..
+        } = function.body.value.statements[1].value
+        else {
+            panic!("expected compound assignment")
+        };
+        let Expr::Call {
+            use_id: UseId(3),
+            function: callee,
+            arguments,
+        } = add_value.value
+        else {
+            panic!("expected call")
+        };
+        assert!(matches!(
+            callee.value,
+            Expr::Var {
+                use_id: UseId(2),
+                ..
+            }
+        ));
+        assert!(matches!(
+            arguments[0].value,
+            Expr::Negate {
+                use_id: UseId(4),
+                expr: Located {
+                    value: Expr::Var {
+                        use_id: UseId(5),
+                        ..
+                    },
+                    ..
+                },
+            }
+        ));
+
+        let Some(tail) = function.body.value.tail else {
+            panic!("expected match tail")
+        };
+        let Expr::Match { scrutinee, arms } = tail.value else {
+            panic!("expected match")
+        };
+        assert!(matches!(
+            scrutinee.value,
+            Expr::Var {
+                use_id: UseId(6),
+                ..
+            }
+        ));
+        assert!(matches!(
+            arms[0].patterns[0].value,
+            Pattern::Pin {
+                use_id: UseId(7),
+                value: Located {
+                    value: Expr::Var {
+                        use_id: UseId(8),
+                        ..
+                    },
+                    ..
+                },
+            }
+        ));
+        assert!(matches!(
+            arms[0].body.value,
+            Expr::Binop {
+                use_id: UseId(10),
+                left: Located {
+                    value: Expr::Var {
+                        use_id: UseId(9),
+                        ..
+                    },
+                    ..
+                },
+                right: Located {
+                    value: Expr::Var {
+                        use_id: UseId(11),
+                        ..
+                    },
+                    ..
+                },
+                ..
+            }
+        ));
+        assert!(matches!(
+            arms[1].body.value,
+            Expr::Var {
+                use_id: UseId(12),
+                ..
+            }
         ));
     }
 

@@ -128,10 +128,15 @@ fn contains_await_expr(expression: &Located<Expr<'_>>) -> bool {
     match &expression.value {
         Expr::Await(_) => true,
         Expr::Array(items) | Expr::Tuple(items) => items.iter().any(|item| contains_await_expr(item)),
-        Expr::Call { function, arguments } => contains_await_expr(function) || arguments.iter().any(|arg| contains_await_expr(arg)),
+        Expr::Call {
+            function,
+            arguments,
+            ..
+        } => contains_await_expr(function) || arguments.iter().any(|arg| contains_await_expr(arg)),
         Expr::Access { record, .. } => contains_await_expr(record),
         Expr::Index { target, index } => contains_await_expr(target) || contains_await_expr(index),
-        Expr::Try(expr) | Expr::Pin(expr) | Expr::Negate(expr) | Expr::Not(expr) | Expr::State(expr) => contains_await_expr(expr),
+        Expr::Try(expr) | Expr::Pin(expr) | Expr::Not(expr) | Expr::State(expr) => contains_await_expr(expr),
+        Expr::Negate { expr, .. } => contains_await_expr(expr),
         Expr::Binop { left, right, .. } => contains_await_expr(left) || contains_await_expr(right),
         Expr::Block(block) | Expr::Loop(block) => contains_await_block(block),
         Expr::If { branches, final_else } => branches.iter().any(|branch| contains_await_expr(branch.condition) || contains_await_block(branch.body)) || final_else.is_some_and(contains_await_block),
@@ -140,7 +145,7 @@ fn contains_await_expr(expression: &Located<Expr<'_>>) -> bool {
         Expr::Record(fields) | Expr::RecordConstructor { fields, .. } => fields.iter().any(|field| match field { RecordField::Field { value, .. } | RecordField::Spread(value) => contains_await_expr(value) }),
         Expr::TaggedTemplate { tag, parts } => contains_await_expr(tag) || parts.iter().any(|part| matches!(part, alder_ast::TemplatePart::Expr(expr) if contains_await_expr(expr))),
         Expr::Template(parts) => parts.iter().any(|part| matches!(part, alder_ast::TemplatePart::Expr(expr) if contains_await_expr(expr))),
-        Expr::Lambda { .. } | Expr::Number { .. } | Expr::BigInt(_) | Expr::Str(_) | Expr::Bool(_) | Expr::Unit | Expr::Var(_) | Expr::Constructor(_) | Expr::Tag { .. } | Expr::TupleAccess { .. } | Expr::Style(_) | Expr::Query(_) | Expr::Markup(_) | Expr::MacroCall { .. } => false,
+        Expr::Lambda { .. } | Expr::Number { .. } | Expr::BigInt(_) | Expr::Str(_) | Expr::Bool(_) | Expr::Unit | Expr::Var { .. } | Expr::Constructor(_) | Expr::Tag { .. } | Expr::TupleAccess { .. } | Expr::Style(_) | Expr::Query(_) | Expr::Markup(_) | Expr::MacroCall { .. } => false,
     }
 }
 
