@@ -784,6 +784,26 @@ fn functions_have_no_structural_eq_instance() {
 }
 
 #[test]
+fn trait_errors_have_user_facing_messages_and_bound_help() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Display[a] { fn display(value: a) -> String }
+            fn missing(value: Number) -> String { display(value) }
+            fn generic(value: a) -> String { display(value) }
+        "#},
+    )
+    .expect_err("both calls require unavailable Display evidence");
+    let rendered = alder_solve::format_errors(&errors);
+    assert!(rendered.contains("no implementation of `Display[Number]` was found"));
+    assert!(rendered.contains("requires `Display`"));
+    assert!(rendered.contains("help: add a matching `where` bound"));
+    assert!(!rendered.contains("MissingInstance"));
+    assert!(!rendered.contains("UnsatisfiedBound"));
+}
+
+#[test]
 fn builtin_containers_require_equality_for_every_type_argument() {
     let bump = Bump::new();
     let solved = solve_input(

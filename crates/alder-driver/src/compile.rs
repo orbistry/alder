@@ -241,7 +241,7 @@ fn compile_module<'s>(
     let trait_database = alder_solve::TraitDatabase::build(store, can_result.module, interfaces);
     let solved = match alder_solve::solve(store, &constraint, &trait_database) {
         Ok(solved) => solved,
-        Err(errors) => return failed(format!("{:?}", errors)),
+        Err(errors) => return failed(alder_solve::format_errors(&errors)),
     };
 
     let interface = alder_can::from_module(store, can_result.module, &solved.annotations);
@@ -559,6 +559,28 @@ mod tests {
             result.modules[&url("project/src/main.ald")],
             ModuleResult::Failed { .. }
         ));
+    }
+
+    #[tokio::test]
+    async fn trait_failures_are_rendered_without_internal_debug_names() {
+        let mem = InMemorySource::new();
+        let uri = url("project/src/main.ald");
+        mem.insert(
+            uri.clone(),
+            "trait Display[a] { fn display(value: a) -> String }\nfn main() { display(1) }"
+                .to_string(),
+        );
+
+        let db = Arc::new(Mutex::new(Database::new(mem)));
+        let graph = build_graph(db.clone(), std::slice::from_ref(&uri))
+            .await
+            .unwrap();
+        let result = build(db, &graph).await;
+        let ModuleResult::Failed { message } = &result.modules[&uri] else {
+            panic!("missing trait evidence must fail compilation");
+        };
+        assert!(message.contains("no implementation of `Display[Number]` was found"));
+        assert!(!message.contains("MissingInstance"));
     }
 
     /// Unannotated mutually recursive exports used from another module:
