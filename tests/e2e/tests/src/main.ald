@@ -42,6 +42,24 @@ fn ordered_equal(left: a, right: a) -> Bool where a: Ord {
     left == right
 }
 
+enum Maybe[a] {
+    None,
+    Some(a),
+}
+
+trait Mapper[f] {
+    fn map(value: f[a], transform: fn(a) -> b) -> f[b]
+}
+
+impl Mapper[Maybe] {
+    fn map(value: Maybe[a], transform: fn(a) -> b) -> Maybe[b] {
+        match value {
+            Maybe::None => Maybe::None,
+            Maybe::Some(item) => Maybe::Some(transform(item)),
+        }
+    }
+}
+
 test "arithmetic works" {
     assert 1 + 1 == 2
     assert generic_equal(1, 1)
@@ -55,6 +73,14 @@ test "arithmetic works" {
 test "trait dictionaries dispatch" {
     assert describe(1) == "number"
     assert render(1) == "number"
+}
+
+test "higher-kinded trait dictionaries dispatch" {
+    let mapped = map(Maybe::Some(41), fn(value) { value + 1 })
+    assert match mapped {
+        Maybe::Some(value) => value == 42,
+        Maybe::None => false,
+    }
 }
 
 tests {
