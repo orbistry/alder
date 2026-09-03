@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: "fn(x) {\n    let y = x * 2\n    y + 1\n}\n"
+description: "x -> {\n    let y = x * 2\n    y + 1\n}\n"
 ---
 Located {
     region: Region {
@@ -22,11 +22,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 4,
+                                column: 1,
                             },
                             end: Position {
                                 line: 1,
-                                column: 5,
+                                column: 2,
                             },
                         },
                         value: Var(
@@ -41,7 +41,7 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 7,
+                        column: 6,
                     },
                     end: Position {
                         line: 4,
@@ -53,7 +53,7 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 7,
+                                column: 6,
                             },
                             end: Position {
                                 line: 4,

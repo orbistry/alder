@@ -1,9 +1,0 @@
----
-source: crates/alder-parse/src/expression/mod.rs
-description: a -> b
----
-OperatorReserved(
-    Arrow,
-    1,
-    3,
-)

@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn alias_fn() {
-        assert_item_snapshot!("type Handler = fn(Request) -> Task[Response]");
+        assert_item_snapshot!("type Handler = fn(Request) Task[Response]");
     }
 
     #[test]

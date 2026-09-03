@@ -1,2 +1,2 @@
 #[extern("alder:kernel", "$ioPrint")]
-pub fn print(value: a) -> ()
+pub fn print(value: a) ()

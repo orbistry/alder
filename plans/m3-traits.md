@@ -25,7 +25,7 @@ static resolution wherever the type is known.
   bodies, superclass constraints (`trait Ord[a] where a: Eq`), and
   higher-kinded parameters type-check with Elm-quality errors for missing
   instances, ambiguous instances, orphan impls, and unsatisfiable bounds.
-- A generic function `fn describe(xs: Array[a]) -> String where a: Show`
+- A generic function `fn describe(xs: Array[a]) String where a: Show`
   compiles to JS taking a dictionary and is called with a statically
   selected dictionary at monomorphic call sites.
 - `Functor`, `Applicative`-style HKT traits work end to end (`map` over
@@ -95,7 +95,7 @@ static resolution wherever the type is known.
   `std/Traits.ald`, canonicalized through the header pipeline, and inserted
   into the ordinary `TraitDatabase`. Intrinsic evidence is selected only after
   an ordinary matching header wins instance search.
-- `Ord` has one `compare(left, right) -> Ordering` method. Generic comparisons
+- `Ord` has one `compare(left, right) Ordering` method. Generic comparisons
   inspect the `Less`/`Equal`/`Greater` tag, while primitive intrinsics retain
   allocation-free native relational operators.
 - Trait and impl parser diagnostics descend through their function, parameter,

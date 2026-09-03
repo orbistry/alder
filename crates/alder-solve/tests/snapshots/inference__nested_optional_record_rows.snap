@@ -2,4 +2,4 @@
 source: crates/alder-solve/tests/inference.rs
 description: "fn display(user: { id: Number, name?: String, profile: { bio?: String, active: Bool, score?: Number } }) {\n    (user.name, user.profile.bio, user.profile.active)\n}\n"
 ---
-display: fn({ id: Number, name?: String, profile: { active: Bool, bio?: String, score?: Number } }) -> (Option[String], Option[String], Bool)
+display: fn({ id: Number, name?: String, profile: { active: Bool, bio?: String, score?: Number } }) (Option[String], Option[String], Bool)

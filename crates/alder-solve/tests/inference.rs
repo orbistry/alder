@@ -124,7 +124,7 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
             projection.assoc.name
         ),
         Type::Fn { params, ret } => format!(
-            "fn({}) -> {}",
+            "fn({}) {}",
             params
                 .iter()
                 .map(|param| render_type(param))
@@ -174,9 +174,9 @@ fn direct_trait_method_selects_the_unique_impl() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            impl Show[Number] { fn show(value: Number) -> String { "number" } }
-            fn render() -> String { show(1) }
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            fn render() String { show(1) }
         "#},
     )
     .expect("trait obligation resolves");
@@ -196,8 +196,8 @@ fn declared_bound_supplies_trait_method_evidence() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            fn describe(value: a) -> String where a: Show { show(value) }
+            trait Show[a] { fn show(value: a) String }
+            fn describe(value: a) String where a: Show { show(value) }
         "#},
     )
     .expect("declared bound resolves");
@@ -214,9 +214,9 @@ fn implementation_body_uses_its_current_dictionary() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
+            trait Show[a] { fn show(value: a) String }
             impl Show[Number] {
-                fn show(value: Number) -> String { show(value) }
+                fn show(value: Number) String { show(value) }
             }
         "#},
     )
@@ -236,9 +236,9 @@ fn implementation_prerequisite_is_available_to_method_bodies() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
+            trait Show[a] { fn show(value: a) String }
             impl Show[Array[a]] where a: Show {
-                fn show(values: Array[a]) -> String { show(values[0]) }
+                fn show(values: Array[a]) String { show(values[0]) }
             }
         "#},
     )
@@ -259,8 +259,8 @@ fn default_body_can_dispatch_through_its_current_dictionary() {
         &bump,
         indoc! {r#"
             trait Show[a] {
-                fn show(value: a) -> String
-                fn render(value: a) -> String { show(value) }
+                fn show(value: a) String
+                fn render(value: a) String { show(value) }
             }
         "#},
     )
@@ -281,10 +281,10 @@ fn default_body_can_use_a_superclass_dictionary() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            trait Equal[a] { fn equal(left: a, right: a) -> Bool }
+            trait Equal[a] { fn equal(left: a, right: a) Bool }
             trait Ordered[a] where a: Equal {
-                fn compare(left: a, right: a) -> Number
-                fn same(left: a, right: a) -> Bool { equal(left, right) }
+                fn compare(left: a, right: a) Number
+                fn same(left: a, right: a) Bool { equal(left, right) }
             }
         "#},
     )
@@ -305,10 +305,10 @@ fn generic_bounds_expose_transitive_superclass_dictionaries() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            trait Equal[a] { fn equal(left: a, right: a) -> Bool }
-            trait Ordered[a] where a: Equal { fn less(left: a, right: a) -> Bool }
-            trait Ranked[a] where a: Ordered { fn rank(value: a) -> Number }
-            fn same(left: a, right: a) -> Bool where a: Ranked { equal(left, right) }
+            trait Equal[a] { fn equal(left: a, right: a) Bool }
+            trait Ordered[a] where a: Equal { fn less(left: a, right: a) Bool }
+            trait Ranked[a] where a: Ordered { fn rank(value: a) Number }
+            fn same(left: a, right: a) Bool where a: Ranked { equal(left, right) }
         "#},
     )
     .expect("Ranked exposes Equal through its Ordered superclass");
@@ -332,12 +332,12 @@ fn implementation_must_supply_each_superclass_dictionary() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            trait Equal[a] { fn equal(left: a, right: a) -> Bool }
+            trait Equal[a] { fn equal(left: a, right: a) Bool }
             trait Ordered[a] where a: Equal {
-                fn less(left: a, right: a) -> Bool
+                fn less(left: a, right: a) Bool
             }
             impl Ordered[Number] {
-                fn less(left: Number, right: Number) -> Bool { left < right }
+                fn less(left: Number, right: Number) Bool { left < right }
             }
         "#},
     )
@@ -356,15 +356,15 @@ fn implementation_records_resolved_superclass_evidence() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            trait Equal[a] { fn equal(left: a, right: a) -> Bool }
+            trait Equal[a] { fn equal(left: a, right: a) Bool }
             trait Ordered[a] where a: Equal {
-                fn less(left: a, right: a) -> Bool
+                fn less(left: a, right: a) Bool
             }
             impl Equal[Number] {
-                fn equal(left: Number, right: Number) -> Bool { left == right }
+                fn equal(left: Number, right: Number) Bool { left == right }
             }
             impl Ordered[Number] {
-                fn less(left: Number, right: Number) -> Bool { left < right }
+                fn less(left: Number, right: Number) Bool { left < right }
             }
         "#},
     )
@@ -390,8 +390,8 @@ fn declared_bounds_are_preserved_in_the_binding_abi() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            fn describe(value: a) -> String where a: Show { show(value) }
+            trait Show[a] { fn show(value: a) String }
+            fn describe(value: a) String where a: Show { show(value) }
         "#},
     )
     .expect("declared bound resolves");
@@ -412,10 +412,10 @@ fn constrained_binding_references_instantiate_their_predicates() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            impl Show[Number] { fn show(value: Number) -> String { "number" } }
-            fn describe(value: a) -> String where a: Show { show(value) }
-            fn render() -> String { describe(1) }
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            fn describe(value: a) String where a: Show { show(value) }
+            fn render() String { describe(1) }
         "#},
     )
     .expect("the constrained callee selects its dictionary");
@@ -436,9 +436,9 @@ fn missing_trait_instance_is_structured() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            impl Show[Number] { fn show(value: Number) -> String { "number" } }
-            fn render() -> String { show("nope") }
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            fn render() String { show("nope") }
         "#},
     )
     .expect_err("missing instance must fail");
@@ -458,9 +458,9 @@ fn associated_equality_normalizes_a_generic_method_result() {
         indoc! {r#"
             trait Iterator[i] {
                 type Item
-                fn next(value: i) -> Item
+                fn next(value: i) Item
             }
-            fn increment(value: i) -> Number
+            fn increment(value: i) Number
                 where i: Iterator, i.Item == Number
             {
                 next(value) + 1
@@ -489,9 +489,9 @@ fn conflicting_associated_equalities_are_structured() {
         indoc! {r#"
             trait Iterator[i] {
                 type Item
-                fn next(value: i) -> Item
+                fn next(value: i) Item
             }
-            fn impossible(value: i) -> ()
+            fn impossible(value: i) ()
                 where i: Iterator, i.Item == Number, i.Item == String
             {}
         "#},
@@ -519,13 +519,13 @@ fn an_impl_binding_normalizes_a_concrete_method_result() {
             enum Counter { Counter }
             trait Iterator[i] {
                 type Item
-                fn next(value: i) -> Item
+                fn next(value: i) Item
             }
             impl Iterator[Counter] {
                 type Item = Number
-                fn next(value: Counter) -> Number { 1 }
+                fn next(value: Counter) Number { 1 }
             }
-            fn increment(value: Counter) -> Number { next(value) + 1 }
+            fn increment(value: Counter) Number { next(value) + 1 }
         "#},
     )
     .expect("the selected impl should normalize Item to Number");
@@ -540,11 +540,11 @@ fn impl_method_must_match_the_substituted_associated_type() {
             enum Counter { Counter }
             trait Iterator[i] {
                 type Item
-                fn next(value: i) -> Item
+                fn next(value: i) Item
             }
             impl Iterator[Counter] {
                 type Item = Number
-                fn next(value: Counter) -> String { "wrong" }
+                fn next(value: Counter) String { "wrong" }
             }
         "#},
     )
@@ -568,11 +568,11 @@ fn cyclic_associated_binding_is_rejected() {
             enum Counter { Counter }
             trait Iterator[i] {
                 type Item
-                fn next(value: i) -> Item
+                fn next(value: i) Item
             }
             impl Iterator[Counter] {
                 type Item = Item
-                fn next(value: Counter) -> Item { next(value) }
+                fn next(value: Counter) Item { next(value) }
             }
         "#},
     )
@@ -621,9 +621,9 @@ fn trait_method_projection_equalities_are_instantiated_at_use_sites() {
         indoc! {r#"
             trait NumericIterator[i] {
                 type Item
-                fn next(value: i) -> Item where i.Item == Number
+                fn next(value: i) Item where i.Item == Number
             }
-            fn increment(value: i) -> Number where i: NumericIterator {
+            fn increment(value: i) Number where i: NumericIterator {
                 next(value) + 1
             }
         "#},
@@ -637,10 +637,10 @@ fn overlapping_trait_instances_are_rejected_before_search() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            impl Show[Number] { fn show(value: Number) -> String { "one" } }
-            impl Show[Number] { fn show(value: Number) -> String { "two" } }
-            fn render() -> String { show(1) }
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "one" } }
+            impl Show[Number] { fn show(value: Number) String { "two" } }
+            fn render() String { show(1) }
         "#},
     )
     .expect_err("overlapping candidates must fail coherence");
@@ -742,9 +742,9 @@ fn generic_and_concrete_heads_overlap() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            impl Show[a] { fn show(value: a) -> String { "any" } }
-            impl Show[Number] { fn show(value: Number) -> String { "number" } }
+            trait Show[a] { fn show(value: a) String }
+            impl Show[a] { fn show(value: a) String { "any" } }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
         "#},
     )
     .expect_err("generic and concrete heads overlap");
@@ -762,8 +762,8 @@ fn non_decreasing_instance_prerequisite_is_rejected() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            impl Show[a] where a: Show { fn show(value: a) -> String { "loop" } }
+            trait Show[a] { fn show(value: a) String }
+            impl Show[a] where a: Show { fn show(value: a) String { "loop" } }
         "#},
     )
     .expect_err("the prerequisite must be structurally smaller than the head");
@@ -781,9 +781,9 @@ fn structurally_decreasing_container_instance_is_accepted() {
     solve_input(
         &bump,
         indoc! {r#"
-            trait Show[a] { fn show(value: a) -> String }
+            trait Show[a] { fn show(value: a) String }
             impl Show[Array[a]] where a: Show {
-                fn show(value: Array[a]) -> String { "array" }
+                fn show(value: Array[a]) String { "array" }
             }
         "#},
     )
@@ -796,8 +796,8 @@ fn superclass_cycles_are_rejected() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            trait A[a] where a: B { fn a(value: a) -> a }
-            trait B[a] where a: A { fn b(value: a) -> a }
+            trait A[a] where a: B { fn a(value: a) a }
+            trait B[a] where a: A { fn b(value: a) a }
         "#},
     )
     .expect_err("superclass graphs must be acyclic");
@@ -817,8 +817,8 @@ fn numeric_operators_select_number_and_bigint_intrinsics() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            fn number() -> Number { 1 + 2 }
-            fn bigint() -> BigInt { 1n + 2n }
+            fn number() Number { 1 + 2 }
+            fn bigint() BigInt { 1n + 2n }
         "#},
     )
     .expect("numeric instances resolve");
@@ -842,9 +842,9 @@ fn builtin_hash_and_num_bounds_expose_their_superclasses() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            fn hash_equal(left: a, right: a) -> Bool where a: Hash { left == right }
-            fn num_equal(left: a, right: a) -> Bool where a: Num { left == right }
-            fn num_greater(left: a, right: a) -> Bool where a: Num { left > right }
+            fn hash_equal(left: a, right: a) Bool where a: Hash { left == right }
+            fn num_equal(left: a, right: a) Bool where a: Num { left == right }
+            fn num_greater(left: a, right: a) Bool where a: Num { left > right }
         "#},
     )
     .expect("Hash and Num dictionaries expose their declared superclasses");
@@ -868,8 +868,8 @@ fn functions_have_no_structural_eq_instance() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            fn identity(value: a) -> a { value }
-            fn bad() -> Bool { identity == identity }
+            fn identity(value: a) a { value }
+            fn bad() Bool { identity == identity }
         "#},
     )
     .expect_err("function equality must fail");
@@ -891,7 +891,7 @@ fn closed_records_have_fieldwise_structural_eq_evidence() {
             fn same(
                 left: { name: String, score: Number },
                 right: { name: String, score: Number },
-            ) -> Bool {
+            ) Bool {
                 left == right
             }
         "#},
@@ -915,7 +915,7 @@ fn open_record_rows_have_no_structural_eq_instance() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            fn same(left: { r | name: String }, right: { r | name: String }) -> Bool {
+            fn same(left: { r | name: String }, right: { r | name: String }) Bool {
                 left == right
             }
         "#},
@@ -937,9 +937,9 @@ fn trait_errors_preserve_structured_missing_evidence() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            trait Display[a] { fn display(value: a) -> String }
-            fn missing(value: Number) -> String { display(value) }
-            fn generic(value: a) -> String { display(value) }
+            trait Display[a] { fn display(value: a) String }
+            fn missing(value: Number) String { display(value) }
+            fn generic(value: a) String { display(value) }
         "#},
     )
     .expect_err("both calls require unavailable Display evidence");
@@ -966,8 +966,8 @@ fn nested_instance_failure_retains_the_obligation_chain() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            fn missing() -> String {
-                show([fn(value: Number) -> Number { value }])
+            fn missing() String {
+                show([(value: Number) Number -> value])
             }
         "#},
     )
@@ -984,10 +984,10 @@ fn nested_instance_failure_retains_the_obligation_chain() {
         .expect("the nested missing instance is retained");
     assert_eq!(chain.len(), 2);
     assert_eq!(chain[0].trait_.0.name, "Show");
-    assert_eq!(chain[0].subject, "Array[fn(Number) -> Number]");
+    assert_eq!(chain[0].subject, "Array[fn(Number) Number]");
     assert!(chain[0].required_by.is_none());
     assert_eq!(chain[1].trait_.0.name, "Show");
-    assert_eq!(chain[1].subject, "fn(Number) -> Number");
+    assert_eq!(chain[1].subject, "fn(Number) Number");
     assert!(chain[1].required_by.is_some());
 }
 
@@ -997,13 +997,13 @@ fn builtin_containers_require_equality_for_every_type_argument() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            fn same_arrays(left: Array[a], right: Array[a]) -> Bool where a: Eq {
+            fn same_arrays(left: Array[a], right: Array[a]) Bool where a: Eq {
                 left == right
             }
-            fn same_options(left: Option[a], right: Option[a]) -> Bool where a: Eq {
+            fn same_options(left: Option[a], right: Option[a]) Bool where a: Eq {
                 left == right
             }
-            fn same_results(left: Result[a, e], right: Result[a, e]) -> Bool
+            fn same_results(left: Result[a, e], right: Result[a, e]) Bool
                 where a: Eq, e: Eq {
                 left == right
             }
@@ -1027,7 +1027,7 @@ fn builtin_containers_require_equality_for_every_type_argument() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-            fn invalid(left: Array[fn(Number) -> Number], right: Array[fn(Number) -> Number]) -> Bool {
+            fn invalid(left: Array[fn(Number) Number], right: Array[fn(Number) Number]) Bool {
                 left == right
             }
         "#},
@@ -1077,11 +1077,11 @@ macro_rules! assert_solve_error_snapshot {
 #[test]
 fn cross_trait_non_decreasing_instance_prerequisite_is_rejected() {
     assert_solve_error_snapshot! {r#"
-        trait Display[a] { fn display(value: a) -> String }
-        trait Render[a] { fn render(value: a) -> String }
+        trait Display[a] { fn display(value: a) String }
+        trait Render[a] { fn render(value: a) String }
 
         impl Display[a] where a: Render {
-            fn display(value: a) -> String { "display" }
+            fn display(value: a) String { "display" }
         }
     "#};
 }
@@ -1092,7 +1092,7 @@ fn explicit_equality_overlaps_automatic_enum_equality() {
         enum Token { Token }
 
         impl Eq[Token] {
-            fn eq(left: Token, right: Token) -> Bool { true }
+            fn eq(left: Token, right: Token) Bool { true }
         }
     "#};
 }
@@ -1107,7 +1107,7 @@ fn opaque_types_may_define_explicit_equality() {
             type Secret
 
             impl Eq[Secret] {
-                fn eq(left: Secret, right: Secret) -> Bool { true }
+                fn eq(left: Secret, right: Secret) Bool { true }
             }
         "#},
     )
@@ -1130,7 +1130,7 @@ fn partial_annotations_share_variables_with_inferred_positions() {
 fn unresolved_local_trait_obligations_are_not_generalized() {
     assert_solve_error_snapshot! {r#"
         fn ambiguous() {
-            let equal = fn(left, right) { left == right }
+            let equal = (left, right) -> { left == right }
             ()
         }
     "#};
@@ -1150,14 +1150,14 @@ fn dependency_scc_generalizes_before_earlier_source_use() {
 
     assert_eq!(
         render_annotations(&annotations),
-        "identity: forall a. fn(a) -> a\npair: fn() -> (Number, String)"
+        "identity: forall a. fn(a) a\npair: fn() (Number, String)"
     );
 }
 
 #[test]
 fn mutable_top_level_bindings_do_not_generalize() {
     assert_inference_error_snapshot! {r#"
-        let mut identity = fn(value) { value }
+        let mut identity = (value) -> { value }
         fn number() { identity(1) }
         fn text() { identity("text") }
     "#};
@@ -1166,7 +1166,7 @@ fn mutable_top_level_bindings_do_not_generalize() {
 #[test]
 fn generalization_subtracts_mutable_environment_variables() {
     assert_inference_error_snapshot! {r#"
-        let mut identity = fn(value) { value }
+        let mut identity = (value) -> { value }
         fn forward(value) { identity(value) }
         fn number() { forward(1) }
         fn text() { forward("text") }
@@ -1177,7 +1177,7 @@ fn generalization_subtracts_mutable_environment_variables() {
 fn local_let_bindings_remain_monomorphic() {
     assert_inference_error_snapshot! {r#"
         fn invalid() {
-            let identity = fn(value) { value }
+            let identity = (value) -> { value }
             let number = identity(1)
             identity("text")
         }
@@ -1198,7 +1198,7 @@ fn mutually_recursive_scc_is_unified_before_generalization() {
 
     assert_eq!(
         render_annotations(&annotations),
-        "first: forall a, b. fn(a) -> b\nsecond: forall a, b. fn(a) -> b"
+        "first: forall a, b. fn(a) b\nsecond: forall a, b. fn(a) b"
     );
 }
 
@@ -1208,15 +1208,15 @@ fn mutually_recursive_calls_receive_preseeded_dictionary_arguments() {
     let output = solve_input(
         &bump,
         indoc! {r#"
-            trait Display[a] { fn display(value: a) -> String }
+            trait Display[a] { fn display(value: a) String }
             impl Display[Number] {
-                fn display(value: Number) -> String { "number" }
+                fn display(value: Number) String { "number" }
             }
-            fn first(value: a) -> String where a: Display { second(value) }
-            fn second(value: a) -> String where a: Display {
+            fn first(value: a) String where a: Display { second(value) }
+            fn second(value: a) String where a: Display {
                 if true { display(value) } else { first(value) }
             }
-            fn main() -> String { first(1) }
+            fn main() String { first(1) }
         "#},
     )
     .expect("recursive peers should see each other's declared predicates");
@@ -1254,31 +1254,31 @@ fn three_member_predicate_fixpoint_is_source_order_independent() {
     }
 
     solve_order(indoc! {r#"
-        trait Display[a] { fn display(value: a) -> String }
-        fn first(value: a) -> String where a: Display { second(value) }
-        fn second(value: a) -> String where a: Display { third(value) }
-        fn third(value: a) -> String where a: Display {
+        trait Display[a] { fn display(value: a) String }
+        fn first(value: a) String where a: Display { second(value) }
+        fn second(value: a) String where a: Display { third(value) }
+        fn third(value: a) String where a: Display {
             if true { display(value) } else { first(value) }
         }
     "#});
     solve_order(indoc! {r#"
-        trait Display[a] { fn display(value: a) -> String }
-        fn third(value: a) -> String where a: Display {
+        trait Display[a] { fn display(value: a) String }
+        fn third(value: a) String where a: Display {
             if true { display(value) } else { first(value) }
         }
-        fn first(value: a) -> String where a: Display { second(value) }
-        fn second(value: a) -> String where a: Display { third(value) }
+        fn first(value: a) String where a: Display { second(value) }
+        fn second(value: a) String where a: Display { third(value) }
     "#});
 }
 
 #[test]
 fn recursive_peers_cannot_hide_mismatched_bounds() {
     assert_solve_error_snapshot! {r#"
-        trait Display[a] { fn display(value: a) -> String }
-        trait Hashable[a] { fn hash(value: a) -> BigInt }
+        trait Display[a] { fn display(value: a) String }
+        trait Hashable[a] { fn hash(value: a) BigInt }
 
-        fn first(value: a) -> String where a: Display { second(value) }
-        fn second(value: a) -> String where a: Hashable { first(value) }
+        fn first(value: a) String where a: Display { second(value) }
+        fn second(value: a) String where a: Hashable { first(value) }
     "#};
 }
 
@@ -1288,7 +1288,7 @@ fn higher_kinded_application_is_preserved_and_specialized() {
     let annotations = infer(
         &bump,
         indoc! {r#"
-            fn adapt(value: f[a]) -> f[a] { value }
+            fn adapt(value: f[a]) f[a] { value }
             fn specialize(value: Result[Number, String]) { adapt(value) }
         "#},
     )
@@ -1297,8 +1297,8 @@ fn higher_kinded_application_is_preserved_and_specialized() {
     assert_eq!(
         render_annotations(&annotations),
         concat!(
-            "adapt: forall a, b. fn(a[b]) -> a[b]\n",
-            "specialize: fn(Result[Number, String]) -> Result[Number, String]"
+            "adapt: forall a, b. fn(a[b]) a[b]\n",
+            "specialize: fn(Result[Number, String]) Result[Number, String]"
         )
     );
     let adapt = annotations
@@ -1312,7 +1312,7 @@ fn higher_kinded_application_is_preserved_and_specialized() {
 #[test]
 fn higher_kinded_unification_recovers_partial_result() {
     assert_inference_snapshot! {r#"
-        fn adapt(value: f[a]) -> f[a] { value }
+        fn adapt(value: f[a]) f[a] { value }
         fn specialize(value: Result[Number, String]) { adapt(value) }
     "#};
 }
@@ -1320,7 +1320,7 @@ fn higher_kinded_unification_recovers_partial_result() {
 #[test]
 fn higher_kinded_unification_preserves_two_hole_order() {
     assert_inference_snapshot! {r#"
-        fn adapt(value: f[a, b], first: a, second: b) -> f[a, b] { value }
+        fn adapt(value: f[a, b], first: a, second: b) f[a, b] { value }
         fn specialize(value: Result[Number, String]) {
             adapt(value, 1, "second")
         }
@@ -1330,7 +1330,7 @@ fn higher_kinded_unification_preserves_two_hole_order() {
 #[test]
 fn higher_kinded_unification_rejects_inconsistent_partial_sections() {
     assert_inference_error_snapshot! {r#"
-        fn combine(left: f[a], right: f[b]) -> f[a] { left }
+        fn combine(left: f[a], right: f[b]) f[a] { left }
         fn invalid(
             left: Result[Number, String],
             right: Result[Bool, Bool],
@@ -1343,7 +1343,7 @@ fn higher_kinded_unification_rejects_inconsistent_partial_sections() {
 #[test]
 fn higher_kinded_unification_rejects_an_occurs_cycle() {
     assert_inference_error_snapshot! {r#"
-        fn impossible(value: f[a]) -> a { value }
+        fn impossible(value: f[a]) a { value }
     "#};
 }
 
@@ -1352,7 +1352,7 @@ fn higher_kinded_unification_expands_transparent_aliases() {
     assert_inference_snapshot! {r#"
         type Wrapped[a, e] = Result[a, e]
 
-        fn adapt(value: f[a]) -> f[a] { value }
+        fn adapt(value: f[a]) f[a] { value }
         fn specialize(value: Wrapped[Number, String]) { adapt(value) }
     "#};
 }
@@ -1363,14 +1363,14 @@ fn builtin_functor_instances_cover_array_option_and_partial_result() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            fn array(value: Array[Number]) -> Array[Number] {
-                map(value, fn(item) { item + 1 })
+            fn array(value: Array[Number]) Array[Number] {
+                map(value, (item) -> { item + 1 })
             }
-            fn option(value: Option[Number]) -> Option[Number] {
-                map(value, fn(item) { item + 1 })
+            fn option(value: Option[Number]) Option[Number] {
+                map(value, (item) -> { item + 1 })
             }
-            fn result(value: Result[Number, String]) -> Result[Number, String] {
-                map(value, fn(item) { item + 1 })
+            fn result(value: Result[Number, String]) Result[Number, String] {
+                map(value, (item) -> { item + 1 })
             }
         "#},
     )
@@ -1402,16 +1402,16 @@ fn builtin_applicative_and_monad_instances_preserve_the_hkt_hierarchy() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            fn option_pure(value: Number) -> Option[Number] { pure(value) }
+            fn option_pure(value: Number) Option[Number] { pure(value) }
             fn array_apply(
-                functions: Array[fn(Number) -> String],
+                functions: Array[fn(Number) String],
                 values: Array[Number],
-            ) -> Array[String] { apply(functions, values) }
-            fn result_bind(value: Result[Number, String]) -> Result[String, String] {
-                flat_map(value, fn(item) { Result.ok("done") })
+            ) Array[String] { apply(functions, values) }
+            fn result_bind(value: Result[Number, String]) Result[String, String] {
+                flat_map(value, (item) -> { Result.ok("done") })
             }
-            fn monad_map(value: f[Number]) -> f[Number] where f: Monad {
-                map(value, fn(item) { item + 1 })
+            fn monad_map(value: f[Number]) f[Number] where f: Monad {
+                map(value, (item) -> { item + 1 })
             }
         "#},
     )
@@ -1454,14 +1454,14 @@ fn builtin_traversable_passes_method_level_applicative_evidence() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            fn traverse_array(value: Array[Number]) -> Option[Array[String]] {
-                traverse(value, fn(item) { Option.some("item") })
+            fn traverse_array(value: Array[Number]) Option[Array[String]] {
+                traverse(value, (item) -> { Option.some("item") })
             }
-            fn traverse_option(value: Option[Number]) -> Array[Option[String]] {
-                traverse(value, fn(item) { ["item"] })
+            fn traverse_option(value: Option[Number]) Array[Option[String]] {
+                traverse(value, (item) -> { ["item"] })
             }
-            fn traverse_result(value: Result[Number, String]) -> Option[Result[String, String]] {
-                traverse(value, fn(item) { Option.some("item") })
+            fn traverse_result(value: Result[Number, String]) Option[Result[String, String]] {
+                traverse(value, (item) -> { Option.some("item") })
             }
         "#},
     )
@@ -1488,8 +1488,8 @@ fn builtin_array_iterator_normalizes_its_item_projection() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            fn first(values: Array[Number]) -> Option[Number] { next(values) }
-            fn generic(value: i) -> Option[Number]
+            fn first(values: Array[Number]) Option[Number] { next(values) }
+            fn generic(value: i) Option[Number]
                 where i: Iterator, i.Item == Number
             {
                 next(value)
@@ -1514,7 +1514,7 @@ fn repeated_higher_kinded_pattern_argument_is_rejected() {
     let errors = infer(
         &bump,
         indoc! {r#"
-            fn adapt(value: f[a, a]) -> f[a, a] { value }
+            fn adapt(value: f[a, a]) f[a, a] { value }
             fn specialize(value: Result[Number, Number]) { adapt(value) }
         "#},
     )
@@ -1536,10 +1536,10 @@ fn concrete_type_cannot_fill_a_higher_kinded_trait_parameter() {
         &bump,
         indoc! {r#"
             trait Mapper[f] {
-                fn map(value: f[a], transform: fn(a) -> b) -> f[b]
+                fn map(value: f[a], transform: fn(a) b) f[b]
             }
             impl Mapper[Number] {
-                fn map(value: Number, transform: fn(a) -> b) -> Number { value }
+                fn map(value: Number, transform: fn(a) b) Number { value }
             }
         "#},
     )
@@ -1578,20 +1578,27 @@ fn placeholder_lambda() {
 }
 
 #[test]
+fn pipe_forwards_into_first_call_argument() {
+    assert_inference_snapshot!(
+        "fn subtract(left: Number, right: Number) Number { left - right }\nlet answer = 44 |> subtract(2)"
+    );
+}
+
+#[test]
 fn optional_record_field_annotation() {
     assert_inference_snapshot!("fn name(user: { name?: String }) { user.name }");
 }
 
 #[test]
 fn mismatch_reports_new_type_syntax() {
-    assert_inference_error_snapshot!("fn bad() -> Number { \"nope\" }");
+    assert_inference_error_snapshot!("fn bad() Number { \"nope\" }");
 }
 
 #[test]
 fn mutable_loop_and_assignment() {
     assert_inference_snapshot!(
         r#"
-        fn sum(values: Array[Number]) -> Number {
+        fn sum(values: Array[Number]) Number {
             let mut total = 0
             for value in values {
                 total += value
@@ -1606,7 +1613,7 @@ fn mutable_loop_and_assignment() {
 fn explicit_return_unifies_with_declared_result() {
     assert_inference_snapshot!(
         r#"
-        fn choose(flag: Bool) -> Number {
+        fn choose(flag: Bool) Number {
             if flag { return 1 }
             return 2
         }
@@ -1629,7 +1636,7 @@ fn nested_optional_record_rows() {
 fn try_unwraps_result_value() {
     assert_inference_snapshot!(
         r#"
-        fn unwrap(value: Result[Number, String]) -> Result[Number, String] {
+        fn unwrap(value: Result[Number, String]) Result[Number, String] {
             Result.ok(value? + 1)
         }
     "#
@@ -1640,7 +1647,7 @@ fn try_unwraps_result_value() {
 fn await_unwraps_task_inside_task_function() {
     assert_inference_snapshot!(
         r#"
-        fn wait() -> Task[()] {
+        fn wait() Task[()] {
             Task.sleep(1).await
         }
     "#

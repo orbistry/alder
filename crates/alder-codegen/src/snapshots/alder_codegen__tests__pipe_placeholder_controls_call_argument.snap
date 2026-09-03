@@ -1,0 +1,19 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "fn subtract(left: Number, right: Number) Number { left - right }\npub fn answer() Number { 2 |> subtract(44, _) }\n"
+---
+function $v_subtract($a0, $a1) {
+	let $l0_left = $a0;
+	let $l1_right = $a1;
+	const $t0 = $l0_left;
+	return $t0 - $l1_right;
+}
+function $v_answer() {
+	const $t1 = 2;
+	return (($a0) => {
+		let $l2__0 = $a0;
+		const $t2 = $v_subtract;
+		return $t2(44, $l2__0);
+	})($t1);
+}
+export { $v_answer as answer };

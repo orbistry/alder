@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/type_.rs
-description: fn() -> Number
+description: fn() Number
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 15,
+            column: 12,
         },
     },
     value: Fn {
@@ -19,11 +19,11 @@ Located {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 9,
+                    column: 6,
                 },
                 end: Position {
                     line: 1,
-                    column: 15,
+                    column: 12,
                 },
             },
             value: Named {
@@ -33,11 +33,11 @@ Located {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 9,
+                                    column: 6,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 15,
+                                    column: 12,
                                 },
                             },
                             value: "Number",

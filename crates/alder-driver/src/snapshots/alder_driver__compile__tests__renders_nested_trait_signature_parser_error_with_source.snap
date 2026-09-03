@@ -1,13 +1,13 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "trait Show[a] {\n    fn show(value: Array[]) -> String\n}\n"
+description: "trait Show[a] {\n    fn show(value: Array[]) String\n}\n"
 ---
 alder::syntax
 
   × type argument lists cannot be empty
    ╭─[/project/src/main.ald:2:26]
  1 │ trait Show[a] {
- 2 │     fn show(value: Array[]) -> String
+ 2 │     fn show(value: Array[]) String
    ·                          ┬
    ·                          ╰── add a type argument or remove `[]`
  3 │ }

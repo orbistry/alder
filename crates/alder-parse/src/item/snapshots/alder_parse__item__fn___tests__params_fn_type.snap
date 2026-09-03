@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "(xs: Array[a], g: fn(a) -> b)"
+description: "(xs: Array[a], g: fn(a) b)"
 ---
 [
     Param {
@@ -98,7 +98,7 @@ description: "(xs: Array[a], g: fn(a) -> b)"
                     },
                     end: Position {
                         line: 1,
-                        column: 29,
+                        column: 26,
                     },
                 },
                 value: Fn {
@@ -124,11 +124,11 @@ description: "(xs: Array[a], g: fn(a) -> b)"
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 28,
+                                column: 25,
                             },
                             end: Position {
                                 line: 1,
-                                column: 29,
+                                column: 26,
                             },
                         },
                         value: Var {

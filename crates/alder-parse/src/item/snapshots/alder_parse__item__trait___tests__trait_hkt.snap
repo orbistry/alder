@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/trait_.rs
-description: "trait Functor[f] {\n    fn map(fa: f[a], g: fn(a) -> b) -> f[b]\n}\n"
+description: "trait Functor[f] {\n    fn map(fa: f[a], g: fn(a) b) f[b]\n}\n"
 ---
 TraitDecl {
     name: Located {
@@ -128,7 +128,7 @@ TraitDecl {
                                     },
                                     end: Position {
                                         line: 2,
-                                        column: 35,
+                                        column: 32,
                                     },
                                 },
                                 value: Fn {
@@ -154,11 +154,11 @@ TraitDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 34,
+                                                column: 31,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 35,
+                                                column: 32,
                                             },
                                         },
                                         value: Var {
@@ -176,11 +176,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 40,
+                                column: 34,
                             },
                             end: Position {
                                 line: 2,
-                                column: 44,
+                                column: 38,
                             },
                         },
                         value: Var {
@@ -190,11 +190,11 @@ TraitDecl {
                                     region: Region {
                                         start: Position {
                                             line: 2,
-                                            column: 42,
+                                            column: 36,
                                         },
                                         end: Position {
                                             line: 2,
-                                            column: 43,
+                                            column: 37,
                                         },
                                     },
                                     value: Var {

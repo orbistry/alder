@@ -2,4 +2,4 @@
 source: crates/alder-solve/tests/inference.rs
 description: "fn name(user: { name?: String }) { user.name }"
 ---
-name: fn({ name?: String }) -> Option[String]
+name: fn({ name?: String }) Option[String]

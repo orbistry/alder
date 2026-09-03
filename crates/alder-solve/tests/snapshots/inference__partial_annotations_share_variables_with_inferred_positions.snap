@@ -2,4 +2,4 @@
 source: crates/alder-solve/tests/inference.rs
 description: "fn apply(value: a, transform) { transform(value) }\n"
 ---
-apply: forall a, b. fn(a, fn(a) -> b) -> b
+apply: forall a, b. fn(a, fn(a) b) b

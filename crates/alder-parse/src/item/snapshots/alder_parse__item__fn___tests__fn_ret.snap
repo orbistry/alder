@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "fn name() -> String { \"x\" }"
+description: "fn name() String { \"x\" }"
 ---
 FnDecl {
     name: Located {
@@ -22,11 +22,11 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 14,
+                    column: 11,
                 },
                 end: Position {
                     line: 1,
-                    column: 20,
+                    column: 17,
                 },
             },
             value: Named {
@@ -36,11 +36,11 @@ FnDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 14,
+                                    column: 11,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 20,
+                                    column: 17,
                                 },
                             },
                             value: "String",
@@ -57,11 +57,11 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 21,
+                    column: 18,
                 },
                 end: Position {
                     line: 1,
-                    column: 28,
+                    column: 25,
                 },
             },
             value: Block {
@@ -71,11 +71,11 @@ FnDecl {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 23,
+                                column: 20,
                             },
                             end: Position {
                                 line: 1,
-                                column: 26,
+                                column: 23,
                             },
                         },
                         value: Str(

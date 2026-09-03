@@ -58,15 +58,15 @@ handled centrally instead of in every `load`.
 
 ```alder
 // src/hooks.server.ald
-pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) -> Task[Response]) -> Task[Response] {
+pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) Task[Response]) Task[Response] {
     let session = Auth.fromCookie(event.cookies).await
     provide Session = session {
         resolve(event).await
     }
 }
 
-pub fn handleError(err: Error, event: RequestEvent) -> ErrorResponse { ... }
-pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) -> Task[Response] { ... }
+pub fn handleError(err: Error, event: RequestEvent) ErrorResponse { ... }
+pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) Task[Response] { ... }
 ```
 
 - `handle` wraps every request: pages, endpoints, remote functions, and
@@ -109,7 +109,7 @@ pub let trailingSlash = Never // Never | Always | Ignore
 
 ```alder
 // users/[id]/+page.server.ald
-pub fn load(event: LoadEvent) -> Result[{ user: User, posts: Array[Post] }] {
+pub fn load(event: LoadEvent) Result[{ user: User, posts: Array[Post] }] {
     use Db
     let user = db.run(query { select * from users where users.id == ^event.params.id }).await?
     let posts = loadPosts(user.id).await?
@@ -139,14 +139,14 @@ wire intact.
 
 ```alder
 // lib/users.remote.ald
-pub fn getUser(id: Id) -> Result[User] { ... }              // query
-pub fn deleteUser(id: Id) -> Result[()] { ... }             // command
-pub fn signUp(input: SignUp) -> Result[User] { ... }        // form action, typed by schema
+pub fn getUser(id: Id) Result[User] { ... }                 // query
+pub fn deleteUser(id: Id) Result[()] { ... }                // command
+pub fn signUp(input: SignUp) Result[User] { ... }           // form action, typed by schema
 
 // any component
 component UserCard(props: { id: Id }) {
-    let user = resource(fn() getUser(props.id))
-    <button onClick={fn() deleteUser(props.id)}>Delete</button>
+    let user = resource(() -> getUser(props.id))
+    <button onClick={() -> deleteUser(props.id)}>Delete</button>
 }
 ```
 
@@ -227,7 +227,7 @@ schema SignUp from users {
 }
 
 // lib/auth.remote.ald
-pub fn signUp(input: SignUp) -> Result[User] { ... }
+pub fn signUp(input: SignUp) Result[User] { ... }
 
 <Form action={signUp}>
     <Field name="email" />

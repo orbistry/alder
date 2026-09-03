@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/trait_.rs
-description: "trait Convert[a, b] {\n    fn convert(x: a) -> b\n}\n"
+description: "trait Convert[a, b] {\n    fn convert(x: a) b\n}\n"
 ---
 TraitDecl {
     name: Located {
@@ -104,11 +104,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 25,
+                                column: 22,
                             },
                             end: Position {
                                 line: 2,
-                                column: 26,
+                                column: 23,
                             },
                         },
                         value: Var {

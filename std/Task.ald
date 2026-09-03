@@ -1,2 +1,2 @@
 #[extern("alder:kernel", "$taskSleep")]
-pub fn sleep(milliseconds: Number) -> Task[()]
+pub fn sleep(milliseconds: Number) Task[()]

@@ -953,7 +953,7 @@ mod tests {
     async fn renders_trait_parser_error_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Show[a] where a Show {
-                fn show(value: a) -> String
+                fn show(value: a) String
             }
         "#};
     }
@@ -962,7 +962,7 @@ mod tests {
     async fn renders_nested_trait_signature_parser_error_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Show[a] {
-                fn show(value: Array[]) -> String
+                fn show(value: Array[]) String
             }
         "#};
     }
@@ -971,7 +971,7 @@ mod tests {
     async fn renders_missing_trait_method_annotation_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Display[a] {
-                fn display(value) -> String
+                fn display(value) String
             }
         "#};
     }
@@ -980,7 +980,7 @@ mod tests {
     async fn renders_duplicate_trait_parameter_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Convert[a, a] {
-                fn convert(value: a) -> a
+                fn convert(value: a) a
             }
         "#};
     }
@@ -989,7 +989,7 @@ mod tests {
     async fn renders_unknown_associated_type_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Source[a] { type Item }
-            fn take(value: a) -> Number
+            fn take(value: a) Number
                 where a: Source, a.Missing == Number
             {
                 0
@@ -1002,7 +1002,7 @@ mod tests {
         assert_diagnostic_snapshot! {r#"
             trait First[a] { type Item }
             trait Second[a] { type Item }
-            fn take(value: a) -> Number
+            fn take(value: a) Number
                 where a: First + Second, a.Item == Number
             {
                 0
@@ -1013,9 +1013,9 @@ mod tests {
     #[tokio::test]
     async fn renders_unknown_impl_method_with_source() {
         assert_diagnostic_snapshot! {r#"
-            trait Display[a] { fn display(value: a) -> String }
+            trait Display[a] { fn display(value: a) String }
             impl Display[Number] {
-                fn render(value: Number) -> String { "number" }
+                fn render(value: Number) String { "number" }
             }
         "#};
     }
@@ -1023,7 +1023,7 @@ mod tests {
     #[tokio::test]
     async fn renders_missing_impl_method_with_source() {
         assert_diagnostic_snapshot! {r#"
-            trait Display[a] { fn display(value: a) -> String }
+            trait Display[a] { fn display(value: a) String }
             impl Display[Number] {}
         "#};
     }
@@ -1033,10 +1033,10 @@ mod tests {
         assert_diagnostic_snapshot! {r#"
             trait Source[a] {
                 type Item
-                fn next(value: a) -> Item
+                fn next(value: a) Item
             }
             impl Source[Number] {
-                fn next(value: Number) -> Number { value }
+                fn next(value: Number) Number { value }
             }
         "#};
     }
@@ -1044,9 +1044,9 @@ mod tests {
     #[tokio::test]
     async fn renders_impl_method_type_mismatch_with_source() {
         assert_diagnostic_snapshot! {r#"
-            trait Display[a] { fn display(value: a) -> String }
+            trait Display[a] { fn display(value: a) String }
             impl Display[Number] {
-                fn display(value: Number) -> Number { value }
+                fn display(value: Number) Number { value }
             }
         "#};
     }
@@ -1056,11 +1056,11 @@ mod tests {
         assert_diagnostic_snapshot! {r#"
             trait Source[a] {
                 type Item
-                fn next(value: a) -> Item
+                fn next(value: a) Item
             }
             impl Source[Number] {
                 type Item = String
-                fn next(value: Number) -> Number { value }
+                fn next(value: Number) Number { value }
             }
         "#};
     }
@@ -1069,8 +1069,8 @@ mod tests {
     async fn renders_duplicate_trait_method_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Display[a] {
-                fn display(value: a) -> String
-                fn display(value: a) -> String
+                fn display(value: a) String
+                fn display(value: a) String
             }
         "#};
     }
@@ -1088,10 +1088,10 @@ mod tests {
     #[tokio::test]
     async fn renders_duplicate_impl_method_with_source() {
         assert_diagnostic_snapshot! {r#"
-            trait Display[a] { fn display(value: a) -> String }
+            trait Display[a] { fn display(value: a) String }
             impl Display[Number] {
-                fn display(value: Number) -> String { "first" }
-                fn display(value: Number) -> String { "second" }
+                fn display(value: Number) String { "first" }
+                fn display(value: Number) String { "second" }
             }
         "#};
     }
@@ -1101,12 +1101,12 @@ mod tests {
         assert_diagnostic_snapshot! {r#"
             trait Source[a] {
                 type Item
-                fn next(value: a) -> Item
+                fn next(value: a) Item
             }
             impl Source[Number] {
                 type Item = Number
                 type Item = Number
-                fn next(value: Number) -> Number { value }
+                fn next(value: Number) Number { value }
             }
         "#};
     }
@@ -1122,11 +1122,9 @@ mod tests {
     #[tokio::test]
     async fn renders_invalid_nested_impl_hole_with_source() {
         assert_diagnostic_snapshot! {r#"
-            trait Convert[a] { fn convert(value: a) -> a }
+            trait Convert[a] { fn convert(value: a) a }
             impl Convert[Result[Array[_], String]] {
-                fn convert(value: Result[Array[Number], String])
-                    -> Result[Array[Number], String]
-                {
+                fn convert(value: Result[Array[Number], String]) Result[Array[Number], String] {
                     value
                 }
             }
@@ -1137,7 +1135,7 @@ mod tests {
     async fn renders_missing_instance_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Display[a] {
-                fn display(value: a) -> String
+                fn display(value: a) String
             }
 
             fn main() {
@@ -1150,10 +1148,10 @@ mod tests {
     async fn renders_unsatisfied_generic_bound_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Display[a] {
-                fn display(value: a) -> String
+                fn display(value: a) String
             }
 
-            fn render(value: a) -> String {
+            fn render(value: a) String {
                 display(value)
             }
         "#};
@@ -1163,7 +1161,7 @@ mod tests {
     async fn renders_ambiguous_local_trait_variable_with_source() {
         assert_diagnostic_snapshot! {r#"
             fn ambiguous() {
-                let equal = fn(left, right) { left == right }
+                let equal = (left, right) -> { left == right }
                 ()
             }
         "#};
@@ -1173,15 +1171,15 @@ mod tests {
     fn renders_ambiguous_instance_candidates_with_source() {
         let source = indoc::indoc! {r#"
             trait Display[a] {
-                fn display(value: a) -> String
+                fn display(value: a) String
             }
 
             impl Display[a] {
-                fn display(value: a) -> String { "generic" }
+                fn display(value: a) String { "generic" }
             }
 
             impl Display[Number] {
-                fn display(value: Number) -> String { "number" }
+                fn display(value: Number) String { "number" }
             }
 
             fn main() { display(1) }
@@ -1192,8 +1190,8 @@ mod tests {
     #[tokio::test]
     async fn renders_nested_instance_obligation_chain_with_source() {
         assert_diagnostic_snapshot! {r#"
-            fn main() -> String {
-                show([fn(value: Number) -> Number { value }])
+            fn main() String {
+                show([(value: Number) Number -> value])
             }
         "#};
     }
@@ -1202,7 +1200,7 @@ mod tests {
     async fn renders_orphan_impl_with_source() {
         let source = indoc::indoc! {r#"
             impl Show[Number] {
-                fn show(value: Number) -> String { "number" }
+                fn show(value: Number) String { "number" }
             }
         "#};
         let diagnostic = compile_failures(source)
@@ -1217,15 +1215,15 @@ mod tests {
     async fn renders_overlapping_impls_with_both_source_sites() {
         assert_diagnostic_snapshot! {r#"
             trait Display[a] {
-                fn display(value: a) -> String
+                fn display(value: a) String
             }
 
             impl Display[a] {
-                fn display(value: a) -> String { "any" }
+                fn display(value: a) String { "any" }
             }
 
             impl Display[Number] {
-                fn display(value: Number) -> String { "number" }
+                fn display(value: Number) String { "number" }
             }
         "#};
     }
@@ -1234,11 +1232,11 @@ mod tests {
     async fn renders_higher_kinded_impl_mismatch_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Mapper[f] {
-                fn map(value: f[a], transform: fn(a) -> b) -> f[b]
+                fn map(value: f[a], transform: fn(a) b) f[b]
             }
 
             impl Mapper[Number] {
-                fn map(value: Number, transform: fn(a) -> b) -> Number { value }
+                fn map(value: Number, transform: fn(a) b) Number { value }
             }
         "#};
     }
@@ -1262,10 +1260,10 @@ mod tests {
     async fn renders_superclass_cycle_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait First[a] where a: Second {
-                fn first(value: a) -> a
+                fn first(value: a) a
             }
             trait Second[a] where a: First {
-                fn second(value: a) -> a
+                fn second(value: a) a
             }
         "#};
     }
@@ -1274,10 +1272,10 @@ mod tests {
     async fn renders_invalid_instance_termination_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Display[a] {
-                fn display(value: a) -> String
+                fn display(value: a) String
             }
             impl Display[a] where a: Display {
-                fn display(value: a) -> String { "recursive" }
+                fn display(value: a) String { "recursive" }
             }
         "#};
     }
@@ -1286,7 +1284,7 @@ mod tests {
     fn renders_instance_search_cycle_with_source() {
         let source = indoc::indoc! {r#"
             trait Display[a] {
-                fn display(value: a) -> String
+                fn display(value: a) String
             }
             fn main() { 42 }
         "#};
@@ -1419,27 +1417,27 @@ mod tests {
                 (
                     traits,
                     Ok(indoc::indoc! {r#"
-                        pub trait Display[a] { fn display(value: a) -> String }
+                        pub trait Display[a] { fn display(value: a) String }
                         impl Display[Number] {
-                            fn display(value: Number) -> String { "number" }
+                            fn display(value: Number) String { "number" }
                         }
                     "#}.to_owned()),
                 ),
                 (
                     qualified.clone(),
-                    Ok("import ~/traits\npub fn render() -> String { traits.display(1) }".to_owned()),
+                    Ok("import ~/traits\npub fn render() String { traits.display(1) }".to_owned()),
                 ),
                 (
                     named.clone(),
-                    Ok("import ~/traits.{ display }\npub fn render() -> String { display(1) }".to_owned()),
+                    Ok("import ~/traits.{ display }\npub fn render() String { display(1) }".to_owned()),
                 ),
                 (
                     open.clone(),
-                    Ok("import ~/traits.*\npub fn render() -> String { display(1) }".to_owned()),
+                    Ok("import ~/traits.*\npub fn render() String { display(1) }".to_owned()),
                 ),
                 (
                     trait_qualified.clone(),
-                    Ok("import ~/traits.{ Display }\npub fn render() -> String { Display::display(1) }".to_owned()),
+                    Ok("import ~/traits.{ Display }\npub fn render() String { Display::display(1) }".to_owned()),
                 ),
             ],
             BuildMode::Check,
@@ -1460,7 +1458,7 @@ mod tests {
         let source = indoc::indoc! {r#"
             import ~/first.*
             import ~/second.*
-            pub fn main() -> String { render(1) }
+            pub fn main() String { render(1) }
         "#};
         let consumer = url("project/src/main.ald");
         let result = build_sync(
@@ -1468,9 +1466,9 @@ mod tests {
                 (
                     url("project/src/first.ald"),
                     Ok(indoc::indoc! {r#"
-                        pub trait First[a] { fn render(value: a) -> String }
+                        pub trait First[a] { fn render(value: a) String }
                         impl First[Number] {
-                            fn render(value: Number) -> String { "first" }
+                            fn render(value: Number) String { "first" }
                         }
                     "#}
                     .to_owned()),
@@ -1478,9 +1476,9 @@ mod tests {
                 (
                     url("project/src/second.ald"),
                     Ok(indoc::indoc! {r#"
-                        pub trait Second[a] { fn render(value: a) -> String }
+                        pub trait Second[a] { fn render(value: a) String }
                         impl Second[Number] {
-                            fn render(value: Number) -> String { "second" }
+                            fn render(value: Number) String { "second" }
                         }
                     "#}
                     .to_owned()),
@@ -1504,7 +1502,7 @@ mod tests {
         let implementation = url("package/src/instances.ald");
         mem.insert(
             model.clone(),
-            "pub enum Token { Token }\npub trait Display[a] { fn display(value: a) -> String }"
+            "pub enum Token { Token }\npub trait Display[a] { fn display(value: a) String }"
                 .to_owned(),
         );
         mem.insert(
@@ -1512,7 +1510,7 @@ mod tests {
             indoc::indoc! {r#"
                 import ~/model.{ Token, Display }
                 impl Display[Token] {
-                    fn display(value: Token) -> String { "token" }
+                    fn display(value: Token) String { "token" }
                 }
             "#}
             .to_owned(),
@@ -1553,7 +1551,7 @@ mod tests {
     #[tokio::test]
     async fn package_index_supplies_instances_from_an_unimported_dependency_module() {
         let api = dependency_interface(
-            "pub enum Token { Token }\npub trait Display[a] { fn display(value: a) -> String }",
+            "pub enum Token { Token }\npub trait Display[a] { fn display(value: a) String }",
             &["api"],
             &[],
         );
@@ -1561,7 +1559,7 @@ mod tests {
             indoc::indoc! {r#"
                 import @vendor/widgets/api.{ Token, Display }
                 impl Display[Token] {
-                    fn display(value: Token) -> String { "token" }
+                    fn display(value: Token) String { "token" }
                 }
             "#},
             &["instances"],
@@ -1580,7 +1578,7 @@ mod tests {
             consumer.clone(),
             indoc::indoc! {r#"
                 import @vendor/widgets/api.{ Token, display }
-                pub fn render(value: Token) -> String { display(value) }
+                pub fn render(value: Token) String { display(value) }
             "#}
             .to_owned(),
         );
@@ -1642,7 +1640,7 @@ mod tests {
         let uri = url("project/src/main.ald");
         mem.insert(
             uri.clone(),
-            "trait Display[a] { fn display(value: a) -> String }\nfn main() { display(1) }"
+            "trait Display[a] { fn display(value: a) String }\nfn main() { display(1) }"
                 .to_string(),
         );
 
@@ -1670,15 +1668,15 @@ mod tests {
             vec![
                 (
                     model,
-                    Ok("pub enum Token { Token }\npub trait Display[a] { fn display(value: a) -> String }".to_owned()),
+                    Ok("pub enum Token { Token }\npub trait Display[a] { fn display(value: a) String }".to_owned()),
                 ),
                 (
                     consumer.clone(),
-                    Ok("import ~/model.{ Token, display }\npub fn render(value: Token) -> String { display(value) }".to_owned()),
+                    Ok("import ~/model.{ Token, display }\npub fn render(value: Token) String { display(value) }".to_owned()),
                 ),
                 (
                     implementation,
-                    Ok("import ~/model.{ Token, Display }\nimpl Display[Token] { fn display(value: Token) -> String { \"token\" } }".to_owned()),
+                    Ok("import ~/model.{ Token, Display }\nimpl Display[Token] { fn display(value: Token) String { \"token\" } }".to_owned()),
                 ),
             ],
             BuildMode::Check,
@@ -1697,13 +1695,13 @@ mod tests {
             vec![
                 (
                     model,
-                    Ok("pub enum Token { Token }\npub trait Display[a] { fn display(value: a) -> String }".to_owned()),
+                    Ok("pub enum Token { Token }\npub trait Display[a] { fn display(value: a) String }".to_owned()),
                 ),
                 (
                     first.clone(),
                     Ok(indoc::indoc! {r#"
                         import ~/model.{ Token, Display }
-                        impl Display[Token] { fn display(value: Token) -> String { "first" } }
+                        impl Display[Token] { fn display(value: Token) String { "first" } }
                         fn broken() { missing_first }
                     "#}.to_owned()),
                 ),
@@ -1711,7 +1709,7 @@ mod tests {
                     second.clone(),
                     Ok(indoc::indoc! {r#"
                         import ~/model.{ Token, Display }
-                        impl Display[Token] { fn display(value: Token) -> String { "second" } }
+                        impl Display[Token] { fn display(value: Token) String { "second" } }
                         fn broken() { missing_second }
                     "#}.to_owned()),
                 ),

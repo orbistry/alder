@@ -418,7 +418,7 @@ mod tests {
                     type Item = a
                 }
 
-                pub fn identity(value: a) -> a { value }
+                pub fn identity(value: a) a { value }
             "#},
         );
         let file = InterfaceFile::dehydrate(&interface).unwrap();
@@ -437,12 +437,12 @@ mod tests {
         let first_bump = Bump::new();
         let first = compile_interface(
             &first_bump,
-            "pub trait Convert[a] { fn convert(value: a) -> String }",
+            "pub trait Convert[a] { fn convert(value: a) String }",
         );
         let second_bump = Bump::new();
         let second = compile_interface(
             &second_bump,
-            "pub trait Convert[a] { fn convert(value: a) -> Number }",
+            "pub trait Convert[a] { fn convert(value: a) Number }",
         );
         let first = InterfaceFile::dehydrate(&first).unwrap();
         let second = InterfaceFile::dehydrate(&second).unwrap();

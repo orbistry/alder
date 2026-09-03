@@ -2754,10 +2754,10 @@ mod tests {
         let bump = Bump::new();
         let source_text = bump.alloc_str(indoc::indoc! {r#"
             trait Show[a] {
-                fn show(value: a) -> String { missing_default }
+                fn show(value: a) String { missing_default }
             }
             impl Show[Number] {
-                fn show(value: Number) -> String { missing_impl }
+                fn show(value: Number) String { missing_impl }
             }
             fn broken() { missing_value }
         "#});
@@ -2787,7 +2787,7 @@ mod tests {
     #[test]
     fn function_body_resolves_parameter() {
         let bump = Bump::new();
-        let result = can(&bump, "fn identity(value: a) -> a { value }");
+        let result = can(&bump, "fn identity(value: a) a { value }");
         let ItemKind::Fn(function) = &result.module.items[0].value.kind else {
             panic!("expected function")
         };
@@ -2809,9 +2809,9 @@ mod tests {
         let result = can(
             &bump,
             indoc::indoc! {r#"
-                trait Show[a] { fn show(value: a) -> String }
-                fn bare(value: a) -> String where a: Show { show(value) }
-                fn qualified(value: a) -> String where a: Show { Show::show(value) }
+                trait Show[a] { fn show(value: a) String }
+                fn bare(value: a) String where a: Show { show(value) }
+                fn qualified(value: a) String where a: Show { Show::show(value) }
             "#},
         );
         let ItemKind::Trait(trait_) = &result.module.items[0].value.kind else {
@@ -2849,7 +2849,7 @@ mod tests {
         let bump = Bump::new();
         let result = can(
             &bump,
-            "trait Functor[f] { fn map(apply: fn(a) -> b, value: f[a]) -> f[b] }",
+            "trait Functor[f] { fn map(apply: fn(a) b, value: f[a]) f[b] }",
         );
         let ItemKind::Trait(trait_) = &result.module.items[0].value.kind else {
             panic!("expected trait")
@@ -2873,7 +2873,7 @@ mod tests {
             package: PackageId::Application,
             path: bump.alloc_slice_copy(&["Producer"]),
         };
-        let producer_text = bump.alloc_str("pub trait Show[a] { fn show(value: a) -> String }");
+        let producer_text = bump.alloc_str("pub trait Show[a] { fn show(value: a) String }");
         let producer_source =
             alder_parse::parse_module(&bump, producer_text).expect("producer parses");
         let producer = canonicalize(
@@ -2911,7 +2911,7 @@ mod tests {
         }]);
         let interfaces = bump.alloc_slice_copy(&[interface]);
         let consumer_text =
-            bump.alloc_str("fn render(value: a) -> String where a: Show { Show::show(value) }");
+            bump.alloc_str("fn render(value: a) String where a: Show { Show::show(value) }");
         let consumer_source =
             alder_parse::parse_module(&bump, consumer_text).expect("consumer parses");
         canonicalize(
@@ -2928,12 +2928,12 @@ mod tests {
 
     #[test]
     fn trait_method_parameters_require_annotations() {
-        assert_can_error_snapshot!("trait Show[a] { fn show(value) -> String }");
+        assert_can_error_snapshot!("trait Show[a] { fn show(value) String }");
     }
 
     #[test]
     fn trait_parameters_must_be_unique() {
-        assert_can_error_snapshot!("trait Convert[a, a] { fn convert(value: a) -> a }");
+        assert_can_error_snapshot!("trait Convert[a, a] { fn convert(value: a) a }");
     }
 
     #[test]
@@ -3313,14 +3313,14 @@ mod tests {
         "#};
         assert_can_error_snapshot! {r#"
             #[derive(Eq)]
-            enum Callback { Callback(fn() -> ()) }
+            enum Callback { Callback(fn() ()) }
         "#};
     }
 
     #[test]
     fn function_fields_do_not_receive_automatic_equality() {
         let bump = Bump::new();
-        let result = can(&bump, "enum Callback { Callback(fn() -> ()) }");
+        let result = can(&bump, "enum Callback { Callback(fn() ()) }");
         assert!(
             !result
                 .module
@@ -3347,8 +3347,8 @@ mod tests {
         let result = can(
             &bump,
             indoc::indoc! {r#"
-                trait Show[a] { fn show(value: a) -> String }
-                fn keep(value: a) -> a where a: Show { value }
+                trait Show[a] { fn show(value: a) String }
+                fn keep(value: a) a where a: Show { value }
             "#},
         );
         let ItemKind::Fn(function) = &result.module.items[1].value.kind else {
@@ -3369,9 +3369,9 @@ mod tests {
             indoc::indoc! {r#"
                 trait Iterator[i] {
                     type Item
-                    fn next(value: i) -> Item
+                    fn next(value: i) Item
                 }
-                fn count(value: i) -> Number where i: Iterator, i.Item == Number { 0 }
+                fn count(value: i) Number where i: Iterator, i.Item == Number { 0 }
             "#},
         );
         let ItemKind::Fn(function) = &result.module.items[1].value.kind else {
@@ -3395,7 +3395,7 @@ mod tests {
     fn associated_equality_requires_a_matching_bound() {
         assert_can_error_snapshot! {r#"
             trait Iterator[i] { type Item }
-            trait Show[a] { fn show(value: a) -> String }
+            trait Show[a] { fn show(value: a) String }
             fn bad(value: i) where i: Show, i.Item == Number { value }
         "#};
     }
@@ -3412,7 +3412,7 @@ mod tests {
     #[test]
     fn function_where_bound_variable_must_occur_in_signature() {
         assert_can_error_snapshot! {r#"
-            trait Show[a] { fn show(value: a) -> String }
+            trait Show[a] { fn show(value: a) String }
             fn bad(value: Number) where a: Show { value }
         "#};
     }
@@ -3420,7 +3420,7 @@ mod tests {
     #[test]
     fn colon_bound_requires_a_unary_trait() {
         assert_can_error_snapshot! {r#"
-            trait Convert[a, b] { fn convert(value: a) -> b }
+            trait Convert[a, b] { fn convert(value: a) b }
             fn bad(value: a) where a: Convert { value }
         "#};
     }
@@ -3428,9 +3428,9 @@ mod tests {
     #[test]
     fn impl_where_variable_must_occur_in_the_impl_head() {
         assert_can_error_snapshot! {r#"
-            trait Show[a] { fn show(value: a) -> String }
+            trait Show[a] { fn show(value: a) String }
             impl Show[Array[a]] where b: Show {
-                fn show(value: Array[a]) -> String { "array" }
+                fn show(value: Array[a]) String { "array" }
             }
         "#};
     }
@@ -3443,13 +3443,13 @@ mod tests {
             indoc::indoc! {r#"
                 trait Iterator[i] {
                     type Item
-                    fn next(value: i) -> Item
+                    fn next(value: i) Item
                 }
                 impl Iterator[Array[a]] where a: Show {
                     type Item = a
-                    fn next(value: Array[a]) -> a { value[0] }
+                    fn next(value: Array[a]) a { value[0] }
                 }
-                trait Show[a] { fn show(value: a) -> String }
+                trait Show[a] { fn show(value: a) String }
             "#},
         );
         let ItemKind::Impl(implementation) = &result.module.items[1].value.kind else {
@@ -3490,10 +3490,10 @@ mod tests {
                 pub trait PublicTrait[a] {}
 
                 impl Show[Private] {
-                    fn show(value: Private) -> String { "private" }
+                    fn show(value: Private) String { "private" }
                 }
                 impl Show[Public] {
-                    fn show(value: Public) -> String { "public" }
+                    fn show(value: Public) String { "public" }
                 }
                 impl PrivateTrait[Number] {}
                 impl PublicTrait[Number] {}
@@ -3534,8 +3534,8 @@ mod tests {
     #[test]
     fn impl_trait_head_arity_is_checked() {
         assert_can_error_snapshot! {r#"
-            trait Convert[a, b] { fn convert(value: a) -> b }
-            impl Convert[Number] { fn convert(value: Number) -> Number { value } }
+            trait Convert[a, b] { fn convert(value: a) b }
+            impl Convert[Number] { fn convert(value: Number) Number { value } }
         "#};
     }
 
@@ -3543,7 +3543,7 @@ mod tests {
     fn foreign_trait_for_foreign_type_is_rejected_during_canonicalization() {
         assert_can_error_snapshot! {r#"
             impl Show[Number] {
-                fn show(value: Number) -> String { "number" }
+                fn show(value: Number) String { "number" }
             }
         "#};
     }
@@ -3557,15 +3557,15 @@ mod tests {
                 enum Local { Local }
 
                 impl Show[Local] {
-                    fn show(value: Local) -> String { "local" }
+                    fn show(value: Local) String { "local" }
                 }
 
                 trait LocalShow[a] {
-                    fn local_show(value: a) -> String
+                    fn local_show(value: a) String
                 }
 
                 impl LocalShow[Number] {
-                    fn local_show(value: Number) -> String { "number" }
+                    fn local_show(value: Number) String { "number" }
                 }
             "#},
         );
@@ -3574,9 +3574,9 @@ mod tests {
     #[test]
     fn impl_unknown_method_is_rejected() {
         assert_can_error_snapshot! {r#"
-            trait Show[a] { fn show(value: a) -> String }
+            trait Show[a] { fn show(value: a) String }
             impl Show[Number] {
-                fn display(value: Number) -> String { "number" }
+                fn display(value: Number) String { "number" }
             }
         "#};
     }
@@ -3584,7 +3584,7 @@ mod tests {
     #[test]
     fn impl_missing_required_method_is_rejected() {
         assert_can_error_snapshot! {r#"
-            trait Show[a] { fn show(value: a) -> String }
+            trait Show[a] { fn show(value: a) String }
             impl Show[Number] {}
         "#};
     }
@@ -3594,10 +3594,10 @@ mod tests {
         assert_can_error_snapshot! {r#"
             trait Iterator[i] {
                 type Item
-                fn next(value: i) -> Item
+                fn next(value: i) Item
             }
             impl Iterator[Number] {
-                fn next(value: Number) -> Number { value }
+                fn next(value: Number) Number { value }
             }
         "#};
     }
@@ -3608,7 +3608,7 @@ mod tests {
         can(
             &bump,
             indoc::indoc! {r#"
-                trait Named[a] { fn name(value: a) -> String { "default" } }
+                trait Named[a] { fn name(value: a) String { "default" } }
                 impl Named[Number] {}
             "#},
         );
@@ -3619,7 +3619,7 @@ mod tests {
         insta::assert_snapshot!(can_error("fn wait() { Task.sleep(1).await }"));
 
         let bump = Bump::new();
-        can(&bump, "fn wait() -> Task[()] { Task.sleep(1).await }");
+        can(&bump, "fn wait() Task[()] { Task.sleep(1).await }");
     }
 
     #[test]

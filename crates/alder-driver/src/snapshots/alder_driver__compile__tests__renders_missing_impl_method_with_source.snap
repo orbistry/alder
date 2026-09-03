@@ -1,12 +1,12 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "trait Display[a] { fn display(value: a) -> String }\nimpl Display[Number] {}\n"
+description: "trait Display[a] { fn display(value: a) String }\nimpl Display[Number] {}\n"
 ---
 alder::canonicalize::missing_impl_item
 
   × impl of `Display` is missing method `display`
    ╭─[/project/src/main.ald:2:1]
- 1 │ trait Display[a] { fn display(value: a) -> String }
+ 1 │ trait Display[a] { fn display(value: a) String }
  2 │ impl Display[Number] {}
    · ───────────┬───────────
    ·            ╰── reported here

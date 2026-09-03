@@ -1,2 +1,2 @@
 #[extern("alder:kernel", "$cliArgs")]
-pub fn args() -> Array[String]
+pub fn args() Array[String]

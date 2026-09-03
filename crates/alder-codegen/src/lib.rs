@@ -378,23 +378,51 @@ mod tests {
     fn result_extern_is_guarded() {
         assert_emit_snapshot! {r#"
             #[extern("library", "parse")]
-            pub fn parse(value: String) -> Result[Number, String]
+            pub fn parse(value: String) Result[Number, String]
+        "#};
+    }
+
+    #[test]
+    fn pipe_forwards_into_first_call_argument() {
+        assert_solved_emit_snapshot! {r#"
+            fn subtract(left: Number, right: Number) Number { left - right }
+            pub fn answer() Number { 44 |> subtract(2) }
+        "#};
+    }
+
+    #[test]
+    fn pipe_placeholder_controls_call_argument() {
+        assert_solved_emit_snapshot! {r#"
+            fn subtract(left: Number, right: Number) Number { left - right }
+            pub fn answer() Number { 2 |> subtract(44, _) }
+        "#};
+    }
+
+    #[test]
+    fn pipe_evaluates_left_before_callee_and_existing_arguments() {
+        assert_solved_emit_snapshot! {r#"
+            fn left() Number { 40 }
+            fn right() Number { 2 }
+            fn factory() fn(Number, Number) Number {
+                (a: Number, b: Number) Number -> a + b
+            }
+            pub fn answer() Number { left() |> factory()(right()) }
         "#};
     }
 
     #[test]
     fn trait_dictionary_passing() {
         assert_solved_emit_snapshot! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            impl Show[Number] { fn show(value: Number) -> String { "number" } }
-            fn describe(value: a) -> String where a: Show { show(value) }
-            pub fn main() -> String { describe(1) }
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            fn describe(value: a) String where a: Show { show(value) }
+            pub fn main() String { describe(1) }
         "#};
     }
 
     #[test]
     fn solved_primitive_equality_is_strict() {
-        assert_solved_emit_snapshot!("pub fn same() -> Bool { 1 == 2 }");
+        assert_solved_emit_snapshot!("pub fn same() Bool { 1 == 2 }");
     }
 
     #[test]
@@ -403,7 +431,7 @@ mod tests {
             pub fn same(
                 left: { name: String, score: Number },
                 right: { name: String, score: Number },
-            ) -> Bool {
+            ) Bool {
                 left == right
             }
         "#};
@@ -412,7 +440,7 @@ mod tests {
     #[test]
     fn generic_ordering_uses_the_compare_result_tag() {
         assert_solved_emit_snapshot! {r#"
-            pub fn less_than(left: a, right: a) -> Bool where a: Ord {
+            pub fn less_than(left: a, right: a) Bool where a: Ord {
                 left < right
             }
         "#};
@@ -421,12 +449,12 @@ mod tests {
     #[test]
     fn prerequisite_dictionary_factory() {
         assert_solved_emit_snapshot! {r#"
-            trait Show[a] { fn show(value: a) -> String }
-            impl Show[Number] { fn show(value: Number) -> String { "number" } }
+            trait Show[a] { fn show(value: a) String }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
             impl Show[Array[a]] where a: Show {
-                fn show(value: Array[a]) -> String { "array" }
+                fn show(value: Array[a]) String { "array" }
             }
-            pub fn main() -> String { show([1]) }
+            pub fn main() String { show([1]) }
         "#};
     }
 
@@ -434,11 +462,11 @@ mod tests {
     fn default_method_dictionary_entry() {
         assert_solved_emit_snapshot! {r#"
             trait Show[a] {
-                fn show(value: a) -> String
-                fn render(value: a) -> String { show(value) }
+                fn show(value: a) String
+                fn render(value: a) String { show(value) }
             }
-            impl Show[Number] { fn show(value: Number) -> String { "number" } }
-            pub fn main() -> String { render(1) }
+            impl Show[Number] { fn show(value: Number) String { "number" } }
+            pub fn main() String { render(1) }
         "#};
     }
 
@@ -446,11 +474,11 @@ mod tests {
     fn mutually_recursive_defaults_use_the_selected_dictionary() {
         assert_solved_emit_snapshot! {r#"
             trait Alternate[a] {
-                fn first(value: a) -> String { second(value) }
-                fn second(value: a) -> String { first(value) }
+                fn first(value: a) String { second(value) }
+                fn second(value: a) String { first(value) }
             }
             impl Alternate[Number] {}
-            pub fn render(value: Number) -> String { first(value) }
+            pub fn render(value: Number) String { first(value) }
         "#};
     }
 
@@ -458,17 +486,17 @@ mod tests {
     fn method_local_dictionaries_follow_predicate_order() {
         assert_solved_emit_snapshot! {r#"
             trait Render[a] {
-                fn render(value: a, first: b, second: c) -> String
+                fn render(value: a, first: b, second: c) String
                     where b: Show, c: Eq + Show
             }
             impl Render[Number] {
-                fn render(value: Number, first: b, second: c) -> String
+                fn render(value: Number, first: b, second: c) String
                     where b: Show, c: Eq + Show
                 {
                     show(first)
                 }
             }
-            pub fn main() -> String { render(0, "first", true) }
+            pub fn main() String { render(0, "first", true) }
         "#};
     }
 
@@ -477,9 +505,9 @@ mod tests {
         assert_solved_emit_snapshot! {r#"
             trait Source[a] {
                 type Item
-                fn next(value: a) -> Option[Item]
+                fn next(value: a) Option[Item]
             }
-            fn take(value: a) -> Option[Number]
+            fn take(value: a) Option[Number]
                 where a: Source, a.Item == Number
             {
                 next(value)
@@ -520,11 +548,11 @@ mod tests {
         assert_solved_emit_snapshot! {r#"
             enum Secret { Secret }
             impl Show[Secret] {
-                fn show(value: Secret) -> String { "redacted" }
+                fn show(value: Secret) String { "redacted" }
             }
             #[derive(Show)]
             enum Wrapped { Wrapped(Secret) }
-            pub fn main() -> String { show(Wrapped::Wrapped(Secret::Secret)) }
+            pub fn main() String { show(Wrapped::Wrapped(Secret::Secret)) }
         "#};
     }
 
@@ -533,7 +561,7 @@ mod tests {
         assert_solved_emit_snapshot! {r#"
             #[derive(Show)]
             enum Box[a] { Box(a) }
-            pub fn render(value: Box[String]) -> String { show(value) }
+            pub fn render(value: Box[String]) String { show(value) }
         "#};
     }
 
@@ -551,7 +579,7 @@ mod tests {
             #[derive(Show)]
             pub enum Chain { End, Link(Number, Chain) }
 
-            pub fn render(value: Chain) -> String { show(value) }
+            pub fn render(value: Chain) String { show(value) }
         "#};
     }
 
@@ -560,17 +588,17 @@ mod tests {
         assert_solved_emit_snapshot! {r#"
             enum Token { Token }
             impl Ord[Token] {
-                fn compare(left: Token, right: Token) -> Ordering { Ordering::Equal }
+                fn compare(left: Token, right: Token) Ordering { Ordering::Equal }
             }
             impl Num[Token] {
-                fn add(left: Token, right: Token) -> Token { right }
-                fn sub(left: Token, right: Token) -> Token { right }
-                fn mul(left: Token, right: Token) -> Token { right }
-                fn div(left: Token, right: Token) -> Token { right }
-                fn rem(left: Token, right: Token) -> Token { right }
-                fn negate(value: Token) -> Token { value }
+                fn add(left: Token, right: Token) Token { right }
+                fn sub(left: Token, right: Token) Token { right }
+                fn mul(left: Token, right: Token) Token { right }
+                fn div(left: Token, right: Token) Token { right }
+                fn rem(left: Token, right: Token) Token { right }
+                fn negate(value: Token) Token { value }
             }
-            pub fn update() -> Token {
+            pub fn update() Token {
                 let mut value = Token::Token
                 value += Token::Token
                 value
@@ -583,18 +611,18 @@ mod tests {
         assert_solved_emit_snapshot! {r#"
             enum Token { Token }
             impl Ord[Token] {
-                fn compare(left: Token, right: Token) -> Ordering { Ordering::Equal }
+                fn compare(left: Token, right: Token) Ordering { Ordering::Equal }
             }
             impl Num[Token] {
-                fn add(left: Token, right: Token) -> Token { right }
-                fn sub(left: Token, right: Token) -> Token { right }
-                fn mul(left: Token, right: Token) -> Token { right }
-                fn div(left: Token, right: Token) -> Token { right }
-                fn rem(left: Token, right: Token) -> Token { right }
-                fn negate(value: Token) -> Token { value }
+                fn add(left: Token, right: Token) Token { right }
+                fn sub(left: Token, right: Token) Token { right }
+                fn mul(left: Token, right: Token) Token { right }
+                fn div(left: Token, right: Token) Token { right }
+                fn rem(left: Token, right: Token) Token { right }
+                fn negate(value: Token) Token { value }
             }
-            fn next_index() -> Number { 0 }
-            pub fn update() -> Token {
+            fn next_index() Number { 0 }
+            pub fn update() Token {
                 let mut values = [Token::Token]
                 values[next_index()] += Token::Token
                 values[0]

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "#[durable_object]\ntype Counter = { count: Number }\n\nimpl DurableObject[Counter] {\n    fn fetch(obj: Counter, req: Request) -> Response { obj.count }\n}\n\nfn handler(req: Request) -> Response {\n    use Kv                      // bound to the worker's KV namespace via wrangler config\n    Kv.get(cache, \"key\").await\n}\n"
+description: "#[durable_object]\ntype Counter = { count: Number }\n\nimpl DurableObject[Counter] {\n    fn fetch(obj: Counter, req: Request) Response { obj.count }\n}\n\nfn handler(req: Request) Response {\n    use Kv                      // bound to the worker's KV namespace via wrangler config\n    Kv.get(cache, \"key\").await\n}\n"
 ---
 Module {
     items: [
@@ -327,11 +327,11 @@ Module {
                                             region: Region {
                                                 start: Position {
                                                     line: 5,
-                                                    column: 45,
+                                                    column: 42,
                                                 },
                                                 end: Position {
                                                     line: 5,
-                                                    column: 53,
+                                                    column: 50,
                                                 },
                                             },
                                             value: Named {
@@ -341,11 +341,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 5,
-                                                                    column: 45,
+                                                                    column: 42,
                                                                 },
                                                                 end: Position {
                                                                     line: 5,
-                                                                    column: 53,
+                                                                    column: 50,
                                                                 },
                                                             },
                                                             value: "Response",
@@ -362,11 +362,11 @@ Module {
                                             region: Region {
                                                 start: Position {
                                                     line: 5,
-                                                    column: 54,
+                                                    column: 51,
                                                 },
                                                 end: Position {
                                                     line: 5,
-                                                    column: 67,
+                                                    column: 64,
                                                 },
                                             },
                                             value: Block {
@@ -376,11 +376,11 @@ Module {
                                                         region: Region {
                                                             start: Position {
                                                                 line: 5,
-                                                                column: 56,
+                                                                column: 53,
                                                             },
                                                             end: Position {
                                                                 line: 5,
-                                                                column: 65,
+                                                                column: 62,
                                                             },
                                                         },
                                                         value: Access {
@@ -388,11 +388,11 @@ Module {
                                                                 region: Region {
                                                                     start: Position {
                                                                         line: 5,
-                                                                        column: 56,
+                                                                        column: 53,
                                                                     },
                                                                     end: Position {
                                                                         line: 5,
-                                                                        column: 59,
+                                                                        column: 56,
                                                                     },
                                                                 },
                                                                 value: Var(
@@ -403,11 +403,11 @@ Module {
                                                                 region: Region {
                                                                     start: Position {
                                                                         line: 5,
-                                                                        column: 60,
+                                                                        column: 57,
                                                                     },
                                                                     end: Position {
                                                                         line: 5,
-                                                                        column: 65,
+                                                                        column: 62,
                                                                     },
                                                                 },
                                                                 value: "count",
@@ -513,11 +513,11 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 8,
-                                        column: 29,
+                                        column: 26,
                                     },
                                     end: Position {
                                         line: 8,
-                                        column: 37,
+                                        column: 34,
                                     },
                                 },
                                 value: Named {
@@ -527,11 +527,11 @@ Module {
                                                 region: Region {
                                                     start: Position {
                                                         line: 8,
-                                                        column: 29,
+                                                        column: 26,
                                                     },
                                                     end: Position {
                                                         line: 8,
-                                                        column: 37,
+                                                        column: 34,
                                                     },
                                                 },
                                                 value: "Response",
@@ -548,7 +548,7 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 8,
-                                        column: 38,
+                                        column: 35,
                                     },
                                     end: Position {
                                         line: 11,

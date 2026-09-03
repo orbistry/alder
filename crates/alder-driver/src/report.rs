@@ -724,13 +724,6 @@ fn function_type_problem(error: &alder_parse::error::TFn<'_>) -> SyntaxProblem {
             "expected `,` or `)`",
             None,
         ),
-        TFn::Arrow(row, column) => expected_problem(
-            "I was expecting `->` before the function result type",
-            *row,
-            *column,
-            "expected `->`",
-            Some("function types look like `fn(Input) -> Output`".to_owned()),
-        ),
     }
 }
 

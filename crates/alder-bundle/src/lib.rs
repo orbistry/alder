@@ -160,6 +160,7 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
                 ("$arrayLength", "length"),
                 ("$arrayPush", "push"),
                 ("$arrayMap", "map"),
+                ("$arrayFilter", "filter"),
             ]),
         ),
         (

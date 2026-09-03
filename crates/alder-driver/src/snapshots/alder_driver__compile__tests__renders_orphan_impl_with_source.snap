@@ -1,6 +1,6 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "impl Show[Number] {\n    fn show(value: Number) -> String { \"number\" }\n}\n"
+description: "impl Show[Number] {\n    fn show(value: Number) String { \"number\" }\n}\n"
 ---
 alder::canonicalize::orphan_impl
 
@@ -8,7 +8,7 @@ alder::canonicalize::orphan_impl
   │ (the standard library) nor `Number` (the standard library)
    ╭─[/project/src/main.ald:1:1]
  1 │ ╭─▶ impl Show[Number] {
- 2 │ │       fn show(value: Number) -> String { "number" }
+ 2 │ │       fn show(value: Number) String { "number" }
  3 │ ├─▶ }
    · ╰──── this package owns neither side of the implementation
    ╰────

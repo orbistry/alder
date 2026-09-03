@@ -1,8 +1,8 @@
 ---
 source: crates/alder-parse/src/item/trait_.rs
-description: "trait Show[a] {\n    fn show(value: a) -> String { \"?\" } fn other(value: a) -> String\n}\n"
+description: "trait Show[a] {\n    fn show(value: a) String { \"?\" } fn other(value: a) String\n}\n"
 ---
 SameLine(
     2,
-    41,
+    38,
 )

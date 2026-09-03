@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/type_.rs
-description: "fn(String, Number) -> Bool"
+description: "fn(String, Number) Bool"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 27,
+            column: 24,
         },
     },
     value: Fn {
@@ -84,11 +84,11 @@ Located {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 23,
+                    column: 20,
                 },
                 end: Position {
                     line: 1,
-                    column: 27,
+                    column: 24,
                 },
             },
             value: Named {
@@ -98,11 +98,11 @@ Located {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 23,
+                                    column: 20,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 27,
+                                    column: 24,
                                 },
                             },
                             value: "Bool",

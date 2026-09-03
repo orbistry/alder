@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/impl_.rs
-description: "impl Iterator[Counter] {\n    type Item = Number\n    fn next(it: Counter) -> Option[Number] { None }\n}\n"
+description: "impl Iterator[Counter] {\n    type Item = Number\n    fn next(it: Counter) Option[Number] { None }\n}\n"
 ---
 ImplDecl {
     trait_: Path {
@@ -177,11 +177,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 3,
-                                column: 29,
+                                column: 26,
                             },
                             end: Position {
                                 line: 3,
-                                column: 43,
+                                column: 40,
                             },
                         },
                         value: Named {
@@ -191,11 +191,11 @@ ImplDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 3,
-                                                column: 29,
+                                                column: 26,
                                             },
                                             end: Position {
                                                 line: 3,
-                                                column: 35,
+                                                column: 32,
                                             },
                                         },
                                         value: "Option",
@@ -207,11 +207,11 @@ ImplDecl {
                                     region: Region {
                                         start: Position {
                                             line: 3,
-                                            column: 36,
+                                            column: 33,
                                         },
                                         end: Position {
                                             line: 3,
-                                            column: 42,
+                                            column: 39,
                                         },
                                     },
                                     value: Named {
@@ -221,11 +221,11 @@ ImplDecl {
                                                     region: Region {
                                                         start: Position {
                                                             line: 3,
-                                                            column: 36,
+                                                            column: 33,
                                                         },
                                                         end: Position {
                                                             line: 3,
-                                                            column: 42,
+                                                            column: 39,
                                                         },
                                                     },
                                                     value: "Number",
@@ -245,11 +245,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 3,
-                                column: 44,
+                                column: 41,
                             },
                             end: Position {
                                 line: 3,
-                                column: 52,
+                                column: 49,
                             },
                         },
                         value: Block {
@@ -259,11 +259,11 @@ ImplDecl {
                                     region: Region {
                                         start: Position {
                                             line: 3,
-                                            column: 46,
+                                            column: 43,
                                         },
                                         end: Position {
                                             line: 3,
-                                            column: 50,
+                                            column: 47,
                                         },
                                     },
                                     value: Path(
@@ -273,11 +273,11 @@ ImplDecl {
                                                     region: Region {
                                                         start: Position {
                                                             line: 3,
-                                                            column: 46,
+                                                            column: 43,
                                                         },
                                                         end: Position {
                                                             line: 3,
-                                                            column: 50,
+                                                            column: 47,
                                                         },
                                                     },
                                                     value: "None",

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "trait Mapper[f] {\n    fn map(value: f[a], transform: fn(a) -> b) -> f[b]\n}\n\nimpl Mapper[Number] {\n    fn map(value: Number, transform: fn(a) -> b) -> Number { value }\n}\n"
+description: "trait Mapper[f] {\n    fn map(value: f[a], transform: fn(a) b) f[b]\n}\n\nimpl Mapper[Number] {\n    fn map(value: Number, transform: fn(a) b) Number { value }\n}\n"
 ---
 alder::trait::kind_mismatch
 
@@ -9,7 +9,7 @@ alder::trait::kind_mismatch
    ╭─[/project/src/main.ald:5:1]
  4 │     
  5 │ ╭─▶ impl Mapper[Number] {
- 6 │ │       fn map(value: Number, transform: fn(a) -> b) -> Number { value }
+ 6 │ │       fn map(value: Number, transform: fn(a) b) Number { value }
  7 │ ├─▶ }
    · ╰──── this trait argument has the wrong kind
    ╰────

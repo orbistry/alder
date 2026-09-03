@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn call_on_lambda_result() {
-        assert_expression_snapshot!("(fn(x) x + 1)(2)");
+        assert_expression_snapshot!("(x -> x + 1)(2)");
     }
 
     #[test]

@@ -2,4 +2,4 @@
 source: crates/alder-solve/tests/inference.rs
 description: "fn answer() {\n    let value = 40\n    value + 2\n}\n"
 ---
-answer: fn() -> Number
+answer: fn() Number

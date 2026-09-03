@@ -21,7 +21,7 @@
 //! non-reserved lowercase word follows, so a trailing comma before the
 //! next item (`where a: Show,` then `fn …` on the next line) is fine.
 //!
-//! `fn_decl` (after `fn`) reads `name ( params ) [-> type] [where …]` and
+//! `fn_decl` (after `fn`) reads `name ( params ) [type] [where …]` and
 //! then a body only when a `{` follows; otherwise the declaration is
 //! bodiless (`body: None`, §10.26: extern functions and trait signatures —
 //! the `#[extern]` requirement is canonicalization's). The body may start
@@ -63,19 +63,19 @@ impl<'a> Parser<'a> {
         )?;
         // `params()` stops right after the `)`.
         let mut end = self.get_position();
+        let params_end = end;
         self.chomp();
-        let ret = if self.peek() == Some(b'-') && self.peek_at(1) == Some(b'>') {
-            self.advance_by(2);
-            self.chomp();
-            let typ = self.specialize(
-                |bump, e, row, col| error::Fn::Ret(bump.alloc(e), row, col),
-                |p| p.type_expr(),
-            )?;
-            end = typ.region.end;
-            Some(typ)
-        } else {
-            None
-        };
+        let ret =
+            if !self.newline_since(params_end) && self.peek() != Some(b'{') && self.starts_type() {
+                let typ = self.specialize(
+                    |bump, e, row, col| error::Fn::Ret(bump.alloc(e), row, col),
+                    |p| p.type_expr(),
+                )?;
+                end = typ.region.end;
+                Some(typ)
+            } else {
+                None
+            };
         let where_clause = if self.peek_keyword(b"where") {
             self.advance_by(5);
             end = self.get_position();
@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn params_fn_type() {
-        assert_params_snapshot!("(xs: Array[a], g: fn(a) -> b)");
+        assert_params_snapshot!("(xs: Array[a], g: fn(a) b)");
     }
 
     #[test]
@@ -584,12 +584,12 @@ mod tests {
 
     #[test]
     fn fn_typed_params() {
-        assert_fn_decl_snapshot!("fn add(a: Number, b: Number) -> Number { a + b }");
+        assert_fn_decl_snapshot!("fn add(a: Number, b: Number) Number { a + b }");
     }
 
     #[test]
     fn fn_ret() {
-        assert_fn_decl_snapshot!("fn name() -> String { \"x\" }");
+        assert_fn_decl_snapshot!("fn name() String { \"x\" }");
     }
 
     #[test]
@@ -609,7 +609,7 @@ mod tests {
             fn add(
                 a: Number,
                 b: Number,
-            ) -> Number {
+            ) Number {
                 a + b
             }
         "#
@@ -620,7 +620,7 @@ mod tests {
     fn fn_multiline_body() {
         assert_fn_decl_snapshot!(
             r#"
-            fn classify(n: Number) -> String {
+            fn classify(n: Number) String {
                 let sign = if n < 0 { "neg" } else { "pos" }
                 sign
             }
@@ -633,7 +633,7 @@ mod tests {
     fn fn_where_single() {
         assert_fn_decl_snapshot!(
             r#"
-            fn describe(xs: Array[a]) -> String where a: Show {
+            fn describe(xs: Array[a]) String where a: Show {
                 xs |> Array.map(show) |> String.join(", ")
             }
         "#
@@ -644,7 +644,7 @@ mod tests {
     fn fn_where_multi() {
         assert_fn_decl_snapshot!(
             r#"
-            fn show2(a: a, b: b) -> String where a: Show, b: Show {
+            fn show2(a: a, b: b) String where a: Show, b: Show {
                 show(a)
             }
         "#
@@ -656,7 +656,7 @@ mod tests {
     fn fn_where_plus() {
         assert_fn_decl_snapshot!(
             r#"
-            fn lookup(cache: Cache[k, v], key: k) -> Option[v]
+            fn lookup(cache: Cache[k, v], key: k) Option[v]
                 where k: Eq + Hash
         "#
         );
@@ -666,7 +666,7 @@ mod tests {
     fn fn_where_assoc() {
         assert_fn_decl_snapshot!(
             r#"
-            fn sum(it: i) -> Number where i: Iterator, i.Item == Number {
+            fn sum(it: i) Number where i: Iterator, i.Item == Number {
                 0
             }
         "#
@@ -678,7 +678,7 @@ mod tests {
     fn fn_where_multiline_trailing_comma() {
         assert_fn_decl_snapshot!(
             r#"
-            fn traverse(xs: t[f[a]], g: fn(a) -> f[b]) -> f[t[b]]
+            fn traverse(xs: t[f[a]], g: fn(a) f[b]) f[t[b]]
                 where
                     t: Traversable,
                     f: Applicative,
@@ -690,7 +690,7 @@ mod tests {
     fn fn_where_then_body_on_next_line() {
         assert_fn_decl_snapshot!(
             r#"
-            fn describe(xs: Array[a]) -> String
+            fn describe(xs: Array[a]) String
                 where a: Show
             {
                 show(xs)
@@ -702,7 +702,7 @@ mod tests {
     /// language.md "JavaScript interop" (the attribute form is `fn_bodiless_with_extern_attr`).
     #[test]
     fn fn_bodiless() {
-        assert_fn_decl_snapshot!("fn randomUUID() -> String");
+        assert_fn_decl_snapshot!("fn randomUUID() String");
     }
 
     #[test]
@@ -743,11 +743,6 @@ mod tests {
     }
 
     #[test]
-    fn error_ret() {
-        assert_fn_decl_error_snapshot!("fn add() -> { 1 }");
-    }
-
-    #[test]
     fn error_where_bad_bound() {
         assert_fn_decl_error_snapshot!("fn f(x: a) where a: 1 { x }");
     }
@@ -769,7 +764,7 @@ mod tests {
     fn fn_pub() {
         assert_item_snapshot!(
             r#"
-            pub fn add(a: Number, b: Number) -> Number {
+            pub fn add(a: Number, b: Number) Number {
                 a + b
             }
         "#
@@ -782,7 +777,7 @@ mod tests {
         assert_item_snapshot!(
             r#"
             #[extern("node:crypto", "randomUUID")]
-            fn randomUUID() -> String
+            fn randomUUID() String
         "#
         );
     }

@@ -318,7 +318,7 @@ mod tests {
     #[test]
     fn function_arity_is_preserved() {
         let bump = Bump::new();
-        let source = bump.alloc_str("fn(Number, String) -> Bool");
+        let source = bump.alloc_str("fn(Number, String) Bool");
         let typ = canonicalize_type(
             &bump,
             &env(&bump),

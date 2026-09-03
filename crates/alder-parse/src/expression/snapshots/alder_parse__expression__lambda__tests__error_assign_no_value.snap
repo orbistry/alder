@@ -1,15 +1,15 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: fn() x +=
+description: () -> x +=
 ---
 Lambda(
     AssignValue(
         Start(
             1,
-            10,
+            11,
         ),
         1,
-        10,
+        11,
     ),
     1,
     1,

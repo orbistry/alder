@@ -973,7 +973,7 @@ mod tests {
     fn database_collects_local_traits_impls_and_builtins() {
         let bump = Bump::new();
         let source = bump.alloc_str(
-            "trait Show[a] { fn show(value: a) -> String }\nimpl Show[Number] { fn show(value: Number) -> String { \"number\" } }",
+            "trait Show[a] { fn show(value: a) String }\nimpl Show[Number] { fn show(value: Number) String { \"number\" } }",
         );
         let parsed = alder_parse::parse_module(&bump, source).expect("source parses");
         let module = alder_can::canonicalize(

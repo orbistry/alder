@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/schema.rs
-description: "schema S { check: fn(String) -> Bool, required }"
+description: "schema S { check: fn(String) Bool, required }"
 ---
 SchemaDecl {
     name: Located {
@@ -41,7 +41,7 @@ SchemaDecl {
                         },
                         end: Position {
                             line: 1,
-                            column: 37,
+                            column: 34,
                         },
                     },
                     value: Fn {
@@ -83,11 +83,11 @@ SchemaDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 33,
+                                    column: 30,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 37,
+                                    column: 34,
                                 },
                             },
                             value: Named {
@@ -97,11 +97,11 @@ SchemaDecl {
                                             region: Region {
                                                 start: Position {
                                                     line: 1,
-                                                    column: 33,
+                                                    column: 30,
                                                 },
                                                 end: Position {
                                                     line: 1,
-                                                    column: 37,
+                                                    column: 34,
                                                 },
                                             },
                                             value: "Bool",
@@ -120,11 +120,11 @@ SchemaDecl {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 39,
+                                column: 36,
                             },
                             end: Position {
                                 line: 1,
-                                column: 47,
+                                column: 44,
                             },
                         },
                         value: "required",

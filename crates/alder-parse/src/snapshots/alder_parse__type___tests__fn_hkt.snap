@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/type_.rs
-description: "fn(a) -> f[b]"
+description: "fn(a) f[b]"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 14,
+            column: 11,
         },
     },
     value: Fn {
@@ -36,11 +36,11 @@ Located {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 10,
+                    column: 7,
                 },
                 end: Position {
                     line: 1,
-                    column: 14,
+                    column: 11,
                 },
             },
             value: Var {
@@ -50,11 +50,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 12,
+                                column: 9,
                             },
                             end: Position {
                                 line: 1,
-                                column: 13,
+                                column: 10,
                             },
                         },
                         value: Var {

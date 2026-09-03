@@ -195,7 +195,7 @@ mod tests {
                 let mut count = state(props.start ?? 0)
                 let double = count * 2                     // memoized automatically
 
-                <button onClick={fn() count += 1}>
+                <button onClick={() -> count += 1}>
                     {props.label}: {count} ({double})
                 </button>
             }
@@ -207,7 +207,7 @@ mod tests {
     fn docs_classify_fn() {
         assert_module_snapshot!(
             r#"
-            fn classify(n: Number) -> String {
+            fn classify(n: Number) String {
                 if n < 0 {
                     "negative"
                 } else if n == 0 {
@@ -224,7 +224,7 @@ mod tests {
     fn docs_find_result() {
         assert_module_snapshot!(
             r#"
-            fn find(id: Id) -> Result[User] {              // error inferred: [:not_found(Id) | r]
+            fn find(id: Id) Result[User] {              // error inferred: [:not_found(Id) | r]
                 match db.get(id) {
                     Some(u) => Ok(u),
                     None => Err(:not_found(id)),
@@ -238,7 +238,7 @@ mod tests {
     fn docs_load_await() {
         assert_module_snapshot!(
             r#"
-            fn load(id: Id) -> Result[Profile] {           // inferred: [:not_found(Id) | :timeout | r]
+            fn load(id: Id) Result[Profile] {           // inferred: [:not_found(Id) | :timeout | r]
                 let user = find(id)?          // rows merge through ?
                 let prefs = fetchPrefs(user).await?
                 Ok({ user, prefs })
@@ -254,19 +254,19 @@ mod tests {
         assert_module_snapshot!(
             r#"
             pub trait Show[a] {
-                fn show(value: a) -> String
+                fn show(value: a) String
             }
 
             impl Show[User] {
-                fn show(user: User) -> String { user.name }
+                fn show(user: User) String { user.name }
             }
 
             pub trait Functor[f] {
-                fn map(fa: f[a], g: fn(a) -> b) -> f[b]
+                fn map(fa: f[a], g: fn(a) b) f[b]
             }
 
             impl Functor[Option] {
-                fn map(fa: Option[a], g: fn(a) -> b) -> Option[b] {
+                fn map(fa: Option[a], g: fn(a) b) Option[b] {
                     match fa {
                         Some(x) => Some(g(x)),
                         None => None,
@@ -274,13 +274,13 @@ mod tests {
                 }
             }
 
-            fn describe(xs: Array[a]) -> String where a: Show {
+            fn describe(xs: Array[a]) String where a: Show {
                 xs |> Array.map(show) |> String.join(", ")
             }
 
             trait Iterator[i] {
                 type Item
-                fn next(it: i) -> Option[Item]
+                fn next(it: i) Option[Item]
             }
             "#
         );
@@ -315,7 +315,7 @@ mod tests {
         assert_module_snapshot!(
             r#"
             // users/[id]/+page.server.ald
-            pub fn load(event: LoadEvent) -> Result[{ user: User, posts: Array[Post] }] {
+            pub fn load(event: LoadEvent) Result[{ user: User, posts: Array[Post] }] {
                 use Db
                 let user = db.run(query { select * from users where users.id == ^event.params.id }).await?
                 let posts = loadPosts(user.id).await?
@@ -345,7 +345,7 @@ mod tests {
             }
 
             // lib/auth.remote.ald
-            pub fn signUp(input: SignUp) -> Result[User] {
+            pub fn signUp(input: SignUp) Result[User] {
                 Ok(createUser(input))
             }
 
@@ -415,7 +415,7 @@ mod tests {
                 limit ^pageSize
             }
 
-            fn run(db: Db) -> Result[()] {
+            fn run(db: Db) Result[()] {
                 let rows = db.run(recent).await?      // Array[{ name: String, title: String, created: Timestamp }]
                 db.run(query { insert into users values ^{ email, name } }).await?
                 db.run(query { update users set { name: ^newName } where users.id == ^user.id }).await?
@@ -451,23 +451,23 @@ mod tests {
     fn docs_functions() {
         assert_module_snapshot!(
             r#"
-            pub fn add(a: Number, b: Number) -> Number {
+            pub fn add(a: Number, b: Number) Number {
                 a + b
             }
 
-            fn greet(name: String) -> String {
+            fn greet(name: String) String {
                 `Hello ${name}`
             }
 
-            let inc = fn(x) x + 1
-            let block = fn(x) {
+            let inc = x -> x + 1
+            let block = (x) -> {
                 let y = x * 2
                 y + 1
             }
 
             let big = [1, 2, 3]
-                |> Array.map(fn(x) x * 2)
-                |> Array.filter(fn(x) x > 2)
+                |> Array.map(x -> x * 2)
+                |> Array.filter(x -> x > 2)
             "#
         );
     }
@@ -478,12 +478,12 @@ mod tests {
     fn docs_type_variables() {
         assert_module_snapshot!(
             r#"
-            fn zip(xs: Array[a], ys: Array[b]) -> Array[(a, b)]
+            fn zip(xs: Array[a], ys: Array[b]) Array[(a, b)]
 
-            fn lookup(cache: Cache[k, v], key: k) -> Option[v]
+            fn lookup(cache: Cache[k, v], key: k) Option[v]
                 where k: Eq + Hash
 
-            fn traverse(xs: t[f[a]], g: fn(a) -> f[b]) -> f[t[b]]
+            fn traverse(xs: t[f[a]], g: fn(a) f[b]) f[t[b]]
                 where
                     t: Traversable,
                     f: Applicative,
@@ -524,7 +524,7 @@ mod tests {
                 nickname?: String,        // read as Option[String]
             }
 
-            fn rename(user: { r | name: String }, name: String) -> { r | name: String } {
+            fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {
                 { ..user, name }
             }
 
@@ -539,7 +539,7 @@ mod tests {
     fn docs_error_group() {
         assert_module_snapshot!(
             r#"
-            fn loadStrict(id: Id) -> Result[Profile, [:not_found(Id) | :timeout]] {
+            fn loadStrict(id: Id) Result[Profile, [:not_found(Id) | :timeout]] {
                 load(id)                       // explicit, closed row
             }
 
@@ -548,7 +548,7 @@ mod tests {
                 :expired(Timestamp),
             }
 
-            fn check(token: String) -> Result[Session, AuthError]
+            fn check(token: String) Result[Session, AuthError]
             "#
         );
     }
@@ -558,7 +558,7 @@ mod tests {
     fn docs_async_fibers() {
         assert_module_snapshot!(
             r#"
-            fn profile(id: Id) -> Result[Profile] {
+            fn profile(id: Id) Result[Profile] {
                 let user = Http.get(`/users/${id}`).await?
                 let posts = Http.get(`/users/${id}/posts`).await?
                 Ok({ user, posts })
@@ -574,7 +574,7 @@ mod tests {
     fn docs_context() {
         assert_module_snapshot!(
             r#"
-            fn saveUser(user: User) -> Result[()] {
+            fn saveUser(user: User) Result[()] {
                 use Db
                 Db.insert(users, user).await
             }
@@ -621,13 +621,13 @@ mod tests {
         assert_module_snapshot!(
             r#"
             #[extern("node:crypto", "randomUUID")]
-            fn randomUUID() -> String
+            fn randomUUID() String
 
             #[extern("node:fs/promises", "readFile")]
-            fn readFile(path: String, encoding: String) -> Task[Result[String, [:io(String)]]]
+            fn readFile(path: String, encoding: String) Task[Result[String, [:io(String)]]]
 
             #[extern("globalThis", "JSON.parse")]
-            fn parseJson(s: String) -> Result[Json, [:syntax(String)]]
+            fn parseJson(s: String) Result[Json, [:syntax(String)]]
 
             #[extern] type Response
             "#
@@ -642,15 +642,15 @@ mod tests {
         assert_module_snapshot!(
             r#"
             // src/hooks.server.ald
-            pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) -> Task[Response]) -> Task[Response] {
+            pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) Task[Response]) Task[Response] {
                 let session = Auth.fromCookie(event.cookies).await
                 provide Session = session {
                     resolve(event).await
                 }
             }
 
-            pub fn handleError(err: Error, event: RequestEvent) -> ErrorResponse { report(err) }
-            pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) -> Task[Response] { fetch(request) }
+            pub fn handleError(err: Error, event: RequestEvent) ErrorResponse { report(err) }
+            pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) Task[Response] { fetch(request) }
             "#
         );
     }
@@ -674,14 +674,14 @@ mod tests {
         assert_module_snapshot!(
             r#"
             // lib/users.remote.ald
-            pub fn getUser(id: Id) -> Result[User] { db.get(id) }              // query
-            pub fn deleteUser(id: Id) -> Result[()] { db.delete(id) }           // command
-            pub fn signUp(input: SignUp) -> Result[User] { db.insert(input) }   // form action, typed by schema
+            pub fn getUser(id: Id) Result[User] { db.get(id) }              // query
+            pub fn deleteUser(id: Id) Result[()] { db.delete(id) }           // command
+            pub fn signUp(input: SignUp) Result[User] { db.insert(input) }   // form action, typed by schema
 
             // any component
             component UserCard(props: { id: Id }) {
-                let user = resource(fn() getUser(props.id))
-                <button onClick={fn() deleteUser(props.id)}>Delete</button>
+                let user = resource(() -> getUser(props.id))
+                <button onClick={() -> deleteUser(props.id)}>Delete</button>
             }
             "#
         );
@@ -724,10 +724,10 @@ mod tests {
             type Counter = { count: Number }
 
             impl DurableObject[Counter] {
-                fn fetch(obj: Counter, req: Request) -> Response { obj.count }
+                fn fetch(obj: Counter, req: Request) Response { obj.count }
             }
 
-            fn handler(req: Request) -> Response {
+            fn handler(req: Request) Response {
                 use Kv                      // bound to the worker's KV namespace via wrangler config
                 Kv.get(cache, "key").await
             }

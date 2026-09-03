@@ -611,7 +611,7 @@ impl BinOp {
 pub struct Lambda<'a> {
     pub params: &'a [Param<'a>],
     pub ret: Option<&'a Located<Type<'a>>>,
-    /// `{ … }` bodies are `Expr::Block`; an assignment body (`fn() count += 1`)
+    /// `{ … }` bodies are `Expr::Block`; an assignment body (`() -> count += 1`)
     /// is wrapped as a one-statement block with no tail.
     pub body: &'a Located<Expr<'a>>,
 }

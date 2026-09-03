@@ -1104,61 +1104,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 use_id,
                 function,
                 arguments,
-            } => {
-                let action = self
-                    .solved
-                    .and_then(|solved| solved.uses.get(use_id))
-                    .cloned();
-                let direct = match &action {
-                    Some(UseAction::DirectCall {
-                        dictionaries,
-                        target: Some(DirectTarget::TraitMethod(method)),
-                        ..
-                    }) if !dictionaries.is_empty() => {
-                        let dictionary = self.evidence(&dictionaries[0]);
-                        Some((
-                            self.js.vec(),
-                            self.js.member(dictionary, method.name),
-                            dictionaries[1..].to_vec(),
-                        ))
-                    }
-                    Some(UseAction::DirectCall {
-                        dictionaries,
-                        target: Some(DirectTarget::Binding(binding)),
-                        ..
-                    }) if !dictionaries.is_empty() => Some((
-                        self.js.vec(),
-                        self.reference(ValueRef::TopLevel(*binding)),
-                        dictionaries.clone(),
-                    )),
-                    Some(UseAction::DirectCall { dictionaries, .. }) => {
-                        let function = self.expr(function)?;
-                        Some((function.prefix, function.expr, dictionaries.clone()))
-                    }
-                    _ => None,
-                };
-                let (mut prefix, function, dictionaries) = match direct {
-                    Some(direct) => direct,
-                    None => {
-                        let function = self.expr(function)?;
-                        (function.prefix, function.expr, Vec::new())
-                    }
-                };
-                let function = self.materialize(function, &mut prefix);
-                let (other_prefix, arguments) = self.values(arguments)?;
-                prefix.extend(other_prefix);
-                let mut call_arguments = self.js.vec();
-                call_arguments.extend(
-                    dictionaries
-                        .iter()
-                        .map(|dictionary| self.evidence(dictionary)),
-                );
-                call_arguments.extend(arguments);
-                Value {
-                    prefix,
-                    expr: self.js.call(function, call_arguments),
-                }
-            }
+            } => self.call(*use_id, function, arguments, self.js.vec(), None)?,
             Expr::Access { record, field } => {
                 let record = self.expr(record)?;
                 Value {
@@ -1283,6 +1229,71 @@ impl<'src, 'js> Emitter<'src, 'js> {
         Ok((prefix, values))
     }
 
+    fn call(
+        &mut self,
+        use_id: alder_ast::UseId,
+        function: &Located<Expr<'src>>,
+        arguments: &[&Located<Expr<'src>>],
+        mut prefix: ArenaVec<'js, Statement<'js>>,
+        leading: Option<Expression<'js>>,
+    ) -> Result<Value<'js>, Error> {
+        let action = self
+            .solved
+            .and_then(|solved| solved.uses.get(&use_id))
+            .cloned();
+        let direct = match &action {
+            Some(UseAction::DirectCall {
+                dictionaries,
+                target: Some(DirectTarget::TraitMethod(method)),
+                ..
+            }) if !dictionaries.is_empty() => {
+                let dictionary = self.evidence(&dictionaries[0]);
+                Some((
+                    self.js.vec(),
+                    self.js.member(dictionary, method.name),
+                    dictionaries[1..].to_vec(),
+                ))
+            }
+            Some(UseAction::DirectCall {
+                dictionaries,
+                target: Some(DirectTarget::Binding(binding)),
+                ..
+            }) if !dictionaries.is_empty() => Some((
+                self.js.vec(),
+                self.reference(ValueRef::TopLevel(*binding)),
+                dictionaries.clone(),
+            )),
+            Some(UseAction::DirectCall { dictionaries, .. }) => {
+                let function = self.expr(function)?;
+                Some((function.prefix, function.expr, dictionaries.clone()))
+            }
+            _ => None,
+        };
+        let (function_prefix, function, dictionaries) = match direct {
+            Some(direct) => direct,
+            None => {
+                let function = self.expr(function)?;
+                (function.prefix, function.expr, Vec::new())
+            }
+        };
+        prefix.extend(function_prefix);
+        let function = self.materialize(function, &mut prefix);
+        let (other_prefix, arguments) = self.values(arguments)?;
+        prefix.extend(other_prefix);
+        let mut call_arguments = self.js.vec();
+        call_arguments.extend(
+            dictionaries
+                .iter()
+                .map(|dictionary| self.evidence(dictionary)),
+        );
+        call_arguments.extend(leading);
+        call_arguments.extend(arguments);
+        Ok(Value {
+            prefix,
+            expr: self.js.call(function, call_arguments),
+        })
+    }
+
     fn record(
         &mut self,
         fields: &[RecordField<'src>],
@@ -1367,6 +1378,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let left = self.expr(left)?;
         let mut prefix = left.prefix;
         let left = self.materialize(left.expr, &mut prefix);
+        if op == alder_ast::BinOp::Pipe
+            && let Expr::Call {
+                use_id,
+                function,
+                arguments,
+            } = right.value
+        {
+            return self.call(use_id, function, arguments, prefix, Some(left));
+        }
         if matches!(
             op,
             alder_ast::BinOp::And | alder_ast::BinOp::Or | alder_ast::BinOp::Coalesce
@@ -3004,7 +3024,7 @@ mod tests {
             "pub fn choose(flag, fallback) { if flag && fallback() { 1 } else { 2 } }",
             "pub fn first(name) { let value = { name: name, scores: [10, 20] }\n value.scores[0] }",
             "pub fn sum() { let mut total = 0\n for value in [1, 2] { total += value }\n total }",
-            "#[extern(\"library\", \"parse\")]\npub fn parse(value: String) -> Result[Number, String]",
+            "#[extern(\"library\", \"parse\")]\npub fn parse(value: String) Result[Number, String]",
         ] {
             let generated = emit(source);
             let code = EcmaCompiler::print_with(&generated.ast, PrintOptions::default()).code;

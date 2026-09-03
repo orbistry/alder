@@ -174,7 +174,11 @@ value is rejected rather than observing JavaScript TDZ/`undefined` behavior.
 
 Primitive arithmetic/comparison/boolean operators emit native JS. Structural
 `==`/`!=` uses the kernel unless a solved primitive type proves strict equality
-is enough. Pipe becomes a call with the left value as its single argument.
+is enough. A pipe into a bare function calls it with the left value; a pipe
+into an existing call inserts the left value as the first source argument,
+after any hidden dictionary arguments. Calls containing `_` have already been
+canonicalized into lambdas, so a placeholder explicitly selects another pipe
+position. The left value is evaluated before the callee and existing arguments.
 `??` preserves short-circuit RHS lifting.
 
 `Try` evaluates its `Result` once, returns an `Err` unchanged from the current

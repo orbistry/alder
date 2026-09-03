@@ -235,11 +235,11 @@ then, by design.
 
 - [x] Lexer: `//` comments, template literals, `:tag` tokens, `#[`, `::`, `=>`, `->`, `|>`, `??`, `?`, `^`, `@if`/`@for`/`@match`
 - [x] Items: `pub`, path-first `import` with `.{ }`/`.*`/`as`, re-exports (`pub import`)
-- [x] `fn` declarations and lambdas, optional `-> Type` after params
+- [x] `fn` declarations with optional juxtaposed return types; arrow lambdas without a leading `fn`
 - [x] Statements: `let`/`let mut`, assignment and compound assignment, `for`, `while`, `loop`, `break`/`continue` with values, `return`, `assert`
 - [x] Expressions: blocks, `if`/`else if`, `match` with `=>` and guards, `|>`, `.await`, `?`, `??`, calls, `_` placeholders, field/tuple access, paths (`Option::Some`)
 - [x] Literals: numbers (JS semantics), template literals, arrays, tuples, records with spread and optional fields
-- [x] Types: `Name[a, b]`, `fn(A) -> B`, tuples, records with `?` fields and rows, error rows `[:tag(A) | r]`, `Result[a]` shorthand, `where` clauses
+- [x] Types: `Name[a, b]`, `fn(A) B`, tuples, records with `?` fields and rows, error rows `[:tag(A) | r]`, `Result[a]` shorthand, `where` clauses
 - [x] `type` aliases, `enum` with tuple and record variants
 - [x] `trait` and `impl` (Haskell-style, HKT params, associated types, default bodies)
 - [x] `error` groups
@@ -415,7 +415,7 @@ import_name   = ( lower_ident | upper_ident ) [ 'as' ( lower_ident | upper_ident
 module_path   = '@' raw_lower '/' raw_lower { '/' raw_lower }         (* package *)
               | '~' { '/' raw_lower } ;                               (* this package *)
 
-fn_decl       = 'fn' lower_ident '(' [ params ] ')' [ '->' type ] [ where_clause ] [ block ] ;
+fn_decl       = 'fn' lower_ident '(' [ params ] ')' [ type ] [ where_clause ] [ block ] ;
 type_params   = '[' lower_ident { ',' lower_ident } [ ',' ] ']' ;     (* only on definitions with arity *)
 where_clause  = 'where' [ constraint { ',' constraint } [ ',' ] ] ;
 constraint    = lower_ident ':' bound { '+' bound } | lower_ident '.' upper_ident '==' type ;
@@ -463,6 +463,10 @@ tests_block   = 'tests' '{' { item } '}' ;                            (* line-br
 "name")]`) or a trait signature; `opaque_type` requires `#[extern]`.
   The parser accepts both anywhere and canonicalization checks the
   attribute (§10.26). A trait `type Item` takes no `= type`.
+- A return type is juxtaposed after a declaration's parameter list and must
+  begin on that same line. A record return type must be parenthesized
+  (`fn f() ({ value: Number })`) because an unparenthesized `{` starts the
+  function body.
 - `style` is an expression (`let card = style { … }`), not an item form.
 
 ### Statements and blocks
@@ -505,7 +509,8 @@ primary       = number | bigint | string | template | 'true' | 'false'
               | 'style' style_block
               | 'query' '{' query_expr '}' | markup
               | macro_call ;
-lambda        = 'fn' '(' [ params ] ')' [ '->' type ] ( block | assign | expression ) ;   (* §10.13 *)
+lambda        = lower_ident '->' ( block | assign | expression )
+              | '(' [ params ] ')' [ type ] '->' ( block | assign | expression ) ;       (* §10.13 *)
 if_expr       = 'if' expression block { 'else' 'if' expression block } [ 'else' block ] ;
 match_expr    = 'match' expression '{' { match_arm } '}' ;
 match_arm     = pattern { '|' pattern } [ 'if' expression ] '=>' ( block | expression ) [ ',' ] ;
@@ -535,11 +540,18 @@ Operator precedence, resolved in canonicalization (§10.1):
 
 Operators are matched longest-first from this fixed table (§10.2), so
 `a==-1` is `a == -1` and `x<-1` is `x < -1`. `=`, `=>`, `+=`, `-=`, `*=`
-and `/=` end an expression and are never operators. The Elm-habit tokens
-`->`, `|`, `++`, `::`, `..`, `<|`, `>>`, `<<` and `^` (outside patterns
-and queries) are recognized only to report an error with a hint. `?`
+and `/=` end an expression and are never operators. Outside its role
+between a lambda head and body, `->` is not a binary operator. The tokens
+`|`, `++`, `::`, `..`, `<|`, `>>`, `<<` and `^` (outside patterns and
+queries) are recognized only to report an error with a hint. `?`
 applies whenever the next byte is not `?`, so `x? ?? y` works (§10.19).
 `^` outside `query { }` and patterns is an error (§10.20).
+
+`value |> function` calls `function(value)`. When the right side is an
+existing call, `value |> function(args...)` inserts the value as its first
+source argument: `function(value, args...)`. A `_` call placeholder still
+desugars the call to a lambda first, so `value |> function(a, _, b)` forwards
+to that explicitly selected position.
 
 ### Markup
 
@@ -608,7 +620,7 @@ field_pattern = lower_ident [ ':' pattern ] ;
 
 ```ebnf
 type          = fn_type | type_app ;
-fn_type       = 'fn' '(' [ type { ',' type } [ ',' ] ] ')' '->' type ;
+fn_type       = 'fn' '(' [ type { ',' type } [ ',' ] ] ')' type ;
 type_app      = path [ type_args ]
               | lower_ident [ type_args ]                              (* type variable; applied for HKT (§10.14) *)
               | '_'                                                    (* only a direct named-constructor argument in an impl head, e.g. Result[_, e] *)

@@ -202,7 +202,7 @@ mod tests {
         assert_impl_snapshot!(
             r#"
             impl Show[User] {
-                fn show(user: User) -> String { user.name }
+                fn show(user: User) String { user.name }
             }
         "#
         );
@@ -214,7 +214,7 @@ mod tests {
         assert_impl_snapshot!(
             r#"
             impl Functor[Option] {
-                fn map(fa: Option[a], g: fn(a) -> b) -> Option[b] {
+                fn map(fa: Option[a], g: fn(a) b) Option[b] {
                     match fa {
                         Some(x) => Some(g(x)),
                         None => None,
@@ -231,7 +231,7 @@ mod tests {
             r#"
             impl Iterator[Counter] {
                 type Item = Number
-                fn next(it: Counter) -> Option[Number] { None }
+                fn next(it: Counter) Option[Number] { None }
             }
         "#
         );
@@ -243,7 +243,7 @@ mod tests {
         assert_impl_snapshot!(
             r#"
             impl Show[Cache[k, v]] where k: Show, v: Show {
-                fn show(cache: Cache[k, v]) -> String { "cache" }
+                fn show(cache: Cache[k, v]) String { "cache" }
             }
         "#
         );
@@ -254,8 +254,8 @@ mod tests {
         assert_impl_snapshot!(
             r#"
             impl Monoid[String] {
-                fn empty() -> String { "" }
-                fn append(x: String, y: String) -> String { x }
+                fn empty() String { "" }
+                fn append(x: String, y: String) String { x }
             }
         "#
         );
@@ -266,7 +266,7 @@ mod tests {
         assert_impl_snapshot!(
             r#"
             impl Convert[Number, String] {
-                fn convert(n: Number) -> String { show(n) }
+                fn convert(n: Number) String { show(n) }
             }
         "#
         );
@@ -292,7 +292,7 @@ mod tests {
         assert_impl_snapshot!(
             r#"
             impl Show[User] {
-                fn show(user: User) -> String
+                fn show(user: User) String
             }
         "#
         );
@@ -354,7 +354,7 @@ mod tests {
         assert_impl_error_snapshot!(
             r#"
             impl Show[User] {
-                fn show(user: User) -> String { user.name }
+                fn show(user: User) String { user.name }
         "#
         );
     }
@@ -387,13 +387,13 @@ mod tests {
 
     #[test]
     fn error_fn() {
-        assert_impl_error_snapshot!("impl Show[User] { fn show(user: User) -> String { let } }");
+        assert_impl_error_snapshot!("impl Show[User] { fn show(user: User) String { let } }");
     }
 
     #[test]
     fn error_semicolon_between_items() {
         assert_impl_error_snapshot!(
-            "impl Iterator[Foo] { type Item = Number; fn next(it: Foo) -> Option[Number] { None } }"
+            "impl Iterator[Foo] { type Item = Number; fn next(it: Foo) Option[Number] { None } }"
         );
     }
 
@@ -402,7 +402,7 @@ mod tests {
         assert_impl_error_snapshot!(
             r#"
             impl Show[User] {
-                fn show(user: User) -> String { user.name } fn other() {}
+                fn show(user: User) String { user.name } fn other() {}
             }
         "#
         );

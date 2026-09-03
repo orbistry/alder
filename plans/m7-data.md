@@ -55,7 +55,7 @@ built into the language.
    `Number`/`Option[Number]` per SQL nullability rules.**
 3. Snapshot location. **`migrations/meta/` committed, like drizzle-kit,
    so CI can verify the diff is empty.**
-4. Transactions. **`db.transaction(fn(tx) task)` where `tx` is a `Db`;
+4. Transactions. **`db.transaction(tx -> task)` where `tx` is a `Db`;
    nested transactions are savepoints where the dialect supports them.**
 5. Quoting escape for SQL-word column names. **A column named `limit`,
    `set`, or `on` is written `` `limit` `` inside a query (backtick
@@ -81,7 +81,7 @@ Design panel producing `docs/data-internals.md`:
 - Migration engine: snapshot format, diff rules per dialect, SQL
   generation, apply/journal tables, `push`.
 - `schema` semantics: `pick` from a table (nullability, lengths),
-  rules (`min`, `max`, `matches`, `equals`, custom `fn(a) -> Result[()]`),
+  rules (`min`, `max`, `matches`, `equals`, custom `fn(a) Result[()]`),
   generated record type and parser, error tags per field.
 - Driver trait and the three drivers; `Db` context; embedded SQLite via
   a Rust-side extension in deno_core.

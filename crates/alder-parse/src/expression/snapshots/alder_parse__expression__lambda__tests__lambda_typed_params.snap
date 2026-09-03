@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: "fn(a: Number, b: String) a"
+description: "(a: Number, b: String) -> a"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 27,
+            column: 28,
         },
     },
     value: Lambda(
@@ -22,11 +22,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 4,
+                                column: 2,
                             },
                             end: Position {
                                 line: 1,
-                                column: 5,
+                                column: 3,
                             },
                         },
                         value: Var(
@@ -38,11 +38,11 @@ Located {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 7,
+                                    column: 5,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 13,
+                                    column: 11,
                                 },
                             },
                             value: Named {
@@ -52,11 +52,11 @@ Located {
                                             region: Region {
                                                 start: Position {
                                                     line: 1,
-                                                    column: 7,
+                                                    column: 5,
                                                 },
                                                 end: Position {
                                                     line: 1,
-                                                    column: 13,
+                                                    column: 11,
                                                 },
                                             },
                                             value: "Number",
@@ -74,11 +74,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 15,
+                                column: 13,
                             },
                             end: Position {
                                 line: 1,
-                                column: 16,
+                                column: 14,
                             },
                         },
                         value: Var(
@@ -90,11 +90,11 @@ Located {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 18,
+                                    column: 16,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 24,
+                                    column: 22,
                                 },
                             },
                             value: Named {
@@ -104,11 +104,11 @@ Located {
                                             region: Region {
                                                 start: Position {
                                                     line: 1,
-                                                    column: 18,
+                                                    column: 16,
                                                 },
                                                 end: Position {
                                                     line: 1,
-                                                    column: 24,
+                                                    column: 22,
                                                 },
                                             },
                                             value: "String",
@@ -126,11 +126,11 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 26,
+                        column: 27,
                     },
                     end: Position {
                         line: 1,
-                        column: 27,
+                        column: 28,
                     },
                 },
                 value: Var(

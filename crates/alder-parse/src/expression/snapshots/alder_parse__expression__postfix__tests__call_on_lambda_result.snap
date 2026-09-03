@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/postfix.rs
-description: (fn(x) x + 1)(2)
+description: (x -> x + 1)(2)
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 17,
+            column: 16,
         },
     },
     value: Call {
@@ -22,7 +22,7 @@ Located {
                 },
                 end: Position {
                     line: 1,
-                    column: 14,
+                    column: 13,
                 },
             },
             value: Lambda(
@@ -34,11 +34,11 @@ Located {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 5,
+                                        column: 2,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 6,
+                                        column: 3,
                                     },
                                 },
                                 value: Var(
@@ -53,11 +53,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 8,
+                                column: 7,
                             },
                             end: Position {
                                 line: 1,
-                                column: 13,
+                                column: 12,
                             },
                         },
                         value: BinOps {
@@ -67,11 +67,11 @@ Located {
                                         region: Region {
                                             start: Position {
                                                 line: 1,
-                                                column: 8,
+                                                column: 7,
                                             },
                                             end: Position {
                                                 line: 1,
-                                                column: 9,
+                                                column: 8,
                                             },
                                         },
                                         value: Var(
@@ -82,11 +82,11 @@ Located {
                                         region: Region {
                                             start: Position {
                                                 line: 1,
-                                                column: 10,
+                                                column: 9,
                                             },
                                             end: Position {
                                                 line: 1,
-                                                column: 11,
+                                                column: 10,
                                             },
                                         },
                                         value: Add,
@@ -97,11 +97,11 @@ Located {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 12,
+                                        column: 11,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 13,
+                                        column: 12,
                                     },
                                 },
                                 value: Number(
@@ -121,11 +121,11 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 15,
+                        column: 14,
                     },
                     end: Position {
                         line: 1,
-                        column: 16,
+                        column: 15,
                     },
                 },
                 value: Number(

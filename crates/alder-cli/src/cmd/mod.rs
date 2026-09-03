@@ -150,7 +150,7 @@ mod tests {
                 pub enum Token { Token }
                 pub enum Badge { Badge }
                 pub trait Display[a] {
-                    fn display(value: a) -> String
+                    fn display(value: a) String
                 }
             "#},
         )
@@ -160,10 +160,10 @@ mod tests {
             indoc::indoc! {r#"
                 import ~/api.{ Token, Display }
                 impl Display[Array[a]] where a: Display {
-                    fn display(value: Array[a]) -> String { "array" }
+                    fn display(value: Array[a]) String { "array" }
                 }
                 impl Display[Token] {
-                    fn display(value: Token) -> String { "token" }
+                    fn display(value: Token) String { "token" }
                 }
             "#},
         )
@@ -173,7 +173,7 @@ mod tests {
             indoc::indoc! {r#"
                 import ~/api.{ Badge, Display }
                 impl Display[Badge] {
-                    fn display(value: Badge) -> String { "badge" }
+                    fn display(value: Badge) String { "badge" }
                 }
             "#},
         )
@@ -199,8 +199,8 @@ mod tests {
             application.join("src/main.ald"),
             indoc::indoc! {r#"
                 import @vendor/widgets/api.{ Badge, Token, display }
-                pub fn render(value: Array[Token]) -> String { display(value) }
-                pub fn render_badge(value: Badge) -> String { display(value) }
+                pub fn render(value: Array[Token]) String { display(value) }
+                pub fn render_badge(value: Badge) String { display(value) }
                 pub fn main() {
                     assert(render([Token::Token]) == "array")
                     assert(render_badge(Badge::Badge) == "badge")

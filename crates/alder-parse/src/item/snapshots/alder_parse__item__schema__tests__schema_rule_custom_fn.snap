@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/schema.rs
-description: "schema S { confirm: String, equals(password), check(fn(c) c != \"\") }"
+description: "schema S { confirm: String, equals(password), check(c -> c != \"\") }"
 ---
 SchemaDecl {
     name: Located {
@@ -122,7 +122,7 @@ SchemaDecl {
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 66,
+                                    column: 65,
                                 },
                             },
                             value: Lambda(
@@ -134,11 +134,11 @@ SchemaDecl {
                                                 region: Region {
                                                     start: Position {
                                                         line: 1,
-                                                        column: 56,
+                                                        column: 53,
                                                     },
                                                     end: Position {
                                                         line: 1,
-                                                        column: 57,
+                                                        column: 54,
                                                     },
                                                 },
                                                 value: Var(
@@ -153,11 +153,11 @@ SchemaDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 1,
-                                                column: 59,
+                                                column: 58,
                                             },
                                             end: Position {
                                                 line: 1,
-                                                column: 66,
+                                                column: 65,
                                             },
                                         },
                                         value: BinOps {
@@ -167,11 +167,11 @@ SchemaDecl {
                                                         region: Region {
                                                             start: Position {
                                                                 line: 1,
-                                                                column: 59,
+                                                                column: 58,
                                                             },
                                                             end: Position {
                                                                 line: 1,
-                                                                column: 60,
+                                                                column: 59,
                                                             },
                                                         },
                                                         value: Var(
@@ -182,11 +182,11 @@ SchemaDecl {
                                                         region: Region {
                                                             start: Position {
                                                                 line: 1,
-                                                                column: 61,
+                                                                column: 60,
                                                             },
                                                             end: Position {
                                                                 line: 1,
-                                                                column: 63,
+                                                                column: 62,
                                                             },
                                                         },
                                                         value: NotEq,
@@ -197,11 +197,11 @@ SchemaDecl {
                                                 region: Region {
                                                     start: Position {
                                                         line: 1,
-                                                        column: 64,
+                                                        column: 63,
                                                     },
                                                     end: Position {
                                                         line: 1,
-                                                        column: 66,
+                                                        column: 65,
                                                     },
                                                 },
                                                 value: Str(

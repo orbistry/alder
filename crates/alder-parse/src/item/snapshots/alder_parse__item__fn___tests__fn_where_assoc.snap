@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "fn sum(it: i) -> Number where i: Iterator, i.Item == Number {\n    0\n}\n"
+description: "fn sum(it: i) Number where i: Iterator, i.Item == Number {\n    0\n}\n"
 ---
 FnDecl {
     name: Located {
@@ -59,11 +59,11 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 18,
+                    column: 15,
                 },
                 end: Position {
                     line: 1,
-                    column: 24,
+                    column: 21,
                 },
             },
             value: Named {
@@ -73,11 +73,11 @@ FnDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 18,
+                                    column: 15,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 24,
+                                    column: 21,
                                 },
                             },
                             value: "Number",
@@ -94,11 +94,11 @@ FnDecl {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 31,
+                        column: 28,
                     },
                     end: Position {
                         line: 1,
-                        column: 32,
+                        column: 29,
                     },
                 },
                 value: "i",
@@ -110,11 +110,11 @@ FnDecl {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 34,
+                                    column: 31,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 42,
+                                    column: 39,
                                 },
                             },
                             value: "Iterator",
@@ -128,11 +128,11 @@ FnDecl {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 44,
+                        column: 41,
                     },
                     end: Position {
                         line: 1,
-                        column: 45,
+                        column: 42,
                     },
                 },
                 value: "i",
@@ -141,11 +141,11 @@ FnDecl {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 46,
+                        column: 43,
                     },
                     end: Position {
                         line: 1,
-                        column: 50,
+                        column: 47,
                     },
                 },
                 value: "Item",
@@ -154,11 +154,11 @@ FnDecl {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 54,
+                        column: 51,
                     },
                     end: Position {
                         line: 1,
-                        column: 60,
+                        column: 57,
                     },
                 },
                 value: Named {
@@ -168,11 +168,11 @@ FnDecl {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 54,
+                                        column: 51,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 60,
+                                        column: 57,
                                     },
                                 },
                                 value: "Number",
@@ -189,7 +189,7 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 61,
+                    column: 58,
                 },
                 end: Position {
                     line: 3,

@@ -880,7 +880,7 @@ fn render_ty(typ: &Ty<'_>, variable_names: &BTreeMap<usize, &str>) -> String {
             assoc.name
         ),
         Ty::Fn(params, ret) => format!(
-            "fn({}) -> {}",
+            "fn({}) {}",
             params
                 .iter()
                 .map(|param| render_ty(param, variable_names))
@@ -964,6 +964,14 @@ struct CallSite<'a> {
     use_id: UseId,
     callee_use: Option<UseId>,
     target: Option<DirectTarget<'a>>,
+}
+
+struct CallInput<'a> {
+    region: Region,
+    use_id: UseId,
+    function: &'a Located<Expr<'a>>,
+    arguments: &'a [&'a Located<Expr<'a>>],
+    leading: Option<(Ty<'a>, Region)>,
 }
 
 #[derive(Clone, Copy)]
@@ -1747,48 +1755,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                 use_id,
                 function,
                 arguments,
-            } => {
-                let (callee_use, target) = match function.value {
-                    Expr::Var {
-                        use_id,
-                        reference: ValueRef::TopLevel(name),
-                    }
-                    | Expr::Var {
-                        use_id,
-                        reference:
-                            ValueRef::Foreign {
-                                reference: name, ..
-                            },
-                    }
-                    | Expr::Var {
-                        use_id,
-                        reference: ValueRef::Builtin(name),
-                    } => (Some(use_id), Some(DirectTarget::Binding(name))),
-                    Expr::Var {
-                        use_id,
-                        reference: ValueRef::TraitMethod { method, .. },
-                    } => (Some(use_id), Some(DirectTarget::TraitMethod(method))),
-                    Expr::Var { use_id, .. } => (Some(use_id), None),
-                    _ => (None, None),
-                };
-                let function_type = self.infer_expr(env, function, return_type.clone())?;
-                let mut args = Vec::with_capacity(arguments.len());
-                for argument in *arguments {
-                    args.push(self.infer_expr(env, argument, return_type.clone())?);
-                }
-                let result = self.fresh();
-                self.unify(
-                    function_type,
-                    Ty::Fn(args, Box::new(result.clone())),
+            } => self.infer_call(
+                env,
+                CallInput {
                     region,
-                )?;
-                self.calls.push(CallSite {
                     use_id: *use_id,
-                    callee_use,
-                    target,
-                });
-                Ok(self.prune(result))
-            }
+                    function,
+                    arguments,
+                    leading: None,
+                },
+                return_type,
+            ),
             Expr::Access { record, field } => {
                 let record_type = self.infer_expr(env, record, return_type)?;
                 self.access_field(record_type, field.value, field.region)
@@ -2238,6 +2215,36 @@ impl<'a, 'db> Infer<'a, 'db> {
         return_type: Option<Ty<'a>>,
     ) -> Result<Ty<'a>, Error> {
         let left_type = self.infer_expr(env, left, return_type.clone())?;
+        if op == BinOp::Pipe {
+            if let Expr::Call {
+                use_id,
+                function,
+                arguments,
+            } = right.value
+            {
+                return self.infer_call(
+                    env,
+                    CallInput {
+                        region: right.region,
+                        use_id,
+                        function,
+                        arguments,
+                        leading: Some((left_type, left.region)),
+                    },
+                    return_type,
+                );
+            }
+
+            let right_type = self.infer_expr(env, right, return_type)?;
+            let result = self.fresh();
+            self.unify(
+                right_type,
+                Ty::Fn(vec![left_type], Box::new(result.clone())),
+                right.region,
+            )?;
+            return Ok(self.prune(result));
+        }
+
         let right_type = self.infer_expr(env, right, return_type)?;
         match op {
             BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Rem => {
@@ -2280,17 +2287,67 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.unify(left_type.clone(), right_type, right.region)?;
                 Ok(self.prune(left_type))
             }
-            BinOp::Pipe => {
-                let result = self.fresh();
-                self.unify(
-                    right_type,
-                    Ty::Fn(vec![left_type], Box::new(result.clone())),
-                    right.region,
-                )?;
-                Ok(self.prune(result))
-            }
+            BinOp::Pipe => unreachable!("pipe expressions return before ordinary binop inference"),
             BinOp::In => Ok(self.named("Bool", Vec::new())),
         }
+    }
+
+    fn infer_call(
+        &mut self,
+        env: &Env<'a>,
+        call: CallInput<'a>,
+        return_type: Option<Ty<'a>>,
+    ) -> Result<Ty<'a>, Error> {
+        let CallInput {
+            region,
+            use_id,
+            function,
+            arguments,
+            leading,
+        } = call;
+        let (callee_use, target) = match function.value {
+            Expr::Var {
+                use_id,
+                reference: ValueRef::TopLevel(name),
+            }
+            | Expr::Var {
+                use_id,
+                reference:
+                    ValueRef::Foreign {
+                        reference: name, ..
+                    },
+            }
+            | Expr::Var {
+                use_id,
+                reference: ValueRef::Builtin(name),
+            } => (Some(use_id), Some(DirectTarget::Binding(name))),
+            Expr::Var {
+                use_id,
+                reference: ValueRef::TraitMethod { method, .. },
+            } => (Some(use_id), Some(DirectTarget::TraitMethod(method))),
+            Expr::Var { use_id, .. } => (Some(use_id), None),
+            _ => (None, None),
+        };
+        let function_type = self.infer_expr(env, function, return_type.clone())?;
+        let mut args = Vec::with_capacity(arguments.len() + usize::from(leading.is_some()));
+        if let Some((typ, _)) = &leading {
+            args.push(typ.clone());
+        }
+        for argument in arguments {
+            args.push(self.infer_expr(env, argument, return_type.clone())?);
+        }
+        let result = self.fresh();
+        self.unify(
+            function_type,
+            Ty::Fn(args, Box::new(result.clone())),
+            leading.map_or(region, |(_, region)| region),
+        )?;
+        self.calls.push(CallSite {
+            use_id,
+            callee_use,
+            target,
+        });
+        Ok(self.prune(result))
     }
 
     fn record_builtin_obligation(
@@ -3862,7 +3919,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     .join(", ")
             ),
             Ty::Fn(args, ret) => format!(
-                "fn({}) -> {}",
+                "fn({}) {}",
                 args.into_iter()
                     .map(|arg| self.render(arg))
                     .collect::<Vec<_>>()

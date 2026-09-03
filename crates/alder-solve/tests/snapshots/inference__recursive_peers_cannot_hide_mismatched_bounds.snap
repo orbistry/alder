@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "trait Display[a] { fn display(value: a) -> String }\ntrait Hashable[a] { fn hash(value: a) -> BigInt }\n\nfn first(value: a) -> String where a: Display { second(value) }\nfn second(value: a) -> String where a: Hashable { first(value) }\n"
+description: "trait Display[a] { fn display(value: a) String }\ntrait Hashable[a] { fn hash(value: a) BigInt }\n\nfn first(value: a) String where a: Display { second(value) }\nfn second(value: a) String where a: Hashable { first(value) }\n"
 ---
 [
     Trait(
@@ -20,11 +20,11 @@ description: "trait Display[a] { fn display(value: a) -> String }\ntrait Hashabl
             origin: Region {
                 start: Position {
                     line: 4,
-                    column: 49,
+                    column: 46,
                 },
                 end: Position {
                     line: 4,
-                    column: 55,
+                    column: 52,
                 },
             },
             chain: [
@@ -63,11 +63,11 @@ description: "trait Display[a] { fn display(value: a) -> String }\ntrait Hashabl
             origin: Region {
                 start: Position {
                     line: 5,
-                    column: 51,
+                    column: 48,
                 },
                 end: Position {
                     line: 5,
-                    column: 56,
+                    column: 53,
                 },
             },
             chain: [

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "fn impossible(value: f[a]) -> a { value }\n"
+description: "fn impossible(value: f[a]) a { value }\n"
 ---
 [
     Error {
@@ -11,7 +11,7 @@ description: "fn impossible(value: f[a]) -> a { value }\n"
             },
             end: Position {
                 line: 1,
-                column: 42,
+                column: 39,
             },
         },
         kind: InfiniteType,

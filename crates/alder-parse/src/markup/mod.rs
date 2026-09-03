@@ -606,7 +606,7 @@ mod tests {
 
     #[test]
     fn element_attr_lambda_assign() {
-        assert_markup_snapshot!("<button onClick={fn() count += 1}>+</button>");
+        assert_markup_snapshot!("<button onClick={() -> count += 1}>+</button>");
     }
 
     #[test]
@@ -955,7 +955,7 @@ mod tests {
     fn docs_language_counter_button() {
         assert_markup_snapshot!(
             r#"
-            <button onClick={fn() count += 1}>
+            <button onClick={() -> count += 1}>
                 {props.label}: {count} ({double})
             </button>
             "#
@@ -969,7 +969,7 @@ mod tests {
 
     #[test]
     fn docs_web_user_card_button() {
-        assert_markup_snapshot!("<button onClick={fn() deleteUser(props.id)}>Delete</button>");
+        assert_markup_snapshot!("<button onClick={() -> deleteUser(props.id)}>Delete</button>");
     }
 
     #[test]

@@ -21,6 +21,7 @@ mod tests {
             "$compareEnum",
             "$compareDerived",
             "$arrayApply",
+            "$arrayFilter",
             "$optionFlatMap",
             "$resultPure",
             "$arrayTraverse",

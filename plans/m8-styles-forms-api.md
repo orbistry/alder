@@ -50,7 +50,7 @@ builder for API-only packages.
 3. Keyframes and global styles. **`keyframes name { from: {...}, to: {...} }`
    as an expression form producing a typed animation name; a `global`
    style block escape hatch for resets.**
-4. Middleware model. **`fn(event, next) -> Task[Response]` composed with
+4. Middleware model. **`fn(Event, Next) Task[Response]` composed with
    `Router.use`; the same signature as `hooks.server.ald` `handle`.**
 5. OpenAPI. **Generated from `+server.ald` and router types on `alder
 build --openapi`; not required for the milestone's exit.**

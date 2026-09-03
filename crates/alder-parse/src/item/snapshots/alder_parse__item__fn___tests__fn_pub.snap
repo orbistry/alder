@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "pub fn add(a: Number, b: Number) -> Number {\n    a + b\n}\n"
+description: "pub fn add(a: Number, b: Number) Number {\n    a + b\n}\n"
 ---
 Located {
     region: Region {
@@ -153,11 +153,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 37,
+                                column: 34,
                             },
                             end: Position {
                                 line: 1,
-                                column: 43,
+                                column: 40,
                             },
                         },
                         value: Named {
@@ -167,11 +167,11 @@ Located {
                                         region: Region {
                                             start: Position {
                                                 line: 1,
-                                                column: 37,
+                                                column: 34,
                                             },
                                             end: Position {
                                                 line: 1,
-                                                column: 43,
+                                                column: 40,
                                             },
                                         },
                                         value: "Number",
@@ -188,7 +188,7 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 44,
+                                column: 41,
                             },
                             end: Position {
                                 line: 3,

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "import ~/first.*\nimport ~/second.*\npub fn main() -> String { render(1) }\n"
+description: "import ~/first.*\nimport ~/second.*\npub fn main() String { render(1) }\n"
 ---
 alder::canonicalize::import_alias_collision
 
@@ -12,5 +12,5 @@ alder::canonicalize::import_alias_collision
  2 │ import ~/second.*
    · ────────┬────────
    ·         ╰── reported here
- 3 │ pub fn main() -> String { render(1) }
+ 3 │ pub fn main() String { render(1) }
    ╰────

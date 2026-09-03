@@ -1,13 +1,13 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "trait Display[a] {\n    fn display(value) -> String\n}\n"
+description: "trait Display[a] {\n    fn display(value) String\n}\n"
 ---
 alder::canonicalize::missing_annotation
 
   × every parameter of `display` needs a type annotation
    ╭─[/project/src/main.ald:2:16]
  1 │ trait Display[a] {
- 2 │     fn display(value) -> String
+ 2 │     fn display(value) String
    ·                ──┬──
    ·                  ╰── reported here
  3 │ }

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/impl_.rs
-description: "impl Functor[Option] {\n    fn map(fa: Option[a], g: fn(a) -> b) -> Option[b] {\n        match fa {\n            Some(x) => Some(g(x)),\n            None => None,\n        }\n    }\n}\n"
+description: "impl Functor[Option] {\n    fn map(fa: Option[a], g: fn(a) b) Option[b] {\n        match fa {\n            Some(x) => Some(g(x)),\n            None => None,\n        }\n    }\n}\n"
 ---
 ImplDecl {
     trait_: Path {
@@ -167,7 +167,7 @@ ImplDecl {
                                     },
                                     end: Position {
                                         line: 2,
-                                        column: 40,
+                                        column: 37,
                                     },
                                 },
                                 value: Fn {
@@ -193,11 +193,11 @@ ImplDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 39,
+                                                column: 36,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 40,
+                                                column: 37,
                                             },
                                         },
                                         value: Var {
@@ -215,11 +215,11 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 45,
+                                column: 39,
                             },
                             end: Position {
                                 line: 2,
-                                column: 54,
+                                column: 48,
                             },
                         },
                         value: Named {
@@ -229,11 +229,11 @@ ImplDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 45,
+                                                column: 39,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 51,
+                                                column: 45,
                                             },
                                         },
                                         value: "Option",
@@ -245,11 +245,11 @@ ImplDecl {
                                     region: Region {
                                         start: Position {
                                             line: 2,
-                                            column: 52,
+                                            column: 46,
                                         },
                                         end: Position {
                                             line: 2,
-                                            column: 53,
+                                            column: 47,
                                         },
                                     },
                                     value: Var {
@@ -267,7 +267,7 @@ ImplDecl {
                         region: Region {
                             start: Position {
                                 line: 2,
-                                column: 55,
+                                column: 49,
                             },
                             end: Position {
                                 line: 7,

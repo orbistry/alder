@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/trait_.rs
-description: "trait Iterator[i] {\n    type Item\n    fn next(it: i) -> Option[Item]\n}\n"
+description: "trait Iterator[i] {\n    type Item\n    fn next(it: i) Option[Item]\n}\n"
 ---
 TraitDecl {
     name: Located {
@@ -106,11 +106,11 @@ TraitDecl {
                         region: Region {
                             start: Position {
                                 line: 3,
-                                column: 23,
+                                column: 20,
                             },
                             end: Position {
                                 line: 3,
-                                column: 35,
+                                column: 32,
                             },
                         },
                         value: Named {
@@ -120,11 +120,11 @@ TraitDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 3,
-                                                column: 23,
+                                                column: 20,
                                             },
                                             end: Position {
                                                 line: 3,
-                                                column: 29,
+                                                column: 26,
                                             },
                                         },
                                         value: "Option",
@@ -136,11 +136,11 @@ TraitDecl {
                                     region: Region {
                                         start: Position {
                                             line: 3,
-                                            column: 30,
+                                            column: 27,
                                         },
                                         end: Position {
                                             line: 3,
-                                            column: 34,
+                                            column: 31,
                                         },
                                     },
                                     value: Named {
@@ -150,11 +150,11 @@ TraitDecl {
                                                     region: Region {
                                                         start: Position {
                                                             line: 3,
-                                                            column: 30,
+                                                            column: 27,
                                                         },
                                                         end: Position {
                                                             line: 3,
-                                                            column: 34,
+                                                            column: 31,
                                                         },
                                                     },
                                                     value: "Item",

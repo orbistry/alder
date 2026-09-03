@@ -1,14 +1,14 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "trait Convert[a] { fn convert(value: a) -> a }\nimpl Convert[Result[Array[_], String]] {\n    fn convert(value: Result[Array[Number], String])\n        -> Result[Array[Number], String]\n    {\n        value\n    }\n}\n"
+description: "trait Convert[a] { fn convert(value: a) a }\nimpl Convert[Result[Array[_], String]] {\n    fn convert(value: Result[Array[Number], String]) Result[Array[Number], String] {\n        value\n    }\n}\n"
 ---
 alder::canonicalize::invalid_type_hole
 
   × `_` is only allowed in a partially-applied impl head
    ╭─[/project/src/main.ald:2:27]
- 1 │ trait Convert[a] { fn convert(value: a) -> a }
+ 1 │ trait Convert[a] { fn convert(value: a) a }
  2 │ impl Convert[Result[Array[_], String]] {
    ·                           ┬
    ·                           ╰── reported here
- 3 │     fn convert(value: Result[Array[Number], String])
+ 3 │     fn convert(value: Result[Array[Number], String]) Result[Array[Number], String] {
    ╰────

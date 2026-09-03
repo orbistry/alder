@@ -1,6 +1,6 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "trait Source[a] {\n    type Item\n    fn next(value: a) -> Item\n}\nimpl Source[Number] {\n    type Item = Number\n    type Item = Number\n    fn next(value: Number) -> Number { value }\n}\n"
+description: "trait Source[a] {\n    type Item\n    fn next(value: a) Item\n}\nimpl Source[Number] {\n    type Item = Number\n    type Item = Number\n    fn next(value: Number) Number { value }\n}\n"
 ---
 alder::canonicalize::duplicate_definition
 
@@ -13,5 +13,5 @@ alder::canonicalize::duplicate_definition
  7 │     type Item = Number
    ·          ──┬─
    ·            ╰── reported here
- 8 │     fn next(value: Number) -> Number { value }
+ 8 │     fn next(value: Number) Number { value }
    ╰────

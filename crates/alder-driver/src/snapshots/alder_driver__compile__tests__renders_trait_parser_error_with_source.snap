@@ -1,6 +1,6 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "trait Show[a] where a Show {\n    fn show(value: a) -> String\n}\n"
+description: "trait Show[a] where a Show {\n    fn show(value: a) String\n}\n"
 ---
 alder::syntax
 
@@ -9,6 +9,6 @@ alder::syntax
  1 │ trait Show[a] where a Show {
    ·                       ┬
    ·                       ╰── expected `:` or `.Assoc ==`
- 2 │     fn show(value: a) -> String
+ 2 │     fn show(value: a) String
    ╰────
   help: write `a: Show` or `i.Item == Number`

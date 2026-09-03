@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "fn bad() -> Number { \"nope\" }"
+description: "fn bad() Number { \"nope\" }"
 ---
 [
     Error {
@@ -11,7 +11,7 @@ description: "fn bad() -> Number { \"nope\" }"
             },
             end: Position {
                 line: 1,
-                column: 30,
+                column: 27,
             },
         },
         kind: Mismatch {

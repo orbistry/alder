@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "fn saveUser(user: User) -> Result[()] {\n    use Db\n    Db.insert(users, user).await\n}\n\nfn main() {\n    provide Db = Sqlite.open(\"app.db\") {\n        saveUser(u).await\n    }\n}\n"
+description: "fn saveUser(user: User) Result[()] {\n    use Db\n    Db.insert(users, user).await\n}\n\nfn main() {\n    provide Db = Sqlite.open(\"app.db\") {\n        saveUser(u).await\n    }\n}\n"
 ---
 Module {
     items: [
@@ -92,11 +92,11 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 28,
+                                        column: 25,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 38,
+                                        column: 35,
                                     },
                                 },
                                 value: Named {
@@ -106,11 +106,11 @@ Module {
                                                 region: Region {
                                                     start: Position {
                                                         line: 1,
-                                                        column: 28,
+                                                        column: 25,
                                                     },
                                                     end: Position {
                                                         line: 1,
-                                                        column: 34,
+                                                        column: 31,
                                                     },
                                                 },
                                                 value: "Result",
@@ -122,11 +122,11 @@ Module {
                                             region: Region {
                                                 start: Position {
                                                     line: 1,
-                                                    column: 35,
+                                                    column: 32,
                                                 },
                                                 end: Position {
                                                     line: 1,
-                                                    column: 37,
+                                                    column: 34,
                                                 },
                                             },
                                             value: Unit,
@@ -141,7 +141,7 @@ Module {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 39,
+                                        column: 36,
                                     },
                                     end: Position {
                                         line: 4,

@@ -46,6 +46,9 @@ impl<'a> Parser<'a> {
     }
 
     fn expression_chain(&mut self) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
+        if let Some(lambda) = self.try_lambda()? {
+            return Ok(lambda);
+        }
         let mut last = self.unary()?;
         let mut operands = BumpVec::new_in(self.bump);
         loop {
@@ -240,10 +243,6 @@ impl<'a> Parser<'a> {
             "true" | "false" => {
                 self.advance_by(word.len());
                 Ok(self.add_end(start, Expr::Bool(word == "true")))
-            }
-            "fn" => {
-                self.advance_by(word.len());
-                self.lambda(start)
             }
             "if" => {
                 self.advance_by(word.len());
@@ -639,11 +638,6 @@ mod tests {
     #[test]
     fn double_negate() {
         assert_expression_snapshot!("--x");
-    }
-
-    #[test]
-    fn error_operator_arrow() {
-        assert_expression_error_snapshot!("a -> b");
     }
 
     #[test]

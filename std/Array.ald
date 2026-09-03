@@ -1,8 +1,11 @@
 #[extern("alder:kernel", "$arrayLength")]
-pub fn length(values: Array[a]) -> Number
+pub fn length(values: Array[a]) Number
 
 #[extern("alder:kernel", "$arrayPush")]
-pub fn push(values: Array[a], value: a) -> ()
+pub fn push(values: Array[a], value: a) ()
 
 #[extern("alder:kernel", "$arrayMap")]
-pub fn map(values: Array[a], transform: fn(a) -> b) -> Array[b]
+pub fn map(values: Array[a], transform: fn(a) b) Array[b]
+
+#[extern("alder:kernel", "$arrayFilter")]
+pub fn filter(values: Array[a], predicate: fn(a) Bool) Array[a]

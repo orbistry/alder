@@ -1,26 +1,26 @@
 trait Describe[a] {
-    fn describe(value: a) -> String
+    fn describe(value: a) String
 }
 
 impl Describe[Number] {
-    fn describe(value: Number) -> String { "number" }
+    fn describe(value: Number) String { "number" }
 }
 
 enum Box[a] { Box(a) }
 
 impl Describe[Box[a]] where a: Describe {
-    fn describe(value: Box[a]) -> String {
+    fn describe(value: Box[a]) String {
         match value { Box::Box(inner) => describe(inner) }
     }
 }
 
 impl Functor[Box] {
-    fn map(value: Box[a], transform: fn(a) -> b) -> Box[b] {
+    fn map(value: Box[a], transform: fn(a) b) Box[b] {
         match value { Box::Box(inner) => Box::Box(transform(inner)) }
     }
 }
 
-fn describe_generic(value: a) -> String where a: Describe {
+fn describe_generic(value: a) String where a: Describe {
     describe(value)
 }
 
@@ -33,7 +33,7 @@ enum Status {
 pub fn main() {
     assert(describe_generic(Box::Box(42)) == "number")
 
-    let mapped: Box[Number] = map(Box::Box(41), fn(value) { value + 1 })
+    let mapped: Box[Number] = map(Box::Box(41), value -> value + 1)
     assert(mapped == Box::Box(42))
 
     let failed = Status::Failed("network unavailable")

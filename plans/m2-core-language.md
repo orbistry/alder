@@ -171,7 +171,7 @@ Run a design panel (see `plans/README.md`) producing
   unqualified constructors, `^` pins, array rest patterns, optional-field
   record patterns.
 - `alder-can/types`: type expressions with `[ ]` application, HKT
-  variables, `fn(A) -> B`, records with `?` fields and rows, error rows.
+  variables, `fn(A) B`, records with `?` fields and rows, error rows.
 - Tests: rewrite every existing `alder-can` snapshot test into the new
   syntax as the constructs land (owners split the list by construct);
   keep the granular one-construct-per-test style.
@@ -189,7 +189,7 @@ Run a design panel (see `plans/README.md`) producing
   no numeric supertypes (Elm's `number`/`comparable` go away; `+` is
   `Number` in M2, traits fix this in M3).
 - Error messages: port `Reporting/Error/Type.hs` rendering for the new
-  type syntax (`Map[String, Number]`, `fn(a) -> b`, `{ x?: Number }`).
+  type syntax (`Map[String, Number]`, `fn(a) b`, `{ x?: Number }`).
 - `alder-driver`: interface (de)serialization for the new canonical AST,
   module graph from path-first imports, `src/` root, index resolution,
   `~/` and `@pkg` resolution across workspace members, `target` from

@@ -1361,37 +1361,37 @@ to:
 ```alder
 enum Ordering { Less, Equal, Greater }
 
-trait Show[a] { fn show(value: a) -> String }
-trait Eq[a] { fn eq(left: a, right: a) -> Bool }
-trait Ord[a] where a: Eq { fn compare(left: a, right: a) -> Ordering }
-trait Hash[a] where a: Eq { fn hash(value: a) -> BigInt }
+trait Show[a] { fn show(value: a) String }
+trait Eq[a] { fn eq(left: a, right: a) Bool }
+trait Ord[a] where a: Eq { fn compare(left: a, right: a) Ordering }
+trait Hash[a] where a: Eq { fn hash(value: a) BigInt }
 trait Num[a] where a: Eq + Ord {
-    fn add(left: a, right: a) -> a
-    fn sub(left: a, right: a) -> a
-    fn mul(left: a, right: a) -> a
-    fn div(left: a, right: a) -> a
-    fn rem(left: a, right: a) -> a
-    fn negate(value: a) -> a
+    fn add(left: a, right: a) a
+    fn sub(left: a, right: a) a
+    fn mul(left: a, right: a) a
+    fn div(left: a, right: a) a
+    fn rem(left: a, right: a) a
+    fn negate(value: a) a
 }
 trait Json[a] {
-    fn encode(value: a) -> String
-    fn decode(text: String) -> Result[a, String]
+    fn encode(value: a) String
+    fn decode(text: String) Result[a, String]
 }
-trait Functor[f] { fn map(value: f[a], transform: fn(a) -> b) -> f[b] }
+trait Functor[f] { fn map(value: f[a], transform: fn(a) b) f[b] }
 trait Applicative[f] where f: Functor {
-    fn pure(value: a) -> f[a]
-    fn apply(function: f[fn(a) -> b], value: f[a]) -> f[b]
+    fn pure(value: a) f[a]
+    fn apply(function: f[fn(a) b], value: f[a]) f[b]
 }
 trait Monad[f] where f: Applicative {
-    fn flat_map(value: f[a], transform: fn(a) -> f[b]) -> f[b]
+    fn flat_map(value: f[a], transform: fn(a) f[b]) f[b]
 }
 trait Traversable[t] {
-    fn traverse(value: t[a], transform: fn(a) -> f[b]) -> f[t[b]]
+    fn traverse(value: t[a], transform: fn(a) f[b]) f[t[b]]
         where f: Applicative
 }
 trait Iterator[i] {
     type Item
-    fn next(iterator: i) -> Option[Item]
+    fn next(iterator: i) Option[Item]
 }
 ```
 

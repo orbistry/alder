@@ -1,6 +1,6 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "trait First[a] where a: Second {\n    fn first(value: a) -> a\n}\ntrait Second[a] where a: First {\n    fn second(value: a) -> a\n}\n"
+description: "trait First[a] where a: Second {\n    fn first(value: a) a\n}\ntrait Second[a] where a: First {\n    fn second(value: a) a\n}\n"
 ---
 alder::trait::superclass_cycle
 
@@ -8,7 +8,7 @@ alder::trait::superclass_cycle
    ╭─[/project/src/main.ald:4:1]
  3 │     }
  4 │ ╭─▶ trait Second[a] where a: First {
- 5 │ │       fn second(value: a) -> a
+ 5 │ │       fn second(value: a) a
  6 │ ├─▶ }
    · ╰──── this superclass closes the cycle
    ╰────

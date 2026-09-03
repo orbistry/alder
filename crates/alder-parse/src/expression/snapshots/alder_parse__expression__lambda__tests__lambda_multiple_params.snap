@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: "fn(a, b) a + b"
+description: "(a, b) -> a + b"
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 15,
+            column: 16,
         },
     },
     value: Lambda(
@@ -22,11 +22,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 4,
+                                column: 2,
                             },
                             end: Position {
                                 line: 1,
-                                column: 5,
+                                column: 3,
                             },
                         },
                         value: Var(
@@ -41,11 +41,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 7,
+                                column: 5,
                             },
                             end: Position {
                                 line: 1,
-                                column: 8,
+                                column: 6,
                             },
                         },
                         value: Var(
@@ -60,11 +60,11 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 10,
+                        column: 11,
                     },
                     end: Position {
                         line: 1,
-                        column: 15,
+                        column: 16,
                     },
                 },
                 value: BinOps {
@@ -74,11 +74,11 @@ Located {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 10,
+                                        column: 11,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 11,
+                                        column: 12,
                                     },
                                 },
                                 value: Var(
@@ -89,11 +89,11 @@ Located {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 12,
+                                        column: 13,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 13,
+                                        column: 14,
                                     },
                                 },
                                 value: Add,
@@ -104,11 +104,11 @@ Located {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 14,
+                                column: 15,
                             },
                             end: Position {
                                 line: 1,
-                                column: 15,
+                                column: 16,
                             },
                         },
                         value: Var(

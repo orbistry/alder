@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "fn ambiguous() {\n    let equal = fn(left, right) { left == right }\n    ()\n}\n"
+description: "fn ambiguous() {\n    let equal = (left, right) -> { left == right }\n    ()\n}\n"
 ---
 [
     Trait(
@@ -18,11 +18,11 @@ description: "fn ambiguous() {\n    let equal = fn(left, right) { left == right 
             origin: Region {
                 start: Position {
                     line: 2,
-                    column: 40,
+                    column: 41,
                 },
                 end: Position {
                     line: 2,
-                    column: 42,
+                    column: 43,
                 },
             },
             chain: [

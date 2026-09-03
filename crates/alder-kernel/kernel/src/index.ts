@@ -405,6 +405,7 @@ export function $resultMap(value, transform) {
 export function $arrayLength(values) { return values.length; }
 export function $arrayPush(values, value) { values.push(value); }
 export function $arrayMap(values, transform) { return values.map(transform); }
+export function $arrayFilter(values, predicate) { return values.filter(predicate); }
 export function $stringLength(value) { return [...value].length; }
 export function $stringConcat(left, right) { return left + right; }
 export function $numberParse(value) {
