@@ -1098,6 +1098,23 @@ fn explicit_equality_overlaps_automatic_enum_equality() {
 }
 
 #[test]
+fn opaque_types_may_define_explicit_equality() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            #[extern]
+            type Secret
+
+            impl Eq[Secret] {
+                fn eq(left: Secret, right: Secret) -> Bool { true }
+            }
+        "#},
+    )
+    .expect("opaque types have no automatic Eq and may define their own implementation");
+}
+
+#[test]
 fn polymorphic_identity() {
     assert_inference_snapshot!("fn identity(value) { value }");
 }
