@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use alder_ast::{
-    Annotation, AssocTypeId, ConstructorRef, Interface, InterfaceEnum, LocalId, LocalName,
-    MethodId, ModuleId, Namespace, PackageId, ProjectionType, QualifiedName, Type, UseId, ValueRef,
-    Variant, VariantPayload,
+    Annotation, AssocTypeId, ConstructorName, ConstructorRef, Interface, InterfaceEnum, LocalId,
+    LocalName, MethodId, ModuleId, Namespace, PackageId, ProjectionType, QualifiedName, Type,
+    UseId, ValueRef, Variant, VariantPayload,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -110,6 +110,7 @@ impl<'a> Env<'a> {
             next_use: Rc::new(Cell::new(0)),
         };
         env.add_builtin_types();
+        env.add_builtin_ordering(bump);
         env.add_builtin_traits(bump);
         env.add_builtin_modules();
         env
@@ -127,6 +128,7 @@ impl<'a> Env<'a> {
             ("Task", 1),
             ("Option", 1),
             ("Result", 2),
+            ("Ordering", 0),
             ("Html", 0),
             ("Style", 0),
             ("Query", 1),
@@ -146,6 +148,39 @@ impl<'a> Env<'a> {
                 }),
             );
         }
+    }
+
+    fn add_builtin_ordering(&mut self, bump: &'a Bump) {
+        let reference = QualifiedName {
+            module: ModuleId {
+                package: PackageId::Builtin,
+                path: &[],
+            },
+            name: "Ordering",
+        };
+        let annotation = bump.alloc(Annotation {
+            params: &[],
+            trait_predicates: &[],
+            projection_equalities: &[],
+            typ: bump.alloc(Located::at_zero(Type::Named {
+                reference,
+                args: &[],
+            })),
+        });
+        let variants =
+            bump.alloc_slice_fill_iter(["Less", "Equal", "Greater"].into_iter().enumerate().map(
+                |(index, variant)| ConstructorRef {
+                    name: ConstructorName {
+                        enum_: reference,
+                        variant,
+                    },
+                    index: index as u16,
+                    alternatives: 3,
+                    payload: VariantPayload::Unit,
+                    annotation,
+                },
+            ));
+        self.register_enum(reference, variants);
     }
 
     fn add_builtin_modules(&mut self) {
@@ -179,12 +214,7 @@ impl<'a> Env<'a> {
             let specifications: &[(&str, &[&str], &str)] = match name {
                 "Show" => &[("show", &["a"], "String")],
                 "Eq" => &[("eq", &["a", "a"], "Bool")],
-                "Ord" => &[
-                    ("lt", &["a", "a"], "Bool"),
-                    ("lte", &["a", "a"], "Bool"),
-                    ("gt", &["a", "a"], "Bool"),
-                    ("gte", &["a", "a"], "Bool"),
-                ],
+                "Ord" => &[("compare", &["a", "a"], "Ordering")],
                 "Hash" => &[("hash", &["a"], "BigInt")],
                 "Json" => &[("encode", &["a"], "String"), ("decode", &["String"], "a")],
                 "Num" => &[
@@ -980,6 +1010,18 @@ impl<'a> Env<'a> {
         arity: usize,
     ) -> Result<QualifiedName<'a>, Region> {
         if let Some(Candidate::Unique(existing)) = self.types.get(text) {
+            if self.home.package == PackageId::Builtin && existing.reference.module == self.home {
+                let reference = existing.reference;
+                self.types.insert(
+                    text,
+                    Candidate::Unique(TypeBinding {
+                        reference,
+                        arity,
+                        region,
+                    }),
+                );
+                return Ok(reference);
+            }
             return Err(existing.region);
         }
         if self.enums.contains_key(text) || self.traits.contains_key(text) {
@@ -1496,6 +1538,32 @@ mod tests {
             },
         );
         let interface = crate::builtin_trait_interface(&bump);
+
+        let ordering = interface
+            .enums
+            .iter()
+            .find(|enum_| enum_.reference.name == "Ordering")
+            .expect("the audited stdlib defines Ordering");
+        let Candidate::Unique(binding) = env
+            .enums
+            .get("Ordering")
+            .expect("Ordering has a bootstrap enum binding")
+        else {
+            panic!("builtin Ordering binding must be unambiguous");
+        };
+        assert_eq!(binding.reference, ordering.reference);
+        assert_eq!(
+            binding
+                .variants
+                .iter()
+                .map(|variant| variant.name.variant)
+                .collect::<Vec<_>>(),
+            ordering
+                .variants
+                .iter()
+                .map(|variant| variant.name.variant)
+                .collect::<Vec<_>>()
+        );
 
         for trait_ in interface.traits {
             let Candidate::Unique(binding) = env

@@ -576,6 +576,7 @@ fn builtin_instance_evidence<'a>(
         ("Eq", Some("String")) => Intrinsic::EqString,
         ("Eq", Some("Bool")) => Intrinsic::EqBool,
         ("Eq", Some("BigInt")) => Intrinsic::EqBigInt,
+        ("Eq", Some("Ordering")) => Intrinsic::EqOrdering,
         ("Ord", Some("Number")) => Intrinsic::OrdNumber,
         ("Ord", Some("String")) => Intrinsic::OrdString,
         ("Ord", Some("BigInt")) => Intrinsic::OrdBigInt,

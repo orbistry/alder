@@ -49,12 +49,15 @@ enum NestedSecretBox { NestedSecretBox(Array[Option[Secret]]) }
 enum Reverse { Low, High }
 
 impl Ord[Reverse] {
-    fn lt(left: Reverse, right: Reverse) -> Bool {
-        left == Reverse::High && right == Reverse::Low
+    fn compare(left: Reverse, right: Reverse) -> Ordering {
+        if left == right {
+            Ordering::Equal
+        } else if left == Reverse::High {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
     }
-    fn lte(left: Reverse, right: Reverse) -> Bool { left == right || lt(left, right) }
-    fn gt(left: Reverse, right: Reverse) -> Bool { lt(right, left) }
-    fn gte(left: Reverse, right: Reverse) -> Bool { left == right || gt(left, right) }
 }
 
 #[derive(Ord)]
@@ -99,6 +102,10 @@ fn describe_generic(value: a) -> String where a: Describe {
     describe(value)
 }
 
+fn less_than(left: a, right: a) -> Bool where a: Ord {
+    left < right
+}
+
 pub fn main() {
     assert(describe_generic(1) == "number")
     assert(describe_generic("text") == "text")
@@ -107,6 +114,13 @@ pub fn main() {
     assert(show(Status::Failed("oops")) == "Failed(\"oops\")")
     assert(show(Status::Meta { code: 7, note: "same" }) == "Meta { code: 7, note: \"same\" }")
     assert(Status::Ready < Status::Failed("later"))
+    assert(match compare(1, 2) {
+        Ordering::Less => true,
+        _ => false,
+    })
+    assert(compare(2, 2) == Ordering::Equal)
+    assert(less_than(1, 2))
+    assert(less_than(Reverse::High, Reverse::Low))
     assert(OrderProbe::Value { zed: 0, alpha: 9 } < OrderProbe::Value { zed: 1, alpha: 0 })
     assert(hash(Status::Meta { code: 7, note: "same" }) == hash(Status::Meta { code: 7, note: "same" }))
     assert(hash(Status::Meta { code: 7, note: "same" }) != hash(Status::Meta { code: 8, note: "same" }))

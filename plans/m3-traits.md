@@ -77,6 +77,9 @@ static resolution wherever the type is known.
   `std/Traits.ald`, canonicalized through the header pipeline, and inserted
   into the ordinary `TraitDatabase`. Intrinsic evidence is selected only after
   an ordinary matching header wins instance search.
+- `Ord` has one `compare(left, right) -> Ordering` method. Generic comparisons
+  inspect the `Less`/`Equal`/`Greater` tag, while primitive intrinsics retain
+  allocation-free native relational operators.
 
 ## Open decisions (recommendation in bold)
 

@@ -127,6 +127,7 @@ pub enum Intrinsic {
     EqBool,
     EqBigInt,
     EqUnit,
+    EqOrdering,
     OrdNumber,
     OrdString,
     OrdBigInt,

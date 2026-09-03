@@ -127,8 +127,10 @@ export function $compareDerived(left, right, variants) {
     for (const [index, field] of shape.fields.entries()) {
         const dictionary = shape.dictionaries?.[index];
         const ordering = dictionary
-            ? (dictionary.lt(left[field], right[field]) ? -1
-                : dictionary.gt(left[field], right[field]) ? 1 : 0)
+            ? (() => {
+                const result = dictionary.compare(left[field], right[field]);
+                return result.$ === "Less" ? -1 : result.$ === "Greater" ? 1 : 0;
+            })()
             : $compare(left[field], right[field]);
         if (ordering !== 0) return ordering;
     }

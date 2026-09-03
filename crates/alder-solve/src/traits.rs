@@ -992,7 +992,7 @@ mod tests {
         assert_eq!(database.instances(iterator.id).len(), 1);
         for (trait_name, instances) in [
             ("Show", 8),
-            ("Eq", 8),
+            ("Eq", 9),
             ("Ord", 3),
             ("Hash", 8),
             ("Json", 8),

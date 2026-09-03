@@ -3444,8 +3444,19 @@ mod tests {
             if path.file_name().is_some_and(|name| name == "Traits.ald") {
                 let source_text = bump.alloc_str(&source);
                 let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
-                canonicalize_headers(&bump, context(), &source)
-                    .expect("trait header source canonicalizes");
+                canonicalize_headers(
+                    &bump,
+                    Context {
+                        home: ModuleId {
+                            package: PackageId::Builtin,
+                            path: &[],
+                        },
+                        imports: &[],
+                        interfaces: &[],
+                    },
+                    &source,
+                )
+                .expect("trait header source canonicalizes");
             } else {
                 can(&bump, &source);
             }

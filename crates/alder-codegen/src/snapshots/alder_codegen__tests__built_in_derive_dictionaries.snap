@@ -48,8 +48,8 @@ $dict$Show$0["show"] = ($a0) => {
 Object["freeze"]($dict$Show$0);
 const $dict$Ord$0 = {};
 $dict$Ord$0["$super0"] = $dict$Eq$0;
-$dict$Ord$0["lt"] = ($a0, $a1) => {
-	return $compareDerived($a0, $a1, {
+$dict$Ord$0["compare"] = ($a0, $a1) => {
+	const $ordering = $compareDerived($a0, $a1, {
 		"Ready": {
 			"record": false,
 			"fields": [],
@@ -62,55 +62,8 @@ $dict$Ord$0["lt"] = ($a0, $a1) => {
 			"optional": [],
 			"dictionaries": [undefined]
 		}
-	}) < 0;
-};
-$dict$Ord$0["lte"] = ($a0, $a1) => {
-	return $compareDerived($a0, $a1, {
-		"Ready": {
-			"record": false,
-			"fields": [],
-			"optional": [],
-			"dictionaries": []
-		},
-		"Failed": {
-			"record": false,
-			"fields": ["_0"],
-			"optional": [],
-			"dictionaries": [undefined]
-		}
-	}) <= 0;
-};
-$dict$Ord$0["gt"] = ($a0, $a1) => {
-	return $compareDerived($a0, $a1, {
-		"Ready": {
-			"record": false,
-			"fields": [],
-			"optional": [],
-			"dictionaries": []
-		},
-		"Failed": {
-			"record": false,
-			"fields": ["_0"],
-			"optional": [],
-			"dictionaries": [undefined]
-		}
-	}) > 0;
-};
-$dict$Ord$0["gte"] = ($a0, $a1) => {
-	return $compareDerived($a0, $a1, {
-		"Ready": {
-			"record": false,
-			"fields": [],
-			"optional": [],
-			"dictionaries": []
-		},
-		"Failed": {
-			"record": false,
-			"fields": ["_0"],
-			"optional": [],
-			"dictionaries": [undefined]
-		}
-	}) >= 0;
+	});
+	return $ordering < 0 ? { "$": "Less" } : $ordering > 0 ? { "$": "Greater" } : { "$": "Equal" };
 };
 Object["freeze"]($dict$Ord$0);
 const $dict$Hash$0 = {};

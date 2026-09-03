@@ -6,11 +6,10 @@ pub trait Eq[a] {
     fn eq(left: a, right: a) -> Bool
 }
 
+pub enum Ordering { Less, Equal, Greater }
+
 pub trait Ord[a] where a: Eq {
-    fn lt(left: a, right: a) -> Bool
-    fn lte(left: a, right: a) -> Bool
-    fn gt(left: a, right: a) -> Bool
-    fn gte(left: a, right: a) -> Bool
+    fn compare(left: a, right: a) -> Ordering
 }
 
 pub trait Hash[a] where a: Eq {
@@ -72,22 +71,13 @@ impl Eq[Option[a]] where a: Eq { fn eq(left: Option[a], right: Option[a]) -> Boo
 impl Eq[Result[a, e]] where a: Eq, e: Eq { fn eq(left: Result[a, e], right: Result[a, e]) -> Bool }
 
 impl Ord[Number] {
-    fn lt(left: Number, right: Number) -> Bool
-    fn lte(left: Number, right: Number) -> Bool
-    fn gt(left: Number, right: Number) -> Bool
-    fn gte(left: Number, right: Number) -> Bool
+    fn compare(left: Number, right: Number) -> Ordering
 }
 impl Ord[String] {
-    fn lt(left: String, right: String) -> Bool
-    fn lte(left: String, right: String) -> Bool
-    fn gt(left: String, right: String) -> Bool
-    fn gte(left: String, right: String) -> Bool
+    fn compare(left: String, right: String) -> Ordering
 }
 impl Ord[BigInt] {
-    fn lt(left: BigInt, right: BigInt) -> Bool
-    fn lte(left: BigInt, right: BigInt) -> Bool
-    fn gt(left: BigInt, right: BigInt) -> Bool
-    fn gte(left: BigInt, right: BigInt) -> Bool
+    fn compare(left: BigInt, right: BigInt) -> Ordering
 }
 
 impl Hash[Number] { fn hash(value: Number) -> BigInt }

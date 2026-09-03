@@ -398,6 +398,15 @@ mod tests {
     }
 
     #[test]
+    fn generic_ordering_uses_the_compare_result_tag() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn less_than(left: a, right: a) -> Bool where a: Ord {
+                left < right
+            }
+        "#};
+    }
+
+    #[test]
     fn prerequisite_dictionary_factory() {
         assert_solved_emit_snapshot! {r#"
             trait Show[a] { fn show(value: a) -> String }
@@ -487,10 +496,7 @@ mod tests {
         assert_solved_emit_snapshot! {r#"
             enum Token { Token }
             impl Ord[Token] {
-                fn lt(left: Token, right: Token) -> Bool { false }
-                fn lte(left: Token, right: Token) -> Bool { true }
-                fn gt(left: Token, right: Token) -> Bool { false }
-                fn gte(left: Token, right: Token) -> Bool { true }
+                fn compare(left: Token, right: Token) -> Ordering { Ordering::Equal }
             }
             impl Num[Token] {
                 fn add(left: Token, right: Token) -> Token { right }

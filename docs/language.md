@@ -319,7 +319,10 @@ fn describe(xs: Array[a]) -> String where a: Show {
 - `Eq` is derived automatically for every type whose parts are `Eq`;
   `Show`, `Ord`, `Hash`, and `Json` use compiler-backed `#[derive(...)]`
   attributes in M3, replaced by macros in M5 without changing user code.
-  Arithmetic is the `Num` trait (`Number`, `BigInt`); comparisons are `Ord`.
+  Arithmetic is the `Num` trait (`Number`, `BigInt`); comparisons use
+  `Ord.compare(left, right) -> Ordering`, where `Ordering` has `Less`, `Equal`,
+  and `Greater` variants. Primitive comparisons lower directly to JavaScript
+  relational operators, while generic comparisons inspect that result.
 
 ### Errors
 

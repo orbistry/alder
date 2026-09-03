@@ -58,10 +58,6 @@ fn trait_operator_method(operator: alder_ast::BinOp) -> Option<&'static str> {
         alder_ast::BinOp::Mul => Some("mul"),
         alder_ast::BinOp::Div => Some("div"),
         alder_ast::BinOp::Rem => Some("rem"),
-        alder_ast::BinOp::Lt => Some("lt"),
-        alder_ast::BinOp::LtEq => Some("lte"),
-        alder_ast::BinOp::Gt => Some("gt"),
-        alder_ast::BinOp::GtEq => Some("gte"),
         _ => None,
     }
 }
@@ -653,54 +649,31 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 );
             }
             alder_ast::DeriveKind::Ord => {
-                let equality = format!("$dict$Eq${}", impl_origin_index(implementation.id.origin));
-                let super_target = self.js.member(self.js.identifier(self_name), "$super0");
-                let equality = if prerequisite_args.is_empty() {
-                    self.js.identifier(&equality)
-                } else {
-                    self.js.call(
-                        self.js.identifier(&equality),
-                        prerequisite_args.iter().map(|argument| {
-                            self.js.member(self.js.identifier(argument), "$super0")
-                        }),
-                    )
-                };
-                let super_assignment =
-                    self.js
-                        .assignment(super_target, AssignmentOperator::Assign, equality);
-                body.push(self.js.expression_statement(super_assignment));
-                self.derived_ord_method(
-                    &mut body,
-                    self_name,
-                    "lt",
-                    module,
-                    implementation,
-                    BinaryOperator::LessThan,
-                );
-                self.derived_ord_method(
-                    &mut body,
-                    self_name,
-                    "lte",
-                    module,
-                    implementation,
-                    BinaryOperator::LessEqualThan,
-                );
-                self.derived_ord_method(
-                    &mut body,
-                    self_name,
-                    "gt",
-                    module,
-                    implementation,
-                    BinaryOperator::GreaterThan,
-                );
-                self.derived_ord_method(
-                    &mut body,
-                    self_name,
-                    "gte",
-                    module,
-                    implementation,
-                    BinaryOperator::GreaterEqualThan,
-                );
+                let has_solved_equality = self.solved.is_some_and(|solved| {
+                    solved
+                        .impl_superclasses
+                        .contains_key(&(implementation.id, 0))
+                });
+                if !has_solved_equality {
+                    let equality =
+                        format!("$dict$Eq${}", impl_origin_index(implementation.id.origin));
+                    let super_target = self.js.member(self.js.identifier(self_name), "$super0");
+                    let equality = if prerequisite_args.is_empty() {
+                        self.js.identifier(&equality)
+                    } else {
+                        self.js.call(
+                            self.js.identifier(&equality),
+                            prerequisite_args.iter().map(|argument| {
+                                self.js.member(self.js.identifier(argument), "$super0")
+                            }),
+                        )
+                    };
+                    let super_assignment =
+                        self.js
+                            .assignment(super_target, AssignmentOperator::Assign, equality);
+                    body.push(self.js.expression_statement(super_assignment));
+                }
+                self.derived_ord_method(&mut body, self_name, module, implementation);
             }
             alder_ast::DeriveKind::Hash => {
                 self.derived_hash_method(&mut body, self_name, module, implementation);
@@ -968,10 +941,8 @@ impl<'src, 'js> Emitter<'src, 'js> {
         &mut self,
         body: &mut ArenaVec<'js, Statement<'js>>,
         dictionary: &str,
-        method: &str,
         module: &Module<'src>,
         implementation: &alder_ast::ImplDecl<'src>,
-        operator: BinaryOperator,
     ) {
         let args = vec!["$a0".to_owned(), "$a1".to_owned()];
         let shape = self.derived_variant_shape(module, implementation);
@@ -984,11 +955,16 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 shape,
             ],
         );
-        let result = self.js.binary(comparison, operator, self.js.number(0.0));
         let mut method_body = self.js.vec();
+        method_body.push(self.js.variable(
+            VariableDeclarationKind::Const,
+            "$ordering",
+            Some(comparison),
+        ));
+        let result = self.ordering_from_number("$ordering");
         method_body.push(self.js.return_statement(result));
         let arrow = self.js.arrow(&args, method_body, false);
-        let target = self.js.member(self.js.identifier(dictionary), method);
+        let target = self.js.member(self.js.identifier(dictionary), "compare");
         let assignment = self
             .js
             .assignment(target, AssignmentOperator::Assign, arrow);
@@ -1420,9 +1396,21 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 _ => None,
             });
         let intrinsic = matches!(evidence, Some(Evidence::Intrinsic(_)));
+        let primitive_equality = matches!(
+            evidence,
+            Some(Evidence::Intrinsic(
+                Intrinsic::EqNumber
+                    | Intrinsic::EqString
+                    | Intrinsic::EqBool
+                    | Intrinsic::EqBigInt
+                    | Intrinsic::EqUnit
+            ))
+        );
         let expr = match op {
             alder_ast::BinOp::Pipe => self.js.call(right, [left]),
-            alder_ast::BinOp::Eq | alder_ast::BinOp::NotEq if evidence.is_some() && !intrinsic => {
+            alder_ast::BinOp::Eq | alder_ast::BinOp::NotEq
+                if evidence.is_some() && !primitive_equality =>
+            {
                 let dictionary = self.evidence(evidence.as_ref().expect("guarded"));
                 let equal = self
                     .js
@@ -1433,7 +1421,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     equal
                 }
             }
-            alder_ast::BinOp::Eq | alder_ast::BinOp::NotEq if intrinsic => {
+            alder_ast::BinOp::Eq | alder_ast::BinOp::NotEq if primitive_equality => {
                 let equal = self.js.binary(left, BinaryOperator::StrictEquality, right);
                 if op == alder_ast::BinOp::NotEq {
                     self.js.unary(UnaryOperator::LogicalNot, equal)
@@ -1459,6 +1447,26 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     ),
                     [left, right],
                 )
+            }
+            op @ (alder_ast::BinOp::Lt
+            | alder_ast::BinOp::LtEq
+            | alder_ast::BinOp::Gt
+            | alder_ast::BinOp::GtEq)
+                if evidence.is_some() && !intrinsic =>
+            {
+                let dictionary = self.evidence(evidence.as_ref().expect("guarded"));
+                let ordering = self
+                    .js
+                    .call(self.js.member(dictionary, "compare"), [left, right]);
+                let tag = self.js.member(ordering, "$");
+                let (operator, expected) = match op {
+                    alder_ast::BinOp::Lt => (BinaryOperator::StrictEquality, "Less"),
+                    alder_ast::BinOp::LtEq => (BinaryOperator::StrictInequality, "Greater"),
+                    alder_ast::BinOp::Gt => (BinaryOperator::StrictEquality, "Greater"),
+                    alder_ast::BinOp::GtEq => (BinaryOperator::StrictInequality, "Less"),
+                    _ => unreachable!(),
+                };
+                self.js.binary(tag, operator, self.js.string(expected))
             }
             alder_ast::BinOp::Add => self.js.binary(left, BinaryOperator::Addition, right),
             alder_ast::BinOp::Sub => self.js.binary(left, BinaryOperator::Subtraction, right),
@@ -2563,13 +2571,35 @@ impl<'src, 'js> Emitter<'src, 'js> {
             | Intrinsic::EqBigInt
             | Intrinsic::EqUnit => properties
                 .push(self.intrinsic_binary_property("eq", BinaryOperator::StrictEquality)),
+            Intrinsic::EqOrdering => {
+                let args = vec!["$a".to_owned(), "$b".to_owned()];
+                let left = self.js.member(self.js.identifier(&args[0]), "$");
+                let right = self.js.member(self.js.identifier(&args[1]), "$");
+                let equal = self.js.binary(left, BinaryOperator::StrictEquality, right);
+                let mut body = self.js.vec();
+                body.push(self.js.return_statement(equal));
+                properties.push(self.js.property("eq", self.js.arrow(&args, body, false)));
+            }
             Intrinsic::OrdNumber | Intrinsic::OrdString | Intrinsic::OrdBigInt => {
-                properties.push(self.intrinsic_binary_property("lt", BinaryOperator::LessThan));
-                properties
-                    .push(self.intrinsic_binary_property("lte", BinaryOperator::LessEqualThan));
-                properties.push(self.intrinsic_binary_property("gt", BinaryOperator::GreaterThan));
-                properties
-                    .push(self.intrinsic_binary_property("gte", BinaryOperator::GreaterEqualThan));
+                let args = vec!["$a".to_owned(), "$b".to_owned()];
+                let left = self.js.identifier(&args[0]);
+                let right = self.js.identifier(&args[1]);
+                let less = self.js.binary(left, BinaryOperator::LessThan, right);
+                let left = self.js.identifier(&args[0]);
+                let right = self.js.identifier(&args[1]);
+                let greater = self.js.binary(left, BinaryOperator::GreaterThan, right);
+                let ordering = self.js.conditional(
+                    less,
+                    self.ordering("Less"),
+                    self.js
+                        .conditional(greater, self.ordering("Greater"), self.ordering("Equal")),
+                );
+                let mut compare_body = self.js.vec();
+                compare_body.push(self.js.return_statement(ordering));
+                properties.push(
+                    self.js
+                        .property("compare", self.js.arrow(&args, compare_body, false)),
+                );
                 let equality = match intrinsic {
                     Intrinsic::OrdNumber => Intrinsic::EqNumber,
                     Intrinsic::OrdString => Intrinsic::EqString,
@@ -2821,10 +2851,40 @@ impl<'src, 'js> Emitter<'src, 'js> {
         self.js.property(name, self.js.arrow(&args, body, false))
     }
 
+    fn ordering(&self, variant: &str) -> Expression<'js> {
+        let mut properties = self.js.vec();
+        properties.push(self.js.property("$", self.js.string(variant)));
+        self.js.object(properties)
+    }
+
+    fn ordering_from_number(&self, comparison: &str) -> Expression<'js> {
+        let less = self.js.binary(
+            self.js.identifier(comparison),
+            BinaryOperator::LessThan,
+            self.js.number(0.0),
+        );
+        let greater = self.js.binary(
+            self.js.identifier(comparison),
+            BinaryOperator::GreaterThan,
+            self.js.number(0.0),
+        );
+        self.js.conditional(
+            less,
+            self.ordering("Less"),
+            self.js
+                .conditional(greater, self.ordering("Greater"), self.ordering("Equal")),
+        )
+    }
+
     fn constructor_reference(
         &mut self,
         constructor: alder_ast::ConstructorRef<'src>,
     ) -> Expression<'js> {
+        if constructor.name.enum_.module.package == alder_ast::PackageId::Builtin
+            && constructor.name.enum_.name == "Ordering"
+        {
+            return self.ordering(constructor.name.variant);
+        }
         let exported =
             constructor_name_from_parts(constructor.name.enum_.name, constructor.name.variant);
         if constructor.name.enum_.module == self.home {
