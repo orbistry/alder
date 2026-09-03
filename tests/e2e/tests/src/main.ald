@@ -106,6 +106,11 @@ enum Phantom[a, b] {
     Present(a),
 }
 
+#[derive(Json)]
+enum Event {
+    Data { count: Number, label: String },
+}
+
 impl Functor[Maybe] {
     fn map(value: Maybe[a], transform: fn(a) -> b) -> Maybe[b] {
         match value {
@@ -187,10 +192,16 @@ test "derived dictionaries execute" {
     assert show(phantom) == "Present(42)"
     let phantom_hash: BigInt = hash(phantom)
     assert phantom_hash == hash(phantom)
+    assert encode(phantom) == "{\"tag\":\"Present\",\"fields\":[42]}"
     let decoded_phantom: Phantom[Number, fn(Number) -> Number] = decode(encode(phantom))?
     assert decoded_phantom == phantom
+    assert encode(Phase::Beta) == "{\"tag\":\"Beta\",\"fields\":[]}"
     let decoded = decode(encode(Phase::Beta))?
     assert decoded == Phase::Beta
+    let event = Event::Data { count: 2, label: "ok" }
+    assert encode(event) == "{\"tag\":\"Data\",\"value\":{\"count\":2,\"label\":\"ok\"}}"
+    let decoded_event: Event = decode(encode(event))?
+    assert encode(decoded_event) == encode(event)
     let expected = Phase::Alpha
     assert match Phase::Alpha {
         ^expected => true,

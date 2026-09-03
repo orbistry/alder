@@ -694,8 +694,22 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.derived_kernel_method(&mut body, self_name, "hash", "$hash", 1, None);
             }
             alder_ast::DeriveKind::Json => {
-                self.derived_kernel_method(&mut body, self_name, "encode", "$jsonEncode", 1, None);
-                self.derived_kernel_method(&mut body, self_name, "decode", "$jsonDecode", 1, None);
+                self.derived_json_method(
+                    &mut body,
+                    self_name,
+                    "encode",
+                    "$jsonEncodeDerived",
+                    module,
+                    implementation,
+                );
+                self.derived_json_method(
+                    &mut body,
+                    self_name,
+                    "decode",
+                    "$jsonDecodeDerived",
+                    module,
+                    implementation,
+                );
             }
         }
         let frozen = self.js.call(
@@ -746,6 +760,100 @@ impl<'src, 'js> Emitter<'src, 'js> {
             self.js.arrow(&args, method_body, false),
         );
         body.push(self.js.expression_statement(assignment));
+    }
+
+    fn derived_json_method(
+        &mut self,
+        body: &mut ArenaVec<'js, Statement<'js>>,
+        dictionary: &str,
+        method: &str,
+        kernel: &'static str,
+        module: &Module<'src>,
+        implementation: &alder_ast::ImplDecl<'src>,
+    ) {
+        self.kernel.insert(kernel);
+        let shape = self.derived_json_shape(module, implementation);
+        let call = self.js.call(
+            self.js.identifier(kernel),
+            [self.js.identifier("$a0"), shape],
+        );
+        let mut method_body = self.js.vec();
+        method_body.push(self.js.return_statement(call));
+        let target = self.js.member(self.js.identifier(dictionary), method);
+        let assignment = self.js.assignment(
+            target,
+            AssignmentOperator::Assign,
+            self.js.arrow(&["$a0".to_owned()], method_body, false),
+        );
+        body.push(self.js.expression_statement(assignment));
+    }
+
+    fn derived_json_shape(
+        &self,
+        module: &Module<'src>,
+        implementation: &alder_ast::ImplDecl<'src>,
+    ) -> Expression<'js> {
+        let reference =
+            implementation
+                .trait_ref
+                .args
+                .first()
+                .and_then(|subject| match subject.value {
+                    alder_ast::Type::Named { reference, .. } => Some(reference),
+                    _ => None,
+                });
+        let mut variants = self.js.vec();
+        if let Some(reference) = reference {
+            for item in module.items {
+                match &item.value.kind {
+                    ItemKind::Enum(enum_) if enum_.name == reference => {
+                        for variant in enum_.variants {
+                            let (record, fields) = match variant.payload {
+                                alder_ast::VariantPayload::Unit => (false, Vec::new()),
+                                alder_ast::VariantPayload::Tuple(types) => (
+                                    false,
+                                    (0..types.len()).map(|index| format!("_{index}")).collect(),
+                                ),
+                                alder_ast::VariantPayload::Record(fields) => (
+                                    true,
+                                    fields.iter().map(|field| field.name.to_owned()).collect(),
+                                ),
+                            };
+                            variants.push(self.js.property(
+                                variant.name.variant,
+                                self.json_variant_shape(record, &fields),
+                            ));
+                        }
+                    }
+                    ItemKind::ErrorGroup(group) if group.name == reference => {
+                        for tag in group.tags {
+                            let fields = (0..tag.args.len())
+                                .map(|index| format!("_{index}"))
+                                .collect::<Vec<_>>();
+                            variants.push(
+                                self.js
+                                    .property(tag.name, self.json_variant_shape(false, &fields)),
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.js.object(variants)
+    }
+
+    fn json_variant_shape(&self, record: bool, fields: &[String]) -> Expression<'js> {
+        let mut properties = self.js.vec();
+        properties.push(self.js.property("record", self.js.boolean(record)));
+        properties.push(
+            self.js.property(
+                "fields",
+                self.js
+                    .array(fields.iter().map(|field| self.js.string(field))),
+            ),
+        );
+        self.js.object(properties)
     }
 
     fn derived_ord_method(

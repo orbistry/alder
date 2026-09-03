@@ -19,6 +19,8 @@ mod tests {
             "$resultPure",
             "$arrayTraverse",
             "$arrayNext",
+            "$jsonEncodeDerived",
+            "$jsonDecodeDerived",
             "$hash",
             "$matchFailure",
             "$optionBox",

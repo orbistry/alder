@@ -1326,8 +1326,41 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 Ok(Ty::Tuple(types))
             }
-            Expr::Record(fields) | Expr::RecordConstructor { fields, .. } => {
-                self.infer_record(env, fields, return_type)
+            Expr::Record(fields) => self.infer_record(env, fields, return_type),
+            Expr::RecordConstructor {
+                constructor,
+                fields,
+            } => {
+                let actual = self.infer_record(env, fields, return_type)?;
+                let Ty::Record(actual_fields, _) = actual else {
+                    unreachable!("record inference always returns a record")
+                };
+                let constructor_type = self.instantiate_annotation(constructor.annotation);
+                let alder_ast::VariantPayload::Record(expected_fields) = constructor.payload else {
+                    unreachable!("record constructor carries a record payload")
+                };
+                match constructor_type {
+                    Ty::Fn(expected_types, result)
+                        if expected_types.len() == expected_fields.len() =>
+                    {
+                        for (field, expected) in expected_fields.iter().zip(expected_types) {
+                            let Some((_, actual)) = actual_fields.get(field.name) else {
+                                return Err(Error {
+                                    region,
+                                    kind: ErrorKind::MissingField {
+                                        field: field.name.to_owned(),
+                                    },
+                                });
+                            };
+                            self.unify(actual.clone(), expected, field.typ.region)?;
+                        }
+                        Ok(self.prune(*result))
+                    }
+                    result if expected_fields.is_empty() => Ok(result),
+                    actual => {
+                        Err(self.mismatch(region, actual, Ty::Fn(Vec::new(), Box::new(Ty::Any))))
+                    }
+                }
             }
             Expr::Call {
                 use_id,

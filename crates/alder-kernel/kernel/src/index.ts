@@ -286,6 +286,46 @@ export function $jsonDecode(value) {
     try { return $resultOk(JSON.parse(value)); }
     catch (error) { return $resultErr(String(error)); }
 }
+export function $jsonEncodeDerived(value, variants) {
+    const shape = value && variants[value.$];
+    if (!shape) throw new TypeError("$: unknown derived JSON variant");
+    if (shape.record) {
+        const record = {};
+        for (const field of shape.fields) record[field] = value[field];
+        return JSON.stringify({ tag: value.$, value: record });
+    }
+    return JSON.stringify({ tag: value.$, fields: shape.fields.map((field) => value[field]) });
+}
+export function $jsonDecodeDerived(value, variants) {
+    try {
+        const parsed = JSON.parse(value);
+        if (!parsed || typeof parsed !== "object" || typeof parsed.tag !== "string") {
+            return $resultErr("$: expected an object with a string `tag`");
+        }
+        const shape = variants[parsed.tag];
+        if (!shape) return $resultErr(`$.tag: unknown variant ${JSON.stringify(parsed.tag)}`);
+        const result = { $: parsed.tag };
+        if (shape.record) {
+            if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
+                return $resultErr("$.value: expected an object");
+            }
+            for (const field of shape.fields) {
+                if (!Object.hasOwn(parsed.value, field)) {
+                    return $resultErr(`$.value.${field}: missing field`);
+                }
+                result[field] = parsed.value[field];
+            }
+        } else {
+            if (!Array.isArray(parsed.fields) || parsed.fields.length !== shape.fields.length) {
+                return $resultErr(`$.fields: expected ${shape.fields.length} values`);
+            }
+            shape.fields.forEach((field, index) => { result[field] = parsed.fields[index]; });
+        }
+        return $resultOk(result);
+    } catch (error) {
+        return $resultErr(`$: ${String(error)}`);
+    }
+}
 export function $ioPrint(value) { console.log(value); }
 export function $cliArgs() { return globalThis.__alderHost?.args ?? []; }
 export function $taskSleep(milliseconds) {
