@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] {\n    fn display(value: a) -> String\n}\n\nfn render(value: a) -> String {\n    display(value)\n}\n"
+---
+alder::trait::unsatisfied_bound
+
+  × the generic type `a` requires `Display`
+   ╭─[/project/src/main.ald:6:5]
+ 5 │ fn render(value: a) -> String {
+ 6 │     display(value)
+   ·     ───┬───
+   ·        ╰── trait evidence is required here
+ 7 │ }
+   ╰────
+  help: add a matching bound, such as `where a: Display`

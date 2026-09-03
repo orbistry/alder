@@ -84,6 +84,10 @@ static resolution wherever the type is known.
   pattern, block, expression-leaf, and complete type error hierarchies before
   building an owned miette report, preserving the innermost source location
   and syntax-specific correction.
+- Trait solver and coherence reports preserve source type-variable spellings,
+  never expose unification-variable IDs, label both local impl sites for an
+  overlap, and attach actionable help for bounds, ownership, kinds, and cycles.
+  Deterministic no-color snapshots cover the rendered source.
 
 ## Open decisions (recommendation in bold)
 

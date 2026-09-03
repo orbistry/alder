@@ -630,6 +630,12 @@ mod tests {
     }
 
     async fn compile_failure(source: &str) -> Diagnostic {
+        let diagnostics = compile_failures(source).await;
+        assert_eq!(diagnostics.len(), 1, "expected one diagnostic");
+        diagnostics.into_iter().next().expect("length checked")
+    }
+
+    async fn compile_failures(source: &str) -> Vec<Diagnostic> {
         let mem = InMemorySource::new();
         let uri = url("project/src/main.ald");
         mem.insert(uri.clone(), source.to_owned());
@@ -641,8 +647,7 @@ mod tests {
         let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
             panic!("source unexpectedly compiled");
         };
-        assert_eq!(diagnostics.len(), 1, "expected one diagnostic");
-        diagnostics[0].clone()
+        diagnostics.clone()
     }
 
     #[tokio::test]
@@ -672,6 +677,64 @@ mod tests {
 
             fn main() {
                 display(1)
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_unsatisfied_generic_bound_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] {
+                fn display(value: a) -> String
+            }
+
+            fn render(value: a) -> String {
+                display(value)
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_orphan_impl_with_source() {
+        let source = indoc::indoc! {r#"
+            impl Show[Number] {
+                fn show(value: Number) -> String { "number" }
+            }
+        "#};
+        let diagnostic = compile_failures(source)
+            .await
+            .into_iter()
+            .find(|diagnostic| diagnostic.message().starts_with("orphan implementation"))
+            .expect("the orphan diagnostic is present");
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
+    }
+
+    #[tokio::test]
+    async fn renders_overlapping_impls_with_both_source_sites() {
+        assert_diagnostic_snapshot! {r#"
+            trait Display[a] {
+                fn display(value: a) -> String
+            }
+
+            impl Display[a] {
+                fn display(value: a) -> String { "any" }
+            }
+
+            impl Display[Number] {
+                fn display(value: Number) -> String { "number" }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_higher_kinded_impl_mismatch_with_source() {
+        assert_diagnostic_snapshot! {r#"
+            trait Mapper[f] {
+                fn map(value: f[a], transform: fn(a) -> b) -> f[b]
+            }
+
+            impl Mapper[Number] {
+                fn map(value: Number, transform: fn(a) -> b) -> Number { value }
             }
         "#};
     }

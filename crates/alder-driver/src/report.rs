@@ -1313,7 +1313,7 @@ fn trait_error(source: Source, error: &SolveTraitError<'_>) -> Diagnostic {
 }
 
 fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) -> Diagnostic {
-    let (code, message, primary, secondary) = match error {
+    let (code, message, primary, primary_label, secondary, help) = match error {
         CoherenceError::SuperclassCycle { traits } => (
             "superclass_cycle",
             format!(
@@ -1325,7 +1325,9 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
                     .join(" -> ")
             ),
             Region::one(),
+            "this superclass closes the cycle",
             None,
+            Some("remove one of the superclass constraints in this cycle".to_owned()),
         ),
         CoherenceError::OrphanImpl {
             implementation,
@@ -1344,7 +1346,12 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
                     .unwrap_or("no owning package")
             ),
             impl_region(module, *implementation),
+            "this package owns neither side of the implementation",
             None,
+            Some(
+                "define either the trait or subject type in this package, or move the impl to a package that does"
+                    .to_owned(),
+            ),
         ),
         CoherenceError::OverlappingImpl {
             first,
@@ -1357,7 +1364,9 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
                 trait_.0.name
             ),
             impl_region(module, *second),
+            "this implementation overlaps the first",
             Some((impl_region(module, *first), "first implementation is here")),
+            Some("remove one impl or introduce a distinct wrapper type; Alder has no specialization".to_owned()),
         ),
         CoherenceError::InvalidTermination {
             implementation,
@@ -1369,7 +1378,9 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
                 prerequisite.0.name
             ),
             impl_region(module, *implementation),
+            "this prerequisite does not get structurally smaller",
             None,
+            Some("make every recursive instance prerequisite structurally smaller than its impl head".to_owned()),
         ),
         CoherenceError::KindMismatch {
             implementation,
@@ -1379,11 +1390,15 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
         } => (
             "kind_mismatch",
             format!(
-                "trait argument {} has kind arity {actual_arity}, but arity {expected_arity} is required",
-                parameter + 1
+                "trait argument {} must be {}, but this is {}",
+                parameter + 1,
+                kind_description(*expected_arity),
+                kind_description(*actual_arity)
             ),
             impl_region(module, *implementation),
+            "this trait argument has the wrong kind",
             None,
+            Some("use a type constructor with the arity required by the trait".to_owned()),
         ),
         CoherenceError::ProjectionCycle {
             implementation,
@@ -1400,16 +1415,29 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
                 chain.first().map_or("associated type", |assoc| assoc.name)
             ),
             impl_region(module, *implementation),
+            "these associated type definitions form a cycle",
             None,
+            Some("make at least one associated type resolve to a non-cyclic type".to_owned()),
         ),
     };
     let mut diagnostic = Diagnostic::error(source, message)
         .with_code(format!("alder::trait::{code}"))
-        .with_primary_label(primary, "invalid implementation");
+        .with_primary_label(primary, primary_label);
     if let Some((region, label)) = secondary {
         diagnostic = diagnostic.with_secondary_label(region, label);
     }
+    if let Some(help) = help {
+        diagnostic = diagnostic.with_help(help);
+    }
     diagnostic
+}
+
+fn kind_description(arity: u16) -> String {
+    match arity {
+        0 => "a concrete type".to_owned(),
+        1 => "a one-argument type constructor".to_owned(),
+        arity => format!("a {arity}-argument type constructor"),
+    }
 }
 
 type CanDetails = (

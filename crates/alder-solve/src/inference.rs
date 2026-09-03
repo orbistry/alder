@@ -47,6 +47,7 @@ fn resolve_obligations<'a>(
     database: &TraitDatabase<'a>,
     result: InferenceResult<'a>,
 ) -> Result<SolveOutput<'a>, Vec<SolveError<'a>>> {
+    let variable_names = result.variable_names;
     let mut uses = BTreeMap::new();
     let mut impl_superclasses = BTreeMap::new();
     let mut errors = Vec::new();
@@ -59,6 +60,7 @@ fn resolve_obligations<'a>(
             &obligation.givens,
             obligation.region,
             &mut stack,
+            &variable_names,
         ) {
             Ok(evidence) => match obligation.action {
                 ObligationAction::Reference(method) => match uses.entry(
@@ -273,7 +275,22 @@ fn resolve_derived_variant_fields<'a, 'field>(
             args: vec![ty_from_ast(typ, vars)],
         };
         let mut stack = Vec::new();
-        match resolve_predicate(bump, database, &predicate, givens, typ.region, &mut stack) {
+        let variable_names = vars
+            .iter()
+            .filter_map(|(name, typ)| match typ {
+                Ty::Var(id) => Some((*id, *name)),
+                _ => None,
+            })
+            .collect();
+        match resolve_predicate(
+            bump,
+            database,
+            &predicate,
+            givens,
+            typ.region,
+            &mut stack,
+            &variable_names,
+        ) {
             Ok(evidence) => {
                 resolved.insert(
                     DerivedFieldKey {
@@ -380,9 +397,10 @@ fn resolve_predicate<'a>(
     givens: &[Given<'a>],
     origin: Region,
     stack: &mut Vec<(TraitId<'a>, String)>,
+    variable_names: &BTreeMap<usize, &'a str>,
 ) -> Result<Evidence<'a>, SolveTraitError<'a>> {
     let subject = predicate.args.first().cloned().unwrap_or(Ty::Unit);
-    let rendered = render_ty(&subject);
+    let rendered = render_ty(&subject, variable_names);
     if let Some(given) = givens.iter().find(|given| {
         given.predicate.trait_ == predicate.trait_ && given.predicate.args == predicate.args
     }) {
@@ -398,8 +416,15 @@ fn resolve_predicate<'a>(
             origin,
         });
     }
-    if let Some(evidence) = resolve_structural_eq(bump, database, predicate, givens, origin, stack)?
-    {
+    if let Some(evidence) = resolve_structural_eq(
+        bump,
+        database,
+        predicate,
+        givens,
+        origin,
+        stack,
+        variable_names,
+    )? {
         return Ok(evidence);
     }
     stack.push((predicate.trait_, rendered.clone()));
@@ -430,7 +455,15 @@ fn resolve_predicate<'a>(
                     .map(|argument| substitute_type(argument, &bindings))
                     .collect(),
             };
-            match resolve_predicate(bump, database, &prerequisite, givens, origin, stack) {
+            match resolve_predicate(
+                bump,
+                database,
+                &prerequisite,
+                givens,
+                origin,
+                stack,
+                variable_names,
+            ) {
                 Ok(evidence) => arguments.push(evidence),
                 Err(error) => {
                     failed = Some(error);
@@ -485,6 +518,7 @@ fn resolve_structural_eq<'a>(
     givens: &[Given<'a>],
     origin: Region,
     stack: &mut Vec<(TraitId<'a>, String)>,
+    variable_names: &BTreeMap<usize, &'a str>,
 ) -> Result<Option<Evidence<'a>>, SolveTraitError<'a>> {
     if predicate.trait_ != builtin_trait_id("Eq") {
         return Ok(None);
@@ -513,6 +547,7 @@ fn resolve_structural_eq<'a>(
                 givens,
                 origin,
                 stack,
+                variable_names,
             )?);
         }
         return Ok(Some(Evidence::StructuralEq {
@@ -725,14 +760,17 @@ fn contains_variable(typ: &Ty<'_>) -> bool {
     }
 }
 
-fn render_ty(typ: &Ty<'_>) -> String {
+fn render_ty(typ: &Ty<'_>, variable_names: &BTreeMap<usize, &str>) -> String {
     match typ {
-        Ty::Var(id) => format!("t{id}"),
+        Ty::Var(id) => variable_names.get(id).copied().unwrap_or("a").to_owned(),
         Ty::Con(name) => name.name.to_owned(),
         Ty::App(head, args) => format!(
             "{}[{}]",
-            render_ty(head),
-            args.iter().map(render_ty).collect::<Vec<_>>().join(", ")
+            render_ty(head, variable_names),
+            args.iter()
+                .map(|arg| render_ty(arg, variable_names))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         Ty::Partial(name, slots) => format!(
             "{}[{}]",
@@ -741,7 +779,7 @@ fn render_ty(typ: &Ty<'_>) -> String {
                 .iter()
                 .map(|slot| match slot {
                     TySlot::Hole(_) => "_".to_owned(),
-                    TySlot::Fixed(typ) => render_ty(typ),
+                    TySlot::Fixed(typ) => render_ty(typ, variable_names),
                 })
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -749,18 +787,29 @@ fn render_ty(typ: &Ty<'_>) -> String {
         Ty::Projection(trait_, args, assoc) => format!(
             "{}[{}]::{}",
             trait_.0.name,
-            args.iter().map(render_ty).collect::<Vec<_>>().join(", "),
+            args.iter()
+                .map(|arg| render_ty(arg, variable_names))
+                .collect::<Vec<_>>()
+                .join(", "),
             assoc.name
         ),
         Ty::Fn(params, ret) => format!(
             "fn({}) -> {}",
-            params.iter().map(render_ty).collect::<Vec<_>>().join(", "),
-            render_ty(ret)
+            params
+                .iter()
+                .map(|param| render_ty(param, variable_names))
+                .collect::<Vec<_>>()
+                .join(", "),
+            render_ty(ret, variable_names)
         ),
         Ty::Unit => "()".to_owned(),
         Ty::Tuple(items) => format!(
             "({})",
-            items.iter().map(render_ty).collect::<Vec<_>>().join(", ")
+            items
+                .iter()
+                .map(|item| render_ty(item, variable_names))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         Ty::Record(_, _) => "{ .. }".to_owned(),
         Ty::ErrorRow => "[:_ | e]".to_owned(),
@@ -820,6 +869,7 @@ struct InferenceResult<'a> {
     bindings: BTreeMap<QualifiedName<'a>, BindingEvidence<'a>>,
     obligations: Vec<Obligation<'a>>,
     calls: Vec<CallSite<'a>>,
+    variable_names: BTreeMap<usize, &'a str>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -864,6 +914,7 @@ struct Infer<'a, 'db> {
     projection_equations: Vec<ProjectionEquation<'a>>,
     calls: Vec<CallSite<'a>>,
     requirement_seeds: BTreeMap<UseId, RequirementSeed<'a>>,
+    variable_names: BTreeMap<usize, &'a str>,
 }
 
 pub fn run<'a>(
@@ -914,6 +965,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 .iter()
                 .map(|seed| (seed.use_id, *seed))
                 .collect(),
+            variable_names: BTreeMap::new(),
         }
     }
 
@@ -1016,6 +1068,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             bindings,
             obligations,
             calls: std::mem::take(&mut self.calls),
+            variable_names: std::mem::take(&mut self.variable_names),
         })
     }
 
@@ -1291,6 +1344,11 @@ impl<'a, 'db> Infer<'a, 'db> {
         let predicates = self.predicates_from_constraints(constraints, &vars);
         let local_projection_equations =
             self.projection_equations_from_constraints(constraints, &vars)?;
+        for (name, typ) in &vars {
+            if let Ty::Var(id) = typ {
+                self.variable_names.entry(*id).or_insert(name);
+            }
+        }
         let outer_givens = std::mem::take(&mut self.givens);
         let outer_projection_equations = std::mem::take(&mut self.projection_equations);
         self.givens = outer_givens.clone();
@@ -2598,8 +2656,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             };
             for previous in &equations {
                 if previous.projection == equation.projection {
-                    let expected = render_ty(&previous.typ);
-                    let actual = render_ty(&equation.typ);
+                    let expected = render_ty(&previous.typ, &self.variable_names);
+                    let actual = render_ty(&equation.typ, &self.variable_names);
                     if self
                         .unify(previous.typ.clone(), equation.typ.clone(), *region)
                         .is_err()

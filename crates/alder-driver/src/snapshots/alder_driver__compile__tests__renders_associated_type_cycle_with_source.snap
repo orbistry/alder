@@ -11,5 +11,6 @@ alder::trait::projection_cycle
  7 │ │       type Left = Right
  8 │ │       type Right = Left
  9 │ ├─▶ }
-   · ╰──── invalid implementation
+   · ╰──── these associated type definitions form a cycle
    ╰────
+  help: make at least one associated type resolve to a non-cyclic type

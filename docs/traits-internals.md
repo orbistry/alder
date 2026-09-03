@@ -1616,6 +1616,12 @@ use, show candidate impl locations for ambiguity/overlap, and show the nested
 obligation chain. Common arithmetic failures lead with the concrete expected
 numeric type where available, preserving useful M2 diagnostics.
 
+Inference retains the source spelling for every generalized type variable used
+by an obligation. Reports render those names (for example, `a`) rather than
+solver implementation details such as numeric unification-variable IDs.
+Coherence reports label the exact impl sites involved and include an actionable
+help message; overlap reports label both source sites when both are available.
+
 ## File ownership and landing order
 
 Wave 0 is serial because it changes shared contracts:
