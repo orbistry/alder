@@ -105,8 +105,9 @@ pub async fn build_with_mode(
         .expect("compile task panicked")
 }
 
-/// Compile modules one at a time in dependency order, threading each
-/// solved module's interface to its dependents through a build-wide arena.
+/// Compile modules in dependency order, retrying failures after new package
+/// interfaces become available. The retry pass makes sibling-module instance
+/// visibility independent of the arbitrary order within a graph level.
 ///
 /// Type checking is inherently dependency-ordered, so within-build
 /// parallelism is limited to source fetching for now.
@@ -117,20 +118,40 @@ fn build_sync(sources: Vec<(Url, Result<String, String>)>, mode: BuildMode) -> B
     let mut results: HashMap<Url, ModuleResult> = HashMap::new();
     let mut all_warnings: Vec<String> = Vec::new();
     let mut artifacts = HashMap::new();
+    let total = sources.len();
+    let mut pending = (0..total).collect::<Vec<_>>();
+    let mut failures = HashMap::new();
 
-    for (uri, source) in &sources {
-        let (output, interface) = compile_module(uri, source, &store, &interfaces, mode);
-        if let Some(interface) = interface {
-            interfaces.push(interface);
+    loop {
+        let mut next = Vec::new();
+        let mut progress = false;
+        for index in pending {
+            let (uri, source) = &sources[index];
+            let (output, interface) = compile_module(uri, source, &store, &interfaces, mode);
+            if let Some(interface) = interface {
+                progress = true;
+                interfaces.push(interface);
+                failures.remove(&output.uri);
+                all_warnings.extend(output.warnings);
+                if let Some(artifact) = output.artifact {
+                    artifacts.insert(output.uri.clone(), artifact);
+                }
+                results.insert(output.uri, output.result);
+            } else {
+                failures.insert(output.uri, output.result);
+                next.push(index);
+            }
         }
-        all_warnings.extend(output.warnings);
-        if let Some(artifact) = output.artifact {
-            artifacts.insert(output.uri.clone(), artifact);
+        if next.is_empty() {
+            break;
         }
-        results.insert(output.uri, output.result);
+        if !progress {
+            results.extend(failures);
+            break;
+        }
+        pending = next;
     }
 
-    let total = results.len();
     let success = results
         .values()
         .filter(|r| matches!(r, ModuleResult::Success { .. }))
@@ -581,6 +602,32 @@ mod tests {
         };
         assert!(message.contains("no implementation of `Display[Number]` was found"));
         assert!(!message.contains("MissingInstance"));
+    }
+
+    #[test]
+    fn sibling_instances_are_visible_independent_of_input_order() {
+        let model = url("project/src/model.ald");
+        let consumer = url("project/src/a_consumer.ald");
+        let implementation = url("project/src/z_impl.ald");
+        let result = build_sync(
+            vec![
+                (
+                    model,
+                    Ok("pub enum Token { Token }\npub trait Display[a] { fn display(value: a) -> String }".to_owned()),
+                ),
+                (
+                    consumer.clone(),
+                    Ok("import ~/model.{ Token, display }\npub fn render(value: Token) -> String { display(value) }".to_owned()),
+                ),
+                (
+                    implementation,
+                    Ok("import ~/model.{ Token, Display }\nimpl Display[Token] { fn display(value: Token) -> String { \"token\" } }".to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+        );
+
+        assert!(result.is_success(), "{:?}", result.modules[&consumer]);
     }
 
     /// Unannotated mutually recursive exports used from another module:
