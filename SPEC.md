@@ -152,8 +152,10 @@ are kept through the redesign and adapted incrementally.
   solved module's interface into a build-wide arena for its dependents.
   Sources are fetched in parallel, but type checking is
   dependency-ordered. Graph ordering breaks ties by source URI; compilation
-  depth groups and cycle traversal are sorted too. Package-aware resolution
-  and duplicate identity validation are tracked in the hardening plan.
+  depth groups and cycle traversal are sorted too. CLI project builds share
+  package/source-root identities between graph resolution and compilation and
+  reject duplicate module sources before interface discovery. See
+  `docs/module-resolution-internals.md` and the remaining hardening audit.
 - **Caching:** Interface-only (always regenerate JavaScript), bincode serialization
 - **Invalidation:** Reverse dependency tracking for LSP
 - **Arenas:** Per-module bumpalo arenas

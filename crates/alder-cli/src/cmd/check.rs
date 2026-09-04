@@ -2,7 +2,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use alder_driver::{
-    BuildMode, Database, FileSystemSource, Project, build_graph, build_with_dependencies,
+    BuildMode, Database, FileSystemSource, Project, build_graph_with_dependencies,
+    build_with_dependencies,
 };
 use miette::{IntoDiagnostic, Result};
 use tokio::sync::Mutex;
@@ -25,7 +26,7 @@ impl Args {
         let db = Arc::new(Mutex::new(Database::new(FileSystemSource::new())));
 
         eprintln!("Discovering modules...");
-        let modules = project
+        let mut modules = project
             .discover_modules(&*db.lock().await)
             .await
             .into_diagnostic()?;
@@ -42,7 +43,12 @@ impl Args {
             .build_dependencies(&mut *db.lock().await, &modules, false)
             .await
             .into_diagnostic()?;
-        let graph = build_graph(db.clone(), &modules).await.into_diagnostic()?;
+        modules.extend(dependencies.source_modules.iter().cloned());
+        modules.sort();
+        modules.dedup();
+        let graph = build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+            .await
+            .into_diagnostic()?;
 
         eprintln!("Dependency order: {} modules", graph.order.len());
 

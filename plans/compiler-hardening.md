@@ -55,7 +55,7 @@ current reparse/comment comparison cannot detect changed literal values.
 
 ### 4. Deterministic modules
 
-- [ ] Reject `util.ald` alongside `util/mod.ald`, labeling both sources.
+- [x] Reject `util.ald` alongside `util/mod.ald`, labeling both sources.
 - [ ] Canonical identities and import lookup use package/source-root context.
 - [ ] Audit root modules, workspaces, same-path dependencies, repeated `src`
   directories, interface/cache identities, and initialization/build ordering.
@@ -150,9 +150,32 @@ Root cause: virtual module imports lack a physical importer location.
 - [ ] Exactly-once completion/observers, child ownership, all/race cleanup,
   finalizer registration while/after closing, and masked interruption.
 - [ ] Deterministic cache identities, source fidelity, and deferred constructs.
+- [ ] Public wildcard/name re-exports: `pub import ~/src/util.*` is accepted
+  but its values are absent from the publishing module's interface. Reproduced
+  through a package-root consumer calling the re-exported `answer`; investigate
+  named re-exports, origin identity, codegen bindings, and cyclic re-export cases.
 - [ ] Identify inactive Elm-era Rust modules and correct obsolete claims.
 
 ## Evidence log
+
+- Module identity checkpoint: duplicate-source regression failed before the fix.
+  Preflight now rejects conflicting package-qualified identities before any
+  interface discovery, with a reviewed colorless diagnostic labeling both
+  source files. The original CLI duplicate probe now exits 1 with that error.
+  Project builds supply explicit source-root-relative module paths, and CLI
+  check/build use a graph resolver sharing those identities with compilation.
+  A positive test checks graph edges, interfaces, and emitted IDs for equal
+  module paths in two packages, repeated/nested `src` directories, package-root
+  imports, and reversed discovery order. Root imports now target the documented
+  empty-path `mod.ald` identity instead of a package-named child module.
+  Workspace application identities, overlap handling, low-level source-only
+  API fallback paths, cache validation, and full CLI package execution remain
+  audit work; these changes do not close the whole module-resolution finding.
+  Validation: all 84 driver tests, full workspace tests (including existing
+  CLI package execution), strict all-target/all-feature Clippy, and formatting
+  pass. One new duplicate diagnostic snapshot was reviewed and accepted; no
+  pending snapshots remain. Packaging against the final pending release set
+  remains a final gate.
 
 - Formatter checkpoint: 12 formatter tests, 1,292 parser tests, and the CLI
   no-write regression pass. A further CLI test applies a real formatting change,

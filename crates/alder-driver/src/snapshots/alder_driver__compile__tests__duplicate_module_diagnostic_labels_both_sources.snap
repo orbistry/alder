@@ -1,0 +1,22 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn answer() Number { 42 }"
+---
+alder::driver::duplicate_module
+
+  × multiple files define module `util`
+   ╭─[/project/src/util.ald:1:1]
+ 1 │ pub fn answer() Number { 42 }
+   · ▲
+   · ╰── one definition is in this file
+   ╰────
+  help: Keep only one source file for this module: a name.ald file and name/
+        mod.ald define the same module.
+
+Error: 
+  × this file defines the same module
+   ╭─[/project/src/util/mod.ald:1:1]
+ 1 │ pub fn answer() Number { 42 }
+   · ▲
+   · ╰── conflicting module source
+   ╰────

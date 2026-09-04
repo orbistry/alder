@@ -53,7 +53,7 @@ pub mod source;
 // Re-export main types
 pub use compile::{
     BuildDependencies, BuildMode, BuildResult, ModuleResult, build, build_graph,
-    build_with_dependencies, build_with_mode,
+    build_graph_with_dependencies, build_with_dependencies, build_with_mode,
 };
 pub use database::Database;
 pub use error::DriverError;

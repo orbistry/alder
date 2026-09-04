@@ -85,6 +85,8 @@ impl Project {
             }
         }
 
+        modules.sort();
+        modules.dedup();
         Ok(modules)
     }
 
@@ -110,6 +112,35 @@ impl Project {
                         .any(|source| path.starts_with(source))
                 })?;
                 Some((uri.clone(), member.package_id()))
+            })
+            .collect()
+    }
+
+    /// Resolve paths using actual source directories, never a textual `src`
+    /// occurrence in an ancestor directory or a nested module name.
+    pub fn module_paths(&self, modules: &[Url]) -> Result<BTreeMap<Url, Vec<String>>, DriverError> {
+        modules
+            .iter()
+            .map(|uri| {
+                let path = uri
+                    .to_file_path()
+                    .map_err(|_| DriverError::InvalidFileUri { uri: uri.clone() })?;
+                let relative = self
+                    .members
+                    .iter()
+                    .flat_map(|member| &member.source_dirs)
+                    .filter_map(|root| path.strip_prefix(root).ok())
+                    .next()
+                    .ok_or_else(|| DriverError::InvalidModulePath { path: path.clone() })?;
+                let mut parts = relative
+                    .with_extension("")
+                    .components()
+                    .map(|part| part.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>();
+                if parts.last().is_some_and(|part| part == "mod") {
+                    parts.pop();
+                }
+                Ok((uri.clone(), parts))
             })
             .collect()
     }
@@ -143,6 +174,7 @@ impl Project {
 
         let mut result = BuildDependencies {
             module_packages: self.module_packages(modules),
+            module_paths: self.module_paths(modules)?,
             ..BuildDependencies::default()
         };
         let mut loaded = std::collections::BTreeSet::new();
@@ -202,6 +234,9 @@ impl Project {
                             .cloned()
                             .map(|module| (module, package.clone())),
                     );
+                    result
+                        .module_paths
+                        .extend(dependency_project.module_paths(&dependency_modules)?);
                     result.source_modules.extend(dependency_modules);
                 }
                 let cache = InterfaceCache::new(&root);
@@ -344,7 +379,7 @@ mod tests {
 
     #[test]
     fn package_modules_receive_the_declared_package_identity() {
-        let root = PathBuf::from("/workspace/widgets");
+        let root = PathBuf::from("/workspace/src/widgets");
         let member = ProjectMember {
             root: root.clone(),
             config: Config::Package(alder_config::Package {
@@ -364,7 +399,11 @@ mod tests {
             config: member.config.clone(),
             members: vec![member],
         };
-        let module = Url::from_file_path("/workspace/widgets/src/model.ald").unwrap();
+        let module = Url::from_file_path("/workspace/src/widgets/src/src/model.ald").unwrap();
+        assert_eq!(
+            project.module_paths(std::slice::from_ref(&module)).unwrap()[&module],
+            vec!["src".to_owned(), "model".to_owned()]
+        );
 
         assert_eq!(
             project.module_packages(std::slice::from_ref(&module))[&module],

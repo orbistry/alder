@@ -86,6 +86,8 @@ pub struct BuildDependencies {
     /// generated evidence imports retain in-memory Oxc ASTs through bundling.
     pub source_modules: Vec<Url>,
     pub module_packages: BTreeMap<Url, OwnedPackageId>,
+    /// Paths relative to each module's actual package source root.
+    pub module_paths: BTreeMap<Url, Vec<String>>,
     pub interfaces: Vec<InterfaceFile>,
     pub package_instance_indexes: Vec<PackageInstanceIndexFile>,
 }
@@ -127,6 +129,64 @@ pub async fn build_with_mode(
     build_with_dependencies(db, graph, mode, BuildDependencies::default()).await
 }
 
+fn duplicate_sources(
+    sources: &[(Url, Result<String, String>)],
+    dependencies: &BuildDependencies,
+) -> Option<BuildResult> {
+    let identities = sources
+        .iter()
+        .map(|(uri, _)| (uri.clone(), source_identity(uri, dependencies)))
+        .collect::<BTreeMap<_, _>>();
+    let mut origins = BTreeMap::<OwnedModuleId, Vec<&Url>>::new();
+    for (uri, identity) in &identities {
+        origins.entry(identity.clone()).or_default().push(uri);
+    }
+    let mut duplicates = HashMap::new();
+    for (identity, uris) in origins.iter().filter(|(_, uris)| uris.len() > 1) {
+        let source_for = |uri: &Url| {
+            Source::new(
+                uri.path(),
+                sources
+                    .iter()
+                    .find(|(candidate, _)| candidate == uri)
+                    .and_then(|(_, source)| source.as_ref().ok())
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+        };
+        let mut diagnostic = Diagnostic::error(source_for(uris[0]),
+            format!("multiple files define module `{}`", identity.path.join("/")))
+            .with_code("alder::driver::duplicate_module")
+            .with_primary_label(alder_region::Region::one(), "one definition is in this file")
+            .with_help("Keep only one source file for this module: a name.ald file and name/mod.ald define the same module.");
+        for uri in &uris[1..] {
+            diagnostic = diagnostic.with_related(
+                Diagnostic::error(source_for(uri), "this file defines the same module")
+                    .with_primary_label(alder_region::Region::one(), "conflicting module source"),
+            );
+        }
+        duplicates.insert(
+            uris[0].clone(),
+            ModuleResult::Failed {
+                diagnostics: vec![diagnostic],
+            },
+        );
+    }
+    if !duplicates.is_empty() {
+        return Some(BuildResult {
+            total: duplicates.len(),
+            failed: duplicates.len(),
+            success: 0,
+            modules: duplicates,
+            warnings: vec![],
+            artifacts: HashMap::new(),
+            interfaces: vec![],
+            package_instance_indexes: vec![],
+        });
+    }
+    None
+}
+
 pub async fn build_with_dependencies(
     db: Arc<Mutex<Database>>,
     graph: &DepGraph,
@@ -154,6 +214,13 @@ fn build_sync(
     mode: BuildMode,
     dependencies: BuildDependencies,
 ) -> BuildResult {
+    if let Some(failure) = duplicate_sources(&sources, &dependencies) {
+        return failure;
+    }
+    let identities = sources
+        .iter()
+        .map(|(uri, _)| (uri.clone(), source_identity(uri, &dependencies)))
+        .collect::<BTreeMap<_, _>>();
     // This arena owns canonical package headers and solved public interfaces.
     // Every source module and all phase-local ASTs use a separate arena in
     // `compile_module`.
@@ -169,7 +236,6 @@ fn build_sync(
         .flat_map(|index| index.hydrate_instances(&store).iter().copied())
         .collect::<Vec<_>>();
     let package_instances = store.alloc_slice_copy(&package_instances);
-    let default_package = OwnedPackageId::Application;
 
     let total = sources.len();
     let mut solved_interfaces = vec![false; total];
@@ -181,14 +247,10 @@ fn build_sync(
                 continue;
             }
             let (uri, source) = &sources[index];
-            let package = dependencies
-                .module_packages
-                .get(uri)
-                .unwrap_or(&default_package);
             let (_, discovered) = compile_module(
                 uri,
                 source,
-                package,
+                &identities[uri],
                 &store,
                 &interfaces,
                 package_instances,
@@ -220,14 +282,10 @@ fn build_sync(
     let mut artifacts = HashMap::new();
     let mut interface_files = Vec::new();
     for (uri, source) in &sources {
-        let package = dependencies
-            .module_packages
-            .get(uri)
-            .unwrap_or(&default_package);
         let (output, discovered) = compile_module(
             uri,
             source,
-            package,
+            &identities[uri],
             &store,
             &interfaces,
             package_instances,
@@ -330,7 +388,7 @@ async fn fetch_sources(
 fn compile_module<'s>(
     uri: &Url,
     source: &Result<String, String>,
-    package: &OwnedPackageId,
+    identity: &OwnedModuleId,
     store: &'s Bump,
     interfaces: &[Interface<'s>],
     package_instances: &'s [alder_ast::InterfaceImpl<'s>],
@@ -369,7 +427,15 @@ fn compile_module<'s>(
         Err(e) => return failed(vec![crate::report::parse(report_source, &e)]),
     };
 
-    let home = module_id_from_uri(&module_arena, uri, package);
+    let home = ModuleId {
+        package: hydrate_package_id(&module_arena, &identity.package),
+        path: module_arena.alloc_slice_fill_iter(
+            identity
+                .path
+                .iter()
+                .map(|part| module_arena.alloc_str(part) as &str),
+        ),
+    };
     let imports = resolve_imports(&module_arena, &module, home.package);
     let interfaces = interfaces
         .iter()
@@ -552,7 +618,20 @@ fn coherence_belongs_to(error: &alder_solve::CoherenceError<'_>, home: ModuleId<
     }
 }
 
-fn module_id_from_uri<'a>(bump: &'a Bump, uri: &Url, package: &OwnedPackageId) -> ModuleId<'a> {
+fn source_identity(uri: &Url, dependencies: &BuildDependencies) -> OwnedModuleId {
+    let package = dependencies
+        .module_packages
+        .get(uri)
+        .cloned()
+        .unwrap_or(OwnedPackageId::Application);
+    if let Some(path) = dependencies.module_paths.get(uri) {
+        return OwnedModuleId {
+            package,
+            path: path.clone(),
+        };
+    }
+    // Compatibility for source-only driver clients without project metadata.
+    // Project builds always provide source-root-relative paths explicitly.
     let path = uri.path();
     let relative = path
         .split("/src/")
@@ -563,13 +642,9 @@ fn module_id_from_uri<'a>(bump: &'a Bump, uri: &Url, package: &OwnedPackageId) -
     if segments.last() == Some(&"mod") {
         segments.pop();
     }
-    ModuleId {
-        package: hydrate_package_id(bump, package),
-        path: bump.alloc_slice_fill_iter(
-            segments
-                .into_iter()
-                .map(|part| bump.alloc_str(part) as &str),
-        ),
+    OwnedModuleId {
+        package,
+        path: segments.into_iter().map(str::to_owned).collect(),
     }
 }
 
@@ -610,12 +685,7 @@ fn resolve_imports<'a>(
                     Some(package),
                 ),
             };
-            let mut parts: Vec<_> = path.segments.iter().map(|segment| segment.value).collect();
-            if parts.is_empty()
-                && let Some(root_name) = root_name
-            {
-                parts.push(root_name.value);
-            }
+            let parts: Vec<_> = path.segments.iter().map(|segment| segment.value).collect();
             let module_id = ModuleId {
                 package,
                 path: bump.alloc_slice_copy(&parts),
@@ -661,7 +731,29 @@ pub async fn build_graph(
     db: Arc<Mutex<Database>>,
     modules: &[Url],
 ) -> Result<DepGraph, DriverError> {
+    build_graph_with_dependencies(db, modules, &BuildDependencies::default()).await
+}
+
+/// Resolve graph edges with the same package identities and source-relative
+/// paths used by canonicalization. Ambiguous identities are diagnosed by build
+/// preflight before any interfaces or code are produced.
+pub async fn build_graph_with_dependencies(
+    db: Arc<Mutex<Database>>,
+    modules: &[Url],
+    dependencies: &BuildDependencies,
+) -> Result<DepGraph, DriverError> {
     let mut graph = DepGraph::new();
+    let identities = modules
+        .iter()
+        .map(|uri| (uri.clone(), source_identity(uri, dependencies)))
+        .collect::<BTreeMap<_, _>>();
+    let mut origins = BTreeMap::<OwnedModuleId, Vec<Url>>::new();
+    for (uri, identity) in &identities {
+        origins
+            .entry(identity.clone())
+            .or_default()
+            .push(uri.clone());
+    }
 
     for uri in modules {
         // Parse module to get imports
@@ -670,7 +762,7 @@ pub async fn build_graph(
             db.source(uri).await?.to_string()
         };
 
-        let imports = extract_imports(&source, uri, modules);
+        let imports = extract_imports(&source, &identities[uri].package, &origins);
         graph.add_module(uri.clone(), imports);
     }
 
@@ -680,8 +772,12 @@ pub async fn build_graph(
 
 /// Extract import URIs from source code.
 ///
-/// This is a simplified implementation - in production we'd use the parser.
-fn extract_imports(source: &str, current: &Url, known_modules: &[Url]) -> Vec<Url> {
+/// Parse imports and look up their exact package-qualified identities.
+fn extract_imports(
+    source: &str,
+    package: &OwnedPackageId,
+    known_modules: &BTreeMap<OwnedModuleId, Vec<Url>>,
+) -> Vec<Url> {
     let mut imports = Vec::new();
 
     // Parse to get imports
@@ -691,7 +787,7 @@ fn extract_imports(source: &str, current: &Url, known_modules: &[Url]) -> Vec<Ur
 
     if let Ok(module) = parser.module() {
         for import in module.imports() {
-            if let Some(uri) = resolve_source_import(import, current, known_modules) {
+            if let Some(uri) = resolve_source_import(import, package, known_modules) {
                 imports.push(uri);
             }
         }
@@ -702,32 +798,27 @@ fn extract_imports(source: &str, current: &Url, known_modules: &[Url]) -> Vec<Ur
 
 /// Resolve an import name to a module URI.
 ///
-/// This is a simplified implementation. Full resolution would handle:
-/// - Package dependencies
-/// - Source directory structure
-/// - Module naming conventions
 fn resolve_source_import(
     import: &alder_source::Import<'_>,
-    _current: &Url,
-    known_modules: &[Url],
+    current_package: &OwnedPackageId,
+    known_modules: &BTreeMap<OwnedModuleId, Vec<Url>>,
 ) -> Option<Url> {
-    if !matches!(import.path.value.root, alder_source::ModuleRoot::Local(_)) {
-        return None;
-    }
+    let package = match import.path.value.root {
+        alder_source::ModuleRoot::Local(_) => current_package.clone(),
+        alder_source::ModuleRoot::Package { author, package } => OwnedPackageId::Named {
+            author: author.value.to_owned(),
+            project: package.value.to_owned(),
+        },
+    };
     let path = import
         .path
         .value
         .segments
         .iter()
-        .map(|segment| segment.value)
-        .collect::<Vec<_>>()
-        .join("/");
-    let file = format!("/src/{path}.ald");
-    let index = format!("/src/{path}/mod.ald");
-    known_modules
-        .iter()
-        .find(|uri| uri.path().ends_with(&file) || uri.path().ends_with(&index))
-        .cloned()
+        .map(|segment| segment.value.to_owned())
+        .collect::<Vec<_>>();
+    let candidates = known_modules.get(&OwnedModuleId { package, path })?;
+    (candidates.len() == 1).then(|| candidates[0].clone())
 }
 
 #[cfg(test)]
@@ -765,6 +856,128 @@ mod tests {
 
     fn url(path: &str) -> Url {
         Url::parse(&format!("file:///{}", path)).unwrap()
+    }
+
+    #[test]
+    fn duplicate_module_identity_cannot_publish_interfaces_or_code() {
+        let source = "pub fn answer() Number { 42 }";
+        for paths in [
+            ["project/src/util.ald", "project/src/util/mod.ald"],
+            ["project/src/util/mod.ald", "project/src/util.ald"],
+        ] {
+            let result = build_sync(
+                paths
+                    .into_iter()
+                    .map(|path| (url(path), Ok(source.to_owned())))
+                    .collect(),
+                BuildMode::Build,
+                BuildDependencies::default(),
+            );
+            assert!(!result.is_success());
+            assert!(result.interfaces.is_empty());
+            assert!(result.artifacts.is_empty());
+        }
+    }
+
+    #[test]
+    fn duplicate_module_diagnostic_labels_both_sources() {
+        let source = "pub fn answer() Number { 42 }";
+        let result = build_sync(
+            vec![
+                (url("project/src/util/mod.ald"), Ok(source.to_owned())),
+                (url("project/src/util.ald"), Ok(source.to_owned())),
+            ],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/util.ald")]
+        else {
+            panic!("duplicate must fail");
+        };
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[tokio::test]
+    async fn graph_and_compilation_share_package_qualified_source_paths() {
+        let app = url("checkout/src/application/src/main.ald");
+        let local = url("checkout/src/application/src/src/util.ald");
+        let foreign = url("checkout/src/widgets/src/src/util.ald");
+        let root = url("checkout/src/widgets/src/mod.ald");
+        let package = OwnedPackageId::Named {
+            author: "vendor".to_owned(),
+            project: "widgets".to_owned(),
+        };
+        let dependencies = BuildDependencies {
+            module_packages: BTreeMap::from([
+                (foreign.clone(), package.clone()),
+                (root.clone(), package),
+            ]),
+            module_paths: BTreeMap::from([
+                (app.clone(), vec!["main".to_owned()]),
+                (local.clone(), vec!["src".to_owned(), "util".to_owned()]),
+                (foreign.clone(), vec!["src".to_owned(), "util".to_owned()]),
+                (root.clone(), vec![]),
+            ]),
+            ..BuildDependencies::default()
+        };
+        let sources = InMemorySource::with_files([
+            (
+                app.clone(),
+                indoc::indoc! {r#"
+                import ~/src/util as local
+                import @vendor/widgets
+                pub fn main() {
+                    assert(local.answer() == 42)
+                    assert(widgets.answer() == "foreign")
+                }
+            "#}
+                .to_owned(),
+            ),
+            (local.clone(), "pub fn answer() Number { 42 }".to_owned()),
+            (
+                foreign.clone(),
+                "pub fn answer() String { \"foreign\" }".to_owned(),
+            ),
+            (
+                root.clone(),
+                indoc::indoc! {r#"
+                import ~/src/util
+                pub fn answer() String { util.answer() }
+            "#}
+                .to_owned(),
+            ),
+        ]);
+        let db = Arc::new(Mutex::new(Database::new(sources)));
+        for modules in [
+            vec![app.clone(), local.clone(), foreign.clone(), root.clone()],
+            vec![root.clone(), foreign.clone(), local.clone(), app.clone()],
+        ] {
+            let graph = build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+                .await
+                .unwrap();
+            assert_eq!(graph.edges[&root], vec![foreign.clone()]);
+            let mut expected = vec![local.clone(), root.clone()];
+            expected.sort();
+            assert_eq!(graph.edges[&app], expected);
+            let result =
+                build_with_dependencies(db.clone(), &graph, BuildMode::Build, dependencies.clone())
+                    .await;
+            assert!(result.is_success(), "{:?}", result.modules);
+            assert_eq!(
+                result.artifacts[&local].module_id,
+                "alder://app/src/util.mjs"
+            );
+            assert_eq!(
+                result
+                    .interfaces
+                    .iter()
+                    .find(|i| i.module.path.is_empty())
+                    .unwrap()
+                    .module
+                    .package,
+                dependencies.module_packages[&root]
+            );
+        }
     }
 
     fn dependency_interface(

@@ -3,8 +3,8 @@ use std::{path::PathBuf, sync::Arc};
 use alder_bundle::EntryKind;
 use alder_config::{Config, Target};
 use alder_driver::{
-    BuildMode, BuildResult, Database, FileSystemSource, InterfaceCache, Project, build_graph,
-    build_with_dependencies,
+    BuildMode, BuildResult, Database, FileSystemSource, InterfaceCache, Project,
+    build_graph_with_dependencies, build_with_dependencies,
 };
 use miette::{IntoDiagnostic, Result, miette};
 use tokio::sync::Mutex;
@@ -74,7 +74,9 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
     modules.extend(dependencies.source_modules.iter().cloned());
     modules.sort();
     modules.dedup();
-    let graph = build_graph(db.clone(), &modules).await.into_diagnostic()?;
+    let graph = build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+        .await
+        .into_diagnostic()?;
     let result = build_with_dependencies(db, &graph, mode, dependencies).await;
     for warning in &result.warnings {
         eprintln!("{:?}", miette::Report::new(warning.clone()));
