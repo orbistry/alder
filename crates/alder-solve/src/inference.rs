@@ -4725,22 +4725,26 @@ impl<'a, 'db> Infer<'a, 'db> {
                     };
                 }
                 let shared = self.fresh_with_kind(VariableKind::ErrorRow);
-                self.unify(
-                    left_tail,
+                // An empty residual is just the shared tail, not a new row
+                // structure that specializes a universally quantified variable.
+                let left_binding = if right.is_empty() {
+                    shared.clone()
+                } else {
                     Ty::ErrorRow {
                         tags: right,
                         tail: Some(Box::new(shared.clone())),
-                    },
-                    region,
-                )?;
-                self.unify(
-                    right_tail,
+                    }
+                };
+                let right_binding = if left.is_empty() {
+                    shared
+                } else {
                     Ty::ErrorRow {
                         tags: left,
                         tail: Some(Box::new(shared)),
-                    },
-                    region,
-                )
+                    }
+                };
+                self.unify(left_tail, left_binding, region)?;
+                self.unify(right_tail, right_binding, region)
             }
         }
     }

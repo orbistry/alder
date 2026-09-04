@@ -47,7 +47,14 @@ between caller and declaration variable names, and rejection of generic
 specialization and wrong payloads. The AbortSignal extern Task check now follows
 alias targets; canonicalization and executable Promise-backed CLI cases pass.
 
-Still required: error-tail arguments, full higher-kinded alias applications,
+Error-tail regressions now cover open and concrete arguments, propagation,
+tag payload checking and rejection of unlisted tags. These exposed an existing
+solver defect in generic Result identities: unifying empty residual error rows
+wrapped universal variables in a row structure. Empty residuals now bind directly
+to the shared variable. Direct and aliased forms pass, with imported execution
+coverage in the records fixture.
+
+Still required: broader error-row inclusion checks, full higher-kinded alias applications,
 serialized imported alias use, private alias publication, and remaining consumers
 that inspect a type's outer constructor. Core positive regressions are not evidence that
 all alias acceptance work is finished.

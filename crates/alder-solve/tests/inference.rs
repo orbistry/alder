@@ -8,6 +8,57 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn generic_error_row_identity_does_not_specialize_its_tail() {
+    let source = indoc! {r#"
+        fn preserve(value: Result[a, [:missing(String) | e]]) Result[a, [:missing(String) | e]] {
+            value
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn error_row_aliases_preserve_open_tails_and_concrete_tags() {
+    let source = indoc! {r#"
+        type Outcome[a, e] = Result[a, [:missing(String) | e]]
+        fn preserve(value: Outcome[a, e]) Outcome[a, e] { value }
+        fn fail() Outcome[Number, [:timeout]] { Err(:timeout) }
+        fn propagate() Outcome[Number, [:timeout]] {
+            let value = preserve(fail())?
+            Ok(value)
+        }
+        fn run() Number {
+            match propagate() {
+                Ok(value) => value,
+                Err(:missing(message)) => String.length(message),
+                Err(:timeout) => 42,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn error_row_aliases_reject_unlisted_tags_and_wrong_payloads() {
+    for source in [
+        indoc! {r#"
+            type Outcome = Result[Number, [:missing(String)]]
+            fn invalid() Outcome { Err(:timeout) }
+        "#},
+        indoc! {r#"
+            type Outcome[e] = Result[Number, [:missing(String) | e]]
+            fn invalid() Outcome[[:timeout]] { Err(:missing(42)) }
+        "#},
+    ] {
+        assert!(infer(&Bump::new(), source).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn record_aliases_substitute_open_and_concrete_row_arguments() {
     let source = indoc! {r#"
         type WithX[r] = { r | x: Number }

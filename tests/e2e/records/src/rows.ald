@@ -12,6 +12,12 @@ pub type OptionalName = { name?: String }
 
 pub type Boxed[a] = { value: a }
 
+pub type Outcome[e] = Result[Number, [:missing(String) | e]]
+
+pub fn failure() Outcome[[:timeout]] { Err(:timeout) }
+
+pub fn preserve_outcome(value: Outcome[e]) Outcome[e] { value }
+
 pub fn boxed(value: a) Boxed[a] { { value } }
 
 pub fn choose(flag: Bool, record: OptionalName) {

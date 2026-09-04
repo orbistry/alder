@@ -523,6 +523,20 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Final gates
 
+- Error-row alias follow-up: reproduced generic Result identity rejection both
+  directly and through an alias (`GenericSpecialization e = [_]`). Error-row
+  unification constructed empty residual wrappers around fresh shared tails.
+  Empty residuals now bind directly to the shared variable, preserving universal
+  identity. Regressions cover open/concrete aliased tails, propagation, wrong
+  payloads and unlisted tags; added imported CLI execution. Full workspace tests
+  pass (173 solver integration tests), as do strict Clippy, formatting and diff
+  checks. No snapshot changes or pending snapshot files.
+  Next soundness check: `include_error_rows` currently returns success for an
+  open target when residual source tags are empty without constraining a source
+  tail, and constructs a fresh target extension otherwise. Investigate whether
+  arbitrary source/target tails can be incorrectly treated as unrelated; do not
+  treat the identity fix as proof of directional inclusion soundness.
+
 - Alias follow-up: reproduced rejection of an AbortSignal extern returning a
   chained Task alias; the canonical Task check now unwraps alias targets, as
   codegen already did. Both canonicalizer and executable Promise-backed CLI

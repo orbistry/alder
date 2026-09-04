@@ -51,6 +51,13 @@ fn field_matches(record: { value?: Number }, expected: Option[Number]) Bool {
 }
 
 pub fn main() {
+    let outcome = rows.preserve_outcome(rows.failure())
+    let error_value = match outcome {
+        Ok(value) => value,
+        Err(:missing(message)) => String.length(message),
+        Err(:timeout) => 42,
+    }
+    assert(error_value == 42)
     let first = rows.rename({ name: "old", score: 42 }, "new")
     let second = rows.rename({ name: "old", enabled: true }, "other")
     assert(first.score == 42)
