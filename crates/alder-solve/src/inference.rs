@@ -1326,13 +1326,18 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.infer_value_item(&mut env, &item.value.kind, item.region)?;
                 }
             }
+            let mut outer_free =
+                self.environment_free_vars(&env, &group.members.iter().copied().collect());
+            // Restricted bindings in this SCC are shared state too. Excluding
+            // the entire recursive group must not let a sibling function
+            // quantify variables reachable through one of these bindings.
             for member in group.members {
-                let outer_free =
-                    self.environment_free_vars(&env, &group.members.iter().copied().collect());
-                let generalizable = !matches!(
-                    value_items[member].value.kind,
-                    ItemKind::Let(decl) if decl.mutable
-                );
+                if !generalizable_item(&value_items[member].value.kind) {
+                    outer_free.extend(self.scheme_free_vars(&env.globals[member]));
+                }
+            }
+            for member in group.members {
+                let generalizable = generalizable_item(&value_items[member].value.kind);
                 self.generalize_global(&mut env, *member, &outer_free, generalizable);
             }
         }
@@ -1351,6 +1356,18 @@ impl<'a, 'db> Infer<'a, 'db> {
         let mut annotations = BTreeMap::new();
         let mut bindings = BTreeMap::new();
         for (name, scheme) in env.globals {
+            if matches!(
+                value_items[&name].value.visibility,
+                alder_ast::Visibility::Public(_)
+            ) && !self.scheme_free_vars(&scheme).is_empty()
+            {
+                return Err(Error {
+                    region: value_items[&name].region,
+                    kind: ErrorKind::UnresolvedSharedExport {
+                        name: name.name.to_owned(),
+                    },
+                });
+            }
             let abi = match self.prune(scheme.typ.clone()) {
                 Ty::Fn(_, _) => BindingAbi::DirectFunction,
                 _ if scheme.predicates.is_empty() => BindingAbi::PlainValue,
@@ -1481,7 +1498,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let excluded = decl.bindings.iter().copied().collect();
                 let outer_free = self.environment_free_vars(env, &excluded);
                 for binding in decl.bindings {
-                    self.generalize_global(env, *binding, &outer_free, !decl.mutable);
+                    self.generalize_global(env, *binding, &outer_free, generalizable_item(item));
                 }
             }
             ItemKind::Component(component) => {
@@ -3096,21 +3113,25 @@ impl<'a, 'db> Infer<'a, 'db> {
             .collect::<Vec<_>>();
         let mut result = BTreeSet::new();
         for scheme in schemes {
-            let mut free = BTreeSet::new();
-            self.free_vars(&scheme.typ, &mut free);
-            for predicate in &scheme.predicates {
-                for argument in &predicate.args {
-                    self.free_vars(argument, &mut free);
-                }
-            }
-            for equation in &scheme.projection_eqs {
-                self.free_vars(&equation.projection, &mut free);
-                self.free_vars(&equation.typ, &mut free);
-            }
-            free.retain(|variable| !scheme.quantified.contains(variable));
-            result.extend(free);
+            result.extend(self.scheme_free_vars(&scheme));
         }
         result
+    }
+
+    fn scheme_free_vars(&mut self, scheme: &Scheme<'a>) -> BTreeSet<usize> {
+        let mut free = BTreeSet::new();
+        self.free_vars(&scheme.typ, &mut free);
+        for predicate in &scheme.predicates {
+            for argument in &predicate.args {
+                self.free_vars(argument, &mut free);
+            }
+        }
+        for equation in &scheme.projection_eqs {
+            self.free_vars(&equation.projection, &mut free);
+            self.free_vars(&equation.typ, &mut free);
+        }
+        free.retain(|variable| !scheme.quantified.contains(variable));
+        free
     }
 
     fn instantiate(&mut self, scheme: &Scheme<'a>) -> Ty<'a> {
@@ -4610,6 +4631,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             });
         }
         let mut params = names.into_iter().collect::<Vec<_>>();
+        params.retain(|(id, _)| scheme.quantified.contains(id));
         params.sort_by_key(|(_, name)| generated_type_name_rank(name));
         self.bump.alloc(Annotation {
             params: self
@@ -4917,6 +4939,26 @@ fn block_contains_return(block: &Located<Block<'_>>) -> bool {
             | Stmt::Assert(_)
             | Stmt::Expr(_) => false,
         })
+}
+
+fn generalizable_item(item: &ItemKind<'_>) -> bool {
+    match item {
+        ItemKind::Let(decl) => {
+            !decl.mutable
+                && matches!(
+                    decl.value.value,
+                    Expr::Lambda { .. }
+                        | Expr::Var { .. }
+                        | Expr::Constructor(_)
+                        | Expr::Number { .. }
+                        | Expr::BigInt(_)
+                        | Expr::Str(_)
+                        | Expr::Bool(_)
+                        | Expr::Unit
+                )
+        }
+        _ => true,
+    }
 }
 
 fn is_value_item(item: &ItemKind<'_>) -> bool {

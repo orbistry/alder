@@ -1851,6 +1851,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_unresolved_shared_export_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            pub let shared = []
+        "#};
+    }
+
+    #[tokio::test]
+    async fn shared_state_remains_monomorphic_across_module_interfaces() {
+        let mem = InMemorySource::new();
+        mem.insert(
+            url("project/src/state.ald"),
+            indoc::indoc! {r#"
+                pub let shared: Array[Number] = []
+        "#}
+            .to_owned(),
+        );
+        mem.insert(
+            url("project/src/main.ald"),
+            indoc::indoc! {r#"
+                import ~/state
+            pub fn main() { Array.push(state.shared, "text") }
+        "#}
+            .to_owned(),
+        );
+        let db = Arc::new(Mutex::new(Database::new(mem)));
+        let modules = vec![url("project/src/state.ald"), url("project/src/main.ald")];
+        let graph = build_graph(db.clone(), &modules).await.unwrap();
+        let result = build(db, &graph).await;
+        assert!(
+            !result.is_success(),
+            "importing a shared array cannot change its element type"
+        );
+        assert_eq!(
+            result.success, 1,
+            "the concrete shared-state module itself remains valid"
+        );
+    }
+
+    #[tokio::test]
     async fn renders_invalid_builtin_argument_without_color() {
         assert_diagnostic_snapshot! {r#"
             fn bad() Number { String.length(42) }

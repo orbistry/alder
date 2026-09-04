@@ -192,6 +192,189 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
 }
 
 #[test]
+fn shared_array_cannot_be_instantiated_at_incompatible_types() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        let shared = []
+        fn bad() {
+            Array.push(shared, 42)
+            let strings: Array[String] = shared
+            String.length(strings[0])
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn shared_map_cannot_be_instantiated_at_incompatible_types() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        let shared = Map.new()
+        fn bad() {
+            Map.set(shared, "key", 42)
+            let strings: Map[String, String] = shared
+            Map.get(strings, "key")
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn function_cannot_generalize_captured_shared_state() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        let shared = []
+        fn values() { shared }
+        fn bad() {
+            Array.push(values(), 42)
+            let strings: Array[String] = values()
+            String.length(strings[0])
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn shared_alias_cannot_regeneralize_state() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        let shared = []
+        let alias = shared
+        fn bad() {
+            Array.push(shared, 42)
+            let strings: Array[String] = alias
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn shared_record_keeps_nested_state_monomorphic() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        let shared = { items: [] }
+        fn bad() {
+            Array.push(shared.items, 42)
+            let strings: Array[String] = shared.items
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn shared_set_keeps_its_element_type() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        let shared = Set.new()
+        fn bad() {
+            Set.add(shared, 42)
+            Set.add(shared, "text")
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn shared_task_cannot_regeneralize_captured_state() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        let shared = []
+        fn operation() {
+            Task.sleep(0).await
+            shared
+        }
+        let task = operation()
+        fn bad() {
+            let numbers: Array[Number] = task.await
+            let strings: Array[String] = task.await
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn exported_shared_state_requires_a_determined_type() {
+    let bump = Bump::new();
+    assert!(solve_input(&bump, "pub let shared = []").is_err());
+}
+
+#[test]
+fn exported_closure_cannot_hide_an_unresolved_shared_type() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        let shared = []
+        pub fn values() { shared }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn exported_shared_state_can_have_a_concrete_type() {
+    let bump = Bump::new();
+    solve_input(&bump, "pub let shared: Array[Number] = []")
+        .expect("a concrete shared contract is safe across modules");
+}
+
+#[test]
+fn array_factories_remain_polymorphic() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn empty() { [] }
+        let factory = () -> []
+        fn good() {
+            let numbers: Array[Number] = empty()
+            let strings: Array[String] = empty()
+            let more_numbers: Array[Number] = factory()
+            let more_strings: Array[String] = factory()
+        }
+    "#},
+    )
+    .expect("each call allocates independent state");
+}
+
+#[test]
 fn builtin_string_length_rejects_a_number() {
     let bump = Bump::new();
     assert!(solve_input(&bump, "fn bad() Number { String.length(42) }").is_err());

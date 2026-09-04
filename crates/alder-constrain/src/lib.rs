@@ -66,6 +66,9 @@ pub enum ErrorKind {
     GenericEscape {
         variable: String,
     },
+    UnresolvedSharedExport {
+        name: String,
+    },
     NonExhaustiveErrorMatch {
         missing: Vec<String>,
         open: bool,

@@ -965,8 +965,14 @@ Top-level values are inferred and generalized by those SCCs, not item order:
 5. Zonk types and obligations; quantify variables not free in the outer
    environment. `free_vars(env)` is the union of free variables in every
    reachable local/global scheme after removing that scheme's quantified
-   variables. Mutable bindings do not generalize. Local block lets remain
-   sequential and non-generalized in M3.
+   variables. Apply the value restriction to top-level initializers: mutable
+   bindings and calls/aggregate construction do not generalize. Include free
+   variables of restricted members of the same SCC in the exclusion set before
+   generalizing any peer. Local block lets remain sequential and non-generalized.
+   At publication, reject public schemes with unresolved non-quantified variables;
+   an importing module must not independently instantiate shared state. Annotation
+   parameter lists include only genuinely quantified variables, not every free
+   variable encountered during serialization.
 6. Discharge ground obligations.
 7. Every residual obligation over quantified variables must be entailed by an
    explicit `where` predicate. Otherwise report `UnsatisfiedBound` and suggest

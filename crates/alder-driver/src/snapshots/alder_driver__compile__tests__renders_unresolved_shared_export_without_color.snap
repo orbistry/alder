@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub let shared = []\n"
+---
+alder::type::unresolved_shared_export
+
+  × the shared type of `shared` is not determined
+   ╭─[/project/src/main.ald:1:1]
+ 1 │ pub let shared = []
+   · ─────────┬─────────
+   ·          ╰── this export cannot be independently instantiated by each importing module
+   ╰────
+  help: give the shared value a concrete type annotation, or export a function
+        that creates a fresh value on each call

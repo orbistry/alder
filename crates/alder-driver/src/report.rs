@@ -1206,6 +1206,12 @@ pub fn codegen(source: Source, error: &alder_codegen::Error) -> Diagnostic {
 fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
     use alder_constrain::ErrorKind;
     match &error.kind {
+        ErrorKind::UnresolvedSharedExport { name } => {
+            return Diagnostic::error(source, format!("the shared type of `{name}` is not determined"))
+                .with_code("alder::type::unresolved_shared_export")
+                .with_primary_label(error.region, "this export cannot be independently instantiated by each importing module")
+                .with_help("give the shared value a concrete type annotation, or export a function that creates a fresh value on each call");
+        }
         ErrorKind::GenericSpecialization { variable, actual } => {
             return Diagnostic::error(source, format!(
                 "this implementation does not work for every `{variable}`"
@@ -1299,6 +1305,7 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
         ErrorKind::NonExhaustiveErrorMatch { .. }
         | ErrorKind::GenericSpecialization { .. }
         | ErrorKind::GenericEscape { .. }
+        | ErrorKind::UnresolvedSharedExport { .. }
         | ErrorKind::ImpossibleErrorPattern { .. }
         | ErrorKind::InvalidErrorTagPlacement => unreachable!("handled above"),
     };

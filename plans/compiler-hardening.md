@@ -33,7 +33,7 @@ flexible variables and unifies away the method's universal contract.
 
 ### 2. Mutation and polymorphism
 
-- [ ] Regressions for a shared top-level empty Array used at incompatible types.
+- [x] Regressions for a shared top-level empty Array used at incompatible types.
 - [ ] Sound generalization restriction accounting for reachable mutable state,
   while preserving safe function polymorphism and existing aliasing semantics.
 - [ ] Arrays, maps, sets, nested records, aliases, captured state, reusable tasks,
@@ -217,6 +217,24 @@ Root cause: virtual module imports lack a physical importer location.
   explicit CLI fixtures, and plain `cargo package -p alder-kernel --allow-dirty`
   verification pass. The original `/tmp/alder-review.D3XIzP/option` counterexample
   now runs successfully through the CLI. No snapshots changed or remain pending.
+- Mutation checkpoint: reproduced incompatible instantiations of shared arrays,
+  maps, and captured state. Top-level calls/aggregate construction now remain
+  monomorphic; safe function/lambda/reference/scalar values retain generalization
+  after subtracting free environment variables. Restricted SCC members contribute
+  free variables before any peer is generalized. JS aliasing is unchanged.
+- Reproduced a second interface hole: annotations quantified every serialized
+  variable even for monomorphic schemes. Only actual quantified variables now
+  appear as parameters, and exports with unresolved shared types are rejected
+  with a reviewed source-aware diagnostic suggesting a concrete type or factory.
+- Eleven solver regressions cover arrays/maps/sets, aliases, nested records,
+  captured state/tasks, export completeness, and polymorphic fresh factories.
+  A driver regression rejects an incompatible use across an actual module
+  interface. Additional SCC and variance/aggregate cases remain to audit before
+  calling the entire mutation requirement complete.
+- Mutation checkpoint validation: formatting, strict Clippy, and the full
+  workspace suite pass (131 solver integration tests, 79 driver tests). The
+  original shared-array CLI reproduction now fails at the incompatible String
+  annotation. No pending snapshots or whitespace errors remain.
 - First checkpoint validation: formatting, strict Clippy, and full workspace
   tests pass (100 solver integration tests). The original trait reproduction
   now fails at CLI check with `alder::type::generic_specialization`, before JS

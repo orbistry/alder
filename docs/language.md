@@ -133,6 +133,21 @@ let block = x -> {
   positions are type variables, generalized per declaration:
   `fn first(xs: Array[a]) Option[a]`. Bounds go in a `where` clause.
 
+Top-level `let` bindings obey a value restriction. Function and lambda values,
+references to existing values, constructor functions, and scalar literals can generalize
+only type variables not tied to shared state. Calls and newly constructed
+arrays, records, tuples, maps, sets, or tasks are not generalized at that
+binding. This prevents one shared object from being used at incompatible types;
+it does not change JavaScript-style aliasing. `let mut` and local block lets
+remain monomorphic.
+
+For example, `let shared = []` has one element type inferred from its uses,
+whereas `fn fresh() { [] }` can be called independently for `Array[Number]` and
+`Array[String]`. Exported shared values must have a determined type by the end
+of their defining module: use `pub let shared: Array[Number] = []`, or export
+a factory. A function capturing shared state cannot re-generalize that state's
+type variables.
+
 ## Statements and control flow
 
 Function bodies are statement blocks. `if`, `match`, and `loop` are
