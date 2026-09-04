@@ -1,5 +1,17 @@
 # alder-cli
 
+## 0.3.0 — 2026-09-04
+
+### Minor changes
+
+- [f87e540](https://github.com/orbistry/alder/commit/f87e540113feb6c1052b2d782a7ad6e1faa7d204) Add inferred lazy tasks, generator-based async lowering, Promise extern lifting,
+  and a structured fiber runtime with interruption, scopes, finalizers, `all`, and
+  `race`. — Thanks @rvcas!
+
+### Patch changes
+
+- Updated dependencies: alder-bundle@0.3.0, alder-driver@0.4.0, alder-runtime@0.2.2
+
 ## 0.2.3 — 2026-09-04
 
 ### Patch changes

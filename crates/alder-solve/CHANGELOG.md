@@ -1,5 +1,17 @@
 # alder-solve
 
+## 0.4.0 — 2026-09-04
+
+### Minor changes
+
+- [f87e540](https://github.com/orbistry/alder/commit/f87e540113feb6c1052b2d782a7ad6e1faa7d204) Add inferred lazy tasks, generator-based async lowering, Promise extern lifting,
+  and a structured fiber runtime with interruption, scopes, finalizers, `all`, and
+  `race`. — Thanks @rvcas!
+
+### Patch changes
+
+- Updated dependencies: alder-ast@0.3.0, alder-can@0.4.0, alder-constrain@0.3.1
+
 ## 0.3.0 — 2026-09-04
 
 ### Minor changes

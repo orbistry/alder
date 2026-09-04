@@ -1,6 +1,6 @@
 [package]
 name = "alder-ast"
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 description = "Canonical AST for the alder programming language"
 homepage.workspace = true

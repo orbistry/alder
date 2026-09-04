@@ -1,5 +1,11 @@
 # alder-constrain
 
+## 0.3.1 — 2026-09-04
+
+### Patch changes
+
+- Updated dependencies: alder-ast@0.3.0
+
 ## 0.3.0 — 2026-09-04
 
 ### Minor changes
