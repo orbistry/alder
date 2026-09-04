@@ -59,6 +59,9 @@ pub enum ErrorKind {
     InvalidAwait,
     InvalidTry,
     ReturnMismatch,
+    MissingReturn {
+        expected: String,
+    },
     GenericSpecialization {
         variable: String,
         actual: String,

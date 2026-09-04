@@ -5,6 +5,7 @@
 
 use alder_region::{Located, Region};
 
+pub mod flow;
 mod interface_copy;
 pub use interface_copy::copy_interface;
 

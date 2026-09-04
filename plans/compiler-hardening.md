@@ -80,7 +80,7 @@ changed or remain pending. Final release packaging remains an open gate.
 ### 5 and 11. Control flow and loop results
 
 - [ ] Regressions for Number-returning zero-iteration loops and valued `break`.
-- [ ] Explicit fallthrough/divergence model, distinct from contains-return.
+- [x] Explicit fallthrough/divergence model, distinct from contains-return.
 - [ ] Each loop owns a result variable and the correct break/continue target.
 - [ ] Check blocks, branches, matches, early exits, `?`, lambdas, functions,
   methods, nested loops, while/for, async bodies, and unreachable paths.
@@ -157,6 +157,28 @@ Root cause: virtual module imports lack a physical importer location.
 - [ ] Identify inactive Elm-era Rust modules and correct obsolete claims.
 
 ## Evidence log
+
+- Control-flow checkpoint: four solver regressions failed before the change:
+  zero-iteration loops could satisfy a return contract, all-return branches and
+  lambdas were rejected as unit, and diverging loops required a fake value.
+  The canonical AST now has an explicit structural flow summary; active
+  inference distinguishes no continuation from unit and checks possible
+  fallthrough. Added a dedicated source-aware missing-return diagnostic with
+  a reviewed colorless snapshot. Regression extensions cover async functions,
+  nested loops, reachable breaks, unreachable literal branches, and lambda
+  scope boundaries. Two flow-algebra tests cover composition and loop exits.
+- Executed `control_flow` CLI fixtures confirmed ordinary and async branch
+  returns, then exposed discarded loop-tail effects and discarded break-payload
+  effects. Both bounded failures were reproduced before fixing codegen.
+  Loop tails now execute for effects; statement-loop scopes no longer borrow
+  an enclosing value-loop result slot. Valued-break typing and the full flow
+  audit remain open. Updated canonical documentation to describe active
+  inference instead of obsolete rank-based constraint claims.
+  Validation: full workspace tests (135 solver integration tests, 86 driver
+  tests, CLI execution fixtures), strict Clippy, and formatting pass. The
+  original returns probe now exits 1 with `alder::type::missing_return`. The
+  new diagnostic snapshot was reviewed and accepted; no pending snapshots
+  remain. Final release packaging and the rest of the flow matrix stay open.
 
 - Extern package/diagnostic checkpoint: a temporary path-dependency fixture
   executes the package's Promise wrapper returning 42 even though the application

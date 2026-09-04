@@ -7,6 +7,78 @@ use alder_region::Located;
 use bumpalo::Bump;
 use indoc::indoc;
 
+#[test]
+fn zero_iteration_loops_do_not_satisfy_a_return_contract() {
+    for source in [
+        indoc! {r#"
+            fn missing(flag: Bool) Number {
+                while flag { return 42 }
+            }
+        "#},
+        indoc! {r#"
+            fn missing(values: Array[Number]) Number {
+                for value in values { return value }
+            }
+        "#},
+        indoc! {r#"
+            fn missing(flag: Bool) Number {
+                Task.sleep(1).await
+                while flag { return 42 }
+            }
+        "#},
+        indoc! {r#"
+            fn missing(flag: Bool) Number {
+                loop { if flag { break } }
+            }
+        "#},
+        indoc! {r#"
+            fn missing() Number {
+                let inner = () -> { return 42 }
+            }
+        "#},
+    ] {
+        assert!(infer(&Bump::new(), source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn explicit_returns_in_all_branches_have_no_unit_fallthrough() {
+    let source = indoc! {r#"
+        fn choose(flag: Bool) Number {
+            if flag { return 42 } else { return 43 }
+        }
+        fn choose_again(flag: Bool) Number {
+            match flag {
+                true => { return 42 },
+                false => { return 43 },
+            }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn diverging_loops_do_not_require_a_fake_return_value() {
+    let source = indoc! {r#"
+        fn forever() Number { loop {} }
+        fn forever_while() String { while true {} }
+        fn nested() Number { loop { loop { break } } }
+        fn unreachable_exit() Number { loop { if false { break } } }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn returning_lambda_block_has_no_unit_fallthrough() {
+    let source = indoc! {r#"
+        fn call() Number {
+            let value = () -> { return 42 }
+            value()
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
 fn solve_input<'a>(
     bump: &'a Bump,
     input: &str,

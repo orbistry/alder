@@ -1841,7 +1841,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
     fn loop_value(&mut self, block: &Located<alder_ast::Block<'src>>) -> Result<Value<'js>, Error> {
         let result = self.temp();
         self.loop_results.push(Some(result.clone()));
-        let body = self.block_statements(block)?;
+        let body = self.block_discard(block)?;
         self.loop_results.pop();
         let mut prefix = self.js.vec();
         prefix.push(
@@ -1999,6 +1999,20 @@ impl<'src, 'js> Emitter<'src, 'js> {
         Ok(statements)
     }
 
+    /// Evaluate every expression for its effects without returning its value.
+    fn block_discard(
+        &mut self,
+        block: &Located<alder_ast::Block<'src>>,
+    ) -> Result<ArenaVec<'js, Statement<'js>>, Error> {
+        let mut statements = self.block_statements(block)?;
+        if let Some(tail) = block.value.tail {
+            let value = self.expr(tail)?;
+            statements.extend(value.prefix);
+            statements.push(self.js.expression_statement(value.expr));
+        }
+        Ok(statements)
+    }
+
     fn block_statements(
         &mut self,
         block: &Located<alder_ast::Block<'src>>,
@@ -2093,12 +2107,16 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 let item = self.temp();
                 let mut loop_body = self.js.vec();
                 self.bind_pattern(pattern, &item, &[], &mut loop_body);
-                loop_body.extend(self.block_statements(body)?);
+                self.loop_results.push(None);
+                loop_body.extend(self.block_discard(body)?);
+                self.loop_results.pop();
                 statements.push(self.js.for_of(&item, iter.expr, loop_body));
             }
             alder_ast::Stmt::While { condition, body } => {
                 let condition = self.expr(condition)?;
-                let loop_body = self.block_statements(body)?;
+                self.loop_results.push(None);
+                let loop_body = self.block_discard(body)?;
+                self.loop_results.pop();
                 if condition.prefix.is_empty() {
                     statements.push(self.js.while_statement(condition.expr, loop_body));
                 } else {
@@ -2120,16 +2138,19 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 statements.push(self.js.return_statement(value.expr));
             }
             alder_ast::Stmt::Break(value) => {
+                let has_value = value.is_some();
+                let value = match value {
+                    Some(value) => self.expr(value)?,
+                    None => self.pure(self.js.undefined()),
+                };
+                statements.extend(value.prefix);
                 if let Some(result) = self.loop_results.last().cloned().flatten() {
-                    let value = match value {
-                        Some(value) => self.expr(value)?,
-                        None => self.pure(self.js.undefined()),
-                    };
-                    statements.extend(value.prefix);
                     statements.push(
                         self.js
                             .expression_statement(self.js.assign_identifier(&result, value.expr)),
                     );
+                } else if has_value {
+                    statements.push(self.js.expression_statement(value.expr));
                 }
                 statements.push(self.js.break_statement(None));
             }

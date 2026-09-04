@@ -1849,8 +1849,19 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
             }
             let body_type = self.infer_block(&mut local, body, Some(body_result.clone()))?;
-            if body.value.tail.is_some() || !block_contains_return(body) {
-                self.unify_return(body_type, body_result, region)?;
+            if alder_ast::flow::block(body).falls_through {
+                let expected = self.render(body_result.clone());
+                self.unify_return(body_type, body_result, region)
+                    .map_err(|error| {
+                        if body.value.tail.is_none() {
+                            Error {
+                                region: body.region,
+                                kind: ErrorKind::MissingReturn { expected },
+                            }
+                        } else {
+                            error
+                        }
+                    })?;
             }
             let function_type = Ty::Fn(args, Box::new(self.prune(result)));
             Ok((function_type, predicates, local_projection_equations))
@@ -1870,9 +1881,14 @@ impl<'a, 'db> Infer<'a, 'db> {
         for statement in block.value.statements {
             self.infer_stmt(env, statement, return_type.clone())?;
         }
-        match block.value.tail {
+        let result = match block.value.tail {
             Some(tail) => self.infer_expr(env, tail, return_type),
             None => Ok(Ty::Unit),
+        }?;
+        if alder_ast::flow::block(block).falls_through {
+            Ok(result)
+        } else {
+            Ok(self.fresh())
         }
     }
 
@@ -2225,7 +2241,11 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             Expr::Loop(block) => {
                 self.infer_block(&mut env.clone(), block, return_type)?;
-                Ok(Ty::Unit)
+                if alder_ast::flow::expression(expression).falls_through {
+                    Ok(Ty::Unit)
+                } else {
+                    Ok(self.fresh())
+                }
             }
             Expr::Provide { value, body, .. } => {
                 self.infer_expr(env, value, return_type.clone())?;
@@ -4921,24 +4941,6 @@ impl<'a, 'db> Infer<'a, 'db> {
             Ty::Any => "_".to_owned(),
         }
     }
-}
-
-fn block_contains_return(block: &Located<Block<'_>>) -> bool {
-    block
-        .value
-        .statements
-        .iter()
-        .any(|statement| match &statement.value {
-            Stmt::Return(_) => true,
-            Stmt::For { body, .. } | Stmt::While { body, .. } => block_contains_return(body),
-            Stmt::Let(_)
-            | Stmt::Use { .. }
-            | Stmt::Assign { .. }
-            | Stmt::Break(_)
-            | Stmt::Continue
-            | Stmt::Assert(_)
-            | Stmt::Expr(_) => false,
-        })
 }
 
 fn generalizable_item(item: &ItemKind<'_>) -> bool {

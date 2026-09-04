@@ -1206,6 +1206,12 @@ pub fn codegen(source: Source, error: &alder_codegen::Error) -> Diagnostic {
 fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
     use alder_constrain::ErrorKind;
     match &error.kind {
+        ErrorKind::MissingReturn { expected } => {
+            return Diagnostic::error(source, format!("this function can finish without returning `{expected}`"))
+                .with_code("alder::type::missing_return")
+                .with_primary_label(error.region, "a path reaches the end without a value")
+                .with_help("add a final expression or return a value on every path; a while or for loop may run zero times");
+        }
         ErrorKind::UnresolvedSharedExport { name } => {
             return Diagnostic::error(source, format!("the shared type of `{name}` is not determined"))
                 .with_code("alder::type::unresolved_shared_export")
@@ -1303,6 +1309,7 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             "return value does not match the function result".to_owned(),
         ),
         ErrorKind::NonExhaustiveErrorMatch { .. }
+        | ErrorKind::MissingReturn { .. }
         | ErrorKind::GenericSpecialization { .. }
         | ErrorKind::GenericEscape { .. }
         | ErrorKind::UnresolvedSharedExport { .. }

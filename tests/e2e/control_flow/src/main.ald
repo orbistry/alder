@@ -1,0 +1,61 @@
+fn choose(flag: Bool) Number {
+    if flag { return 42 } else { return 43 }
+}
+
+fn mixed(flag: Bool) Number {
+    if flag { return 42 } else { 43 }
+}
+
+fn matched(flag: Bool) Number {
+    match flag {
+        true => { return 42 },
+        false => { return 43 },
+    }
+}
+
+fn awaited(flag: Bool) Number {
+    Task.sleep(1).await
+    if flag { return 42 } else { return 43 }
+}
+
+fn loop_tail_return(flag: Bool) Number {
+    let mut count = 0
+    while count < 1 {
+        count += 1
+        if flag { return 42 } else { return 43 }
+    }
+    0
+}
+
+fn loop_tail_effects() Number {
+    let values = []
+    for value in [1, 2] {
+        Array.push(values, value)
+    }
+    Array.length(values)
+}
+
+fn break_payload_effects() Number {
+    let values = []
+    while true {
+        break Array.push(values, 42)
+    }
+    Array.length(values)
+}
+
+pub fn main() {
+    assert(choose(true) == 42)
+    assert(choose(false) == 43)
+    assert(mixed(true) == 42)
+    assert(mixed(false) == 43)
+    assert(matched(true) == 42)
+    assert(matched(false) == 43)
+    let callback = () -> { return 42 }
+    assert(callback() == 42)
+    assert(awaited(true).await == 42)
+    assert(awaited(false).await == 43)
+    assert(loop_tail_return(true) == 42)
+    assert(loop_tail_return(false) == 43)
+    assert(loop_tail_effects() == 2)
+    assert(break_payload_effects() == 1)
+}

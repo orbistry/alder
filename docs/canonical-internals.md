@@ -1054,11 +1054,19 @@ driver resolve paths/imports
   -> codegen while module arena is alive
 ```
 
-Constraint generation carries function-return, loop-result, and query
-contexts. `return`, `break`, and `continue` are diverging control flow rather
-than ordinary unit expressions. Sequential local lets use a dedicated
-non-generalizing binding constraint; top-level SCCs retain rank-based
-generalization.
+Active type inference lives in `alder-solve/src/inference.rs`; the constrain
+crate packages the canonical module and trait requirement seeds. Structural
+control flow is summarized by `alder-ast::flow`, distinguishing normal
+continuation from returns, breaks, and continues. A block with no normal
+continuation contributes no value constraint to its surrounding expression.
+Loops consume their own break/continue exits, while a lambda's body does not
+contribute exits to lambda creation. A while/for loop may run zero times; its
+containing function must still satisfy the return contract on that path.
+
+Sequential local lets are monomorphic. Top-level SCCs use environment-aware
+generalization with a restriction on shared mutable values, not the inactive
+Elm-era rank-based constraint implementation. Valued-break inference and the
+remaining control-flow audit are tracked in `plans/compiler-hardening.md`.
 
 The driver owns one source/canonical arena per active module and an interface
 arena for hydrated dependencies. It does not retain canonical modules merely

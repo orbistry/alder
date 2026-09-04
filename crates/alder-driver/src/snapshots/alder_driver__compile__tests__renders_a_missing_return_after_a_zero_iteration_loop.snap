@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn missing(flag: Bool) Number {\n    while flag { return 42 }\n}\n"
+---
+alder::type::missing_return
+
+  × this function can finish without returning `Number`
+   ╭─[/project/src/main.ald:1:31]
+ 1 │ ╭─▶ fn missing(flag: Bool) Number {
+ 2 │ │       while flag { return 42 }
+ 3 │ ├─▶ }
+   · ╰──── a path reaches the end without a value
+   ╰────
+  help: add a final expression or return a value on every path; a while or for
+        loop may run zero times

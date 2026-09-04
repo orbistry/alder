@@ -2084,6 +2084,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_a_missing_return_after_a_zero_iteration_loop() {
+        assert_diagnostic_snapshot! {r#"
+            fn missing(flag: Bool) Number {
+                while flag { return 42 }
+            }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_unresolved_shared_export_without_color() {
         assert_diagnostic_snapshot! {r#"
             pub let shared = []
