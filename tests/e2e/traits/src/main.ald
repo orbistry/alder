@@ -122,6 +122,18 @@ fn describe_indirect(value: a) String where a: Describe {
     invoke(describe, value)
 }
 
+trait MethodContract[a] {
+    fn inherited(value: a, other: b) String where b: Describe
+    fn reordered(value: a, other: b) String where b: Describe + Show
+}
+
+impl MethodContract[Number] {
+    fn inherited(value: Number, other: c) String { describe(other) }
+    fn reordered(value: Number, other: c) String where c: Show + Describe {
+        describe(other)
+    }
+}
+
 fn lift(value: a) f[a] where f: Applicative {
     pure(value)
 }
@@ -158,6 +170,9 @@ pub fn main() {
     assert(describe_generic("text") == "text")
     assert(describe_generic([1, 2]) == "array")
     assert(describe_indirect(1) == "number")
+    assert(inherited(0, 42) == "number")
+    assert(inherited(0, "text") == "text")
+    assert(reordered(0, 42) == "number")
 
     assert(show(Status::Failed("oops")) == "Failed(\"oops\")")
     assert(show(Status::Meta { code: 7, note: "same" }) == "Meta { code: 7, note: \"same\" }")

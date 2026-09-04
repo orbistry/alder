@@ -5,12 +5,12 @@ description: "trait Convert[a] { fn convert(value: a, other: b) b }\nimpl Conver
 alder::type::generic_specialization
 
   × this implementation does not work for every `b`
-   ╭─[/project/src/main.ald:2:1]
- 1 │     trait Convert[a] { fn convert(value: a, other: b) b }
- 2 │ ╭─▶ impl Convert[Number] {
- 3 │ │       fn convert(value: Number, other: b) b { 42 }
- 4 │ ├─▶ }
-   · ╰──── the signature promises an independent `b`, but the body requires `Number`
+   ╭─[/project/src/main.ald:3:8]
+ 2 │ impl Convert[Number] {
+ 3 │     fn convert(value: Number, other: b) b { 42 }
+   ·        ───┬───
+   ·           ╰── the signature promises an independent `b`, but the body requires `Number`
+ 4 │ }
    ╰────
   help: use the same value generically, or give the declaration a concrete
         signature; a trait implementation must preserve the trait's generic

@@ -153,6 +153,18 @@ Root cause: virtual module imports lack a physical importer location.
 - Separate deferred universal obligations now validate unbound/distinct roots
   and escape after inference, before solved interfaces can be published.
 - Two colorless driver snapshots cover specialization and generic escape.
+- Method-bound audit reproduced both an accepted implementation-only bound
+  (missing dictionary at runtime) and a rejected inherited method bound.
+  Method givens now come from the trait ABI; implementation bounds are proof
+  obligations. Seven solver regressions cover extra/unused bounds, inherited
+  bounds with renamed variables, reordered dictionary arguments, and rejected
+  extra versus accepted inherited projection equalities, and associated return
+  signatures. The traits
+  CLI fixture exercises inherited and reordered bounds with actual execution.
+- Method-contract checkpoint: formatting, strict all-target/all-feature Clippy,
+  full workspace tests (107 solver integration tests), and the explicit CLI
+  standalone fixture suite pass. The reviewed specialization snapshot now
+  labels the method name rather than its entire impl. No pending snapshots.
 - First checkpoint validation: formatting, strict Clippy, and full workspace
   tests pass (100 solver integration tests). The original trait reproduction
   now fails at CLI check with `alder::type::generic_specialization`, before JS

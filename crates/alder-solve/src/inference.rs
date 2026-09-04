@@ -78,6 +78,7 @@ fn resolve_obligations<'a>(
             },
         ) {
             Ok(evidence) => match obligation.action {
+                ObligationAction::ContractCheck => {}
                 ObligationAction::Reference(method) => match uses.entry(
                     obligation
                         .use_id
@@ -1040,6 +1041,7 @@ struct Given<'a> {
 
 #[derive(Clone, Copy, Debug)]
 enum ObligationAction<'a> {
+    ContractCheck,
     Reference(Option<MethodId<'a>>),
     Operator,
     Pin,
@@ -1695,6 +1697,43 @@ impl<'a, 'db> Infer<'a, 'db> {
         let predicates = self.predicates_from_constraints(constraints, &vars);
         let local_projection_equations =
             self.projection_equations_from_constraints(constraints, &vars)?;
+        // An implementation receives exactly the dictionaries promised by the
+        // trait declaration, in declaration order. Its own bounds are proof
+        // obligations, not additional arguments in the method ABI.
+        let mut method_predicates = Vec::new();
+        let mut method_equations = Vec::new();
+        let mut expected_method = None;
+        if let FunctionContext::Impl {
+            implementation,
+            method,
+        } = context
+        {
+            let mut expected_vars = BTreeMap::new();
+            if let Some(header) = self.database.trait_(implementation.trait_ref.trait_) {
+                for (parameter, argument) in header.params.iter().zip(implementation.trait_ref.args)
+                {
+                    expected_vars.insert(parameter.name.value, self.from_ast(argument, &mut vars));
+                }
+            }
+            let subject_variables = expected_vars.keys().copied().collect::<BTreeSet<_>>();
+            let expected = self.from_ast(method.scheme.typ, &mut expected_vars);
+            expected_method = Some((expected, method.name.region));
+            for predicate in method.scheme.trait_predicates {
+                method_predicates
+                    .push(self.predicate_from_trait_ref(*predicate, &mut expected_vars));
+            }
+            for equality in method.scheme.projection_equalities {
+                let projection = self.projection_from_ast(equality.projection, &mut expected_vars);
+                let typ = self.from_ast(equality.typ, &mut expected_vars);
+                method_equations.push(ProjectionEquation { projection, typ });
+            }
+            expected_vars.retain(|name, _| !subject_variables.contains(name));
+            self.generic_contracts.push(GenericContract {
+                variables: expected_vars,
+                outer_free: outer_free.clone(),
+                region: method.name.region,
+            });
+        }
         for (name, typ) in &vars {
             if let Ty::Var(id) = typ {
                 self.variable_names.entry(*id).or_insert(name);
@@ -1705,7 +1744,11 @@ impl<'a, 'db> Infer<'a, 'db> {
         self.givens = outer_givens.clone();
         self.projection_equations = outer_projection_equations.clone();
         self.projection_equations
-            .extend(local_projection_equations.clone());
+            .extend(if matches!(context, FunctionContext::Impl { .. }) {
+                method_equations
+            } else {
+                local_projection_equations.clone()
+            });
         match context {
             FunctionContext::Ordinary => {
                 self.add_parameter_givens(&predicates, 0);
@@ -1736,8 +1779,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                     .collect::<Vec<_>>();
                 self.add_parameter_givens(&prerequisites, 0);
                 self.add_parameter_superclass_givens(&prerequisites, 0);
-                self.add_parameter_givens(&predicates, prerequisites.len());
-                self.add_parameter_superclass_givens(&predicates, prerequisites.len());
+                self.add_parameter_givens(&method_predicates, prerequisites.len());
+                self.add_parameter_superclass_givens(&method_predicates, prerequisites.len());
+                for predicate in &predicates {
+                    self.obligations.push(Obligation {
+                        use_id: None,
+                        predicate: predicate.clone(),
+                        region,
+                        action: ObligationAction::ContractCheck,
+                        givens: self.givens.clone(),
+                    });
+                }
             }
             FunctionContext::Default(trait_) => {
                 let self_predicate = Predicate {
@@ -1767,35 +1819,23 @@ impl<'a, 'db> Infer<'a, 'db> {
             region,
         });
         let inferred = (|| {
+            if let Some((expected, method_region)) = expected_method {
+                self.unify(
+                    Ty::Fn(args.clone(), Box::new(result.clone())),
+                    expected,
+                    method_region,
+                )?;
+            }
+            if matches!(context, FunctionContext::Impl { .. }) {
+                for equation in &local_projection_equations {
+                    self.unify(equation.projection.clone(), equation.typ.clone(), region)?;
+                }
+            }
             let body_type = self.infer_block(&mut local, body, Some(body_result.clone()))?;
             if body.value.tail.is_some() || !block_contains_return(body) {
                 self.unify_return(body_type, body_result, region)?;
             }
             let function_type = Ty::Fn(args, Box::new(self.prune(result)));
-            if let FunctionContext::Impl {
-                implementation,
-                method,
-            } = context
-            {
-                let mut expected_vars = BTreeMap::new();
-                if let Some(header) = self.database.trait_(implementation.trait_ref.trait_) {
-                    for (parameter, argument) in
-                        header.params.iter().zip(implementation.trait_ref.args)
-                    {
-                        expected_vars
-                            .insert(parameter.name.value, self.from_ast(argument, &mut vars));
-                    }
-                }
-                let subject_variables = expected_vars.keys().copied().collect::<BTreeSet<_>>();
-                let expected = self.from_ast(method.scheme.typ, &mut expected_vars);
-                expected_vars.retain(|name, _| !subject_variables.contains(name));
-                self.generic_contracts.push(GenericContract {
-                    variables: expected_vars,
-                    outer_free,
-                    region: method.name.region,
-                });
-                self.unify(function_type.clone(), expected, method.name.region)?;
-            }
             Ok((function_type, predicates, local_projection_equations))
         })();
         self.givens = outer_givens;

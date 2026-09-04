@@ -27,6 +27,14 @@ environment. The expected trait method contributes a separate contract after
 substituting the implementation's subject arguments. Checking is deferred so a
 recursive peer cannot specialize a previously visited declaration unnoticed.
 
+Implementation bodies receive method-bound dictionaries in the trait
+declaration's order after substituting the implementation subject. Repeating
+those bounds is optional, and renaming type variables or reordering written
+bounds does not change the ABI. Implementation-written bounds must be provable
+from that contract, the impl prerequisites, and available instances; they do
+not introduce extra dictionary parameters. Likewise, implementation-written
+projection equalities are checked rather than trusted as additional assumptions.
+
 This follows Elm's distinction between inferred variables and checked generic
 contracts, using explicit post-solve obligations instead of Elm's union-find
 rigid descriptors/rank pools. The broader hardening audit, including bounds,

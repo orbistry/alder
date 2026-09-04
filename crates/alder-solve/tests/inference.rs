@@ -348,6 +348,157 @@ fn generic_contract_accepts_universal_methods_and_functions() {
 }
 
 #[test]
+fn implementation_cannot_add_a_method_bound() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        trait Describe[a] { fn describe(value: a) String }
+        trait Convert[a] { fn convert(value: a, other: b) String }
+        impl Convert[Number] {
+            fn convert(value: Number, other: b) String where b: Describe {
+                describe(other)
+            }
+        }
+    "#}
+        )
+        .is_err(),
+        "callers do not supply an implementation-only dictionary"
+    );
+}
+
+#[test]
+fn implementation_bound_order_uses_the_trait_dictionary_abi() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+        trait First[a] { fn first(value: a) String }
+        trait Second[a] { fn second(value: a) String }
+        trait Convert[a] {
+            fn convert(value: a, other: b) String where b: First + Second
+        }
+        impl Convert[Number] {
+            fn convert(value: Number, other: c) String where c: Second + First {
+                first(other)
+            }
+        }
+    "#},
+    )
+    .expect("reordered implementation bounds do not reorder dictionary arguments");
+    assert!(solved.uses.values().any(|action| matches!(action,
+        alder_solve::UseAction::Reference { dictionaries, method: Some(method) }
+            if method.name == "first"
+                && matches!(dictionaries.as_slice(), [alder_solve::Evidence::Param(0)])
+    )));
+}
+
+#[test]
+fn implementation_cannot_add_an_unused_method_bound() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        trait Describe[a] { fn describe(value: a) String }
+        trait Convert[a] { fn convert(value: a, other: b) b }
+        impl Convert[Number] {
+            fn convert(value: Number, other: b) b where b: Describe { other }
+        }
+    "#}
+        )
+        .is_err(),
+        "even unused implementation constraints must follow from the trait contract"
+    );
+}
+
+#[test]
+fn implementation_cannot_add_a_projection_assumption() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        trait Source[a] {
+            type Item
+            fn get(value: a) Item
+        }
+        trait Convert[a] {
+            fn convert(value: a, source: b) Number where b: Source
+        }
+        impl Convert[Number] {
+            fn convert(value: Number, source: b) Number
+                where b: Source, b.Item == Number
+            { get(source) }
+        }
+    "#}
+        )
+        .is_err(),
+        "implementation-only equalities cannot narrow a method contract"
+    );
+}
+
+#[test]
+fn implementation_inherits_a_method_projection_equality() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Source[a] {
+            type Item
+            fn get(value: a) Item
+        }
+        trait Convert[a] {
+            fn convert(value: a, source: b) Number
+                where b: Source, b.Item == Number
+        }
+        impl Convert[Number] {
+            fn convert(value: Number, source: c) Number { get(source) }
+        }
+    "#},
+    )
+    .expect("the method contract supplies the projection equality");
+}
+
+#[test]
+fn implementation_signature_uses_the_method_projection_equality() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Source[a] {
+            type Item
+            fn get(value: a) Item where a.Item == Number
+        }
+        impl Source[String] {
+            type Item = Number
+            fn get(value: String) Number { 42 }
+        }
+    "#},
+    )
+    .expect("signature checking can use the declared associated equality");
+}
+
+#[test]
+fn implementation_inherits_the_declared_method_bound() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Describe[a] { fn describe(value: a) String }
+        trait Convert[a] {
+            fn convert(value: a, other: b) String where b: Describe
+        }
+        impl Convert[Number] {
+            fn convert(value: Number, other: c) String { describe(other) }
+        }
+    "#},
+    )
+    .expect("the trait contract supplies the dictionary, regardless of local variable names");
+}
+
+#[test]
 fn direct_trait_method_selects_the_unique_impl() {
     let bump = Bump::new();
     let solved = solve_input(
