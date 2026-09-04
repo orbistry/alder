@@ -20,6 +20,7 @@ pub struct SolveOutput<'a> {
     pub uses: BTreeMap<UseId, UseAction<'a>>,
     pub impl_superclasses: BTreeMap<(ImplId<'a>, u16), Evidence<'a>>,
     pub derived_fields: BTreeMap<DerivedFieldKey<'a>, Evidence<'a>>,
+    /// Optional reads, keyed by access-expression or pattern-field-name region.
     pub optional_accesses: BTreeSet<Region>,
 }
 

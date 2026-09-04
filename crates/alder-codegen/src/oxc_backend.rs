@@ -75,6 +75,7 @@ struct Emitter<'src, 'js> {
 #[derive(Clone)]
 enum PatternStep {
     Field(String),
+    OptionalField(String),
     Index(usize),
 }
 
@@ -2248,7 +2249,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
     }
 
     fn bind_pattern(
-        &self,
+        &mut self,
         pattern: &Located<Pattern<'src>>,
         root: &str,
         steps: &[PatternStep],
@@ -2299,7 +2300,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             Pattern::ConstructorRecord { fields, .. } | Pattern::Record { fields, .. } => {
                 for field in *fields {
                     let mut nested = steps.to_vec();
-                    nested.push(PatternStep::Field(field.name.value.to_owned()));
+                    nested.push(self.record_pattern_step(&field.name));
                     self.bind_pattern(field.pattern, root, &nested, statements);
                 }
             }
@@ -2313,11 +2314,27 @@ impl<'src, 'js> Emitter<'src, 'js> {
         }
     }
 
+    fn record_pattern_step(&mut self, field: &Located<&str>) -> PatternStep {
+        if self
+            .solved
+            .is_some_and(|solved| solved.optional_accesses.contains(&field.region))
+        {
+            self.kernel.insert("$optionalField");
+            PatternStep::OptionalField(field.value.to_owned())
+        } else {
+            PatternStep::Field(field.value.to_owned())
+        }
+    }
+
     fn pattern_place(&self, root: &str, steps: &[PatternStep]) -> Expression<'js> {
         let mut value = self.js.identifier(root);
         for step in steps {
             value = match step {
                 PatternStep::Field(field) => self.js.member(value, field),
+                PatternStep::OptionalField(field) => self.js.call(
+                    self.js.identifier("$optionalField"),
+                    [value, self.js.string(field)],
+                ),
                 PatternStep::Index(index) => self.js.index(value, self.js.number(*index as f64)),
             };
         }
@@ -2426,7 +2443,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 ));
                 for field in *fields {
                     let mut nested = steps.to_vec();
-                    nested.push(PatternStep::Field(field.name.value.to_owned()));
+                    nested.push(self.record_pattern_step(&field.name));
                     let test = self.pattern_test(field.pattern, root, &nested)?;
                     prefix.extend(test.prefix);
                     tests.push(test.expr);
@@ -2489,7 +2506,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 );
                 for field in *fields {
                     let mut nested = steps.to_vec();
-                    nested.push(PatternStep::Field(field.name.value.to_owned()));
+                    nested.push(self.record_pattern_step(&field.name));
                     let test = self.pattern_test(field.pattern, root, &nested)?;
                     prefix.extend(test.prefix);
                     tests.push(test.expr);

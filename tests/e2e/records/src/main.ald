@@ -11,6 +11,28 @@ fn counted(counter: Array[Number]) ({ value?: Number }) {
     { value: 42 }
 }
 
+fn destructure(record: { value?: Option[Number] }) Option[Option[Number]] {
+    let { value } = record
+    value
+}
+
+fn match_field(record: { value?: Number }) Option[Number] {
+    match record { { value } => value }
+}
+
+enum Config { Config { value?: Option[Number] } }
+
+fn config_field(config: Config) Option[Option[Number]] {
+    match config { Config::Config { value } => value }
+}
+
+fn field_matches(record: { value?: Number }, expected: Option[Number]) Bool {
+    match record {
+        { value: ^expected } => true,
+        _ => false,
+    }
+}
+
 pub fn main() {
     let user = rename({ name: "old", score: 42 }, "new")
     assert(user.score == 42)
@@ -21,6 +43,16 @@ pub fn main() {
     let present: { value?: Option[Number] } = { value: Option.none() }
     assert(absent.value == Option.none())
     assert(present.value == Option.some(Option.none()))
+    assert(destructure({}) == Option.none())
+    assert(destructure({ value: Option.none() }) == Option.some(Option.none()))
+    assert(destructure({ value: Option.some(42) }) == Option.some(Option.some(42)))
+    assert(match_field({}) == Option.none())
+    assert(match_field({ value: 42 }) == Option.some(42))
+    assert(field_matches({}, Option.none()))
+    assert(field_matches({ value: 42 }, Option.some(42)))
+    assert(!field_matches({}, Option.some(42)))
+    assert(config_field(Config::Config {}) == Option.none())
+    assert(config_field(Config::Config { value: Option.none() }) == Option.some(Option.none()))
     let mut assigned: { value?: Option[Number] } = {}
     assert(assigned.value == Option.none())
     assigned.value = Option.none()

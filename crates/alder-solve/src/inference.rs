@@ -2600,24 +2600,35 @@ impl<'a, 'db> Infer<'a, 'db> {
                     Ty::Fn(arg_types.clone(), Box::new(expected)),
                     pattern.region,
                 )?;
-                for field in *fields {
-                    if let Some(index) = declared
+                let record = Ty::Record(
+                    declared
                         .iter()
-                        .position(|declared| declared.name == field.name.value)
-                    {
-                        self.infer_pattern(env, field.pattern, arg_types[index].clone(), false)?;
-                    }
+                        .zip(arg_types)
+                        .map(|(field, typ)| (field.name, (field.presence, typ)))
+                        .collect(),
+                    None,
+                );
+                for field in *fields {
+                    self.field_accesses
+                        .push((record.clone(), field.name.value, field.name.region));
+                    let typ =
+                        self.access_field(record.clone(), field.name.value, field.name.region)?;
+                    self.infer_pattern(env, field.pattern, typ, false)?;
                 }
             }
             Pattern::Record { fields, .. } => {
-                let mut record = BTreeMap::new();
+                let record = self.open_record(BTreeMap::new());
+                self.unify(expected.clone(), record, pattern.region)?;
                 for field in *fields {
-                    let typ = self.fresh();
-                    self.infer_pattern(env, field.pattern, typ.clone(), false)?;
-                    record.insert(field.name.value, (FieldPresence::Required, typ));
+                    self.field_accesses.push((
+                        expected.clone(),
+                        field.name.value,
+                        field.name.region,
+                    ));
+                    let typ =
+                        self.access_field(expected.clone(), field.name.value, field.name.region)?;
+                    self.infer_pattern(env, field.pattern, typ, false)?;
                 }
-                let record = self.open_record(record);
-                self.unify(expected, record, pattern.region)?;
             }
             Pattern::Tag { name, args, .. } => {
                 if let Ty::ErrorRow { tags, tail: None } = self.prune(expected.clone()) {

@@ -195,6 +195,9 @@ Optional record reads use solved per-region evidence and emit
 than payload truthiness/nullability, returning None for absence and Some of the
 payload otherwise. This preserves nested Options and evaluates the record once.
 Required field reads remain direct member access.
+The same solved set uses field-name regions for record patterns, including
+enum record payloads. Optional pattern steps call the helper in both matching
+and binding; they do not extract the raw payload as a required value.
 
 `provide` pushes the value under its canonical provider key, executes the body
 inside `try/finally`, and pops in `finally`, which remains correct across await.

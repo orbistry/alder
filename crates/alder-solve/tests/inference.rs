@@ -8,6 +8,46 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn optional_record_patterns_bind_option_valued_reads() {
+    let source = indoc! {r#"
+        fn read(record: { value?: Number }) Option[Number] {
+            let { value } = record
+            value
+        }
+        fn run() Option[Number] { read({}) }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn optional_constructor_record_patterns_bind_option_valued_reads() {
+    let source = indoc! {r#"
+        enum Config { Config { value?: Number } }
+        fn read(config: Config) Option[Number] {
+            match config { Config::Config { value } => value }
+        }
+        fn run() Option[Number] { read(Config::Config {}) }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn optional_record_patterns_cannot_extract_a_required_payload() {
+    let source = indoc! {r#"
+        fn read(record: { value?: Number }) Number {
+            let { value } = record
+            value
+        }
+        fn run() Number { read({}) }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
 fn optional_record_assignment_stores_the_declared_payload() {
     let source = indoc! {r#"
         fn run() Option[Number] {

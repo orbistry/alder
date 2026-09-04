@@ -58,7 +58,18 @@ regressions cover both rejected Option-as-payload writes and absent-parent
 traversal; the CLI fixture exercises writes of nested Option payloads and writes
 through a required parent. Compound assignments additionally require the read
 type to match the stored payload; they cannot use an optional field as if it
-were present. Optional record patterns still need their audit.
+were present.
+
+Record patterns now use the same field-read inference as access expressions,
+rather than unifying an invented all-required record with the scrutinee. This
+preserves Option-valued optional bindings and rejects extracting a required
+payload from an absent field. Constructor record patterns retain the declared
+presence of each instantiated payload field. Solved optional access regions
+also identify pattern field names; both pattern tests and bindings lower those
+steps through `$optionalField`. Solver and CLI regressions cover destructuring,
+match bindings, pinned field comparisons, and absent versus present nested
+Option payloads, including enum records. Effectful pattern evaluation and
+broader pattern compatibility remain part of the related codegen audit.
 
 Still open: full optional compatibility coverage, multiple open spreads (currently unified,
 which may overconstrain valid combinations), shadowed labels/lacks constraints,

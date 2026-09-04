@@ -523,6 +523,19 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Final gates
 
+- Optional record-pattern follow-up: reproduced acceptance of a `Number`
+  return extracted from an absent optional field, alongside rejection of the
+  correct `Option[Number]` return. Regular record patterns invented required
+  fields and symmetric unification erased the presence distinction; enum
+  record patterns likewise bound raw payload types. Both now use field-read
+  typing, with optional pattern field regions carried to codegen. Binding and
+  matching paths use the centralized `$optionalField` helper. Focused solver
+  tests pass; CLI regressions cover absence, present nested None, enum payloads,
+  and pinned Option comparisons. Full workspace tests pass (162 solver
+  integration tests); strict all-target/all-feature Clippy, formatting, and diff
+  checks pass. No snapshot changes or pending snapshot files. The wider row and
+  effectful pattern-evaluation audits remain open.
+
 - Optional-field assignment follow-up: reproduced two opposite errors in the
   active solver: `record.value = 42` was rejected for `value?: Number`, while
   `record.value = Option.some(42)` was accepted. `place_type` reused read typing

@@ -284,6 +284,8 @@ match u.nickname {
   Assignment to the field stores a `T`, just like construction; it does not
   take the `Option[T]` returned by a read. Access through an optional parent
   requires handling that parent's `Option` first.
+  Destructuring reads fields by the same rule: `let { field } = record`
+  binds `Option[T]` for `field?: T`, including record-shaped enum payloads.
 - `{ ..r, x: 1 }` is record update. `r.x` is access, `t.0` tuple index.
 - `type Name[a] = ...` declares an alias.
 
