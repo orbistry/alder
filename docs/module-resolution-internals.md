@@ -36,6 +36,13 @@ JavaScript resolution. Compiler-generated JavaScript is never serialized for
 this handoff. The virtual ID registry also remains available after an AST has
 been transferred into Rolldown.
 
+The driver also retains source text and extern declaration regions in emitted
+module metadata. For direct extern resolution failures the bundler constructs
+an `alder-report` diagnostic with the relevant declaration labels, keeps the
+underlying resolver explanation, and returns that structured report to the CLI.
+Reports are sorted by source name and message before grouping; the CLI does not
+flatten them to strings. Colorless rendering is selected only by tests.
+
 The low-level source-only driver API retains a compatibility path inference
 when project metadata is absent. It is not appropriate for ambiguous source
 roots; project-aware callers should supply `BuildDependencies::module_paths`

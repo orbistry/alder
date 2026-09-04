@@ -127,9 +127,9 @@ unwrapping the payload according to the runtime representation.
 ### 10. Local extern files
 
 - [x] Regression for `./client.js` beside an Alder source module.
-- [ ] Carry physical origins through virtual modules; resolve relative externs
+- [x] Carry physical origins through virtual modules; resolve relative externs
   consistently regardless of shell cwd and across package boundaries.
-- [ ] CLI build/run with local Promise wrapper, typed Result fulfillment,
+- [x] CLI build/run with local Promise wrapper, typed Result fulfillment,
   throw/rejection, AbortSignal cancellation, and contextual resolution errors.
 
 Root cause: virtual module imports lack a physical importer location.
@@ -157,6 +157,19 @@ Root cause: virtual module imports lack a physical importer location.
 - [ ] Identify inactive Elm-era Rust modules and correct obsolete claims.
 
 ## Evidence log
+
+- Extern package/diagnostic checkpoint: a temporary path-dependency fixture
+  executes the package's Promise wrapper returning 42 even though the application
+  has a same-named wrapper returning 99. Removing the dependency wrapper then
+  reproduced the missing-declaration-snippet problem. Source text and extern
+  regions now survive into bundling; resolution failures return shared
+  `alder-report` diagnostics, and CLI conversion retains their labels. The
+  integration test verifies the actual dependency declaration appears in the
+  rendered error. A reviewed no-color bundle snapshot covers the declaration,
+  import specifier, physical path, and resolver explanation.
+  Validation: full workspace tests (ten CLI tests, three bundle tests), strict
+  Clippy, and formatting pass. The new snapshot was explicitly reviewed; no
+  pending snapshots remain. Final release packaging remains an open gate.
 
 - Local extern checkpoint: the new permanent `externs` CLI fixture failed to
   resolve `./client.js` before the fix. Emitted modules now retain physical

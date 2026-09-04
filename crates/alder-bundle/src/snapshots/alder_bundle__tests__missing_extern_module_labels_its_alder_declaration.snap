@@ -1,0 +1,14 @@
+---
+source: crates/alder-bundle/src/lib.rs
+description: "#[extern(\"./client.js\", \"answer\")]\npub fn answer() Task[Number]\n"
+---
+alder::bundle::extern_resolution
+
+  × cannot resolve extern module `./client.js`
+   ╭─[/project/src/api.ald:1:1]
+ 1 │ ╭─▶ #[extern("./client.js", "answer")]
+ 2 │ ├─▶ pub fn answer() Task[Number]
+   · ╰──── this extern requires the module
+   ╰────
+  help: Cannot find module './client.js'. Relative extern paths are resolved
+        beside /project/src/api.ald. Check the wrapper's path.

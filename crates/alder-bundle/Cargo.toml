@@ -9,6 +9,8 @@ license.workspace = true
 
 [dependencies]
 alder-codegen = { path = "../alder-codegen", version = "0.3.0" }
+alder-report = { path = "../alder-report", version = "0.2.0" }
+alder-region = { path = "../alder-region", version = "0.2.0" }
 alder-kernel = { path = "../alder-kernel", version = "0.3.0" }
 rolldown = { version = "=0.1.0", default-features = false }
 # Keep Rolldown's pre-1.0 family coherent. Its internal dependencies use
@@ -32,4 +34,7 @@ oxc_ast = "=0.95.0"
 thiserror.workspace = true
 
 [dev-dependencies]
+indoc.workspace = true
+insta.workspace = true
+miette.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

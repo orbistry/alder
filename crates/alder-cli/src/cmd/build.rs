@@ -133,7 +133,10 @@ pub(super) async fn bundle(result: &BuildResult, kind: EntryKind) -> Result<Stri
     let entry = "alder://app/main.mjs";
     alder_bundle::bundle(result.artifacts.values().cloned(), entry, kind)
         .await
-        .map_err(|error| miette!(error.to_string()))
+        .map_err(|error| match error {
+            alder_bundle::Error::Diagnostic(diagnostic) => miette::Report::new(*diagnostic),
+            other => miette!(other.to_string()),
+        })
 }
 
 fn project_target(config: &Config) -> Result<Target> {

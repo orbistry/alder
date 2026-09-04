@@ -9,6 +9,7 @@ use std::{
 
 use alder_codegen::EmittedModule;
 use alder_codegen::support;
+use alder_report::{Diagnostic, Source};
 use oxc_ast::ast::Statement;
 use rolldown::{Bundler, BundlerOptions, InputItem, OutputFormat};
 use rolldown_common::ModuleType;
@@ -27,6 +28,8 @@ pub enum EntryKind {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("{0}")]
+    Diagnostic(Box<Diagnostic>),
     #[error("entry module {0} was not emitted")]
     MissingEntry(String),
     #[error("bundle staging failed: {0}")]
@@ -83,10 +86,19 @@ pub async fn bundle(
     let origins = modules
         .iter()
         .filter_map(|module| {
-            module
-                .source_path
-                .as_ref()
-                .map(|path| (module.module_id.clone(), path.clone()))
+            module.source_path.as_ref().map(|path| {
+                (
+                    module.module_id.clone(),
+                    ModuleOrigin {
+                        path: path.clone(),
+                        source: Source::new(
+                            path.to_string_lossy(),
+                            module.source_text.clone().unwrap_or_default(),
+                        ),
+                        extern_regions: module.extern_regions.clone(),
+                    },
+                )
+            })
         })
         .collect();
     let asts: BTreeMap<_, _> = modules
@@ -94,7 +106,9 @@ pub async fn bundle(
         .chain(generated_support)
         .map(|module| (module.module_id, module.ast))
         .collect();
+    let resolution_errors = Arc::new(Mutex::new(Vec::new()));
     let plugin = Arc::new(VirtualModules {
+        resolution_errors: resolution_errors.clone(),
         ids: asts.keys().cloned().collect(),
         origins,
         asts: Mutex::new(asts),
@@ -114,10 +128,26 @@ pub async fn bundle(
         vec![plugin],
     )
     .map_err(|error| Error::Rolldown(error.to_string()))?;
-    let output = bundler
-        .generate()
-        .await
-        .map_err(|error| Error::Rolldown(error.to_string()))?;
+    let output = bundler.generate().await.map_err(|error| {
+        let mut diagnostics = resolution_errors
+            .lock()
+            .expect("resolution error mutex poisoned");
+        diagnostics.sort_by(|left, right| {
+            left.source()
+                .name()
+                .cmp(right.source().name())
+                .then_with(|| left.message().cmp(right.message()))
+        });
+        if diagnostics.is_empty() {
+            return Error::Rolldown(error.to_string());
+        }
+        let primary = diagnostics.remove(0);
+        Error::Diagnostic(Box::new(
+            diagnostics
+                .drain(..)
+                .fold(primary, Diagnostic::with_related),
+        ))
+    })?;
     output
         .assets
         .into_iter()
@@ -229,10 +259,40 @@ fn exports(names: &[(&str, &str)]) -> String {
 }
 
 #[derive(Debug)]
+struct ModuleOrigin {
+    path: std::path::PathBuf,
+    source: Source,
+    extern_regions: Vec<(String, alder_region::Region)>,
+}
+
+impl ModuleOrigin {
+    fn resolution_failure(&self, specifier: &str, reason: &str) -> Diagnostic {
+        let mut diagnostic = Diagnostic::error(
+            self.source.clone(),
+            format!("cannot resolve extern module `{specifier}`"),
+        )
+        .with_code("alder::bundle::extern_resolution")
+        .with_help(format!(
+            "{reason}. Relative extern paths are resolved beside {}. Check the wrapper's path.",
+            self.path.display()
+        ));
+        for (_, region) in self
+            .extern_regions
+            .iter()
+            .filter(|(module, _)| module == specifier)
+        {
+            diagnostic = diagnostic.with_primary_label(*region, "this extern requires the module");
+        }
+        diagnostic
+    }
+}
+
+#[derive(Debug)]
 struct VirtualModules {
     asts: Mutex<BTreeMap<String, EcmaAst>>,
     ids: BTreeSet<String>,
-    origins: BTreeMap<String, std::path::PathBuf>,
+    origins: BTreeMap<String, ModuleOrigin>,
+    resolution_errors: Arc<Mutex<Vec<Diagnostic>>>,
     sources: BTreeMap<String, String>,
 }
 
@@ -265,13 +325,14 @@ impl Plugin for VirtualModules {
         let Some(origin) = args.importer.and_then(|id| self.origins.get(id)) else {
             return Ok(None);
         };
-        let origin = origin
+        let physical_path = origin
+            .path
             .to_str()
             .ok_or_else(|| std::io::Error::other("extern importer path is not valid UTF-8"))?;
         let resolved = ctx
             .resolve(
                 args.specifier,
-                Some(origin),
+                Some(physical_path),
                 Some(PluginContextResolveOptions {
                     import_kind: args.kind,
                     is_entry: args.is_entry,
@@ -281,9 +342,14 @@ impl Plugin for VirtualModules {
             )
             .await?
             .map_err(|error| {
+                let diagnostic = origin.resolution_failure(args.specifier, &error.to_string());
+                self.resolution_errors
+                    .lock()
+                    .expect("resolution error mutex poisoned")
+                    .push(diagnostic);
                 std::io::Error::other(format!(
                     "cannot resolve extern module {:?} from {}: {error}",
-                    args.specifier, origin
+                    args.specifier, physical_path
                 ))
             })?;
         Ok(Some(HookResolveIdOutput::from_resolved_id(resolved)))
@@ -335,11 +401,42 @@ impl Plugin for VirtualModules {
 mod tests {
     use super::*;
 
+    #[test]
+    fn missing_extern_module_labels_its_alder_declaration() {
+        let source = indoc::indoc! {r#"
+            #[extern("./client.js", "answer")]
+            pub fn answer() Task[Number]
+        "#};
+        let origin = ModuleOrigin {
+            path: "/project/src/api.ald".into(),
+            source: Source::new("/project/src/api.ald", source),
+            extern_regions: vec![(
+                "./client.js".to_owned(),
+                alder_region::Region::new(
+                    alder_region::Position::new(1, 1),
+                    alder_region::Position::new(2, 28),
+                ),
+            )],
+        };
+        let diagnostic =
+            origin.resolution_failure("./client.js", "Cannot find module './client.js'");
+        let mut rendered = String::new();
+        miette::GraphicalReportHandler::new_themed(miette::GraphicalTheme::unicode_nocolor())
+            .with_width(80)
+            .render_report(&mut rendered, &diagnostic)
+            .unwrap();
+        insta::with_settings!({ description => source, omit_expression => true }, {
+            insta::assert_snapshot!(rendered);
+        });
+    }
+
     // Parse hand-written JavaScript used only as a bundler fixture. Production
     // Alder modules arrive from alder-codegen as already-built `EcmaAst`s.
     fn parsed_javascript_fixture(code: &str) -> EmittedModule {
         EmittedModule {
             source_path: None,
+            source_text: None,
+            extern_regions: vec![],
             module_id: "alder://app/main.mjs".to_owned(),
             ast: rolldown_ecmascript::EcmaCompiler::parse("fixture.mjs", code, Default::default())
                 .unwrap(),

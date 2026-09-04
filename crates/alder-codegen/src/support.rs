@@ -120,6 +120,8 @@ fn generated_module(
     });
     EmittedModule {
         source_path: None,
+        source_text: None,
+        extern_regions: vec![],
         module_id: module_id.to_owned(),
         ast,
         dependencies: Vec::new(),

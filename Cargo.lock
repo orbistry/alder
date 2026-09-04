@@ -85,6 +85,11 @@ version = "0.2.2"
 dependencies = [
  "alder-codegen",
  "alder-kernel",
+ "alder-region",
+ "alder-report",
+ "indoc",
+ "insta",
+ "miette",
  "oxc_ast",
  "oxc_resolver",
  "rolldown",

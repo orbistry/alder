@@ -97,6 +97,87 @@ mod tests {
         }
     }
 
+    #[tokio::test(flavor = "current_thread")]
+    async fn dependency_extern_uses_its_own_sibling_wrapper() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-extern-dependency-{}-{nonce}",
+            std::process::id()
+        ));
+        let dependency = root.join("package");
+        let app = root.join("application");
+        for project in [&dependency, &app] {
+            std::fs::create_dir_all(project.join("src")).unwrap();
+        }
+        std::fs::write(
+            dependency.join("alder.jsonc"),
+            indoc::indoc! {r#"
+            { "type": "package", "name": "vendor/wrapper", "version": "0.1.0",
+              "summary": "Extern fixture", "license": "MIT", "target": "standalone" }
+        "#},
+        )
+        .unwrap();
+        let source = indoc::indoc! {r#"
+            #[extern("./client.js", "answer")]
+            pub fn answer() Task[Number]
+        "#};
+        std::fs::write(dependency.join("src/api.ald"), source).unwrap();
+        std::fs::write(
+            dependency.join("src/client.js"),
+            "export function answer() { return Promise.resolve(42); }",
+        )
+        .unwrap();
+        super::build::compile(&dependency, BuildMode::Check)
+            .await
+            .unwrap();
+        std::fs::write(
+            app.join("alder.jsonc"),
+            indoc::indoc! {r#"
+            { "type": "application", "target": "standalone",
+              "dependencies": { "vendor/wrapper": { "path": "../package" } } }
+        "#},
+        )
+        .unwrap();
+        std::fs::write(
+            app.join("src/client.js"),
+            "export function answer() { return Promise.resolve(99); }",
+        )
+        .unwrap();
+        std::fs::write(
+            app.join("src/main.ald"),
+            indoc::indoc! {r#"
+            import @vendor/wrapper/api
+            pub fn main() { assert(api.answer().await == 42) }
+        "#},
+        )
+        .unwrap();
+        let compiled = super::build::compile_ephemeral(&app, BuildMode::Build)
+            .await
+            .unwrap();
+        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+            .await
+            .unwrap();
+        assert_eq!(alder_runtime::execute(bundle, Vec::new()).await.unwrap(), 0);
+
+        std::fs::remove_file(dependency.join("src/client.js")).unwrap();
+        let error = super::build::bundle(&compiled.result, EntryKind::Standalone)
+            .await
+            .unwrap_err();
+        let mut rendered = String::new();
+        miette::GraphicalReportHandler::new_themed(miette::GraphicalTheme::unicode_nocolor())
+            .render_report(&mut rendered, error.as_ref())
+            .unwrap();
+        assert!(
+            rendered.contains("pub fn answer() Task[Number]"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("./client.js"), "{rendered}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn runnable_traits_documentation_matches_its_fixture() {
         let docs = include_str!("../../../../docs/language.md");

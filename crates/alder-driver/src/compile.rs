@@ -572,6 +572,23 @@ fn compile_module<'s>(
             match alder_codegen::emit_solved_module(can_result.module, &solved, options) {
                 Ok(mut artifact) => {
                     artifact.source_path = uri.to_file_path().ok();
+                    artifact.source_text = Some(source.clone());
+                    artifact.extern_regions = can_result
+                        .module
+                        .items
+                        .iter()
+                        .filter_map(|item| {
+                            if let alder_ast::ItemKind::Extern(alder_ast::ExternDecl::Fn {
+                                module,
+                                ..
+                            }) = item.value.kind
+                            {
+                                Some(((*module).to_owned(), item.region))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
                     Some(artifact)
                 }
                 Err(error) => {

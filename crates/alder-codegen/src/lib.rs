@@ -34,6 +34,9 @@ pub struct EmittedModule {
     pub module_id: String,
     /// Physical Alder source location, supplied by the driver for extern resolution.
     pub source_path: Option<std::path::PathBuf>,
+    /// Owned source and extern declaration regions for late resolution errors.
+    pub source_text: Option<String>,
+    pub extern_regions: Vec<(String, Region)>,
     pub ast: EcmaAst,
     pub dependencies: Vec<String>,
 }
@@ -50,6 +53,8 @@ impl Clone for EmittedModule {
         Self {
             module_id: self.module_id.clone(),
             source_path: self.source_path.clone(),
+            source_text: self.source_text.clone(),
+            extern_regions: self.extern_regions.clone(),
             ast: self.ast.clone_with_another_arena(),
             dependencies: self.dependencies.clone(),
         }
@@ -70,6 +75,8 @@ impl PartialEq for EmittedModule {
     fn eq(&self, other: &Self) -> bool {
         self.module_id == other.module_id
             && self.source_path == other.source_path
+            && self.source_text == other.source_text
+            && self.extern_regions == other.extern_regions
             && self.dependencies == other.dependencies
             && self.code() == other.code()
     }
@@ -117,6 +124,8 @@ fn emit_module_with_solution(
     Ok(EmittedModule {
         module_id: generated.module_id,
         source_path: None,
+        source_text: None,
+        extern_regions: vec![],
         ast: generated.ast,
         dependencies: generated.dependencies,
     })
