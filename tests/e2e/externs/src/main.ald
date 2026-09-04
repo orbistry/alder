@@ -1,0 +1,44 @@
+import ~/nested/operations
+
+#[extern("./client.js", "answer")]
+fn answer() Task[Number]
+
+#[extern("./client.js", "fulfilled")]
+fn fulfilled(value: Result[Number, [:rejected(String)]]) Task[Result[Number, [:rejected(String)]]]
+
+#[extern("./client.js", "pending", "abort")]
+fn pending() Task[Number]
+
+#[extern("./client.js", "abortCount")]
+fn abortCount() Number
+
+#[extern("./client.js", "throws")]
+fn throws() Task[Number]
+
+#[extern("./client.js", "rejects")]
+fn rejects() Task[Number]
+
+pub fn main() {
+    let args = Cli.args()
+    if Array.length(args) > 0 {
+        if args[0] == "throw" {
+            assert(throws().await == 0)
+        } else {
+            assert(rejects().await == 0)
+        }
+    }
+    assert(answer().await == 42)
+    assert(operations.answer().await == 43)
+    assert(match fulfilled(Ok(42)).await {
+        Ok(value) => value == 42,
+        Err(_) => false,
+    })
+    assert(match fulfilled(Err(:rejected("typed error"))).await {
+        Ok(_) => false,
+        Err(:rejected(message)) => message == "typed error",
+    })
+    let fiber = Fiber.fork(pending()).await
+    Task.sleep(1).await
+    Fiber.interrupt(fiber).await
+    assert(abortCount() == 1)
+}

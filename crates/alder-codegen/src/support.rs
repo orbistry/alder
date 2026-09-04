@@ -119,6 +119,7 @@ fn generated_module(
         *fields.program = build(&js);
     });
     EmittedModule {
+        source_path: None,
         module_id: module_id.to_owned(),
         ast,
         dependencies: Vec::new(),

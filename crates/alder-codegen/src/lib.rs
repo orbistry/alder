@@ -32,6 +32,8 @@ impl Default for EmitOptions {
 
 pub struct EmittedModule {
     pub module_id: String,
+    /// Physical Alder source location, supplied by the driver for extern resolution.
+    pub source_path: Option<std::path::PathBuf>,
     pub ast: EcmaAst,
     pub dependencies: Vec<String>,
 }
@@ -47,6 +49,7 @@ impl Clone for EmittedModule {
     fn clone(&self) -> Self {
         Self {
             module_id: self.module_id.clone(),
+            source_path: self.source_path.clone(),
             ast: self.ast.clone_with_another_arena(),
             dependencies: self.dependencies.clone(),
         }
@@ -57,6 +60,7 @@ impl std::fmt::Debug for EmittedModule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EmittedModule")
             .field("module_id", &self.module_id)
+            .field("source_path", &self.source_path)
             .field("dependencies", &self.dependencies)
             .finish_non_exhaustive()
     }
@@ -65,6 +69,7 @@ impl std::fmt::Debug for EmittedModule {
 impl PartialEq for EmittedModule {
     fn eq(&self, other: &Self) -> bool {
         self.module_id == other.module_id
+            && self.source_path == other.source_path
             && self.dependencies == other.dependencies
             && self.code() == other.code()
     }
@@ -111,6 +116,7 @@ fn emit_module_with_solution(
     let generated = oxc_backend::emit_module_ast(module, solved, options)?;
     Ok(EmittedModule {
         module_id: generated.module_id,
+        source_path: None,
         ast: generated.ast,
         dependencies: generated.dependencies,
     })

@@ -26,6 +26,16 @@ build. A shared source-aware diagnostic shows the conflicting files, ordered
 by URI. No interface or JavaScript artifacts are returned for that build.
 Ambiguous identities are not assigned arbitrary graph edges.
 
+Emitted modules retain an optional physical Alder source path alongside the
+owned Oxc AST. The driver supplies it from the source URI; generated entry
+modules have no physical origin. The bundler preserves this map independently
+of its consumable AST map and delegates foreign resolution to Rolldown using
+the physical importer. A relative extern therefore resolves beside its Alder
+declaration, including nested modules; a wrapper's own imports use ordinary
+JavaScript resolution. Compiler-generated JavaScript is never serialized for
+this handoff. The virtual ID registry also remains available after an AST has
+been transferred into Rolldown.
+
 The low-level source-only driver API retains a compatibility path inference
 when project metadata is absent. It is not appropriate for ambiguous source
 roots; project-aware callers should supply `BuildDependencies::module_paths`

@@ -647,6 +647,9 @@ fn request(url: String) Task[Response]
 fn parseJson(s: String) Result[Json, [:syntax(String)]]
 ```
 
+- Relative extern modules such as `"./client.js"` resolve beside the declaring
+  Alder source file, not the shell's working directory. A JS wrapper's own
+  relative imports resolve beside that wrapper normally.
 - A JS function returning a Promise must be declared `Task[...]`. The Promise
   producer is lazy: calling the Alder extern constructs a task, and the JS
   function is invoked only when that task runs.

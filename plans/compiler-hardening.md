@@ -126,7 +126,7 @@ unwrapping the payload according to the runtime representation.
 
 ### 10. Local extern files
 
-- [ ] Regression for `./client.js` beside an Alder source module.
+- [x] Regression for `./client.js` beside an Alder source module.
 - [ ] Carry physical origins through virtual modules; resolve relative externs
   consistently regardless of shell cwd and across package boundaries.
 - [ ] CLI build/run with local Promise wrapper, typed Result fulfillment,
@@ -157,6 +157,23 @@ Root cause: virtual module imports lack a physical importer location.
 - [ ] Identify inactive Elm-era Rust modules and correct obsolete claims.
 
 ## Evidence log
+
+- Local extern checkpoint: the new permanent `externs` CLI fixture failed to
+  resolve `./client.js` before the fix. Emitted modules now retain physical
+  source paths and the bundler delegates foreign resolution using that importer.
+  The AST handoff remains direct; virtual IDs survive consuming their ASTs.
+  CLI execution now covers sibling/nested wrappers, a wrapper importing its
+  parent JS module, fulfilled Ok/Err data, raw rejection, synchronous throws,
+  retained runtime defect context, and exactly-once AbortSignal cancellation.
+  The original extern probe now runs successfully. Dependency-package wrappers
+  and source-labeled declaration diagnostics for resolution failures remain
+  required follow-up work; the current resolver error includes the source path
+  and import specifier but not a labeled declaration span.
+  Validation: full workspace tests, all nine CLI tests, strict Clippy, and
+  formatting pass. The fixture also ran using the real CLI from `/tmp` with
+  an absolute project path. Its generated cache was moved out of the repository
+  after the manual check. No snapshots changed or remain pending. Final package
+  verification against the pending inter-crate release set remains open.
 
 - Workspace application regression reproduced two distinct members both being
   assigned `Application`. Workspace-aware package mapping now assigns opaque

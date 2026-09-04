@@ -65,12 +65,34 @@ mod tests {
             "modules",
             "errors",
             "async",
+            "externs",
             "traits",
             "docs_traits",
         ] {
             assert_eq!(
                 execute(name, BuildMode::Build, EntryKind::Standalone).await,
                 0
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn local_promise_extern_defects_retain_their_context() {
+        let compiled = super::build::compile_ephemeral(&fixture("externs"), BuildMode::Build)
+            .await
+            .unwrap();
+        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+            .await
+            .unwrap();
+        for (argument, symbol) in [("throw", "throws"), ("reject", "rejects")] {
+            let error = alder_runtime::execute(bundle.clone(), vec![argument.to_owned()])
+                .await
+                .unwrap_err();
+            let message = error.to_string();
+            assert!(message.contains("wrapper failure"), "{message}");
+            assert!(
+                message.contains(&format!("extern ./client.js:{symbol}")),
+                "{message}"
             );
         }
     }

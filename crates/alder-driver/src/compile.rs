@@ -570,7 +570,10 @@ fn compile_module<'s>(
                 },
             };
             match alder_codegen::emit_solved_module(can_result.module, &solved, options) {
-                Ok(artifact) => Some(artifact),
+                Ok(mut artifact) => {
+                    artifact.source_path = uri.to_file_path().ok();
+                    Some(artifact)
+                }
                 Err(error) => {
                     let (output, _) = failed(vec![crate::report::codegen(report_source, &error)]);
                     return (

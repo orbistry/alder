@@ -3,7 +3,7 @@
 
 use std::{
     borrow::Cow,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
 };
 
@@ -15,7 +15,7 @@ use rolldown_common::ModuleType;
 use rolldown_ecmascript::EcmaAst;
 use rolldown_plugin::{
     HookLoadArgs, HookLoadOutput, HookResolveIdArgs, HookResolveIdOutput, HookTransformAstArgs,
-    HookUsage, Plugin, PluginContext,
+    HookUsage, Plugin, PluginContext, PluginContextResolveOptions,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,7 +44,8 @@ pub async fn bundle(
     entry_module: &str,
     kind: EntryKind,
 ) -> Result<String, Error> {
-    let modules: Vec<_> = modules.into_iter().collect();
+    let mut modules: Vec<_> = modules.into_iter().collect();
+    modules.sort_by(|left, right| left.module_id.cmp(&right.module_id));
     if !modules
         .iter()
         .any(|module| module.module_id == entry_module)
@@ -79,12 +80,23 @@ pub async fn bundle(
         support_kind,
         &application_modules,
     )];
-    let asts = modules
+    let origins = modules
+        .iter()
+        .filter_map(|module| {
+            module
+                .source_path
+                .as_ref()
+                .map(|path| (module.module_id.clone(), path.clone()))
+        })
+        .collect();
+    let asts: BTreeMap<_, _> = modules
         .into_iter()
         .chain(generated_support)
         .map(|module| (module.module_id, module.ast))
         .collect();
     let plugin = Arc::new(VirtualModules {
+        ids: asts.keys().cloned().collect(),
+        origins,
         asts: Mutex::new(asts),
         sources,
     });
@@ -219,17 +231,14 @@ fn exports(names: &[(&str, &str)]) -> String {
 #[derive(Debug)]
 struct VirtualModules {
     asts: Mutex<BTreeMap<String, EcmaAst>>,
+    ids: BTreeSet<String>,
+    origins: BTreeMap<String, std::path::PathBuf>,
     sources: BTreeMap<String, String>,
 }
 
 impl VirtualModules {
     fn contains(&self, id: &str) -> bool {
-        self.sources.contains_key(id)
-            || self
-                .asts
-                .lock()
-                .expect("virtual AST map mutex poisoned")
-                .contains_key(id)
+        self.sources.contains_key(id) || self.ids.contains(id)
     }
 }
 
@@ -238,15 +247,46 @@ impl Plugin for VirtualModules {
         Cow::Borrowed("alder-virtual-modules")
     }
 
-    fn resolve_id(
+    async fn resolve_id(
         &self,
-        _ctx: &PluginContext,
+        ctx: &PluginContext,
         args: &HookResolveIdArgs<'_>,
-    ) -> impl std::future::Future<Output = rolldown_plugin::HookResolveIdReturn> + Send {
-        let resolved = self
-            .contains(args.specifier)
-            .then(|| HookResolveIdOutput::from_id(args.specifier));
-        async move { Ok(resolved) }
+    ) -> rolldown_plugin::HookResolveIdReturn {
+        if self.contains(args.specifier) {
+            return Ok(Some(HookResolveIdOutput::from_id(args.specifier)));
+        }
+        if args.specifier.starts_with("node:") {
+            return Err(std::io::Error::other(format!(
+                "Node compatibility imports are not supported: {}",
+                args.specifier
+            ))
+            .into());
+        }
+        let Some(origin) = args.importer.and_then(|id| self.origins.get(id)) else {
+            return Ok(None);
+        };
+        let origin = origin
+            .to_str()
+            .ok_or_else(|| std::io::Error::other("extern importer path is not valid UTF-8"))?;
+        let resolved = ctx
+            .resolve(
+                args.specifier,
+                Some(origin),
+                Some(PluginContextResolveOptions {
+                    import_kind: args.kind,
+                    is_entry: args.is_entry,
+                    custom: args.custom.clone(),
+                    ..Default::default()
+                }),
+            )
+            .await?
+            .map_err(|error| {
+                std::io::Error::other(format!(
+                    "cannot resolve extern module {:?} from {}: {error}",
+                    args.specifier, origin
+                ))
+            })?;
+        Ok(Some(HookResolveIdOutput::from_resolved_id(resolved)))
     }
 
     fn load(
@@ -299,6 +339,7 @@ mod tests {
     // Alder modules arrive from alder-codegen as already-built `EcmaAst`s.
     fn parsed_javascript_fixture(code: &str) -> EmittedModule {
         EmittedModule {
+            source_path: None,
             module_id: "alder://app/main.mjs".to_owned(),
             ast: rolldown_ecmascript::EcmaCompiler::parse("fixture.mjs", code, Default::default())
                 .unwrap(),

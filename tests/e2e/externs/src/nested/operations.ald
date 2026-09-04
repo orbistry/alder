@@ -1,0 +1,2 @@
+#[extern("./client.js", "answer")]
+pub fn answer() Task[Number]
