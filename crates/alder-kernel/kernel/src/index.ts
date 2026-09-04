@@ -600,6 +600,9 @@ export function $cliArgs() { return globalThis.__alderHost?.args ?? []; }
 
 const taskType = Symbol.for("alder/Task");
 const maxOperationsBeforeYield = 1024;
+let operationsRemaining = maxOperationsBeforeYield;
+let readyFibers = [];
+let drainScheduled = false;
 let nextFiberId = 0;
 let currentFiber = null;
 const synchronousProviderContext = new Map();
@@ -716,7 +719,7 @@ class FiberImpl {
     }
 
     start() {
-        schedule(this, false);
+        schedule(this);
         return this;
     }
 
@@ -747,7 +750,7 @@ class FiberImpl {
             this.resumeMethod = "throw";
             this.resumeValue = this.interruptError;
             this.interruptDelivered = true;
-            schedule(this, false);
+            schedule(this);
         }
     }
 
@@ -756,9 +759,8 @@ class FiberImpl {
         const previousFiber = currentFiber;
         currentFiber = this;
         try {
-            let operations = 0;
-            while (this.state === "Running" && operations < maxOperationsBeforeYield) {
-                operations += 1;
+            while (this.state === "Running" && operationsRemaining > 0) {
+                operationsRemaining -= 1;
                 if (this.interruptRequested && !this.interruptDelivered && this.interruptMask === 0) {
                     this.resumeMethod = "throw";
                     this.resumeValue = this.interruptError;
@@ -785,7 +787,7 @@ class FiberImpl {
                 }
                 if (this.handle(step.value)) return;
             }
-            if (this.state === "Running") schedule(this, true);
+            if (this.state === "Running") schedule(this);
         } finally {
             currentFiber = previousFiber;
         }
@@ -828,7 +830,7 @@ class FiberImpl {
             this.state = "Running";
             this.resumeMethod = method;
             this.resumeValue = value;
-            schedule(this, false);
+            schedule(this);
         };
         try {
             cleanup = register(resume) ?? null;
@@ -1056,15 +1058,38 @@ class FiberImpl {
     }
 }
 
-function schedule(fiber, yieldToHost) {
+function schedule(fiber) {
     if (fiber.queued || fiber.state !== "Running") return;
     fiber.queued = true;
-    const run = () => {
+    readyFibers.push(fiber);
+    scheduleDrain();
+}
+
+function scheduleDrain() {
+    if (drainScheduled || readyFibers.length === 0) return;
+    drainScheduled = true;
+    if (operationsRemaining === 0) {
+        setTimeout(() => {
+            // Only a host yield replenishes the shared budget. Promise
+            // resumptions and newly created fibers must not reset it.
+            operationsRemaining = maxOperationsBeforeYield;
+            drainReadyFibers();
+        }, 0);
+    } else {
+        queueMicrotask(drainReadyFibers);
+    }
+}
+
+function drainReadyFibers() {
+    let index = 0;
+    while (index < readyFibers.length && operationsRemaining > 0) {
+        const fiber = readyFibers[index++];
         fiber.queued = false;
         fiber.run();
-    };
-    if (yieldToHost) setTimeout(run, 0);
-    else queueMicrotask(run);
+    }
+    readyFibers = readyFibers.slice(index);
+    drainScheduled = false;
+    scheduleDrain();
 }
 
 function runFinalizer(task, context) {

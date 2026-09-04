@@ -155,6 +155,75 @@ $assert(JSON.stringify($optionUnbox(decoded._0)) === JSON.stringify(reserved));
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn immediately_ready_work_yields_to_host_timers() {
+        let harness = r#"
+const unit = $task(function* () {});
+const ready = $tryPromise(() => Promise.resolve());
+for (const mode of ["promise", "join", "fork", "all", "race", "finalizers"]) {
+    let timerRan = false;
+    let progress = 0;
+    const timer = setTimeout(() => { timerRan = true; }, 0);
+    await $runTask($task(function* () {
+        const completed = yield* $fiberFork(unit);
+        yield* $fiberJoin(completed);
+        if (mode === "finalizers") {
+            for (let i = 0; i < 4096; i++) {
+                yield* $fiberAddFinalizer($task(function* () {
+                    progress++;
+                    if (progress === 2048 && !timerRan) throw new Error("finalizer starvation");
+                }));
+            }
+            timerRan = false;
+            setTimeout(() => { timerRan = true; }, 0);
+            return;
+        }
+        for (let i = 0; i < 4096; i++) {
+            if (mode === "promise") yield* ready;
+            else if (mode === "join") yield* $fiberJoin(completed);
+            else if (mode === "fork") yield* $fiberJoin(yield* $fiberFork(unit));
+            else if (mode === "all") yield* $fiberAll([unit]);
+            else if (mode === "race") yield* $fiberRace([unit]);
+            progress++;
+            if (progress === 2048 && !timerRan) throw new Error(`${mode} starvation`);
+        }
+    }));
+    clearTimeout(timer);
+    if (!timerRan) throw new Error(`${mode} did not yield`);
+}
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn host_timer_can_interrupt_immediately_fulfilled_awaits() {
+        let harness = r#"
+let steps = 0;
+let finalized = 0;
+let interrupted = false;
+await $runTask($task(function* () {
+    const child = yield* $fiberFork($task(function* () {
+        yield* $fiberAddFinalizer($task(function* () { finalized++; }));
+        for (let i = 0; i < 4096; i++) {
+            yield* $tryPromise(() => Promise.resolve());
+            steps++;
+        }
+    }));
+    const timer = setTimeout(() => child.interruptUnsafe(), 0);
+    try { yield* $fiberJoin(child); }
+    catch (error) {
+        if (error.name !== "AlderInterrupted") throw error;
+        interrupted = true;
+    } finally { clearTimeout(timer); }
+}));
+if (!interrupted || steps >= 4096) throw new Error("timer interruption was starved");
+if (finalized !== 1) throw new Error("interrupted child must finalize exactly once");
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn fiber_runtime_obeys_lifecycle_and_promise_invariants() {
         let harness = r#"
 const check = (condition, message) => { if (!condition) throw new Error(message); };

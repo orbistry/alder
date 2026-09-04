@@ -418,9 +418,21 @@ an uninterruptible region stays pending and is delivered after the mask is
 removed. Promise/callback double settlement and settlement after interruption
 cannot complete a fiber twice or resurrect it.
 
-The scheduler uses microtasks for ready work, never recursive interpreter
-calls. A fiber processes at most 1,024 operations before yielding through a
-host timer, preventing immediately-ready chains from starving the event loop.
+The scheduler uses a FIFO ready queue drained by microtasks, never recursive
+interpreter calls. One shared budget permits at most 1,024 generator steps
+across all fibers before the next ready work must pass through a host timer.
+Only that timer replenishes the budget: Promise resumptions, completed joins,
+new children, and finalizer fibers do not reset it. If the queue becomes empty,
+the unused budget is retained for subsequent ready work. Completion steps count
+too, so a sequence of immediately completing child/finalizer fibers cannot
+bypass the budget. Tests observe timer progress within bounded operation
+counts, including timer-driven interruption and exactly-once cleanup.
+
+This is a cooperative boundary, not a wall-clock or instruction limit inside
+an individual generator step. Ordinary synchronous computation and runtime
+bulk work inside one operation cannot be preempted by this budget. Stack-safe
+composition and the broader bulk-operation/cancellation audit remain tracked
+in the compiler-hardening plan.
 Fiber contexts are cloned at child construction so provider state is inherited
 without later sibling mutation leaks; compile-time provider checking remains
 the separate unfinished M4 context wave.
@@ -442,8 +454,12 @@ Intentional divergences are:
   tracing stack, supervision API, or public fiber-ref system.
 - Every Alder fiber owns its lexical child scope rather than exposing Effect's
   general scope graph.
-- Scheduling uses one FIFO queue, a fixed 1,024-operation budget, microtasks,
+- Scheduling uses one FIFO queue, a fixed shared 1,024-step budget, microtasks,
   and timer-based host yields rather than Effect's configurable scheduler.
+  The hardening audit rechecked `MixedScheduler` and the interpreter's
+  `runLoop` at the pinned commit above. Alder deliberately counts across
+  asynchronous resumptions and fiber identities, not just one interpreter
+  invocation; no reference source was copied.
 - Foreign rejection is one contextual `AlderForeignDefect`; interruption is a
   distinct internal exit, and neither becomes a fabricated Alder error row.
 - Provider context cloning is only a future-compatible runtime seam. Static

@@ -158,6 +158,28 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Scheduler-budget checkpoint: the original Node probe printed `false` for
+  timer progress across 10,000 fulfilled Promise awaits. A permanent bounded
+  runtime regression also failed with `promise starvation`. Ready work now
+  uses a shared FIFO drain and 1,024-generator-step budget, replenished only
+  after a host-timer yield rather than on each fiber resumption. Tests cover
+  fulfilled Promises, completed joins, fork/join, all, race, and runs of fresh
+  finalizer fibers; timer-driven interruption checks exactly-once finalization.
+  The original probe now prints `true`. Rechecked the pinned Effect v4 commit
+  `bd393d63c19bdd0ab212d95576cec89051c8501c`, specifically interpreter runLoop
+  and MixedScheduler; no code copied. Stack-safe task composition, bulk work
+  inside individual runtime operations, and deeper cleanup audit remain open.
+  Validation: all eight kernel tests, full workspace tests including CLI
+  execution, strict all-target/all-feature Clippy, formatting, and diff checks
+  pass. `cargo package -p alder-kernel --allow-dirty` packages and verifies
+  successfully. No snapshot changes or pending snapshot files. Remaining
+  changed-crate packaging and final acceptance gates stay open.
+- Related runtime finding from inspection: `createChildren` interrupts already
+  constructed children when a later task constructor fails, but those children
+  have not yet been started. Their parent scope can then wait forever for exits.
+  Reproduce with a bounded timeout and fix partial-construction cleanup during
+  the remaining lifecycle audit.
+
 - Conditional-exit checkpoint: new solver regressions reproduced breaks in
   `false && ...`, `true || ...`, and false-guarded match arms incorrectly
   constraining live loop results. Inference now respects those reachability
