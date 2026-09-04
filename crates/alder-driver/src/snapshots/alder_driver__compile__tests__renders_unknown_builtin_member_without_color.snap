@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn bad() { Array.missing([1]) }\n"
+---
+alder::canonicalize::unknown_name
+
+  × unknown name `missing`
+   ╭─[/project/src/main.ald:1:18]
+ 1 │ fn bad() { Array.missing([1]) }
+   ·                  ───┬───
+   ·                     ╰── reported here
+   ╰────

@@ -1851,6 +1851,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_invalid_builtin_argument_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn bad() Number { String.length(42) }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_unknown_builtin_member_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn bad() { Array.missing([1]) }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_generic_method_specialization_without_color() {
         assert_diagnostic_snapshot! {r#"
             trait Convert[a] { fn convert(value: a, other: b) b }

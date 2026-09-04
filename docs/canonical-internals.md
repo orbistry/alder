@@ -439,12 +439,22 @@ pub enum ValueRef<'a> {
     Local(LocalName<'a>),
     TopLevel(QualifiedName<'a>),
     Foreign { reference: QualifiedName<'a>, annotation: &'a Annotation<'a> },
-    Builtin(QualifiedName<'a>), // embedded stdlib member; opaque until its interface is loaded
+    TraitMethod { method: MethodId<'a>, annotation: &'a Annotation<'a> },
     Module(ModuleId<'a>),
     Provider(QualifiedName<'a>),
     QueryName(&'a str),
 }
 
+```
+
+Embedded stdlib members use the same annotated `Foreign` reference as imported
+values; there is no untyped builtin-reference escape hatch. Canonicalization
+loads each requested module's packaged `.ald` signatures once per environment,
+in an isolated builtin namespace, and rejects names absent from its public
+declarations. The package-local sources are checked against `std/` in workspace
+tests so Cargo packages do not depend on files outside their own directory.
+
+```rust
 #[derive(Clone, Copy, Debug)]
 pub struct ConstructorRef<'a> {
     pub name: ConstructorName<'a>,

@@ -123,10 +123,11 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Related audit
 
-- [ ] **Confirmed additional defect:** prelude module members are canonicalized
-  as `ValueRef::Builtin`, which inference resolves to `Ty::Any`. Load and check
-  the actual stdlib signatures; reject unknown members and invalid calls. This
-  currently bypasses contracts for Array/String/Fiber and the other modules.
+- [x] Prelude module members carry actual stdlib signatures, rejecting unknown
+  members and invalid calls. Removed the untyped `ValueRef::Builtin` path.
+- [ ] Audit stdlib declarations against their runtime implementations:
+  `Json.decode` currently promises arbitrary `a` but only runs `JSON.parse`;
+  `Map.get` returns an unboxed nullable payload and loses present `None` values.
 - [x] Nested lambda annotations share same-named enclosing type variables as
   promised in `docs/language.md`, including nested lambda scopes and HKT.
 - [ ] Generic evidence and interface contract fidelity.
@@ -175,6 +176,30 @@ Root cause: virtual module imports lack a physical importer location.
 - Lambda checkpoint validation: formatting, strict Clippy, and full workspace
   tests pass (113 solver integration tests and 75 driver tests, plus CLI
   execution fixtures). No pending snapshots or whitespace errors.
+- Stdlib checkpoint: four invalid builtin calls reproduced before the fix.
+  Canonicalization now loads cached package-local `.ald` signatures into
+  annotated foreign references, in an isolated builtin namespace. Seven solver
+  regressions cover arguments, callbacks, arity, indirect use, and inferred
+  result contracts. Two reviewed driver diagnostics cover invalid arguments
+  and unknown members. Two package-source tests check parity and every module's
+  signatures; added the missing `Ref.ald` declaration.
+- Corrected call mismatch orientation: actual arguments precede the expected
+  callee type. Reviewed five updated solver snapshots, including previously
+  stale source descriptions; program acceptance did not change for those cases.
+- `cargo package -p alder-can --allow-dirty` includes the embedded sources but
+  plain registry verification cannot yet use the unreleased async AST field
+  `abort_signal`. The existing `async-fibers` changeset already bumps that AST.
+  Tarball verification succeeds with explicit local patches for alder-ast,
+  alder-region, alder-source, and alder-parse. Release-version verification
+  remains part of the final gate; no versions or tags were manually changed.
+- Direct kernel probes additionally confirmed `Json.decode("42")` returns
+  `Ok(42)` without target-type validation and `Map.get` returns identical null
+  values for a present None and an absent key. These runtime-contract defects
+  remain required follow-up work, not covered by signature loading alone.
+- Stdlib validation: formatting, strict Clippy, full workspace tests (120 solver
+  integration tests, 77 driver tests), and CLI execution fixtures pass. The
+  package tarball verifies with the pending local dependency set. No pending
+  snapshot files remain.
 - First checkpoint validation: formatting, strict Clippy, and full workspace
   tests pass (100 solver integration tests). The original trait reproduction
   now fails at CLI check with `alder::type::generic_specialization`, before JS

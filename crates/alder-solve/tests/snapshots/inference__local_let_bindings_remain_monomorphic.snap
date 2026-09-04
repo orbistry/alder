@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "fn invalid() {\n    let identity = fn(value) { value }\n    let number = identity(1)\n    identity(\"text\")\n}\n"
+description: "fn invalid() {\n    let identity = (value) -> { value }\n    let number = identity(1)\n    identity(\"text\")\n}\n"
 ---
 [
     Error {
@@ -15,8 +15,8 @@ description: "fn invalid() {\n    let identity = fn(value) { value }\n    let nu
             },
         },
         kind: Mismatch {
-            actual: "Number",
-            expected: "String",
+            actual: "String",
+            expected: "Number",
         },
     },
 ]

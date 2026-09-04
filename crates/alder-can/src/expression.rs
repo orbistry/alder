@@ -116,10 +116,9 @@ pub fn canonicalize_expr<'a>(
             } else if module.module.package == alder_ast::PackageId::Builtin {
                 CanExpr::Var {
                     use_id: env.fresh_use(),
-                    reference: ValueRef::Builtin(alder_ast::QualifiedName {
-                        module: module.module,
-                        name: name.value,
-                    }),
+                    reference: env
+                        .builtin_value(bump, module.module, name.value)
+                        .ok_or_else(|| vec![unknown_value(name.region, name.value)])?,
                 }
             } else {
                 CanExpr::Access {
@@ -200,10 +199,9 @@ pub fn canonicalize_expr<'a>(
                 } else if module.module.package == alder_ast::PackageId::Builtin {
                     CanExpr::Var {
                         use_id: env.fresh_use(),
-                        reference: ValueRef::Builtin(alder_ast::QualifiedName {
-                            module: module.module,
-                            name: field.value,
-                        }),
+                        reference: env
+                            .builtin_value(bump, module.module, field.value)
+                            .ok_or_else(|| vec![unknown_value(field.region, field.value)])?,
                     }
                 } else {
                     CanExpr::Access {

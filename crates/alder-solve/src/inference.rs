@@ -1128,10 +1128,7 @@ fn is_result_err_expr(expression: &Located<Expr<'_>>) -> bool {
                 && constructor.name.variant == "Err"
         }
         Expr::Var {
-            reference:
-                ValueRef::Builtin(reference)
-                | ValueRef::Foreign { reference, .. }
-                | ValueRef::TopLevel(reference),
+            reference: ValueRef::Foreign { reference, .. } | ValueRef::TopLevel(reference),
             ..
         } => reference.name == "err" && reference.module.path.last() == Some(&"Result"),
         _ => false,
@@ -2319,7 +2316,6 @@ impl<'a, 'db> Infer<'a, 'db> {
                 Ok(typ)
             }
             ValueRef::Module(_)
-            | ValueRef::Builtin(_)
             | ValueRef::Provider(_)
             | ValueRef::QueryName(_)
             | ValueRef::Opaque(_) => Ok(Ty::Any),
@@ -2713,10 +2709,6 @@ impl<'a, 'db> Infer<'a, 'db> {
                     ValueRef::Foreign {
                         reference: name, ..
                     },
-            }
-            | Expr::Var {
-                use_id,
-                reference: ValueRef::Builtin(name),
             } => (Some(use_id), Some(DirectTarget::Binding(name))),
             Expr::Var {
                 use_id,
@@ -2743,8 +2735,8 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         let result = self.fresh();
         self.unify(
-            function_type,
             Ty::Fn(args, Box::new(result.clone())),
+            function_type,
             leading.map_or(region, |(_, region)| region),
         )?;
         self.calls.push(CallSite {

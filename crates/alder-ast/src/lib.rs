@@ -541,9 +541,6 @@ pub enum ValueRef<'a> {
         method: MethodId<'a>,
         annotation: &'a Annotation<'a>,
     },
-    /// A value exported by an embedded first-party stdlib module. Its
-    /// signature is opaque until stdlib interfaces are loaded by the driver.
-    Builtin(QualifiedName<'a>),
     Module(ModuleId<'a>),
     Provider(QualifiedName<'a>),
     QueryName(&'a str),

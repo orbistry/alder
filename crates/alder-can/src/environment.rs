@@ -90,6 +90,7 @@ pub struct Env<'a> {
     pub providers: Vec<BTreeMap<&'a str, QualifiedName<'a>>>,
     pub associated_types: Vec<BTreeMap<&'a str, ProjectionType<'a>>>,
     pub control: ControlContext,
+    builtin_annotations: BTreeMap<ModuleId<'a>, BTreeMap<&'a str, &'a Annotation<'a>>>,
     next_local: Rc<Cell<u32>>,
     next_use: Rc<Cell<u32>>,
 }
@@ -106,6 +107,7 @@ impl<'a> Env<'a> {
             providers: Vec::new(),
             associated_types: Vec::new(),
             control: ControlContext::default(),
+            builtin_annotations: BTreeMap::new(),
             next_local: Rc::new(Cell::new(0)),
             next_use: Rc::new(Cell::new(0)),
         };
@@ -264,6 +266,22 @@ impl<'a> Env<'a> {
                 }),
             );
         }
+    }
+
+    pub fn builtin_value(
+        &mut self,
+        bump: &'a Bump,
+        module: ModuleId<'a>,
+        name: &'a str,
+    ) -> Option<ValueRef<'a>> {
+        let annotations = self
+            .builtin_annotations
+            .entry(module)
+            .or_insert_with(|| crate::interface::builtin_value_annotations(bump, module));
+        annotations.get(name).map(|annotation| ValueRef::Foreign {
+            reference: QualifiedName { module, name },
+            annotation,
+        })
     }
 
     fn add_builtin_traits(&mut self, bump: &'a Bump) {

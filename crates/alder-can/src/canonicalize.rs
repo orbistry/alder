@@ -999,7 +999,7 @@ fn predeclare_trait_members<'a>(
     errors
 }
 
-fn trait_method_annotation<'a>(
+pub(crate) fn trait_method_annotation<'a>(
     bump: &'a Bump,
     env: &Env<'a>,
     source: &'a alder_source::FnDecl<'a>,

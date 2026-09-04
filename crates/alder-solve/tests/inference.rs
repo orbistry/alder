@@ -192,6 +192,70 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
 }
 
 #[test]
+fn builtin_string_length_rejects_a_number() {
+    let bump = Bump::new();
+    assert!(solve_input(&bump, "fn bad() Number { String.length(42) }").is_err());
+}
+
+#[test]
+fn builtin_array_push_checks_the_element_type() {
+    let bump = Bump::new();
+    assert!(solve_input(&bump, r#"fn bad() { Array.push(["text"], 42) }"#).is_err());
+}
+
+#[test]
+fn builtin_array_filter_requires_a_boolean_callback() {
+    let bump = Bump::new();
+    assert!(solve_input(&bump, "fn bad() { Array.filter([1], x -> 42) }").is_err());
+}
+
+#[test]
+fn builtin_fiber_join_requires_a_fiber() {
+    let bump = Bump::new();
+    assert!(solve_input(&bump, "fn bad() { Fiber.join(42) }").is_err());
+}
+
+#[test]
+fn builtin_argument_count_is_checked() {
+    let bump = Bump::new();
+    assert!(solve_input(&bump, "fn bad() { Array.length([1], 2) }").is_err());
+}
+
+#[test]
+fn builtin_signature_survives_an_indirect_reference() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn bad() {
+            let length = String.length
+            length(42)
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn builtin_calls_publish_their_actual_result_types() {
+    let bump = Bump::new();
+    let solved = solve_input(
+        &bump,
+        indoc! {r#"
+        fn numbers() { Array.map([1], x -> x) }
+        fn strings() { Array.map(["text"], x -> x) }
+    "#},
+    )
+    .expect("each builtin call independently instantiates its signature");
+    assert_eq!(
+        render_annotations(&solved.schemes),
+        "numbers: fn() Array[Number]\nstrings: fn() Array[String]"
+    );
+}
+
+#[test]
 fn lambda_annotation_cannot_specialize_an_enclosing_generic() {
     let bump = Bump::new();
     assert!(

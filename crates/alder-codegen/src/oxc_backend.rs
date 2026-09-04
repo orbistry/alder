@@ -2529,7 +2529,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 let local = self.value_import(name, top_name(name));
                 self.js.identifier(&local)
             }
-            ValueRef::Foreign { reference, .. } | ValueRef::Builtin(reference) => {
+            ValueRef::Foreign { reference, .. } => {
                 let local = self.value_import(reference, reference.name.to_owned());
                 self.js.identifier(&local)
             }

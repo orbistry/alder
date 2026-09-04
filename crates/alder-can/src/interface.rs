@@ -10,6 +10,60 @@ use crate::Annotations;
 
 const BUILTIN_TRAITS_SOURCE: &str = include_str!("../stdlib/Traits.ald");
 
+const BUILTIN_VALUE_SOURCES: &[(&str, &str)] = &[
+    ("Array", include_str!("../stdlib/Array.ald")),
+    ("BigInt", include_str!("../stdlib/BigInt.ald")),
+    ("Cli", include_str!("../stdlib/Cli.ald")),
+    ("Fiber", include_str!("../stdlib/Fiber.ald")),
+    ("Io", include_str!("../stdlib/Io.ald")),
+    ("Json", include_str!("../stdlib/Json.ald")),
+    ("Map", include_str!("../stdlib/Map.ald")),
+    ("Number", include_str!("../stdlib/Number.ald")),
+    ("Option", include_str!("../stdlib/Option.ald")),
+    ("Ref", include_str!("../stdlib/Ref.ald")),
+    ("Result", include_str!("../stdlib/Result.ald")),
+    ("Set", include_str!("../stdlib/Set.ald")),
+    ("String", include_str!("../stdlib/String.ald")),
+    ("Task", include_str!("../stdlib/Task.ald")),
+];
+
+pub(crate) fn builtin_value_annotations<'a>(
+    bump: &'a Bump,
+    module: alder_ast::ModuleId<'a>,
+) -> std::collections::BTreeMap<&'a str, &'a alder_ast::Annotation<'a>> {
+    let Some((_, source)) = BUILTIN_VALUE_SOURCES
+        .iter()
+        .find(|(name, _)| module.path == [*name])
+    else {
+        return Default::default();
+    };
+    let parsed =
+        alder_parse::parse_module(bump, source).expect("packaged stdlib declarations must parse");
+    // Use the builtin environment, never the importing module's shadowed names.
+    let env = crate::environment::Env::new(bump, module);
+    parsed
+        .items
+        .iter()
+        .filter_map(|item| {
+            if !matches!(item.value.visibility, alder_source::Visibility::Pub(_)) {
+                return None;
+            }
+            let alder_source::ItemKind::Fn(function) = &item.value.kind else {
+                return None;
+            };
+            let annotation = crate::canonicalize::trait_method_annotation(
+                bump,
+                &env,
+                function,
+                &Default::default(),
+                &Default::default(),
+            )
+            .expect("packaged stdlib signatures must canonicalize");
+            Some((function.name.value, annotation))
+        })
+        .collect()
+}
+
 /// Canonical first-party trait headers authored in Alder source.
 pub fn builtin_trait_interface<'a>(bump: &'a Bump) -> Interface<'a> {
     let source = alder_parse::parse_module(bump, BUILTIN_TRAITS_SOURCE)
@@ -485,7 +539,37 @@ fn impl_origin_index(origin: alder_ast::ImplOrigin) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::BUILTIN_TRAITS_SOURCE;
+    use super::{BUILTIN_TRAITS_SOURCE, BUILTIN_VALUE_SOURCES};
+
+    #[test]
+    fn packaged_builtin_values_match_the_workspace_stdlib() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../std");
+        if !root.is_dir() {
+            return; // Published packages carry their own audited source copies.
+        }
+        for (name, source) in BUILTIN_VALUE_SOURCES {
+            assert_eq!(
+                std::fs::read_to_string(root.join(format!("{name}.ald"))).unwrap(),
+                *source,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_packaged_builtin_value_has_a_canonical_signature() {
+        let bump = bumpalo::Bump::new();
+        for (name, _) in BUILTIN_VALUE_SOURCES {
+            let module = alder_ast::ModuleId {
+                package: alder_ast::PackageId::Builtin,
+                path: bump.alloc_slice_copy(&[*name]),
+            };
+            assert!(
+                !super::builtin_value_annotations(&bump, module).is_empty(),
+                "{name}"
+            );
+        }
+    }
 
     #[test]
     fn packaged_builtin_traits_match_the_workspace_stdlib() {

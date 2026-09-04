@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "let mut identity = fn(value) { value }\nfn forward(value) { identity(value) }\nfn number() { forward(1) }\nfn text() { forward(\"text\") }\n"
+description: "let mut identity = (value) -> { value }\nfn forward(value) { identity(value) }\nfn number() { forward(1) }\nfn text() { forward(\"text\") }\n"
 ---
 [
     Error {
@@ -15,8 +15,8 @@ description: "let mut identity = fn(value) { value }\nfn forward(value) { identi
             },
         },
         kind: Mismatch {
-            actual: "Number",
-            expected: "String",
+            actual: "String",
+            expected: "Number",
         },
     },
 ]
