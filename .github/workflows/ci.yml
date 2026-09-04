@@ -24,3 +24,11 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Tests
         run: cargo test
+
+  windows-build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build CLI
+        run: cargo build --locked -p alder-cli
