@@ -7,9 +7,7 @@ mod js_ast;
 mod oxc_backend;
 pub mod support;
 
-use alder_ast::{
-    BindingName, Block, Expr, Module, ModuleId, PackageId, QualifiedName, RecordField, Stmt,
-};
+use alder_ast::{BindingName, Module, ModuleId, PackageId, QualifiedName};
 use alder_region::{Located, Region};
 use rolldown_ecmascript::{EcmaAst, EcmaCompiler, PrintOptions};
 
@@ -116,53 +114,6 @@ fn emit_module_with_solution(
         ast: generated.ast,
         dependencies: generated.dependencies,
     })
-}
-
-fn contains_await_block(block: &Located<Block<'_>>) -> bool {
-    block.value.tail.is_some_and(contains_await_expr)
-        || block
-            .value
-            .statements
-            .iter()
-            .any(|statement| match &statement.value {
-                Stmt::Let(decl) => contains_await_expr(decl.value),
-                Stmt::Assign { value, .. } | Stmt::Assert(value) | Stmt::Expr(value) => {
-                    contains_await_expr(value)
-                }
-                Stmt::Return(Some(value)) | Stmt::Break(Some(value)) => contains_await_expr(value),
-                Stmt::For { iter, body, .. } => {
-                    contains_await_expr(iter) || contains_await_block(body)
-                }
-                Stmt::While { condition, body } => {
-                    contains_await_expr(condition) || contains_await_block(body)
-                }
-                Stmt::Use { .. } | Stmt::Return(None) | Stmt::Break(None) | Stmt::Continue => false,
-            })
-}
-
-fn contains_await_expr(expression: &Located<Expr<'_>>) -> bool {
-    match &expression.value {
-        Expr::Await(_) => true,
-        Expr::Array(items) | Expr::Tuple(items) => items.iter().any(|item| contains_await_expr(item)),
-        Expr::Call {
-            function,
-            arguments,
-            ..
-        } => contains_await_expr(function) || arguments.iter().any(|arg| contains_await_expr(arg)),
-        Expr::Access { record, .. } => contains_await_expr(record),
-        Expr::Index { target, index } => contains_await_expr(target) || contains_await_expr(index),
-        Expr::Try(expr) | Expr::Pin(expr) | Expr::Not(expr) | Expr::State(expr) => contains_await_expr(expr),
-        Expr::Negate { expr, .. } => contains_await_expr(expr),
-        Expr::Binop { left, right, .. } => contains_await_expr(left) || contains_await_expr(right),
-        Expr::Block(block) | Expr::Loop(block) => contains_await_block(block),
-        Expr::If { branches, final_else } => branches.iter().any(|branch| contains_await_expr(branch.condition) || contains_await_block(branch.body)) || final_else.is_some_and(contains_await_block),
-        Expr::Match { scrutinee, arms } => contains_await_expr(scrutinee) || arms.iter().any(|arm| arm.guard.is_some_and(contains_await_expr) || contains_await_expr(arm.body)),
-        Expr::Provide { value, body, .. } => contains_await_expr(value) || contains_await_block(body),
-        Expr::Record(fields) | Expr::RecordConstructor { fields, .. } => fields.iter().any(|field| match field { RecordField::Field { value, .. } | RecordField::Spread(value) => contains_await_expr(value) }),
-        Expr::TaggedTemplate { tag, parts } => contains_await_expr(tag) || parts.iter().any(|part| matches!(part, alder_ast::TemplatePart::Expr(expr) if contains_await_expr(expr))),
-        Expr::Template(parts) => parts.iter().any(|part| matches!(part, alder_ast::TemplatePart::Expr(expr) if contains_await_expr(expr))),
-        Expr::Lambda { .. } | Expr::Number { .. } | Expr::BigInt(_) | Expr::Str(_) | Expr::Bool(_) | Expr::Unit | Expr::Var { .. } | Expr::Constructor(_) | Expr::Tag { .. } | Expr::TupleAccess { .. } | Expr::Style(_) | Expr::Query(_) | Expr::Markup(_) | Expr::MacroCall { .. } => false,
-    }
 }
 
 fn module_specifier(module: ModuleId<'_>) -> String {
@@ -439,6 +390,36 @@ mod tests {
                 (a: Number, b: Number) Number -> a + b
             }
             pub fn answer() Number { left() |> factory()(right()) }
+        "#};
+    }
+
+    #[test]
+    fn async_functions_and_pipe_postfixes_lower_to_direct_generator_asts() {
+        assert_solved_emit_snapshot! {r#"
+            #[extern("globalThis", "Promise.resolve")]
+            fn resolved(value: a) Task[a]
+
+            fn load(value: Number) Result[Number] {
+                Task.sleep(1).await
+                Ok(value)
+            }
+
+            pub fn main() Result[Number] {
+                let value = 42 |> resolved().await |> load().await?
+                Ok(value)
+            }
+        "#};
+    }
+
+    #[test]
+    fn abort_aware_extern_receives_the_runtime_signal() {
+        assert_solved_emit_snapshot! {r#"
+            #[extern("globalThis", "fetch", "abort")]
+            fn fetch(url: String) Task[String]
+
+            pub fn request(url: String) String {
+                fetch(url).await
+            }
         "#};
     }
 

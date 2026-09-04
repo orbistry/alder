@@ -64,6 +64,7 @@ mod tests {
             "loops",
             "modules",
             "errors",
+            "async",
             "traits",
             "docs_traits",
         ] {

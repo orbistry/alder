@@ -1388,6 +1388,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         item: &'a ItemKind<'a>,
         region: Region,
     ) -> Result<(), Error> {
+        let suspends = matches!(item, ItemKind::Fn(function) if alder_ast::contains_await_block(function.body));
         let (name, params, ret, constraints) = match item {
             ItemKind::Fn(function) => (
                 function.name,
@@ -1413,10 +1414,16 @@ impl<'a, 'db> Infer<'a, 'db> {
                 None => self.fresh(),
             });
         }
-        let ret = match ret {
+        let mut ret = match ret {
             Some(typ) => self.from_ast(typ, &mut vars),
             None => self.fresh(),
         };
+        if suspends
+            && !matches!(self.prune(ret.clone()), Ty::App(head, ref args)
+                if matches!(*head, Ty::Con(reference) if reference.name == "Task") && args.len() == 1)
+        {
+            ret = self.named("Task", vec![ret]);
+        }
         let predicates = self.predicates_from_constraints(constraints, &vars);
         let projection_eqs = self.projection_equations_from_constraints(constraints, &vars)?;
         let placeholder = env
@@ -1644,9 +1651,27 @@ impl<'a, 'db> Infer<'a, 'db> {
             self.infer_pattern(&mut local, param.pattern, typ.clone(), false)?;
             args.push(typ);
         }
-        let result = match ret {
+        let declared_result = match ret {
             Some(ret) => self.from_ast(ret, &mut vars),
             None => self.fresh(),
+        };
+        let suspends = alder_ast::contains_await_block(body);
+        let (result, body_result) = if suspends {
+            match self.prune(declared_result.clone()) {
+                Ty::App(head, args)
+                    if matches!(*head, Ty::Con(reference) if reference.name == "Task")
+                        && args.len() == 1 =>
+                {
+                    let inner = args.into_iter().next().expect("length checked");
+                    (declared_result, inner)
+                }
+                _ => {
+                    let task = self.named("Task", vec![declared_result.clone()]);
+                    (task, declared_result)
+                }
+            }
+        } else {
+            (declared_result.clone(), declared_result)
         };
         let predicates = self.predicates_from_constraints(constraints, &vars);
         let local_projection_equations =
@@ -1717,15 +1742,6 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.add_parameter_superclass_givens(&predicates, 0);
             }
         }
-        let body_result = match self.prune(result.clone()) {
-            Ty::App(head, args)
-                if matches!(*head, Ty::Con(reference) if reference.name == "Task")
-                    && args.len() == 1 =>
-            {
-                args.into_iter().next().expect("length checked")
-            }
-            _ => result.clone(),
-        };
         let inferred = (|| {
             let body_type = self.infer_block(&mut local, body, Some(body_result.clone()))?;
             if body.value.tail.is_some() || !block_contains_return(body) {
@@ -2002,29 +2018,12 @@ impl<'a, 'db> Infer<'a, 'db> {
                 Ok(self.prune(item))
             }
             Expr::Await(expr) => {
-                let value = self.fresh();
                 let actual = self.infer_expr(env, expr, return_type)?;
-                self.unify(actual, self.named("Task", vec![value.clone()]), region)?;
-                Ok(self.prune(value))
+                self.infer_await_type(actual, region)
             }
             Expr::Try(expr) => {
-                let value = self.fresh();
-                let error = self.fresh_error_row();
                 let actual = self.infer_expr(env, expr, return_type.clone())?;
-                self.unify(
-                    actual,
-                    self.named("Result", vec![value.clone(), error.clone()]),
-                    region,
-                )?;
-                let Some(return_type) = return_type else {
-                    return Err(Error {
-                        region,
-                        kind: ErrorKind::InvalidTry,
-                    });
-                };
-                let (_, enclosing_errors) = self.require_result_parts(return_type, region)?;
-                self.include_error_rows(error, enclosing_errors, region)?;
-                Ok(self.prune(value))
+                self.infer_try_type(actual, return_type, region)
             }
             Expr::Pin(expr) | Expr::State(expr) => self.infer_expr(env, expr, return_type),
             Expr::Negate { use_id, expr } => {
@@ -2061,11 +2060,29 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.infer_pattern(&mut local, param.pattern, typ.clone(), false)?;
                     args.push(typ);
                 }
-                let result = ret
+                let declared_result = ret
                     .map(|ret| self.from_ast(ret, &mut vars))
                     .unwrap_or_else(|| self.fresh());
-                let body_type = self.infer_expr(&local, body, Some(result.clone()))?;
-                self.unify(body_type, result.clone(), region)?;
+                let suspends = alder_ast::contains_await_expr(body);
+                let (result, body_result) = if suspends {
+                    match self.prune(declared_result.clone()) {
+                        Ty::App(head, task_args)
+                            if matches!(*head, Ty::Con(reference) if reference.name == "Task")
+                                && task_args.len() == 1 =>
+                        {
+                            let inner = task_args.into_iter().next().expect("length checked");
+                            (declared_result, inner)
+                        }
+                        _ => {
+                            let task = self.named("Task", vec![declared_result.clone()]);
+                            (task, declared_result)
+                        }
+                    }
+                } else {
+                    (declared_result.clone(), declared_result)
+                };
+                let body_type = self.infer_expr(&local, body, Some(body_result.clone()))?;
+                self.unify(body_type, body_result, region)?;
                 Ok(Ty::Fn(args, Box::new(self.prune(result))))
             }
             Expr::If {
@@ -2451,6 +2468,88 @@ impl<'a, 'db> Infer<'a, 'db> {
         Ok(())
     }
 
+    fn infer_await_type(&mut self, actual: Ty<'a>, region: Region) -> Result<Ty<'a>, Error> {
+        let value = self.fresh();
+        self.unify(actual, self.named("Task", vec![value.clone()]), region)?;
+        Ok(self.prune(value))
+    }
+
+    fn infer_try_type(
+        &mut self,
+        actual: Ty<'a>,
+        return_type: Option<Ty<'a>>,
+        region: Region,
+    ) -> Result<Ty<'a>, Error> {
+        let value = self.fresh();
+        let error = self.fresh_error_row();
+        self.unify(
+            actual,
+            self.named("Result", vec![value.clone(), error.clone()]),
+            region,
+        )?;
+        let Some(return_type) = return_type else {
+            return Err(Error {
+                region,
+                kind: ErrorKind::InvalidTry,
+            });
+        };
+        let (_, enclosing_errors) = self.require_result_parts(return_type, region)?;
+        self.include_error_rows(error, enclosing_errors, region)?;
+        Ok(self.prune(value))
+    }
+
+    fn infer_pipe_destination(
+        &mut self,
+        env: &Env<'a>,
+        destination: &'a Located<Expr<'a>>,
+        leading: Ty<'a>,
+        leading_region: Region,
+        return_type: Option<Ty<'a>>,
+    ) -> Result<Ty<'a>, Error> {
+        match destination.value {
+            Expr::Call {
+                use_id,
+                function,
+                arguments,
+            } => self.infer_call(
+                env,
+                CallInput {
+                    region: destination.region,
+                    use_id,
+                    function,
+                    arguments,
+                    leading: Some((leading, leading_region)),
+                },
+                return_type,
+            ),
+            Expr::Await(inner) => {
+                let actual =
+                    self.infer_pipe_destination(env, inner, leading, leading_region, return_type)?;
+                self.infer_await_type(actual, destination.region)
+            }
+            Expr::Try(inner) => {
+                let actual = self.infer_pipe_destination(
+                    env,
+                    inner,
+                    leading,
+                    leading_region,
+                    return_type.clone(),
+                )?;
+                self.infer_try_type(actual, return_type, destination.region)
+            }
+            _ => {
+                let destination_type = self.infer_expr(env, destination, return_type)?;
+                let result = self.fresh();
+                self.unify(
+                    destination_type,
+                    Ty::Fn(vec![leading], Box::new(result.clone())),
+                    destination.region,
+                )?;
+                Ok(self.prune(result))
+            }
+        }
+    }
+
     fn infer_binop(
         &mut self,
         env: &Env<'a>,
@@ -2462,33 +2561,7 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<Ty<'a>, Error> {
         let left_type = self.infer_expr(env, left, return_type.clone())?;
         if op == BinOp::Pipe {
-            if let Expr::Call {
-                use_id,
-                function,
-                arguments,
-            } = right.value
-            {
-                return self.infer_call(
-                    env,
-                    CallInput {
-                        region: right.region,
-                        use_id,
-                        function,
-                        arguments,
-                        leading: Some((left_type, left.region)),
-                    },
-                    return_type,
-                );
-            }
-
-            let right_type = self.infer_expr(env, right, return_type)?;
-            let result = self.fresh();
-            self.unify(
-                right_type,
-                Ty::Fn(vec![left_type], Box::new(result.clone())),
-                right.region,
-            )?;
-            return Ok(self.prune(result));
+            return self.infer_pipe_destination(env, right, left_type, left.region, return_type);
         }
 
         let right_type = self.infer_expr(env, right, return_type)?;

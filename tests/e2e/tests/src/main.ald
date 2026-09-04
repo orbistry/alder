@@ -1,5 +1,8 @@
 pub fn main() {}
 
+#[extern("globalThis", "Promise.resolve")]
+fn resolvedForTest(value: a) Task[a]
+
 trait Display[a] {
     fn display(value: a) String
 
@@ -185,6 +188,12 @@ test "arithmetic works" {
     let different_record = { name: "Elm", scores: [40, 2] }
     assert record == same_record
     assert record != different_record
+}
+
+test "async declarations run through the fiber scheduler" {
+    let value = 42 |> resolvedForTest().await
+    Task.sleep(1).await
+    assert value == 42
 }
 
 test "trait dictionaries dispatch" {

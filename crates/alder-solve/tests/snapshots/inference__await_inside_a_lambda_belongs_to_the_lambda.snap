@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn makeWorker() fn(Number) Task[Number] {\n    value -> {\n        Task.sleep(1).await\n        value\n    }\n}\n\nfn staysSynchronous() Number {\n    let worker = value -> {\n        Task.sleep(1).await\n        value\n    }\n    42\n}\n"
+---
+makeWorker: fn() fn(Number) Task[Number]
+staysSynchronous: fn() Number

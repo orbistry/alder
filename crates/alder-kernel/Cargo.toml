@@ -10,3 +10,6 @@ build = "build.rs"
 
 [dependencies]
 
+[dev-dependencies]
+alder-runtime = { path = "../alder-runtime" }
+tokio.workspace = true

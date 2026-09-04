@@ -1,0 +1,4 @@
+pub fn delayed(value: Number) Number {
+    Task.sleep(1).await
+    value
+}

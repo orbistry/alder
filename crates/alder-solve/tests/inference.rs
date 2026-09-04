@@ -1888,6 +1888,63 @@ fn await_unwraps_task_inside_task_function() {
 }
 
 #[test]
+fn await_infers_a_task_return_without_an_explicit_wrapper() {
+    assert_inference_snapshot! {r#"
+        #[extern("alder:kernel", "$taskSleep")]
+        fn sleep(milliseconds: Number) Task[()]
+
+        fn wait() {
+            sleep(1).await
+        }
+    "#};
+}
+
+#[test]
+fn await_wraps_an_explicit_body_result_in_task() {
+    assert_inference_snapshot! {r#"
+        fn load(value: Number) Result[Number] {
+            Task.sleep(1).await
+            Ok(value)
+        }
+    "#};
+}
+
+#[test]
+fn await_inside_a_lambda_belongs_to_the_lambda() {
+    assert_inference_snapshot! {r#"
+        fn makeWorker() fn(Number) Task[Number] {
+            value -> {
+                Task.sleep(1).await
+                value
+            }
+        }
+
+        fn staysSynchronous() Number {
+            let worker = value -> {
+                Task.sleep(1).await
+                value
+            }
+            42
+        }
+    "#};
+}
+
+#[test]
+fn pipe_forwarding_precedes_await_and_try() {
+    assert_inference_snapshot! {r#"
+        fn load(value: Number) Result[Number] {
+            Task.sleep(1).await
+            Ok(value)
+        }
+
+        fn run() Result[Number] {
+            let value = 42 |> load().await?
+            Ok(value)
+        }
+    "#};
+}
+
+#[test]
 fn constructor_call_arity_is_checked() {
     assert_inference_error_snapshot!(
         "enum Maybe[a] { Just(a) }\nfn invalid() { Maybe::Just(1, 2) }"

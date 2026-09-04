@@ -232,6 +232,10 @@ dependencies = [
 [[package]]
 name = "alder-kernel"
 version = "0.3.0"
+dependencies = [
+ "alder-runtime",
+ "tokio",
+]
 
 [[package]]
 name = "alder-language-server"

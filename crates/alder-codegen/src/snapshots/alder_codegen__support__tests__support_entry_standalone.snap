@@ -3,7 +3,8 @@ source: crates/alder-codegen/src/support.rs
 expression: "entry_module(\"alder://app/main.mjs\", EntryKind::Standalone, &modules).code()"
 ---
 import { main } from "alder://app/main.mjs";
-const $result = await main();
+import { $runMain } from "alder:kernel";
+const $result = await $runMain(main());
 if ($result && $result["$"] === "Err") {
 	console["error"]($result["_0"]);
 	globalThis["__alderHost"]["exit"](1);

@@ -1,0 +1,108 @@
+import ~/helper.{ delayed }
+
+#[extern("globalThis", "Promise.resolve")]
+fn resolved(value: a) Task[a]
+
+#[extern("globalThis", "Promise.resolve")]
+fn resolvedResult(
+    value: Result[Number, [:promised(String)]],
+) Task[Result[Number, [:promised(String)]]]
+
+fn load(value: Number) Result[Number] {
+    Ok(resolved(value).await)
+}
+
+fn checkedDelay(value: Number, milliseconds: Number) Result[Number] {
+    Task.sleep(milliseconds).await
+    Ok(value)
+}
+
+fn prepare(value: Number) Number {
+    value
+}
+
+fn fail() Result[Number] {
+    Task.sleep(1).await
+    Err(:not_found("missing"))
+}
+
+fn propagate() Result[Number] {
+    let value = fail().await?
+    Ok(value)
+}
+
+fn promisedSuccess() Result[Number] {
+    let value = resolvedResult(Ok(42)).await?
+    Ok(value)
+}
+
+fn promisedFailure() Result[Number] {
+    let value = resolvedResult(Err(:promised("rejected as typed data"))).await?
+    Ok(value)
+}
+
+fn choose(flag: Bool) Number {
+    if flag {
+        resolved(10).await
+    } else {
+        resolved(20).await
+    }
+}
+
+fn counted() Number {
+    let mut count = 0
+    while count < 2 {
+        Task.sleep(1).await
+        count += 1
+    }
+    count
+}
+
+fn early() Number {
+    Task.sleep(1).await
+    return 42
+}
+
+pub fn main() Result[()] {
+    let direct = delayed(40).await
+    let piped = 2 |> resolved().await
+    let loaded = 42 |> load().await?
+    let loadedWithArgument = 42 |> checkedDelay(1).await?
+    let directFinal = 42 |> prepare |> resolved().await
+    let groupedFinal = (42 |> prepare |> resolved()).await
+    let anonymous = value -> {
+        Task.sleep(1).await
+        value
+    }
+    let nested = resolved(resolved(42).await).await
+    let concurrent = Fiber.all([delayed(20), delayed(22)]).await
+    let forked = Fiber.fork(delayed(42)).await
+    let joined = Fiber.join(forked).await
+    let winner = Fiber.race([delayed(42), delayed(99)]).await
+    let scoped = Fiber.scope(delayed(42)).await
+    assert(direct + piped == 42)
+    assert(loaded == 42)
+    assert(loadedWithArgument == 42)
+    assert(directFinal == groupedFinal)
+    assert(anonymous(42).await == 42)
+    assert(nested == 42)
+    assert(concurrent == [20, 22])
+    assert(joined == 42)
+    assert(winner == 42)
+    assert(scoped == 42)
+    assert(choose(true).await == 10)
+    assert(counted().await == 2)
+    assert(early().await == 42)
+    assert(match propagate().await {
+        Ok(value) => false,
+        Err(:not_found(message)) => message == "missing",
+        Err(_) => false,
+    })
+    assert(promisedSuccess().await? == 42)
+    assert(match promisedFailure().await {
+        Ok(_) => false,
+        Err(:promised(message)) => message == "rejected as typed data",
+        Err(_) => false,
+    })
+    Ok(())
+}

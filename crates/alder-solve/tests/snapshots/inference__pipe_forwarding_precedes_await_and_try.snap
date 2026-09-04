@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn load(value: Number) Result[Number] {\n    Task.sleep(1).await\n    Ok(value)\n}\n\nfn run() Result[Number] {\n    let value = 42 |> load().await?\n    Ok(value)\n}\n"
+---
+load: forall a. fn(Number) Task[Result[Number, [a]]]
+run: forall a. fn() Task[Result[Number, [a]]]

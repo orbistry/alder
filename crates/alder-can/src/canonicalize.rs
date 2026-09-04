@@ -1324,7 +1324,7 @@ fn canonicalize_item<'a>(
             ItemKind::Fn(canonicalize_fn(bump, env, decl)?)
         }
         SourceItemKind::Fn(decl) => {
-            let (module, symbol) = extern_strings(item.value.attributes)?;
+            let (module, symbol, abort_signal) = extern_options(item.value.attributes)?;
             let variables = signature_variables(decl);
             let Some(ret) = decl.ret else {
                 return Err(vec![invalid_extern(
@@ -1336,12 +1336,20 @@ fn canonicalize_item<'a>(
             let params = canonicalize_params(bump, env, decl.params, &variables)?;
             env.pop_scope();
             let constraints = canonicalize_constraints(bump, env, decl.where_clause, &variables)?;
+            let ret = canonicalize_type(bump, env, &variables, ret)?;
+            if abort_signal && !is_task_type(ret) {
+                return Err(vec![invalid_extern(
+                    item.region,
+                    "the `abort` convention requires a Task return type",
+                )]);
+            }
             ItemKind::Extern(bump.alloc(ExternDecl::Fn {
                 module,
                 symbol,
+                abort_signal,
                 name: top_level_name(env, decl.name.value),
                 params,
-                ret: canonicalize_type(bump, env, &variables, ret)?,
+                ret,
                 constraints,
             }))
         }
@@ -1427,10 +1435,16 @@ fn canonicalize_item<'a>(
                 ErrorKind::Attribute(AttributeError::MacroUnavailable),
             )]);
         }
-        SourceItemKind::Test(decl) => ItemKind::Test(bump.alloc(TestDecl {
-            name: decl.name,
-            body: canonicalize_block(bump, env, decl.body)?,
-        })),
+        SourceItemKind::Test(decl) => {
+            let saved_control = env.control;
+            env.control.test_depth += 1;
+            let body = canonicalize_block(bump, env, decl.body);
+            env.control = saved_control;
+            ItemKind::Test(bump.alloc(TestDecl {
+                name: decl.name,
+                body: body?,
+            }))
+        }
         SourceItemKind::Tests(items) => {
             let mut nested_env = env.clone();
             let nested_module = SourceModule {
@@ -1660,7 +1674,6 @@ fn canonicalize_trait_fn<'a>(
             .ret
             .map(|typ| canonicalize_type(bump, env, &variables, typ))
             .transpose()?;
-        env.control.task_return = ret.is_some_and(is_task_type);
         let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
         let body = if include_body {
             source
@@ -1992,14 +2005,12 @@ fn canonicalize_impl_fn<'a>(
     let saved_control = env.control;
     env.control.function_depth += 1;
     env.control.loop_depth = 0;
-    env.control.task_return = false;
     let result = (|| {
         let params = canonicalize_params(bump, env, source.params, &variables)?;
         let ret = source
             .ret
             .map(|typ| canonicalize_type(bump, env, &variables, typ))
             .transpose()?;
-        env.control.task_return = ret.is_some_and(is_task_type);
         let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
         let body = match (include_body, source.body) {
             (true, Some(body)) => canonicalize_block(bump, env, body)?,
@@ -2200,7 +2211,6 @@ fn canonicalize_component<'a>(
     let saved_control = env.control;
     env.control.function_depth += 1;
     env.control.loop_depth = 0;
-    env.control.task_return = false;
     let result = (|| {
         let params = canonicalize_params(bump, env, source.params, &variables)?;
         let body = canonicalize_block(bump, env, source.body)?;
@@ -2312,7 +2322,6 @@ fn canonicalize_fn<'a>(
         None => None,
     };
     let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
-    env.control.task_return = ret.is_some_and(is_task_type);
     let body = canonicalize_block(bump, env, source.body.expect("body checked by caller"))?;
     env.control = saved_control;
     env.pop_scope();
@@ -2371,10 +2380,12 @@ fn canonicalize_attributes<'a>(
                         _ => None,
                     })
                     .collect();
-                if strings.len() != attribute.value.args.len() || !matches!(strings.len(), 0 | 2) {
+                if strings.len() != attribute.value.args.len()
+                    || !matches!(strings.len(), 0 | 2 | 3)
+                {
                     return Err(vec![invalid_extern(
                         attribute.value.name.region,
-                        "#[extern] takes either no arguments or two string arguments",
+                        "#[extern] takes no arguments, two string arguments, or an `abort` convention",
                     )]);
                 }
                 attributes.push(Attribute::Extern {
@@ -2447,9 +2458,9 @@ fn canonicalize_attributes<'a>(
     Ok(bump.alloc_slice_copy(&attributes))
 }
 
-fn extern_strings<'a>(
+fn extern_options<'a>(
     attributes: &'a [Located<alder_source::Attribute<'a>>],
-) -> Result<(&'a str, &'a str), Vec<Error<'a>>> {
+) -> Result<(&'a str, &'a str, bool), Vec<Error<'a>>> {
     let Some(attribute) = attributes
         .iter()
         .find(|attribute| attribute.value.name.value == "extern")
@@ -2459,14 +2470,30 @@ fn extern_strings<'a>(
             "a bodiless function requires #[extern(\"module\", \"symbol\")]",
         )]);
     };
-    let [module, symbol] = attribute.value.args else {
-        return Err(vec![invalid_extern(
-            attribute.region,
-            "extern functions require a module and symbol",
-        )]);
+    let (module, symbol, convention) = match attribute.value.args {
+        [module, symbol] => (module, symbol, None),
+        [module, symbol, convention] => (module, symbol, Some(convention)),
+        _ => {
+            return Err(vec![invalid_extern(
+                attribute.region,
+                "extern functions require a module, symbol, and optional `abort` convention",
+            )]);
+        }
+    };
+    let abort_signal = match convention.map(|value| &value.value) {
+        None => false,
+        Some(alder_source::Expr::Str("abort")) => true,
+        Some(_) => {
+            return Err(vec![invalid_extern(
+                attribute.region,
+                "the only supported extern convention is the string `abort`",
+            )]);
+        }
     };
     match (&module.value, &symbol.value) {
-        (alder_source::Expr::Str(module), alder_source::Expr::Str(symbol)) => Ok((module, symbol)),
+        (alder_source::Expr::Str(module), alder_source::Expr::Str(symbol)) => {
+            Ok((module, symbol, abort_signal))
+        }
         _ => Err(vec![invalid_extern(
             attribute.region,
             "extern module and symbol must be strings",
@@ -3615,10 +3642,9 @@ mod tests {
     }
 
     #[test]
-    fn await_requires_explicit_task_return_in_m2() {
-        insta::assert_snapshot!(can_error("fn wait() { Task.sleep(1).await }"));
-
+    fn await_is_accepted_without_an_explicit_task_return() {
         let bump = Bump::new();
+        can(&bump, "fn wait() { Task.sleep(1).await }");
         can(&bump, "fn wait() Task[()] { Task.sleep(1).await }");
     }
 

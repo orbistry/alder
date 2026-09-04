@@ -182,7 +182,7 @@ pub enum ExprError<'a> {
     },
     PlaceholderOutsideCall,
     PinOutsideQuery,
-    AwaitRequiresTaskReturn,
+    AwaitOutsideFunction,
     MacroUnavailable {
         name: &'a str,
     },

@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "#[extern(\"alder:kernel\", \"$taskSleep\")]\nfn sleep(milliseconds: Number) Task[()]\n\nfn wait() {\n    sleep(1).await\n}\n"
+---
+sleep: fn(Number) Task[()]
+wait: fn() Task[()]

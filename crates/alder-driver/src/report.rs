@@ -1832,10 +1832,12 @@ fn expression_error(error: &ExprError<'_>) -> CanDetails {
             None,
             None,
         ),
-        ExprError::AwaitRequiresTaskReturn => (
-            "await_requires_task",
-            "a function using `.await` must return `Task`".to_owned(),
-            None,
+        ExprError::AwaitOutsideFunction => (
+            "await_outside_function",
+            "`.await` can only be used inside a function or test".to_owned(),
+            Some(
+                "move this expression into a function; Alder will infer its Task return".to_owned(),
+            ),
             None,
         ),
         ExprError::MacroUnavailable { name } => (

@@ -1,5 +1,23 @@
+#[extern("alder:kernel", "$fiberFork")]
+pub fn fork(task: Task[a]) Task[Fiber[a]]
+
+#[extern("alder:kernel", "$fiberJoin")]
+pub fn join(fiber: Fiber[a]) Task[a]
+
+#[extern("alder:kernel", "$fiberInterrupt")]
+pub fn interrupt(fiber: Fiber[a]) Task[()]
+
 #[extern("alder:kernel", "$fiberAll")]
 pub fn all(tasks: Array[Task[a]]) Task[Array[a]]
 
 #[extern("alder:kernel", "$fiberRace")]
 pub fn race(tasks: Array[Task[a]]) Task[a]
+
+#[extern("alder:kernel", "$fiberScope")]
+pub fn scope(task: Task[a]) Task[a]
+
+#[extern("alder:kernel", "$fiberAddFinalizer")]
+pub fn addFinalizer(finalizer: Task[()]) Task[()]
+
+#[extern("alder:kernel", "$fiberUninterruptible")]
+pub fn uninterruptible(task: Task[a]) Task[a]

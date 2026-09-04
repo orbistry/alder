@@ -5,7 +5,9 @@ fn main() -> miette::Result<()> {
     // process is single-threaded — so it runs before the runtime starts.
     let proxied = alder_cli::proxy::proxy_guard()?;
 
-    tokio::runtime::Builder::new_multi_thread()
+    // deno_core and its unsynchronized V8 futures require a current-thread
+    // executor. Compiler I/O remains concurrent on that executor.
+    tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .into_diagnostic()?

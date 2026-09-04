@@ -17,7 +17,7 @@ use bumpalo::Bump;
 
 use crate::environment::Env;
 use crate::pattern::{BindingMode, canonicalize_pattern};
-use crate::types::{canonicalize_type, is_task_type};
+use crate::types::canonicalize_type;
 use crate::{Error, ErrorKind, ExprError, NameError, StmtError};
 
 pub fn canonicalize_expr<'a>(
@@ -227,10 +227,10 @@ pub fn canonicalize_expr<'a>(
             index: canonicalize_expr(bump, env, index)?,
         },
         SourceExpr::Await(expr) => {
-            if !env.control.task_return {
+            if env.control.function_depth == 0 && env.control.test_depth == 0 {
                 return Err(vec![Error::new(
                     source.region,
-                    ErrorKind::Expr(ExprError::AwaitRequiresTaskReturn),
+                    ErrorKind::Expr(ExprError::AwaitOutsideFunction),
                 )]);
             }
             CanExpr::Await(canonicalize_expr(bump, env, expr)?)
@@ -692,7 +692,6 @@ fn canonicalize_lambda<'a>(
         Some(ret) => Some(canonicalize_type(bump, env, &BTreeSet::new(), ret)?),
         None => None,
     };
-    env.control.task_return = ret.is_some_and(is_task_type);
     let body = canonicalize_expr(bump, env, lambda.body)?;
     env.control = saved_control;
     env.pop_scope();

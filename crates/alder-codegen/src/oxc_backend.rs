@@ -187,12 +187,20 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 ItemKind::Extern(alder_ast::ExternDecl::Fn {
                     module,
                     symbol,
+                    abort_signal,
                     name,
                     params,
                     ret,
                     ..
                 }) => {
-                    declarations.push(self.extern_function(module, symbol, *name, params, ret));
+                    declarations.push(self.extern_function(
+                        module,
+                        symbol,
+                        *abort_signal,
+                        *name,
+                        params,
+                        ret,
+                    ));
                     if public {
                         exports.push((top_name(*name), name.name.to_owned()));
                     }
@@ -348,19 +356,61 @@ impl<'src, 'js> Emitter<'src, 'js> {
         &mut self,
         module: &str,
         symbol: &str,
+        abort_signal: bool,
         name: alder_ast::QualifiedName<'src>,
         params: &[alder_ast::Param<'src>],
         ret: &Located<alder_ast::Type<'src>>,
     ) -> Statement<'js> {
-        let imported = self.extern_import(module, symbol);
+        let imported = if module == "globalThis" {
+            symbol
+                .split('.')
+                .fold(self.js.identifier("globalThis"), |value, part| {
+                    self.js.member(value, part)
+                })
+        } else {
+            let imported = self.extern_import(module, symbol);
+            self.js.identifier(&imported)
+        };
         let args = (0..params.len())
             .map(|index| format!("$a{index}"))
             .collect::<Vec<_>>();
-        let call = self.js.call(
-            self.js.identifier(&imported),
-            args.iter().map(|argument| self.js.identifier(argument)),
-        );
-        let value = if super::type_named(ret, "Result") {
+        let call_arguments = args
+            .iter()
+            .map(|argument| self.js.identifier(argument))
+            .chain(abort_signal.then(|| self.js.identifier("$signal")));
+        let call = self.js.call(imported, call_arguments);
+        let value = if super::type_named(ret, "Task") && module != "alder:kernel" {
+            self.kernel.insert("$task");
+            self.kernel.insert("$tryPromise");
+            let mut callback_body = self.js.vec();
+            callback_body.push(self.js.return_statement(call));
+            let callback_args = if abort_signal {
+                vec!["$signal".to_owned()]
+            } else {
+                Vec::new()
+            };
+            let callback = self.js.arrow(&callback_args, callback_body, false);
+            let promise_task = self.js.call(
+                self.js.identifier("$tryPromise"),
+                [
+                    callback,
+                    self.js.boolean(abort_signal),
+                    self.js.string(&format!(
+                        "{}:{}:{} extern {module}:{symbol}",
+                        super::module_specifier(name.module),
+                        ret.region.start.line,
+                        ret.region.start.column,
+                    )),
+                ],
+            );
+            let mut task_body = self.js.vec();
+            task_body.push(
+                self.js
+                    .return_statement(self.js.yield_expression(promise_task, true)),
+            );
+            let factory = self.js.function_expression(&[], task_body, true);
+            self.js.call(self.js.identifier("$task"), [factory])
+        } else if super::type_named(ret, "Result") {
             self.kernel.insert("$tryCatch");
             let mut callback = self.js.vec();
             callback.push(self.js.return_statement(call));
@@ -381,7 +431,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
     ) -> Result<Statement<'js>, Error> {
         self.kernel.insert("$registerTest");
         let body = self.block_return(test.body)?;
-        let callback = self.js.arrow(&[], body, true);
+        let callback = if alder_ast::contains_await_block(test.body) {
+            self.task_function_expression(&[], body)
+        } else {
+            self.js.arrow(&[], body, false)
+        };
         let call = self.js.call(
             self.js.identifier("$registerTest"),
             [
@@ -428,9 +482,14 @@ impl<'src, 'js> Emitter<'src, 'js> {
             self.bind_pattern(param.pattern, arg, &[], &mut statements);
         }
         statements.extend(self.block_return(body)?);
-        Ok(self
-            .js
-            .function(name, &args, statements, super::contains_await_block(body)))
+        if alder_ast::contains_await_block(body) {
+            let task = self.task_expression(statements);
+            let mut outer = self.js.vec();
+            outer.push(self.js.return_statement(task));
+            Ok(self.js.function(name, &args, outer, false))
+        } else {
+            Ok(self.js.function(name, &args, statements, false))
+        }
     }
 
     fn implementation(
@@ -1134,32 +1193,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
             }
             Expr::Await(expression) => {
                 let value = self.expr(expression)?;
-                Value {
-                    prefix: value.prefix,
-                    expr: self.js.builder.expression_await(oxc_span::SPAN, value.expr),
-                }
+                self.await_value(value)
             }
             Expr::Try(expression) => {
                 let value = self.expr(expression)?;
-                let mut prefix = value.prefix;
-                let temp = self.temp();
-                prefix.push(self.js.variable(
-                    VariableDeclarationKind::Const,
-                    &temp,
-                    Some(value.expr),
-                ));
-                let is_error = self.js.binary(
-                    self.js.member(self.js.identifier(&temp), "$"),
-                    BinaryOperator::StrictEquality,
-                    self.js.string("Err"),
-                );
-                let mut consequent = self.js.vec();
-                consequent.push(self.js.return_statement(self.js.identifier(&temp)));
-                prefix.push(self.js.if_statement(is_error, consequent, None));
-                Value {
-                    prefix,
-                    expr: self.js.member(self.js.identifier(&temp), "_0"),
-                }
+                self.try_value(value)
             }
             Expr::Pin(expression) | Expr::State(expression) => self.expr(expression)?,
             Expr::Negate {
@@ -1378,14 +1416,8 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let left = self.expr(left)?;
         let mut prefix = left.prefix;
         let left = self.materialize(left.expr, &mut prefix);
-        if op == alder_ast::BinOp::Pipe
-            && let Expr::Call {
-                use_id,
-                function,
-                arguments,
-            } = right.value
-        {
-            return self.call(use_id, function, arguments, prefix, Some(left));
+        if op == alder_ast::BinOp::Pipe {
+            return self.pipe_destination(right, left, prefix);
         }
         if matches!(
             op,
@@ -1520,6 +1552,66 @@ impl<'src, 'js> Emitter<'src, 'js> {
         Ok(Value { prefix, expr })
     }
 
+    fn pipe_destination(
+        &mut self,
+        destination: &Located<Expr<'src>>,
+        leading: Expression<'js>,
+        prefix: ArenaVec<'js, Statement<'js>>,
+    ) -> Result<Value<'js>, Error> {
+        match destination.value {
+            Expr::Call {
+                use_id,
+                function,
+                arguments,
+            } => self.call(use_id, function, arguments, prefix, Some(leading)),
+            Expr::Await(inner) => {
+                let value = self.pipe_destination(inner, leading, prefix)?;
+                Ok(self.await_value(value))
+            }
+            Expr::Try(inner) => {
+                let value = self.pipe_destination(inner, leading, prefix)?;
+                Ok(self.try_value(value))
+            }
+            _ => {
+                let destination = self.expr(destination)?;
+                let mut prefix = prefix;
+                prefix.extend(destination.prefix);
+                Ok(Value {
+                    prefix,
+                    expr: self.js.call(destination.expr, [leading]),
+                })
+            }
+        }
+    }
+
+    fn await_value(&self, value: Value<'js>) -> Value<'js> {
+        Value {
+            prefix: value.prefix,
+            expr: self.js.yield_expression(value.expr, true),
+        }
+    }
+
+    fn try_value(&mut self, value: Value<'js>) -> Value<'js> {
+        let mut prefix = value.prefix;
+        let temp = self.temp();
+        prefix.push(
+            self.js
+                .variable(VariableDeclarationKind::Const, &temp, Some(value.expr)),
+        );
+        let is_error = self.js.binary(
+            self.js.member(self.js.identifier(&temp), "$"),
+            BinaryOperator::StrictEquality,
+            self.js.string("Err"),
+        );
+        let mut consequent = self.js.vec();
+        consequent.push(self.js.return_statement(self.js.identifier(&temp)));
+        prefix.push(self.js.if_statement(is_error, consequent, None));
+        Value {
+            prefix,
+            expr: self.js.member(self.js.identifier(&temp), "_0"),
+        }
+    }
+
     fn block_value(
         &mut self,
         block: &Located<alder_ast::Block<'src>>,
@@ -1552,10 +1644,12 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let value = self.expr(body)?;
         statements.extend(value.prefix);
         statements.push(self.js.return_statement(value.expr));
-        Ok(self.pure(
-            self.js
-                .arrow(&args, statements, super::contains_await_expr(body)),
-        ))
+        let function = if alder_ast::contains_await_expr(body) {
+            self.task_function_expression(&args, statements)
+        } else {
+            self.js.arrow(&args, statements, false)
+        };
+        Ok(self.pure(function))
     }
 
     fn if_value(
@@ -2989,6 +3083,23 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let temp = format!("$t{}", self.next_temp);
         self.next_temp += 1;
         temp
+    }
+
+    fn task_expression(&mut self, body: ArenaVec<'js, Statement<'js>>) -> Expression<'js> {
+        self.kernel.insert("$task");
+        let factory = self.js.function_expression(&[], body, true);
+        self.js.call(self.js.identifier("$task"), [factory])
+    }
+
+    fn task_function_expression(
+        &mut self,
+        args: &[String],
+        body: ArenaVec<'js, Statement<'js>>,
+    ) -> Expression<'js> {
+        let task = self.task_expression(body);
+        let mut outer = self.js.vec();
+        outer.push(self.js.return_statement(task));
+        self.js.arrow(args, outer, false)
     }
 
     fn pure(&self, expr: Expression<'js>) -> Value<'js> {
