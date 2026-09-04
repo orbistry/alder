@@ -411,6 +411,13 @@ exit exactly once, interrupts every loser, and waits for loser cleanup before
 publishing the winner. `Fiber.scope(task)` runs the task as an owned child and
 does not let it outlive the call.
 
+If constructing an all/race child fails, previously constructed children are
+already owned by the parent. They are interrupted before being scheduled, so
+their generator bodies do not start, but they still reach terminal exits and
+detach from the parent. The combinator waits for those exits before delivering
+the original construction failure, including when the parent catches it and
+continues. This prevents parent scope closure from waiting on unstarted fibers.
+
 Interruption is cooperative. It is checked at yield and suspension boundaries.
 Suspended operations detach their observer or waiter; abort-aware Promise
 operations additionally abort their controller. An interruption requested in

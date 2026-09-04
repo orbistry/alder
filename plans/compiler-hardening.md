@@ -174,11 +174,19 @@ Root cause: virtual module imports lack a physical importer location.
   pass. `cargo package -p alder-kernel --allow-dirty` packages and verifies
   successfully. No snapshot changes or pending snapshot files. Remaining
   changed-crate packaging and final acceptance gates stay open.
-- Related runtime finding from inspection: `createChildren` interrupts already
-  constructed children when a later task constructor fails, but those children
-  have not yet been started. Their parent scope can then wait forever for exits.
-  Reproduce with a bounded timeout and fix partial-construction cleanup during
-  the remaining lifecycle audit.
+- Partial child-construction cleanup: a bounded regression confirmed that
+  `createChildren` could strand already-owned but unstarted children after a
+  later task factory threw. Interrupted partial children now start solely to
+  reach terminal exits; all/race wait for those exits before propagating the
+  original failure. Tests cover both combinators, escaping and caught failures,
+  no child-body execution, empty child ownership at recovery, and exactly-once
+  parent finalization. Rechecked pinned Effect interpreter completion and child
+  interruption middleware for the ownership-before-completion invariant; no
+  source copied. Broader lifecycle cases remain open.
+  Validation: all nine kernel tests, full workspace tests including CLI
+  execution, strict Clippy, formatting, and diff checks pass. Kernel packaging
+  verifies successfully with `cargo package -p alder-kernel --allow-dirty`.
+  No snapshots changed or remain pending. Other acceptance gates remain open.
 
 - Conditional-exit checkpoint: new solver regressions reproduced breaks in
   `false && ...`, `true || ...`, and false-guarded match arms incorrectly

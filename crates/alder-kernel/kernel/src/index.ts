@@ -926,11 +926,24 @@ class FiberImpl {
         try {
             for (const task of tasks) children.push(new FiberImpl(task, this));
         } catch (error) {
-            for (const child of children) child.interruptUnsafe();
-            throw error;
+            for (const child of children) {
+                child.interruptUnsafe();
+                // These fibers already belong to the parent but have never
+                // run. Drive their pending interruption to a terminal exit.
+                child.start();
+            }
+            return { children, failed: true, error };
         }
         for (const child of children) child.start();
-        return children;
+        return { children, failed: false };
+    }
+
+    handleChildConstructionFailure(created) {
+        return this.suspend((resume) => {
+            Promise.all(created.children.map((child) => child.awaitExit())).then(
+                () => resume("throw", created.error),
+            );
+        });
     }
 
     handleAll(tasks) {
@@ -939,9 +952,9 @@ class FiberImpl {
             this.resumeValue = new TypeError("Fiber.all expected an Array of tasks");
             return false;
         }
-        let children;
-        try { children = this.createChildren(tasks); }
-        catch (error) { this.resumeMethod = "throw"; this.resumeValue = error; return false; }
+        const created = this.createChildren(tasks);
+        if (created.failed) return this.handleChildConstructionFailure(created);
+        const children = created.children;
         if (children.length === 0) { this.resumeValue = []; return false; }
         return this.suspend((resume) => {
             const results = new Array(children.length);
@@ -987,9 +1000,9 @@ class FiberImpl {
             this.resumeValue = new TypeError("Fiber.race expected a non-empty Array of tasks");
             return false;
         }
-        let children;
-        try { children = this.createChildren(tasks); }
-        catch (error) { this.resumeMethod = "throw"; this.resumeValue = error; return false; }
+        const created = this.createChildren(tasks);
+        if (created.failed) return this.handleChildConstructionFailure(created);
+        const children = created.children;
         return this.suspend((resume) => {
             const removers = [];
             let settled = false;

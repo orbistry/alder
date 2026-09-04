@@ -224,6 +224,50 @@ if (finalized !== 1) throw new Error("interrupted child must finalize exactly on
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn partial_child_construction_failure_does_not_strand_owned_fibers() {
+        let harness = r#"
+for (const combine of [$fiberAll, $fiberRace]) {
+  for (const catchFailure of [false, true]) {
+    let bodiesStarted = 0;
+    let parentFinalized = 0;
+    const expected = new Error("task factory failed");
+    const valid = $task(function* () { bodiesStarted++; });
+    const invalid = $task(() => { throw expected; });
+    const execution = $runTask($task(function* () {
+        yield* $fiberAddFinalizer($task(function* () { parentFinalized++; }));
+        if (catchFailure) {
+            try { yield* combine([valid, invalid, valid]); }
+            catch (error) {
+                if (error !== expected) throw error;
+                if (currentFiber.children.size !== 0) throw new Error("failure preceded child cleanup");
+                return 42;
+            }
+            throw new Error("missing caught failure");
+        }
+        yield* combine([valid, invalid, valid]);
+    }));
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("partial construction stranded a child")), 1000);
+    });
+    let observed;
+    let result;
+    try { result = await Promise.race([execution, timeout]); }
+    catch (error) { observed = error; }
+    finally { clearTimeout(timer); }
+    if (catchFailure) {
+        if (observed || result !== 42) throw observed ?? new Error("parent could not recover");
+    } else if (observed !== expected) throw observed ?? new Error("missing construction failure");
+    if (bodiesStarted !== 0) throw new Error("partially constructed children ran user code");
+    if (parentFinalized !== 1) throw new Error("parent finalizer did not run exactly once");
+  }
+}
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn fiber_runtime_obeys_lifecycle_and_promise_invariants() {
         let harness = r#"
 const check = (condition, message) => { if (!condition) throw new Error(message); };
