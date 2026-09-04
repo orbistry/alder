@@ -1851,6 +1851,14 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_invalid_async_extern_signature_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            #[extern("globalThis", "fetch")]
+            fn fetch(url: String) Task
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_an_unknown_extern_convention_without_color() {
         assert_diagnostic_snapshot! {r#"
             #[extern("globalThis", "fetch", "cancel")]
