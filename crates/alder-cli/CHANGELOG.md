@@ -1,5 +1,13 @@
 # alder-cli
 
+## 0.2.2 — 2026-09-04
+
+### Patch changes
+
+- [76d003f](https://github.com/orbistry/alder/commit/76d003f798a88998fed70574fc9a421b77ef3c26) Update the embedded Deno runtime stack to restore Windows CLI builds and add a
+  Windows build to regular CI. — Thanks @rvcas!
+- Updated dependencies: alder-runtime@0.2.1
+
 ## 0.2.1 — 2026-09-03
 
 ### Patch changes
