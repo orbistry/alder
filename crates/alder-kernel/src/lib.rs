@@ -57,6 +57,104 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn option_equality_unwraps_nested_payloads() {
+        let harness = r#"
+const inner = { eq: (a, b) => $equalContainer(a, b, "option", [{ eq: (x, y) => x === y }]) };
+const left = $optionSome($optionNone());
+const right = $optionSome($optionNone());
+$assert($equalContainer(left, right, "option", [inner]));
+$assert($equalContainer(right, left, "option", [inner]));
+$assert(!$equalContainer(left, null, "option", [inner]));
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn option_map_and_map_lookup_preserve_present_none() {
+        let harness = r#"
+const mapped = $optionMap($optionSome(42), () => null);
+$assert(mapped !== null);
+$assert($optionUnbox(mapped) === null);
+const values = $mapNew();
+$mapSet(values, "present", null);
+$assert($mapGet(values, "present") !== null);
+$assert($optionUnbox($mapGet(values, "present")) === null);
+$assert($mapGet(values, "absent") === null);
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn option_operations_preserve_layers_and_payload_identity() {
+        let harness = r#"
+const one = $optionSome(null);
+const two = $optionSome(one);
+const three = $optionSome(two);
+$assert($optionUnbox(three) === two);
+$assert($optionUnbox(two) === one);
+$assert($optionUnbox(one) === null);
+const userSome = { $: "Some", _0: 42 };
+$assert($optionUnbox($optionSome(userSome)) === userSome);
+$assert($optionMap($optionSome(userSome), x => x) === userSome);
+$assert($optionUnbox($optionSome(undefined)) === undefined);
+$assert($optionSome(undefined) !== null);
+$assert($optionApply($optionSome(x => { $assert(x === null); return null; }), one) !== null);
+$assert($optionFlatMap(one, x => { $assert(x === null); return null; }) === null);
+const traversed = $optionTraverse({
+    pure: $resultOk,
+    $super0: { map: $resultMap },
+}, one, x => { $assert(x === null); return $resultOk(x); });
+$assert(traversed.$ === "Ok" && traversed._0 !== null);
+$assert($optionUnbox(traversed._0) === null);
+const payload = { eq: (a, b) => a === b, show: $show, hash: $hash };
+const option = child => ({
+    eq: (a, b) => $equalContainer(a, b, "option", [child]),
+    show: a => $showContainer(a, "option", [child]),
+    hash: a => $hashContainer(a, "option", [child]),
+});
+const nested = option(option(payload));
+const equal = $optionSome(null);
+$assert(nested.eq(one, one) && nested.eq(one, equal) && nested.eq(equal, one));
+$assert(nested.hash(one) === nested.hash(equal));
+$assert(nested.show(one) === "Some(None)");
+$assert(option(nested).show(two) === "Some(Some(None))");
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn option_json_round_trips_nullable_and_nested_payloads() {
+        let harness = r#"
+const option = child => ({
+    encode: value => $jsonEncodeContainer(value, "option", [child]),
+    decode: value => $jsonDecodeContainer(value, "option", [child]),
+});
+const json = { encode: JSON.stringify, decode: text => $resultOk(JSON.parse(text)) };
+const nested = option(option(option(json)));
+for (const value of [null, $optionSome(null), $optionSome($optionSome(null)), 42]) {
+    const decoded = nested.decode(nested.encode(value));
+    $assert(decoded.$ === "Ok");
+    $assert(nested.encode(decoded._0) === nested.encode(value));
+    let left = value, right = decoded._0;
+    for (let depth = 0; depth < 3; depth++) {
+        $assert((left === null) === (right === null));
+        left = $optionUnbox(left); right = $optionUnbox(right);
+    }
+}
+const unit = option({ encode: () => "null", decode: () => $resultOk(undefined) });
+$assert(unit.decode(unit.encode(undefined))._0 !== null);
+const reserved = { $alderSome: null };
+const decoded = option(json).decode(option(json).encode(reserved));
+$assert(JSON.stringify($optionUnbox(decoded._0)) === JSON.stringify(reserved));
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn fiber_runtime_obeys_lifecycle_and_promise_invariants() {
         let harness = r#"
 const check = (condition, message) => { if (!condition) throw new Error(message); };

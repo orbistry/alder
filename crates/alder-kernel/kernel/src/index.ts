@@ -23,7 +23,7 @@ export function $equalContainer(left, right, kind, dictionaries) {
     if (kind === "option") {
         return left === null || right === null
             ? left === right
-            : dictionaries[0].eq(left, right);
+            : dictionaries[0].eq(optionValue(left), optionValue(right));
     }
     if (kind === "result") {
         return left?.$ === right?.$
@@ -98,7 +98,7 @@ export function $showDerived(value, variants) {
 
 export function $showContainer(value, kind, dictionaries) {
     if (kind === "array") return `[${value.map(dictionaries[0].show).join(", ")}]`;
-    if (kind === "option") return value === null ? "None" : `Some(${dictionaries[0].show(value)})`;
+    if (kind === "option") return value === null ? "None" : `Some(${dictionaries[0].show(optionValue(value))})`;
     if (kind === "result") {
         const dictionary = value.$ === "Ok" ? dictionaries[0] : dictionaries[1];
         return `${value.$}(${dictionary.show(value._0)})`;
@@ -166,11 +166,11 @@ export function $optionPure(value) {
 }
 
 export function $optionApply(function_, value) {
-    return function_ === null || value === null ? null : function_(value);
+    return function_ === null || value === null ? null : $optionSome(optionValue(function_)(optionValue(value)));
 }
 
 export function $optionFlatMap(value, transform) {
-    return value === null ? null : transform(value);
+    return value === null ? null : transform(optionValue(value));
 }
 
 export function $resultPure(value) {
@@ -202,7 +202,7 @@ export function $arrayNext(values) {
 
 export function $optionTraverse(applicative, value, transform) {
     if (value === null) return applicative.pure(null);
-    return applicative.$super0.map(transform(value), $optionSome);
+    return applicative.$super0.map(transform(optionValue(value)), $optionSome);
 }
 
 export function $resultTraverse(applicative, value, transform) {
@@ -242,7 +242,7 @@ export function $hashContainer(value, kind, dictionaries) {
         bytes.push(0x12);
         pushText(bytes, value === null ? "None" : "Some");
         pushU64(bytes, value === null ? 0n : 1n);
-        if (value !== null) pushChildHashValue(bytes, 0, dictionaries[0].hash(value));
+        if (value !== null) pushChildHashValue(bytes, 0, dictionaries[0].hash(optionValue(value)));
         return hashBytes(bytes);
     }
     if (kind === "result") {
@@ -394,20 +394,26 @@ export function $assert(value) {
     if (!value) throw new Error("Assertion failed");
 }
 
+const optionBoxes = new WeakSet();
+
 export function $optionBox(value) {
-    return { $: "Some", _0: value };
+    const box = { $: "Some", _0: value };
+    optionBoxes.add(box);
+    return box;
 }
 
 function optionValue(value) {
-    return value !== null && value?.$ === "Some" ? value._0 : value;
+    return optionBoxes.has(value) ? value._0 : value;
 }
 
 export function $optionUnbox(value) { return optionValue(value); }
 
-export function $optionSome(value) { return value === null ? $optionBox(value) : value; }
+export function $optionSome(value) {
+    return value === null || optionBoxes.has(value) ? $optionBox(value) : value;
+}
 export function $optionNone() { return null; }
 export function $optionMap(value, transform) {
-    return value === null ? null : transform(optionValue(value));
+    return value === null ? null : $optionSome(transform(optionValue(value)));
 }
 export function $resultOk(value) { return { $: "Ok", _0: value }; }
 export function $resultErr(error) { return { $: "Err", _0: error }; }
@@ -428,7 +434,7 @@ export function $bigIntParse(value) {
     try { return BigInt(value); } catch { return null; }
 }
 export function $mapNew() { return new Map(); }
-export function $mapGet(values, key) { return values.has(key) ? values.get(key) : null; }
+export function $mapGet(values, key) { return values.has(key) ? $optionSome(values.get(key)) : null; }
 export function $mapSet(values, key, value) { values.set(key, value); }
 export function $setNew() { return new Set(); }
 export function $setHas(values, value) { return values.has(value); }
@@ -438,11 +444,18 @@ export function $jsonDecode(value) {
     try { return $resultOk(JSON.parse(value)); }
     catch (error) { return $jsonErr(String(error)); }
 }
+function isOptionJsonBox(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+        && Object.keys(value).length === 1 && Object.hasOwn(value, "$alderSome");
+}
 export function $jsonEncodeContainer(value, kind, dictionaries) {
     const encode = (dictionary, item) => JSON.parse(dictionary.encode(item));
     if (kind === "array") return JSON.stringify(value.map((item) => encode(dictionaries[0], item)));
     if (kind === "option") {
-        return value === null ? "null" : JSON.stringify(encode(dictionaries[0], value));
+        if (value === null) return "null";
+        const payload = encode(dictionaries[0], optionValue(value));
+        return JSON.stringify(payload === null || isOptionJsonBox(payload)
+            ? { $alderSome: payload } : payload);
     }
     if (kind === "result") {
         const index = value.$ === "Ok" ? 0 : 1;
@@ -469,7 +482,8 @@ export function $jsonDecodeContainer(value, kind, dictionaries) {
         }
         if (kind === "option") {
             if (parsed === null) return $resultOk(null);
-            return decode(dictionaries[0], parsed, "$" );
+            const payload = isOptionJsonBox(parsed) ? parsed.$alderSome : parsed;
+            return $resultMap(decode(dictionaries[0], payload, "$"), $optionSome);
         }
         if (kind === "result") {
             if (!parsed || typeof parsed !== "object" || !["Ok", "Err"].includes(parsed.$)) {

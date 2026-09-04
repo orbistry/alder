@@ -27,6 +27,11 @@ enum SecondHashProbe {
 
 enum Secret { Secret }
 
+#[derive(Show, Hash, Json)]
+enum OptionalBox { Box(Option[Option[Option[Number]]]) }
+
+enum NamedSome { Some(Number) }
+
 impl Show[Secret] {
     fn show(value: Secret) String { "redacted" }
 }
@@ -165,7 +170,28 @@ fn verify_error_group_derives() Result[(), [:invalid_json(String)]] {
     Result.ok(())
 }
 
+fn verify_option_representation() {
+    let left: Option[Option[Option[Number]]] = Option.some(Option.some(Option.none()))
+    let right: Option[Option[Option[Number]]] = Option.some(Option.some(Option.none()))
+    assert(left == right)
+    assert(show(left) == "Some(Some(None))")
+    assert(hash(left) == hash(right))
+    assert(OptionalBox::Box(left) == OptionalBox::Box(right))
+    let roundtrip: Result[OptionalBox, [:invalid_json(String)]] = decode(encode(OptionalBox::Box(left)))
+    assert(roundtrip == Result.ok(OptionalBox::Box(right)))
+    let mapped: Option[Option[Number]] = Option.map(Option.some(42), x -> Option.none())
+    assert(mapped == Option.some(Option.none()))
+    assert(mapped != Option.none())
+    let values: Map[String, Option[Number]] = Map.new()
+    Map.set(values, "present", Option.none())
+    assert(Map.get(values, "present") == Option.some(Option.none()))
+    assert(Map.get(values, "absent") == Option.none())
+    let named = Option.some(NamedSome::Some(42))
+    assert(Option.map(named, x -> x) == named)
+}
+
 pub fn main() {
+    verify_option_representation()
     let identity = { value: 1 }
     let equal_but_distinct = { value: 1 }
     assert(Ref.same(identity, identity))

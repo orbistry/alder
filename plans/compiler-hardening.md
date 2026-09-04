@@ -103,7 +103,7 @@ identity and making the first field access freeze the inferred field set.
 
 ### 9. Option representation
 
-- [ ] Regression for equality of separately constructed nested Some(None).
+- [x] Regression for equality of separately constructed nested Some(None).
 - [ ] Audit equality, mapping, patterns, derives, ordering/hash/show/JSON,
   unit payloads, nested containers, and higher-kinded operations.
 - [ ] Relevant equality/hash laws and round trips; centralize payload handling.
@@ -126,8 +126,8 @@ Root cause: virtual module imports lack a physical importer location.
 - [x] Prelude module members carry actual stdlib signatures, rejecting unknown
   members and invalid calls. Removed the untyped `ValueRef::Builtin` path.
 - [ ] Audit stdlib declarations against their runtime implementations:
-  `Json.decode` currently promises arbitrary `a` but only runs `JSON.parse`;
-  `Map.get` returns an unboxed nullable payload and loses present `None` values.
+  `Json.decode` currently promises arbitrary `a` but only runs `JSON.parse`.
+- [x] `Map.get` wraps present values so a present `None` differs from absence.
 - [x] Nested lambda annotations share same-named enclosing type variables as
   promised in `docs/language.md`, including nested lambda scopes and HKT.
 - [ ] Generic evidence and interface contract fidelity.
@@ -200,6 +200,23 @@ Root cause: virtual module imports lack a physical importer location.
   integration tests, 77 driver tests), and CLI execution fixtures pass. The
   package tarball verifies with the pending local dependency set. No pending
   snapshot files remain.
+- Option audit: reproduced nested equality and map-result collapse in permanent
+  kernel tests. All payload consumers now unwrap once; map/apply/traverse and
+  Map.get rewrap successful payloads. Some of an existing box adds a layer;
+  private box identity avoids collisions with user enums named Some.
+- Four kernel regressions cover equality/symmetry/hash consistency, show,
+  layers, unit, mapping/applicative/monadic/traversal behavior, map presence,
+  and nested JSON round trips. The nullable JSON codec now uses an escaped
+  singleton `$alderSome` envelope, with collision escaping; simple non-null
+  encodings are unchanged. Actual CLI trait fixtures verify nested options,
+  derives, hashing, showing, JSON, map lookup, and a user Some enum payload.
+- Option pattern/optional-field and ordering audits remain open; current solver
+  intrinsic selection has no builtin Ord[Option]. The unrelated unchecked
+  Json.decode entry point also remains open.
+- Option checkpoint validation: formatting, strict Clippy, full workspace tests,
+  explicit CLI fixtures, and plain `cargo package -p alder-kernel --allow-dirty`
+  verification pass. The original `/tmp/alder-review.D3XIzP/option` counterexample
+  now runs successfully through the CLI. No snapshots changed or remain pending.
 - First checkpoint validation: formatting, strict Clippy, and full workspace
   tests pass (100 solver integration tests). The original trait reproduction
   now fails at CLI check with `alder::type::generic_specialization`, before JS

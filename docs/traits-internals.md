@@ -1542,6 +1542,22 @@ The kernel representation of Option must preserve arbitrary nesting. Constructin
 box; it must not collapse `Some(Some(None))`. Derived/builtin Eq tests cover at
 least three nested levels.
 
+Only boxes created by the kernel are recognized as Option wrappers (a private
+WeakSet tracks them). An ordinary user enum with a `Some` variant is a payload,
+not a wrapper. Consumers remove exactly one wrapper before passing a payload
+to its dictionary or callback. `map`, `apply`, traversal, and `Map.get` construct
+their successful Option results through `$optionSome`; `flatMap` already
+receives an Option result from its callback and must not add a layer.
+
+The Json Option codec retains `null` for None and the payload encoding for
+ordinary Some values. To preserve nullable/nested payloads, it escapes a Some
+whose encoded payload is null as `{ "$alderSome": null }`. A payload that is
+itself a singleton `$alderSome` object is escaped with another such envelope.
+Decoding removes at most one envelope before invoking the payload decoder and
+reconstructs the result through `$optionSome`. Thus simple non-null encodings
+remain unchanged while nested None and Some(unit) round-trip without collapse.
+This changes the previously lossy encoding of nested nullable options.
+
 `Ref.same(a, b)` remains explicit reference identity and never satisfies an Eq
 obligation.
 
