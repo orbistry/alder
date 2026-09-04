@@ -523,6 +523,34 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Final gates
 
+- Cross-module record evidence: the records CLI fixture now imports a separate
+  `rows` module, independently instantiates a row-preserving rename function,
+  reads two inferred fields, preserves two independent input/output tails,
+  and reads an inferred optional result. A driver interface test serializes to
+  bytes after dropping the source arena, deserializes/rehydrates, and checks
+  distinct tail names, corresponding output tails, and optional field presence.
+  Negative driver cases check incompatible shared tails and an imported optional
+  field used as Number. Full workspace tests pass (88 driver tests), as do
+  strict all-target/all-feature Clippy, formatting, and diff checks. No snapshot
+  changes or pending artifacts. This test/documentation checkpoint changes no
+  published behavior and needs no additional version bump.
+- Newly confirmed alias defect (unresolved, not waived): the documented source
+  below fails with `expected { name: String }, found OptionalName`:
+
+  ```alder
+  pub type OptionalName = { name?: String }
+  pub fn choose(flag: Bool, record: OptionalName) {
+      if flag { { name: "present" } } else { record }
+  }
+  ```
+
+  `alder-can/src/types.rs` translates named references unconditionally to
+  `CanType::Named`; the active solver skips TypeAlias declarations. It can
+  expand existing `Type::Alias` nodes but these references never become such
+  nodes. Investigate local/imported alias expansion, generic substitution,
+  declaration ordering and cycles next. The cross-module record test uses
+  structural types to isolate row-interface coverage, not to waive aliases.
+
 - Loop/record interaction follow-up: reproduced first-break-order dependence
   that accepted an absent optional field as a `Number` and rejected the correct
   `Option[Number]` result. Ordinary unification retained the first record's

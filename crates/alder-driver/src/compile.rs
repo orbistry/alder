@@ -2100,6 +2100,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn imported_record_contracts_reject_incompatible_tails_and_presence() {
+        for (provider, consumer) in [
+            (
+                indoc::indoc! {r#"
+                    pub fn both(left: { r | x: Number }, right: { r | y: Number }) Number {
+                        left.x + right.y
+                    }
+                "#},
+                indoc::indoc! {r#"
+                    import ~/rows
+                    pub fn main() Number {
+                        rows.both({ x: 1, extra: 42 }, { y: 2, extra: "wrong" })
+                    }
+                "#},
+            ),
+            (
+                indoc::indoc! {r#"
+                    pub fn optional() ({ value?: Number }) { {} }
+                "#},
+                indoc::indoc! {r#"
+                    import ~/rows
+                    pub fn main() Number { rows.optional().value }
+                "#},
+            ),
+        ] {
+            let mem = InMemorySource::new();
+            mem.insert(url("project/src/rows.ald"), provider.to_owned());
+            mem.insert(url("project/src/main.ald"), consumer.to_owned());
+            let db = Arc::new(Mutex::new(Database::new(mem)));
+            let modules = vec![url("project/src/rows.ald"), url("project/src/main.ald")];
+            let graph = build_graph(db.clone(), &modules).await.unwrap();
+            let result = build(db, &graph).await;
+            assert!(!result.is_success(), "{provider}\n{consumer}");
+            assert_eq!(
+                result.success, 1,
+                "the provider remains independently valid"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn shared_state_remains_monomorphic_across_module_interfaces() {
         let mem = InMemorySource::new();
         mem.insert(

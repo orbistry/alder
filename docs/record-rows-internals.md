@@ -79,6 +79,15 @@ which may overconstrain valid combinations), shadowed labels/lacks constraints,
 cross-kind annotation use, trait matching of record shapes, and cross-module
 execution/serialization tests. These are acceptance work, not waived limitations.
 
+Cross-module checkpoint: executable `records` tests now cover imported row
+updates, independent instantiations, two distinct tails, inferred field
+requirements, and optional results. Driver tests exercise owned-interface
+binary serialization and rehydration after source-arena destruction, retaining
+tail identity and optional presence, plus negative imported compatibility cases.
+This does not complete the interface audit: record type aliases were found to
+remain nominal named types rather than expanding in active canonicalization.
+The alias reproduction and required follow-up are recorded in the hardening plan.
+
 ## Required representation and operations
 
 - Keep ordinary record values distinct from row fragments. Give record tails

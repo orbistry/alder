@@ -1,3 +1,5 @@
+import ~/rows
+
 fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {
     { ..user, name }
 }
@@ -48,6 +50,21 @@ fn field_matches(record: { value?: Number }, expected: Option[Number]) Bool {
 }
 
 pub fn main() {
+    let first = rows.rename({ name: "old", score: 42 }, "new")
+    let second = rows.rename({ name: "old", enabled: true }, "other")
+    assert(first.score == 42)
+    assert(first.name == "new")
+    assert(second.enabled)
+    assert(second.name == "other")
+    assert(rows.sum({ x: 20, y: 22, extra: true }) == 42)
+    let pair = rows.preserve_two({ x: 1, left: "left" }, { y: 2, right: true })
+    assert(pair.0.x == 2)
+    assert(pair.0.left == "left")
+    assert(pair.1.y == 3)
+    assert(pair.1.right)
+    let optional: { name?: String } = {}
+    assert(rows.choose(false, optional).name == Option.none())
+    assert(rows.choose(true, optional).name == Option.some("present"))
     let user = rename({ name: "old", score: 42 }, "new")
     assert(user.score == 42)
     assert(user.name == "new")

@@ -1,0 +1,13 @@
+pub fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {
+    { ..user, name }
+}
+
+pub fn sum(record) Number { record.x + record.y }
+
+pub fn preserve_two(left: { r | x: Number }, right: { s | y: Number }) {
+    ({ ..left, x: left.x + 1 }, { ..right, y: right.y + 1 })
+}
+
+pub fn choose(flag: Bool, record: { name?: String }) {
+    if flag { { name: "present" } } else { record }
+}

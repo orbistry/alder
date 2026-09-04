@@ -433,6 +433,55 @@ mod tests {
     }
 
     #[test]
+    fn independent_record_tails_survive_serialization_and_rehydration() {
+        let file = {
+            let source = Bump::new();
+            let interface = compile_interface(
+                &source,
+                indoc::indoc! {r#"
+                    pub fn preserve(left: { r | x: Number }, right: { s | y?: String }) {
+                        (left, right)
+                    }
+                "#},
+            );
+            InterfaceFile::dehydrate(&interface).unwrap()
+        };
+        let bytes = bincode::serialize(&file).unwrap();
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let bump = Bump::new();
+        let hydrated = stored.hydrate(&bump);
+        let restored = InterfaceFile::dehydrate(&hydrated).unwrap();
+        assert_eq!(file, restored);
+        let value = restored
+            .values
+            .iter()
+            .find(|v| v.exported_as == "preserve")
+            .unwrap();
+        let OwnedType::Fn { params, ret } = &value.scheme.typ.typ else {
+            panic!("expected a function");
+        };
+        let OwnedType::Record { ext: left, .. } = &params[0].typ else {
+            panic!("expected the first record parameter");
+        };
+        let OwnedType::Record { ext: right, fields } = &params[1].typ else {
+            panic!("expected the second record parameter");
+        };
+        assert!(left.is_some() && right.is_some());
+        assert_ne!(left, right, "independent tails must not be conflated");
+        assert!(fields[0].optional);
+        let OwnedType::Tuple(items) = &ret.typ else {
+            panic!("expected a tuple result");
+        };
+        assert_eq!(items.len(), 2);
+        for (item, expected) in items.iter().zip([left, right]) {
+            let OwnedType::Record { ext, .. } = &item.typ else {
+                panic!("expected a record result");
+            };
+            assert_eq!(ext, expected, "each output preserves its input tail");
+        }
+    }
+
+    #[test]
     fn inferred_error_rows_round_trip_with_payloads_and_an_open_tail() {
         let source = Bump::new();
         let interface = compile_interface(
