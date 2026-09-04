@@ -1,5 +1,11 @@
 # alder-cli
 
+## 0.2.3 — 2026-09-04
+
+### Patch changes
+
+- Updated dependencies: alder-bundle@0.2.2, alder-driver@0.3.0
+
 ## 0.2.2 — 2026-09-04
 
 ### Patch changes
