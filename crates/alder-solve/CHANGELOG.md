@@ -1,5 +1,16 @@
 # alder-solve
 
+## 0.3.0 — 2026-09-04
+
+### Minor changes
+
+- [ac24445](https://github.com/orbistry/alder/commit/ac24445101bb7a8d5bef6076ff145b94e103c91a) Add row-typed `Result` errors, inferred and propagated error rows, exhaustive
+  error matching, diagnostics, direct AST lowering, and typed JSON failures. — Thanks @rvcas!
+
+### Patch changes
+
+- Updated dependencies: alder-can@0.3.0, alder-constrain@0.3.0
+
 ## 0.2.1 — 2026-09-03
 
 ### Patch changes

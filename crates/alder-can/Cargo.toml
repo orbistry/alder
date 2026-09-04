@@ -1,6 +1,6 @@
 [package]
 name = "alder-can"
-version = "0.2.1"
+version = "0.3.0"
 edition.workspace = true
 description = "Canonicalize a alder source tree, resolving symbols, re-ordering definitions, and preparing a module for type inference."
 homepage.workspace = true
