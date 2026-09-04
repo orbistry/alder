@@ -671,7 +671,12 @@ fn canonicalize_lambda<'a>(
     let mut params = Vec::with_capacity(lambda.params.len());
     for param in lambda.params {
         let annotation = match param.annotation {
-            Some(typ) => Some(canonicalize_type(bump, env, &BTreeSet::new(), typ)?),
+            Some(typ) => Some(canonicalize_type(
+                bump,
+                env,
+                &crate::canonicalize::type_variables(typ),
+                typ,
+            )?),
             None => None,
         };
         let pattern = canonicalize_pattern(
@@ -689,7 +694,12 @@ fn canonicalize_lambda<'a>(
         });
     }
     let ret = match lambda.ret {
-        Some(ret) => Some(canonicalize_type(bump, env, &BTreeSet::new(), ret)?),
+        Some(ret) => Some(canonicalize_type(
+            bump,
+            env,
+            &crate::canonicalize::type_variables(ret),
+            ret,
+        )?),
         None => None,
     };
     let body = canonicalize_expr(bump, env, lambda.body)?;

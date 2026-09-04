@@ -122,6 +122,11 @@ fn describe_indirect(value: a) String where a: Describe {
     invoke(describe, value)
 }
 
+fn describe_scoped(value: a) String where a: Describe {
+    let render = (other: a) String -> describe(other)
+    render(value)
+}
+
 trait MethodContract[a] {
     fn inherited(value: a, other: b) String where b: Describe
     fn reordered(value: a, other: b) String where b: Describe + Show
@@ -170,6 +175,8 @@ pub fn main() {
     assert(describe_generic("text") == "text")
     assert(describe_generic([1, 2]) == "array")
     assert(describe_indirect(1) == "number")
+    assert(describe_scoped(1) == "number")
+    assert(describe_scoped("text") == "text")
     assert(inherited(0, 42) == "number")
     assert(inherited(0, "text") == "text")
     assert(reordered(0, 42) == "number")

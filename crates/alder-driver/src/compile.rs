@@ -1861,6 +1861,16 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_lambda_specializing_an_enclosing_generic_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn keep(value: a) a {
+                let ignored = (other: a) a -> 42
+                value
+            }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_generic_variable_escape_without_color() {
         assert_diagnostic_snapshot! {r#"
             #[extern("alder:kernel", "$arrayPush")]

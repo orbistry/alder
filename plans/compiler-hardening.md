@@ -127,8 +127,8 @@ Root cause: virtual module imports lack a physical importer location.
   as `ValueRef::Builtin`, which inference resolves to `Ty::Any`. Load and check
   the actual stdlib signatures; reject unknown members and invalid calls. This
   currently bypasses contracts for Array/String/Fiber and the other modules.
-- [ ] Nested lambda annotations must share same-named enclosing type variables
-  as promised in `docs/language.md`; the current lambda creates a fresh map.
+- [x] Nested lambda annotations share same-named enclosing type variables as
+  promised in `docs/language.md`, including nested lambda scopes and HKT.
 - [ ] Generic evidence and interface contract fidelity.
 - [ ] Evaluation order/exactly-once codegen and control-flow boundaries.
 - [ ] Async inference versus runtime representation.
@@ -165,6 +165,16 @@ Root cause: virtual module imports lack a physical importer location.
   full workspace tests (107 solver integration tests), and the explicit CLI
   standalone fixture suite pass. The reviewed specialization snapshot now
   labels the method name rather than its entire impl. No pending snapshots.
+- Lambda scope audit also found canonicalization rejected all lowercase names
+  in lambda annotations. It now admits annotation variables, while inference
+  explicitly enters/restores the enclosing signature scope. Six regressions
+  cover shared generics/bounds, nested scopes, siblings, separate functions,
+  and higher-kinded annotations. A reviewed colorless diagnostic snapshots
+  specialization via an unused lambda; the CLI trait fixture executes a
+  lambda using its enclosing dictionary for Number and String.
+- Lambda checkpoint validation: formatting, strict Clippy, and full workspace
+  tests pass (113 solver integration tests and 75 driver tests, plus CLI
+  execution fixtures). No pending snapshots or whitespace errors.
 - First checkpoint validation: formatting, strict Clippy, and full workspace
   tests pass (100 solver integration tests). The original trait reproduction
   now fails at CLI check with `alder::type::generic_specialization`, before JS

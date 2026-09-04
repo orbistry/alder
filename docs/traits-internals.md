@@ -35,6 +35,13 @@ from that contract, the impl prerequisites, and available instances; they do
 not introduce extra dictionary parameters. Likewise, implementation-written
 projection equalities are checked rather than trusted as additional assumptions.
 
+Lambda annotations are checked within the enclosing signature's type-variable
+scope. A same-named variable reuses that type and its available dictionaries;
+a fresh name is local to the lambda and its nested lambdas, not its siblings.
+The solver restores the outer annotation scope on leaving each function or
+lambda. Fresh lambda names remain contextual inference variables; they do not
+introduce first-class rank-N polymorphism.
+
 This follows Elm's distinction between inferred variables and checked generic
 contracts, using explicit post-solve obligations instead of Elm's union-find
 rigid descriptors/rank pools. The broader hardening audit, including bounds,

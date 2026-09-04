@@ -192,6 +192,109 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
 }
 
 #[test]
+fn lambda_annotation_cannot_specialize_an_enclosing_generic() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn keep(value: a) a {
+            let ignored = (other: a) a -> 42
+            value
+        }
+    "#}
+        )
+        .is_err(),
+        "the lambda's a is the enclosing universal, even when unused"
+    );
+}
+
+#[test]
+fn lambda_annotation_can_use_an_enclosing_bound_without_a_call() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Describe[a] { fn describe(value: a) String }
+        fn keep(value: a) a where a: Describe {
+            let ignored = (other: a) String -> describe(other)
+            value
+        }
+    "#},
+    )
+    .expect("the enclosing dictionary describes the lambda's annotated argument");
+}
+
+#[test]
+fn sibling_lambda_annotation_variables_are_independent() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn pair() (Number, String) {
+            let number = (value: b) b -> value
+            let text = (value: b) b -> value
+            (number(42), text("hello"))
+        }
+    "#},
+    )
+    .expect("fresh lambda variables do not leak into sibling annotations");
+}
+
+#[test]
+fn nested_lambda_annotation_reuses_its_parent_lambda_variable() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn bad() (String, Number) {
+            let outer = (value: b) -> {
+                let inner = (other: b) -> other
+                (value, inner(42))
+            }
+            outer("hello")
+        }
+    "#}
+        )
+        .is_err(),
+        "the inner annotation must constrain the parent lambda's b"
+    );
+}
+
+#[test]
+fn lambda_annotation_does_not_leak_between_named_functions() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn identity(value: a) a { value }
+        fn number() Number {
+            let convert = (value: a) a -> 42
+            convert(0)
+        }
+        fn text() String { identity("hello") }
+    "#},
+    )
+    .expect("a fresh annotation in another function does not specialize identity");
+}
+
+#[test]
+fn lambda_annotation_preserves_enclosing_higher_kinded_variables() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn keep(value: f[a]) f[a] {
+            let identity = (other: f[a]) f[a] -> other
+            identity(value)
+        }
+    "#},
+    )
+    .expect("higher-kinded lambda annotations share the enclosing constructor and argument");
+}
+
+#[test]
 fn generic_contract_rejects_a_specialized_method_body() {
     let bump = Bump::new();
     assert!(

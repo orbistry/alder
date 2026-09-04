@@ -2615,7 +2615,7 @@ fn kind_from_arity<'a>(bump: &'a Bump, arity: usize) -> alder_ast::Kind<'a> {
     kind
 }
 
-fn type_variables<'a>(source: &'a Located<alder_source::Type<'a>>) -> BTreeSet<&'a str> {
+pub(crate) fn type_variables<'a>(source: &'a Located<alder_source::Type<'a>>) -> BTreeSet<&'a str> {
     let mut variables = BTreeSet::new();
     collect_type_variables(source, &mut variables);
     variables

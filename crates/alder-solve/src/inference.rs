@@ -1198,6 +1198,7 @@ struct Infer<'a, 'db> {
     variable_names: BTreeMap<usize, &'a str>,
     generalized_variables: BTreeSet<usize>,
     generic_contracts: Vec<GenericContract<'a>>,
+    annotation_scope: BTreeMap<&'a str, Ty<'a>>,
     active_scc: BTreeSet<QualifiedName<'a>>,
 }
 
@@ -1256,6 +1257,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             variable_names: BTreeMap::new(),
             generalized_variables: BTreeSet::new(),
             generic_contracts: Vec::new(),
+            annotation_scope: BTreeMap::new(),
             active_scc: BTreeSet::new(),
         }
     }
@@ -1818,6 +1820,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             outer_free: outer_free.clone(),
             region,
         });
+        let outer_annotation_scope = std::mem::replace(&mut self.annotation_scope, vars);
         let inferred = (|| {
             if let Some((expected, method_region)) = expected_method {
                 self.unify(
@@ -1840,6 +1843,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         })();
         self.givens = outer_givens;
         self.projection_equations = outer_projection_equations;
+        self.annotation_scope = outer_annotation_scope;
         inferred
     }
 
@@ -2121,7 +2125,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             Expr::Block(block) => self.infer_block(&mut env.clone(), block, return_type),
             Expr::Lambda { params, ret, body } => {
                 let mut local = env.clone();
-                let mut vars = BTreeMap::new();
+                let mut vars = self.annotation_scope.clone();
                 let mut args = Vec::with_capacity(params.len());
                 for param in *params {
                     let typ = param
@@ -2152,7 +2156,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                 } else {
                     (declared_result.clone(), declared_result)
                 };
-                let body_type = self.infer_expr(&local, body, Some(body_result.clone()))?;
+                let outer_annotation_scope = std::mem::replace(&mut self.annotation_scope, vars);
+                let body_type = self.infer_expr(&local, body, Some(body_result.clone()));
+                self.annotation_scope = outer_annotation_scope;
+                let body_type = body_type?;
                 self.unify(body_type, body_result, region)?;
                 Ok(Ty::Fn(args, Box::new(self.prune(result))))
             }
