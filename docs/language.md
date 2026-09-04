@@ -281,6 +281,9 @@ match u.nickname {
 
 - `field?: T` declares an optional field. Construction may omit it; reading
   it yields `Option[T]`. Callers never write `Some(...)` for props.
+  Assignment to the field stores a `T`, just like construction; it does not
+  take the `Option[T]` returned by a read. Access through an optional parent
+  requires handling that parent's `Option` first.
 - `{ ..r, x: 1 }` is record update. `r.x` is access, `t.0` tuple index.
 - `type Name[a] = ...` declares an alias.
 

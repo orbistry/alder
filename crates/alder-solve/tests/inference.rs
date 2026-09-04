@@ -8,6 +8,53 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn optional_record_assignment_stores_the_declared_payload() {
+    let source = indoc! {r#"
+        fn run() Option[Number] {
+            let mut record: { value?: Number } = {}
+            record.value = 42
+            record.value
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn optional_record_assignment_rejects_an_option_instead_of_the_payload() {
+    let source = indoc! {r#"
+        fn run() {
+            let mut record: { value?: Number } = {}
+            record.value = Option.some(42)
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn optional_record_assignment_cannot_read_an_absent_compound_target() {
+    let source = indoc! {r#"
+        fn run() {
+            let mut record: { value?: Number } = {}
+            record.value += 1
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn optional_record_assignment_cannot_traverse_an_absent_parent() {
+    let source = indoc! {r#"
+        fn run() {
+            let mut record: { child?: { value: Number } } = {}
+            record.child.value = 42
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
 fn branch_results_preserve_optional_field_presence() {
     for source in [
         indoc! {r#"

@@ -51,7 +51,14 @@ remain ordinary member access. The helper checks own-property presence and
 wraps a present payload with the centralized Option constructor, distinguishing
 an absent field from present null/None or unit payloads. The record expression
 and property value are each evaluated once. CLI and kernel tests cover these
-boundaries. Assignment and optional record patterns still need their audit.
+boundaries. Assignment to the final field expects its declared raw payload T,
+not the Option[T] produced by a read. Intermediate optional members still have
+the read type, preventing assignment through a possibly absent parent. Solver
+regressions cover both rejected Option-as-payload writes and absent-parent
+traversal; the CLI fixture exercises writes of nested Option payloads and writes
+through a required parent. Compound assignments additionally require the read
+type to match the stored payload; they cannot use an optional field as if it
+were present. Optional record patterns still need their audit.
 
 Still open: full optional compatibility coverage, multiple open spreads (currently unified,
 which may overconstrain valid combinations), shadowed labels/lacks constraints,

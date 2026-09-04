@@ -523,6 +523,23 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Final gates
 
+- Optional-field assignment follow-up: reproduced two opposite errors in the
+  active solver: `record.value = 42` was rejected for `value?: Number`, while
+  `record.value = Option.some(42)` was accepted. `place_type` reused read typing
+  although lowering writes the raw payload. Final-field assignment now uses
+  the declared payload type; intermediate fields retain read typing, so an
+  absent optional parent cannot be traversed. Four focused solver regressions
+  pass after failing the two affected cases before the fix. Added CLI coverage
+  for absent-to-present writes, nested Option payloads, and a required parent.
+  Adversarial follow-up exposed an initial-fix regression allowing `+=` on an
+  absent optional field; compound assignments now also check read/write type
+  compatibility, and the new negative regression proves that rejection.
+  Checkpoint validation: full `cargo test --quiet` passes (159 solver integration
+  tests, 14 kernel tests, and all CLI fixtures); strict all-target/all-feature
+  Clippy, formatting, and diff checks pass. No snapshot changes or pending
+  snapshot files. Optional patterns and other record-row acceptance work remain
+  open.
+
 - [ ] Re-run every original reproduction against the final compiler.
 - [ ] Adversarial review of alternate forms and cross-feature interactions.
 - [ ] `cargo fmt --all` and strict all-target/all-feature Clippy.

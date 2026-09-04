@@ -1988,7 +1988,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 value,
                 ..
             } => {
-                let expected = self.place_type(env, place, statement.region)?;
+                let expected = self.place_type(env, place, statement.region, use_id.is_some())?;
                 let actual = self.infer_expr(env, value, return_type.clone())?;
                 self.check_value(actual, expected.clone(), statement.region)?;
                 if let Some(use_id) = use_id {
@@ -2970,15 +2970,38 @@ impl<'a, 'db> Infer<'a, 'db> {
         env: &Env<'a>,
         place: &'a alder_ast::Place<'a>,
         region: Region,
+        read_before_write: bool,
     ) -> Result<Ty<'a>, Error> {
         let mut typ = match place.root {
             BindingName::Local(local) => self.instantiate(&env.locals[&local.id.0]),
             BindingName::TopLevel(name) => self.instantiate(&env.globals[&name]),
         };
-        for step in place.steps {
+        for (index, step) in place.steps.iter().enumerate() {
             typ = match step {
                 alder_ast::PlaceStep::Field(field) => {
-                    self.access_field(typ, field.value, field.region)?
+                    // The final member stores a raw payload, even when reading
+                    // that member would produce Option[T]. Intermediate members
+                    // remain reads: an optional parent cannot be traversed as T.
+                    let payload = if index + 1 == place.steps.len() {
+                        match self.prune(typ.clone()) {
+                            Ty::Record(fields, _) => {
+                                fields.get(field.value).map(|(_, typ)| typ.clone())
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    match payload {
+                        Some(payload) => {
+                            if read_before_write {
+                                let read = self.access_field(typ, field.value, field.region)?;
+                                self.check_value(read, payload.clone(), field.region)?;
+                            }
+                            payload
+                        }
+                        None => self.access_field(typ, field.value, field.region)?,
+                    }
                 }
                 alder_ast::PlaceStep::TupleIndex(index) => match self.prune(typ) {
                     Ty::Tuple(items) if (index.value as usize) < items.len() => {

@@ -21,6 +21,15 @@ pub fn main() {
     let present: { value?: Option[Number] } = { value: Option.none() }
     assert(absent.value == Option.none())
     assert(present.value == Option.some(Option.none()))
+    let mut assigned: { value?: Option[Number] } = {}
+    assert(assigned.value == Option.none())
+    assigned.value = Option.none()
+    assert(assigned.value == Option.some(Option.none()))
+    assigned.value = Option.some(42)
+    assert(assigned.value == Option.some(Option.some(42)))
+    let mut nested: { child: { value?: Number } } = { child: {} }
+    nested.child.value = 42
+    assert(nested.child.value == Option.some(42))
     let counter = []
     assert(counted(counter).value == Option.some(42))
     assert(Array.length(counter) == 1)
