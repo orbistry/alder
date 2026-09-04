@@ -2,8 +2,11 @@
 
 **Status: current direction, everything provisional.** The language was
 redesigned on 2026-09-01. The parser (`alder-parse`, M1) implements the
-grammar at the end of this document; canonicalization and the solver
-are still the Elm port and are adapted in M2. Design rationale lives in
+grammar at the end of this document. M2–M4 provide the active Alder-native
+canonicalizer, solver, JavaScript backend, and async runtime. Correctness
+hardening is tracked in `plans/compiler-hardening.md`; milestone completion
+does not imply that the implementation has been exhaustively verified.
+Design rationale lives in
 `docs/`:
 
 - `docs/language.md` — syntax and semantics
@@ -46,9 +49,9 @@ orbistry/alder/
 │   ├── alder-solve/            # Constraint solving (type inference)
 │   ├── alder-config/           # Project configuration (JSONC)
 │   ├── alder-driver/           # Build orchestration, FileSource
-│   ├── alder-codegen/          # JavaScript code generation (TBD)
+│   ├── alder-codegen/          # Direct Oxc JavaScript AST generation
 │   ├── alder-language-server/  # LSP implementation
-│   └── alder-cli/              # CLI binary (`alder`), embeds deno_core (TBD)
+│   └── alder-cli/              # CLI binary (`alder`), embeds deno_core
 ├── docs/                       # Design documents
 ├── tasks/                      # Workspace tasks (currently a stub)
 ├── .alder/                     # Build artifacts (gitignored)

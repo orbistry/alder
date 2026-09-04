@@ -1206,6 +1206,30 @@ pub fn codegen(source: Source, error: &alder_codegen::Error) -> Diagnostic {
 fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
     use alder_constrain::ErrorKind;
     match &error.kind {
+        ErrorKind::GenericSpecialization { variable, actual } => {
+            return Diagnostic::error(source, format!(
+                "this implementation does not work for every `{variable}`"
+            ))
+            .with_code("alder::type::generic_specialization")
+            .with_primary_label(error.region, format!(
+                "the signature promises an independent `{variable}`, but the body requires `{actual}`"
+            ))
+            .with_help("use the same value generically, or give the declaration a concrete signature; a trait implementation must preserve the trait's generic contract");
+        }
+        ErrorKind::GenericEscape { variable } => {
+            return Diagnostic::error(
+                source,
+                format!("generic type `{variable}` is tied to a value outside this function"),
+            )
+            .with_code("alder::type::generic_escape")
+            .with_primary_label(
+                error.region,
+                "this signature cannot be independently instantiated",
+            )
+            .with_help(
+                "pass the shared value as an argument, or use a concrete type for this function",
+            );
+        }
         ErrorKind::NonExhaustiveErrorMatch { missing, open } => {
             let label = if missing.is_empty() {
                 "this open error row may contain more tags".to_owned()
@@ -1273,6 +1297,8 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             "return value does not match the function result".to_owned(),
         ),
         ErrorKind::NonExhaustiveErrorMatch { .. }
+        | ErrorKind::GenericSpecialization { .. }
+        | ErrorKind::GenericEscape { .. }
         | ErrorKind::ImpossibleErrorPattern { .. }
         | ErrorKind::InvalidErrorTagPlacement => unreachable!("handled above"),
     };

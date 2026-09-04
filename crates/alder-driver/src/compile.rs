@@ -1851,6 +1851,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_generic_method_specialization_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            trait Convert[a] { fn convert(value: a, other: b) b }
+            impl Convert[Number] {
+                fn convert(value: Number, other: b) b { 42 }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_generic_variable_escape_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            #[extern("alder:kernel", "$arrayPush")]
+            fn push(values: Array[a], value: a) ()
+            let mut stored = []
+            fn store(value: a) { push(stored, value) }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_invalid_async_extern_signature_without_color() {
         assert_diagnostic_snapshot! {r#"
             #[extern("globalThis", "fetch")]

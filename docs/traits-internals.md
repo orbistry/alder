@@ -12,6 +12,27 @@ and code-generation/runtime angles. The compact active solver in
 `alder-solve/src/inference.rs` is the implementation base. The uncompiled Elm
 solver files are reference material only.
 
+## Generic contract checking during hardening
+
+Named variables in a function or method signature are universal promises. A
+body cannot specialize one to a concrete type or identify two independently
+named variables. An implementation must also preserve the trait method's
+universals even when its own signature writes concrete types.
+
+The active solver records these contracts separately from flexible inference
+variables. After module inference, before publishing solved interfaces, it
+checks that each declared variable still has a distinct unbound representative
+and cannot be reached through a free variable of the enclosing monomorphic
+environment. The expected trait method contributes a separate contract after
+substituting the implementation's subject arguments. Checking is deferred so a
+recursive peer cannot specialize a previously visited declaration unnoticed.
+
+This follows Elm's distinction between inferred variables and checked generic
+contracts, using explicit post-solve obligations instead of Elm's union-find
+rigid descriptors/rank pools. The broader hardening audit, including bounds,
+scoped lambda annotations, and mutation restrictions, remains in
+`plans/compiler-hardening.md`.
+
 ## Semantic boundaries
 
 - A trait is a globally named predicate over one or more types. Argument zero

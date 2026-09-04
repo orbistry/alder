@@ -59,6 +59,13 @@ pub enum ErrorKind {
     InvalidAwait,
     InvalidTry,
     ReturnMismatch,
+    GenericSpecialization {
+        variable: String,
+        actual: String,
+    },
+    GenericEscape {
+        variable: String,
+    },
     NonExhaustiveErrorMatch {
         missing: Vec<String>,
         open: bool,

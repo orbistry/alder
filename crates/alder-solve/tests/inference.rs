@@ -192,6 +192,162 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
 }
 
 #[test]
+fn generic_contract_rejects_a_specialized_method_body() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        trait Convert[a] { fn convert(value: a, other: b) b }
+        impl Convert[Number] {
+            fn convert(value: Number, other: b) b { 42 }
+        }
+        fn use_string() String { convert(0, "hello") }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn generic_contract_rejects_a_specialized_method_signature() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        trait Convert[a] { fn convert(value: a, other: b) b }
+        impl Convert[Number] {
+            fn convert(value: Number, other: Number) Number { other }
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn generic_contract_rejects_a_specialized_function() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn constant(value: a) a { 42 }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn generic_contract_keeps_independent_parameters_distinct() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn invalid(first: a, second: b) a { second }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn generic_contract_rejects_a_specialized_default() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        trait Convert[a] { fn convert(value: a, other: b) b { 42 } }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn generic_contract_rejects_higher_kinded_specialization() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn specialize(values: f[a]) Array[a] { values }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn generic_contract_rejects_escape_into_shared_mutable_state() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        #[extern("alder:kernel", "$arrayPush")]
+        fn push(values: Array[a], value: a) ()
+        let mut stored = []
+        fn store(value: a) { push(stored, value) }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn generic_contract_checks_specialization_through_recursive_peers() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn first(value: a) a { second(value) }
+        fn second(value) { if true { first(value) } else { 42 } }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn generic_contract_accepts_mutually_recursive_universal_functions() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn first(value: a) a { second(value) }
+        fn second(value: b) b { if true { value } else { first(value) } }
+        fn strings() String { first("hello") }
+        fn numbers() Number { first(42) }
+    "#},
+    )
+    .expect("each call independently instantiates the recursive group's contract");
+}
+
+#[test]
+fn generic_contract_accepts_universal_methods_and_functions() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Convert[a] { fn convert(value: a, other: b) b }
+        impl Convert[Number] {
+            fn convert(value: Number, other: b) b { other }
+        }
+        fn identity(value: a) a { value }
+        fn use_string() String { identity(convert(0, "hello")) }
+        fn use_number() Number { identity(convert(0, 42)) }
+    "#},
+    )
+    .expect("universal implementations remain independently instantiable");
+}
+
+#[test]
 fn direct_trait_method_selects_the_unique_impl() {
     let bump = Bump::new();
     let solved = solve_input(

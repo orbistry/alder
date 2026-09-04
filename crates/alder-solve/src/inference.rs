@@ -1170,6 +1170,16 @@ struct Env<'a> {
     globals: BTreeMap<QualifiedName<'a>, Scheme<'a>>,
 }
 
+/// A declared universal contract must survive solving as distinct, unbound
+/// variables, independent of its enclosing monomorphic environment. Checks are
+/// deferred until the module is solved so recursive peers cannot specialize a
+/// signature after its body has already been visited.
+struct GenericContract<'a> {
+    variables: BTreeMap<&'a str, Ty<'a>>,
+    outer_free: BTreeSet<usize>,
+    region: Region,
+}
+
 struct Infer<'a, 'db> {
     bump: &'a Bump,
     database: &'db TraitDatabase<'a>,
@@ -1185,6 +1195,8 @@ struct Infer<'a, 'db> {
     requirement_seeds: BTreeMap<UseId, RequirementSeed<'a>>,
     variable_names: BTreeMap<usize, &'a str>,
     generalized_variables: BTreeSet<usize>,
+    generic_contracts: Vec<GenericContract<'a>>,
+    active_scc: BTreeSet<QualifiedName<'a>>,
 }
 
 pub fn run<'a>(
@@ -1241,6 +1253,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 .collect(),
             variable_names: BTreeMap::new(),
             generalized_variables: BTreeSet::new(),
+            generic_contracts: Vec::new(),
+            active_scc: BTreeSet::new(),
         }
     }
 
@@ -1290,6 +1304,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
 
         for group in module.value_sccs {
+            self.active_scc = group.members.iter().copied().collect();
             let mut seeded_items = BTreeSet::new();
             for member in group.members {
                 let item = value_items
@@ -1321,12 +1336,14 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
         }
 
+        self.active_scc.clear();
         for item in module.items {
             if !is_value_item(&item.value.kind) {
                 self.infer_item(&mut env, &item.value.kind, item.region)?;
             }
         }
 
+        self.check_generic_contracts()?;
         self.check_error_matches()?;
         self.check_error_tag_placement()?;
 
@@ -1640,6 +1657,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             body,
             region,
         } = input;
+        let excluded = self.active_scc.clone();
+        let outer_free = self.environment_free_vars(env, &excluded);
         let mut local = env.clone();
         let mut vars = BTreeMap::new();
         let mut args = Vec::with_capacity(params.len());
@@ -1742,6 +1761,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.add_parameter_superclass_givens(&predicates, 0);
             }
         }
+        self.generic_contracts.push(GenericContract {
+            variables: vars.clone(),
+            outer_free: outer_free.clone(),
+            region,
+        });
         let inferred = (|| {
             let body_type = self.infer_block(&mut local, body, Some(body_result.clone()))?;
             if body.value.tail.is_some() || !block_contains_return(body) {
@@ -1762,7 +1786,14 @@ impl<'a, 'db> Infer<'a, 'db> {
                             .insert(parameter.name.value, self.from_ast(argument, &mut vars));
                     }
                 }
+                let subject_variables = expected_vars.keys().copied().collect::<BTreeSet<_>>();
                 let expected = self.from_ast(method.scheme.typ, &mut expected_vars);
+                expected_vars.retain(|name, _| !subject_variables.contains(name));
+                self.generic_contracts.push(GenericContract {
+                    variables: expected_vars,
+                    outer_free,
+                    region: method.name.region,
+                });
                 self.unify(function_type.clone(), expected, method.name.region)?;
             }
             Ok((function_type, predicates, local_projection_equations))
@@ -3726,6 +3757,46 @@ impl<'a, 'db> Infer<'a, 'db> {
                 region: *region,
                 kind: ErrorKind::InvalidErrorTagPlacement,
             });
+        }
+        Ok(())
+    }
+
+    fn check_generic_contracts(&mut self) -> Result<(), Error> {
+        for contract in std::mem::take(&mut self.generic_contracts) {
+            let mut representatives = BTreeMap::new();
+            let mut escaped = BTreeSet::new();
+            for outer in contract.outer_free {
+                self.free_vars(&Ty::Var(outer), &mut escaped);
+            }
+            for (name, variable) in contract.variables {
+                let resolved = self.prune(variable);
+                let Ty::Var(id) = resolved else {
+                    return Err(Error {
+                        region: contract.region,
+                        kind: ErrorKind::GenericSpecialization {
+                            variable: name.to_owned(),
+                            actual: self.render(resolved),
+                        },
+                    });
+                };
+                if let Some(previous) = representatives.insert(id, name) {
+                    return Err(Error {
+                        region: contract.region,
+                        kind: ErrorKind::GenericSpecialization {
+                            variable: name.to_owned(),
+                            actual: previous.to_owned(),
+                        },
+                    });
+                }
+                if escaped.contains(&id) {
+                    return Err(Error {
+                        region: contract.region,
+                        kind: ErrorKind::GenericEscape {
+                            variable: name.to_owned(),
+                        },
+                    });
+                }
+            }
         }
         Ok(())
     }
