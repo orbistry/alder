@@ -73,6 +73,23 @@ fn loop_payload_once() Number {
     Array.length(values)
 }
 
+fn short_circuit_loop() Number {
+    loop {
+        let skipped = false && { break "unreachable" }
+        let also_skipped = true || { break "unreachable" }
+        let reached = true && { break 42 }
+    }
+}
+
+fn guarded_loop(flag: Bool) Number {
+    loop {
+        match flag {
+            true if false => { break "unreachable" },
+            _ => { break 42 },
+        }
+    }
+}
+
 pub fn main() {
     assert(choose(true) == 42)
     assert(choose(false) == 43)
@@ -94,4 +111,7 @@ pub fn main() {
     assert(loop_payload_once() == 1)
     let unit = loop { break }
     assert(unit == ())
+    assert(short_circuit_loop() == 42)
+    assert(guarded_loop(true) == 42)
+    assert(guarded_loop(false) == 42)
 }

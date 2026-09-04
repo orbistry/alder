@@ -158,6 +158,20 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Conditional-exit checkpoint: new solver regressions reproduced breaks in
+  `false && ...`, `true || ...`, and false-guarded match arms incorrectly
+  constraining live loop results. Inference now respects those reachability
+  boundaries, including non-continuing scrutinees/guards and binary left
+  operands. Structural flow excludes skipped exits and recognizes required
+  Boolean operands, preserving divergence and unconditional operand returns.
+  Negative tests retain constraints for unknown Boolean conditions/guards.
+  CLI fixtures execute skipped and required operands and guarded loop exits.
+  Pattern selection and general expression-sequencing reachability remain
+  open; this is not complete path-sensitive analysis.
+  Validation: all 142 solver integration tests, full workspace tests (including
+  executed CLI fixtures), strict Clippy, formatting, and diff checks pass.
+  No snapshots changed or remain pending; final packaging stays open.
+
 - Loop-result checkpoint: positive valued/nested/async loops and negative
   incompatible break/statement-loop cases failed before target-stack inference.
   Each loop now owns a result type; bare breaks supply unit and while/for

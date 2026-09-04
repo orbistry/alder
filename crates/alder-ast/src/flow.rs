@@ -79,6 +79,19 @@ pub fn block(block: &Located<Block<'_>>) -> Flow {
     statements.then(block.value.tail.map_or(Flow::NEXT, expression))
 }
 
+/// Whether evaluation can reach the right operand. Unknown values are
+/// conservative; Boolean literals expose the two definite short circuits.
+pub fn binary_rhs_reachable(op: BinOp, left: &Located<Expr<'_>>) -> bool {
+    expression(left).falls_through && !binary_rhs_skipped(op, left)
+}
+
+fn binary_rhs_skipped(op: BinOp, left: &Located<Expr<'_>>) -> bool {
+    matches!(
+        (op, &left.value),
+        (BinOp::And, Expr::Bool(false)) | (BinOp::Or, Expr::Bool(true))
+    )
+}
+
 pub fn statement(stmt: &Located<Stmt<'_>>) -> Flow {
     match &stmt.value {
         Stmt::Return(value) => value.map_or(Flow::NEXT, expression).then(Flow::RETURN),
@@ -135,9 +148,16 @@ pub fn expression(expr: &Located<Expr<'_>>) -> Flow {
         Expr::Match { scrutinee, arms } => {
             let branches = arms.iter().fold(Flow::default(), |flow, arm| {
                 flow.either(
-                    arm.guard
-                        .map_or(Flow::NEXT, expression)
-                        .then(expression(arm.body)),
+                    arm.guard.map_or(Flow::NEXT, expression).then(
+                        if arm
+                            .guard
+                            .is_some_and(|guard| matches!(guard.value, Expr::Bool(false)))
+                        {
+                            Flow::default()
+                        } else {
+                            expression(arm.body)
+                        },
+                    ),
                 )
             });
             expression(scrutinee).then(branches)
@@ -182,13 +202,18 @@ pub fn expression(expr: &Located<Expr<'_>>) -> Flow {
         Expr::Try(value) => expression(value).then(Flow::NEXT.either(Flow::RETURN)),
         Expr::Binop {
             op, left, right, ..
-        } => expression(left).then(
-            if matches!(op.value, BinOp::And | BinOp::Or | BinOp::Coalesce) {
-                Flow::NEXT.either(expression(right))
-            } else {
-                expression(right)
-            },
-        ),
+        } => expression(left).then(if binary_rhs_skipped(op.value, left) {
+            Flow::NEXT
+        } else if matches!(
+            (op.value, &left.value),
+            (BinOp::And, Expr::Bool(true)) | (BinOp::Or, Expr::Bool(false))
+        ) {
+            expression(right)
+        } else if matches!(op.value, BinOp::And | BinOp::Or | BinOp::Coalesce) {
+            Flow::NEXT.either(expression(right))
+        } else {
+            expression(right)
+        }),
         Expr::Number { .. }
         | Expr::BigInt(_)
         | Expr::Str(_)

@@ -8,6 +8,82 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn skipped_boolean_operands_do_not_constrain_loop_exits() {
+    let source = indoc! {r#"
+        fn answer() Number {
+            loop {
+                let skipped = false && { break "unreachable" }
+                let also_skipped = true || { break "unreachable" }
+                break 42
+            }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn false_match_guards_do_not_constrain_loop_exits() {
+    let source = indoc! {r#"
+        fn answer(flag: Bool) Number {
+            loop {
+                match flag {
+                    true if false => { break "unreachable" },
+                    _ => { break 42 },
+                }
+            }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn skipped_exits_do_not_make_an_infinite_loop_produce_unit() {
+    let source = indoc! {r#"
+        fn boolean_exit() Number {
+            loop { false && { break } }
+        }
+        fn guarded_exit(flag: Bool) Number {
+            loop {
+                match flag {
+                    true if false => { break },
+                    _ => { continue },
+                }
+            }
+        }
+        fn required_operand() Number {
+            let result = true && { return 42 }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn potentially_reached_conditional_breaks_must_agree() {
+    for source in [
+        indoc! {r#"
+            fn answer(flag: Bool) Number {
+                loop {
+                    let result = flag && { break "wrong" }
+                    break 42
+                }
+            }
+        "#},
+        indoc! {r#"
+            fn answer(flag: Bool) Number {
+                loop {
+                    match flag {
+                        true if flag => { break "wrong" },
+                        _ => { break 42 },
+                    }
+                }
+            }
+        "#},
+    ] {
+        assert!(infer(&Bump::new(), source).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn loop_break_values_determine_the_result_type() {
     let source = indoc! {r#"
         fn answer() Number { loop { break 42 } }

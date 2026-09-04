@@ -27,9 +27,13 @@ Lambda inference saves and clears the target stack, restoring it afterward.
 A loop with no structurally reachable exit remains divergent rather than
 producing unit.
 
-Inference tracks reachability across block statements and literal conditional
-branches so a break after another unconditional exit, or inside `if false`,
-does not determine a live loop's result. Unreachable code is still inferred
+Inference tracks reachability across block statements, literal conditional
+branches, Boolean short circuits, and match guards. A break after another
+unconditional exit, inside `if false`, in a skipped Boolean operand, or behind
+a literal false guard does not determine a live loop's result. The structural
+flow summary also excludes these exits when deciding whether a loop diverges.
+Unknown Boolean values remain conservative. Unreachable code is still inferred
 and subject to ordinary type checks. Further unreachable-path constraints
-(including match guards and expression evaluation order) remain in the
-hardening acceptance matrix. No interprocedural termination analysis is claimed.
+(including pattern selection and general expression evaluation order) remain
+in the hardening acceptance matrix. No interprocedural termination analysis
+is claimed.

@@ -2292,11 +2292,21 @@ impl<'a, 'db> Infer<'a, 'db> {
                     for pattern in arm.patterns {
                         self.infer_pattern(&mut local, pattern, scrutinee_type.clone(), false)?;
                     }
+                    let scrutinee_continues = alder_ast::flow::expression(scrutinee).falls_through;
                     if let Some(guard) = arm.guard {
-                        let guard_type = self.infer_expr(&local, guard, return_type.clone())?;
+                        let guard_type = self.with_reachability(scrutinee_continues, |this| {
+                            this.infer_expr(&local, guard, return_type.clone())
+                        })?;
                         self.unify(guard_type, self.named("Bool", Vec::new()), guard.region)?;
                     }
-                    let body = self.infer_expr(&local, arm.body, return_type.clone())?;
+                    let body = self.with_reachability(
+                        scrutinee_continues
+                            && arm.guard.is_none_or(|guard| {
+                                alder_ast::flow::expression(guard).falls_through
+                                    && !matches!(guard.value, Expr::Bool(false))
+                            }),
+                        |this| this.infer_expr(&local, arm.body, return_type.clone()),
+                    )?;
                     self.unify(body, result.clone(), arm.body.region)?;
                 }
                 Ok(self.prune(result))
@@ -2735,10 +2745,16 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<Ty<'a>, Error> {
         let left_type = self.infer_expr(env, left, return_type.clone())?;
         if op == BinOp::Pipe {
-            return self.infer_pipe_destination(env, right, left_type, left.region, return_type);
+            return self
+                .with_reachability(alder_ast::flow::expression(left).falls_through, |this| {
+                    this.infer_pipe_destination(env, right, left_type, left.region, return_type)
+                });
         }
 
-        let right_type = self.infer_expr(env, right, return_type)?;
+        let right_type = self
+            .with_reachability(alder_ast::flow::binary_rhs_reachable(op, left), |this| {
+                this.infer_expr(env, right, return_type)
+            })?;
         match op {
             BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Rem => {
                 self.unify(left_type.clone(), right_type, right.region)?;
