@@ -297,7 +297,8 @@ machinery as user errors.
 
 ## 11. Async contract
 
-`.await` remains postfix, and `.await?` is ordinary composition:
+`.await` is postfix. `.await?` is not a fused operator: it awaits a task and
+then applies ordinary `?` propagation to the resolved `Result`:
 
 ```alder
 fetch(url).await
@@ -310,14 +311,143 @@ Pipe forwarding happens before wrappers on the destination stage:
 request |> send(client).await?
 ```
 
-is `send(request, client).await?`. Pipe inference and lowering peel the
-wrappers, forward into the call, then reapply wrappers in source order.
+is `send(request, client).await?`. Inference and lowering recursively peel the
+postfix wrappers, forward into the underlying call, and reapply the wrappers in
+source order. Consequently the final stage can be awaited directly:
 
-During the async wave, `.await` marks its enclosing function task-producing.
-Task functions lower to generators and `.await` to the scheduler's `yield*`
-protocol. Non-task functions remain plain functions. The kernel owns fibers,
-cooperative interruption, child scopes, `fork`, `join`, `all`, `race`, timers,
-and task entry execution. `Task[Result[a]]` needs no combined runtime type.
+```alder
+value
+    |> prepare
+    |> startOperation().await?
+```
+
+This is `startOperation(prepare(value)).await?`; parentheses around the entire
+pipeline are accepted but unnecessary. If two asynchronous stages are
+sequential, each stage awaits before forwarding its resolved value:
+
+```alder
+value
+    |> startOperation().await?
+    |> transform().await?
+```
+
+Omitting `.await` deliberately leaves a `Task` value to return or pass onward.
+`await` is never interpreted as a function or standalone pipe target.
+
+An await outside nested lambdas marks its enclosing function or lambda as
+task-producing. The inferred callable result is `Task[a]`, while its body and
+ordinary return annotation describe `a`. A signature may explicitly write
+`Task[a]` to expose the task boundary. An explicitly `Task`-returning function
+with no await is an ordinary function whose body must itself return a task.
+Await sites inside a nested lambda belong to that lambda, not the outer
+function. Tests are also valid scheduler entry points; module-level expressions
+are not.
+
+Task-producing functions lower to plain JavaScript functions which return a
+fresh lazy `$task(function* () { ... })`. `.await` lowers to `yield* task`.
+Calling a task-producing function therefore performs no effects, and the same
+task value can be executed more than once. Non-task functions stay plain
+JavaScript functions. Generated entry modules call `$runMain`, which accepts
+either an ordinary value or a task. Test entries use the same runner.
+
+### Promise extern boundary
+
+For a non-kernel `#[extern("module", "symbol")]` function, a declared
+`Task[a]` return is the explicit promise-returning FFI contract. Generated code
+creates a task whose Promise thunk calls the foreign symbol only when the task
+runs, then delegates to `$tryPromise`. No ordinary extern value is probed and
+no arbitrary value becomes a task because it has a `then` property. Promise
+assimilation happens only after entering this explicitly declared boundary.
+Kernel externs declared `Task[a]` already return Alder tasks and pass through.
+
+Fulfillment supplies `a`. A synchronous throw, malformed non-Promise return, or
+raw rejection is an `AlderForeignDefect`, retaining the extern module/symbol
+and Alder declaration location. JavaScript has no trustworthy static rejection
+type, so raw rejection never invents an Alder error row. A declaration such as
+`Task[Result[a, e]]` means the Promise *fulfills* with Alder `Result` data;
+`.await?` then propagates `e` normally. `$tryPromise` has an internal rejection
+mapper seam for deliberate wrappers, but M4 does not expose a public mapper
+until the standard library has a typed foreign-error design.
+
+The optional third extern argument selects the cancellation ABI:
+
+```alder
+#[extern("./client.js", "request", "abort")]
+fn request(url: String) Task[Response]
+```
+
+`"abort"` requires a `Task` return. The bridge creates the controller before
+calling the thunk, appends its `AbortSignal`, and aborts once on interruption.
+Without that convention, interruption only invalidates the waiter: the foreign
+operation continues, its late fulfillment is ignored, and its late rejection
+remains observed to prevent unhandled-rejection noise. Unknown conventions are
+diagnostics.
+
+### Fiber ABI and lifecycle
+
+The generated-code ABI is deliberately small: `$task`, `$tryPromise`,
+`$runMain`, and the kernel operations underlying `Task.sleep` and
+`Fiber.fork`, `join`, `interrupt`, `all`, `race`, `scope`, `addFinalizer`, and
+`uninterruptible`. Operations are small tagged objects yielded by generators;
+compiler-generated JavaScript never depends on runtime classes.
+
+Every running fiber owns a scope and has one terminal `Success(value)` or
+`Failure(defect/interruption)` exit. Alder `Err` is ordinary successful data,
+not a runtime fiber failure. Completion is idempotent, observers are notified
+once, and registering an observer after or reentrantly during completion sees
+the same exit. Children are attached to their parent before they start.
+
+Parent completion closes its scope: live children are interrupted and joined,
+then finalizers run once in LIFO order. Nested scopes close inside-out.
+Finalizers are internally exit-aware and run uninterruptibly. A finalizer added
+while closure is draining joins that drain; one added after closure runs
+immediately with the final exit. A failing finalizer changes a successful exit
+to failure but does not prevent remaining finalizers from running.
+
+`Fiber.all` preserves input order. The first child defect/interruption
+interrupts every sibling and waits for all cleanup before failing; an Alder
+`Err` remains a normal array element. `Fiber.race` selects the first terminal
+exit exactly once, interrupts every loser, and waits for loser cleanup before
+publishing the winner. `Fiber.scope(task)` runs the task as an owned child and
+does not let it outlive the call.
+
+Interruption is cooperative. It is checked at yield and suspension boundaries.
+Suspended operations detach their observer or waiter; abort-aware Promise
+operations additionally abort their controller. An interruption requested in
+an uninterruptible region stays pending and is delivered after the mask is
+removed. Promise/callback double settlement and settlement after interruption
+cannot complete a fiber twice or resurrect it.
+
+The scheduler uses microtasks for ready work, never recursive interpreter
+calls. A fiber processes at most 1,024 operations before yielding through a
+host timer, preventing immediately-ready chains from starving the event loop.
+Fiber contexts are cloned at child construction so provider state is inherited
+without later sibling mutation leaks; compile-time provider checking remains
+the separate unfinished M4 context wave.
+
+### Effect v4 reference and divergences
+
+The runtime invariants were studied against Effect v4 at commit
+`bd393d63c19bdd0ab212d95576cec89051c8501c` (package version
+`4.0.0-rc.112`, MIT), especially its internal effect interpreter, fiber scope,
+scheduler, and `Effect.tryPromise` implementation. Alder reimplements the
+invariants; no Effect source is copied.
+
+Intentional divergences are:
+
+- Alder uses compiler-generated JavaScript generators and a small yielded
+  operation ABI instead of Effect's full instruction algebra.
+- Alder keeps its erased `Result` value as typed recoverable failure; it does
+  not reproduce Effect's `Cause`, checked-error channel, dependency `Context`,
+  tracing stack, supervision API, or public fiber-ref system.
+- Every Alder fiber owns its lexical child scope rather than exposing Effect's
+  general scope graph.
+- Scheduling uses one FIFO queue, a fixed 1,024-operation budget, microtasks,
+  and timer-based host yields rather than Effect's configurable scheduler.
+- Foreign rejection is one contextual `AlderForeignDefect`; interruption is a
+  distinct internal exit, and neither becomes a fabricated Alder error row.
+- Provider context cloning is only a future-compatible runtime seam. Static
+  provider requirement inference and discharge remain separate compiler work.
 
 ## 12. Context contract
 

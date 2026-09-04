@@ -26,9 +26,9 @@ vertical slice; async and context follow without weakening that slice.
   enclosing function's row.
 - There is no post-solve exhaustiveness pass yet. M4 must add one rather than
   "extend the M2 pass" described by the old plan.
-- `.await` currently requires an explicitly declared `Task` return during
-  canonicalization and emits JavaScript `await` in an `async` function. The
-  generator/fiber design and async inference have not landed.
+- At the start of M4, `.await` required an explicitly declared `Task` return
+  and emitted native JavaScript `await`. Wave 4 replaces that temporary path
+  with inferred task functions and the generator/fiber runtime.
 - `alder-report` already owns miette-backed diagnostics and source-span
   helpers. Parser and compiler diagnostics are rendered by the driver, with
   color disabled only in snapshot tests.
@@ -134,16 +134,22 @@ vertical slice; async and context follow without weakening that slice.
 
 ### Wave 4: async and context
 
-- [ ] Remove the explicit-Task canonicalization gate and infer asyncness.
-- [ ] Lower task functions/await to generators/`yield*`; implement scheduler,
-  fiber operations, scopes, interruption, and async entry points.
+- [x] Remove the explicit-Task canonicalization gate and infer asyncness.
+- [x] Define `Task[...]` externs as the explicit lazy Promise boundary, with
+  foreign defects, typed fulfilled `Result` values, and optional `"abort"`
+  convention.
+- [x] Lower task functions/await to direct Oxc generator/`yield*` ASTs;
+  implement scheduler, fiber operations, scopes, interruption, finalization,
+  async entry points, and forwarding-before-postfix pipe lowering.
 - [ ] Implement provider requirements, lexical discharge, interface storage,
   context propagation, and entry-point validation.
 
 ### Wave 5: sweep
 
-- [x] Update `SPEC.md`, language/runtime/tooling docs, and milestone checkboxes.
-- [x] Add granular Sampo changesets for every changed publishable crate.
+- [x] Update error-row documentation and release metadata.
+- [x] Update `SPEC.md`, language/runtime/codegen/effects docs, async examples,
+  and the async milestone checkbox.
+- [x] Add granular Sampo changesets for every async-affected publishable crate.
 - [x] Run `cargo fmt --all`, full Clippy with warnings denied, full tests,
   package verification for changed crates, and standalone e2e execution.
 

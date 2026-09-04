@@ -54,34 +54,69 @@ a library or a framework switch, not a target.
 
 The runtime is a hand-written TypeScript kernel shipped by the compiler,
 exposed to the Alder stdlib through `extern` (Elm's kernel model). It
-currently contains the M2 value ABI, structural equality, Option and Result
-helpers, collection primitives, context-stack scaffolding, and the minimal
-test registry. Later milestones add:
+contains the value ABI, structural equality, Option and Result helpers,
+collection primitives, the test registry, and M4's task/fiber scheduler.
+Later milestones add:
 
-- The fiber scheduler: generator-based (`yield*`), structured concurrency,
-  interruption, scopes, and the `Task` runner.
 - The signal graph used by components and stores.
 - The SSR renderer and hydration.
-- Context (`provide`/`use`) propagation across fibers and render trees.
+- Compile-time context (`provide`/`use`) validation and render-tree
+  propagation. Fiber-local runtime context inheritance is already in place.
 
 Everything above the kernel is written in Alder.
 
+### Tasks, fibers, and Promise externs
+
+A task is a reusable lazy factory for a JavaScript generator. Calling an Alder
+function inferred as asynchronous constructs the task without running its
+body. `$runMain` starts task-producing main and test entries. The scheduler
+resumes generators through small tagged operations, processes at most 1,024
+operations per turn, and yields to the host timer queue so ready work cannot
+starve I/O.
+
+Every fiber owns a scope. A child is registered before it starts; completing a
+parent interrupts and joins live children before running LIFO finalizers.
+Interruption is cooperative and remains pending through uninterruptible
+cleanup. `Fiber.all` is ordered and fail-fast for defects/interruption;
+`Fiber.race` selects the first exit, interrupts every loser, and waits for
+loser cleanup. Typed Alder `Err` values are data, not fiber defects.
+
+A non-kernel extern declared `Task[a]` is the explicit Promise boundary. The
+compiler emits a lazy thunk passed to `$tryPromise`; no ordinary extern result
+is dynamically promoted. Fulfillment produces `a`, while synchronous foreign
+throws, malformed returns, and raw rejections produce contextual foreign
+defects. A Promise fulfilling with `Result[a, e]` retains the ordinary typed
+`.await?` path.
+
+`#[extern("module", "symbol", "abort")]` opts into cancellation: the bridge
+creates an `AbortController` before invoking the thunk and appends its signal
+to the call. Other Promises are not claimed to be cancellable. Interruption
+invalidates their waiter while the bridge continues observing eventual
+rejection.
+
+The lifecycle, scope, scheduling, and Promise invariants were reimplemented
+with Effect v4 commit `bd393d63c19bdd0ab212d95576cec89051c8501c`
+(`4.0.0-rc.112`, MIT) as the semantic reference. Alder keeps a much smaller
+generator ABI and does not adopt Effect's instruction algebra, Cause model,
+Context API, tracing, or public fiber-ref system. See
+`docs/effects-internals.md` for exact behavior and divergences.
+
 ## Embedded runtime
 
-The `alder` binary embeds V8 through one exact Deno 2.8.1-compatible crate
-family. The versions are intentionally pinned in lockstep:
+The `alder` binary embeds V8 through one exact compatible Deno crate family.
+The versions are intentionally pinned in lockstep:
 
 | crate | version |
 | --- | --- |
-| `deno_core` | 0.402.0 |
-| `deno_webidl` | 0.249.0 |
-| `deno_web` | 0.280.0 |
-| `deno_crypto` | 0.263.0 |
-| `deno_fetch` | 0.273.0 |
-| `deno_fs` | 0.159.0 |
-| `deno_net` | 0.241.0 |
-| `deno_http` | 0.247.0 |
-| `deno_websocket` | 0.254.0 |
+| `deno_core` | 0.403.0 |
+| `deno_webidl` | 0.250.0 |
+| `deno_web` | 0.281.0 |
+| `deno_crypto` | 0.264.0 |
+| `deno_fetch` | 0.274.0 |
+| `deno_fs` | 0.160.0 |
+| `deno_net` | 0.242.0 |
+| `deno_http` | 0.248.0 |
+| `deno_websocket` | 0.255.0 |
 
 In this Deno family URL and console implementations live in `deno_web`, so
 there are no separate `deno_url` or `deno_console` crates. Alder installs its
