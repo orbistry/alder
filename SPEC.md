@@ -151,7 +151,9 @@ are kept through the redesign and adapted incrementally.
   modules: the driver compiles in dependency order and deep-copies each
   solved module's interface into a build-wide arena for its dependents.
   Sources are fetched in parallel, but type checking is
-  dependency-ordered.
+  dependency-ordered. Graph ordering breaks ties by source URI; compilation
+  depth groups and cycle traversal are sorted too. Package-aware resolution
+  and duplicate identity validation are tracked in the hardening plan.
 - **Caching:** Interface-only (always regenerate JavaScript), bincode serialization
 - **Invalidation:** Reverse dependency tracking for LSP
 - **Arenas:** Per-module bumpalo arenas

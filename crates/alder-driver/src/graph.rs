@@ -3,7 +3,7 @@
 //! Builds a graph of module dependencies by parsing import statements,
 //! performs topological sorting for compilation order, and detects cycles.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use url::Url;
 
 use crate::error::DriverError;
@@ -28,7 +28,9 @@ impl DepGraph {
     }
 
     /// Add a module to the graph with its imports.
-    pub fn add_module(&mut self, module: Url, imports: Vec<Url>) {
+    pub fn add_module(&mut self, module: Url, mut imports: Vec<Url>) {
+        imports.sort();
+        imports.dedup();
         self.edges.insert(module, imports);
     }
 
@@ -62,7 +64,7 @@ impl DepGraph {
         }
 
         // Start with nodes that have no dependencies (out-degree = 0)
-        let mut queue: VecDeque<&Url> = out_degree
+        let mut queue: BTreeSet<&Url> = out_degree
             .iter()
             .filter(|&(_, deg)| *deg == 0)
             .map(|(&node, _)| node)
@@ -72,7 +74,7 @@ impl DepGraph {
         let mut depths: HashMap<Url, usize> = HashMap::new();
 
         // Process nodes in order
-        while let Some(node) = queue.pop_front() {
+        while let Some(node) = queue.pop_first() {
             // Calculate depth: max depth of imports + 1
             let depth = self
                 .edges
@@ -97,7 +99,7 @@ impl DepGraph {
                     if let Some(deg) = out_degree.get_mut(importer) {
                         *deg -= 1;
                         if *deg == 0 {
-                            queue.push_back(importer);
+                            queue.insert(importer);
                         }
                     }
                 }
@@ -124,7 +126,8 @@ impl DepGraph {
         let mut stack: HashSet<&Url> = HashSet::new();
         let mut path: Vec<&Url> = Vec::new();
 
-        for start in self.edges.keys() {
+        let starts: BTreeSet<_> = self.edges.keys().collect();
+        for start in starts {
             if self.dfs_cycle(start, &mut visited, &mut stack, &mut path) {
                 // Format cycle as: A -> B -> C -> A
                 let cycle_str: Vec<String> = path.iter().map(|u| module_name_from_uri(u)).collect();
@@ -160,6 +163,8 @@ impl DepGraph {
         path.push(node);
 
         if let Some(imports) = self.edges.get(node) {
+            // `edges` is public, so do not depend on callers using add_module.
+            let imports: BTreeSet<_> = imports.iter().collect();
             for import in imports {
                 if self.dfs_cycle(import, visited, stack, path) {
                     return true;
@@ -186,6 +191,9 @@ impl DepGraph {
 
         for (module, &depth) in &self.depths {
             levels[depth].push(module);
+        }
+        for level in &mut levels {
+            level.sort();
         }
 
         levels
@@ -234,6 +242,57 @@ mod tests {
 
     fn url(path: &str) -> Url {
         Url::parse(&format!("file:///{}", path)).unwrap()
+    }
+
+    #[test]
+    fn discovery_and_import_order_do_not_change_build_order() {
+        let expected = vec![url("A.ald"), url("B.ald"), url("Main.ald")];
+        for iteration in 0..32 {
+            let mut graph = DepGraph::new();
+            let mut modules = vec![
+                (url("Main.ald"), vec![url("B.ald"), url("A.ald")]),
+                (url("B.ald"), vec![]),
+                (url("A.ald"), vec![]),
+            ];
+            modules.rotate_left(iteration % 3);
+            for (module, mut imports) in modules {
+                if iteration % 2 == 0 {
+                    imports.reverse();
+                }
+                graph.add_module(module, imports);
+            }
+            graph.compute_order().unwrap();
+            assert_eq!(graph.order, expected);
+            assert_eq!(
+                graph
+                    .levels()
+                    .into_iter()
+                    .flatten()
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                expected,
+            );
+        }
+    }
+
+    #[test]
+    fn cycle_diagnostics_do_not_depend_on_discovery_order() {
+        for iteration in 0..32 {
+            let mut graph = DepGraph::new();
+            let mut modules = vec![
+                (url("A.ald"), vec![url("C.ald"), url("B.ald")]),
+                (url("B.ald"), vec![url("A.ald")]),
+                (url("C.ald"), vec![url("A.ald")]),
+            ];
+            modules.rotate_left(iteration % 3);
+            for (module, imports) in modules {
+                graph.add_module(module, imports);
+            }
+            assert_eq!(
+                graph.compute_order().unwrap_err().to_string(),
+                "import cycle detected: A -> B -> A",
+            );
+        }
     }
 
     #[test]

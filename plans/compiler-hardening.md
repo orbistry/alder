@@ -64,6 +64,19 @@ current reparse/comment comparison cannot detect changed literal values.
 Root cause: suffix-based graph resolution chooses one candidate; later maps
 collapse duplicate canonical identities in nondeterministic traversal order.
 
+Graph ordering checkpoint: permanent tests reproduced nondeterministic build
+order and cycle selection. The ready queue now chooses the smallest source URI,
+depth groups are sorted, and cycle DFS visits sorted roots/imports. Tests shuffle
+discovery and import order across 32 independently allocated graphs. This only
+fixes graph ordering: duplicate rejection and package/source-root-aware identity
+remain open. In particular, `module_id_from_uri` splits on the first `/src/`,
+while `resolve_source_import` ignores both its current module and package context;
+both must be replaced by the same explicit identity mapping used by compilation.
+Checkpoint validation: both new regressions failed before the fix and pass
+after it; all 81 driver tests, full workspace tests (including CLI execution),
+strict all-target/all-feature Clippy, and formatting checks pass. No snapshots
+changed or remain pending. Final release packaging remains an open gate.
+
 ### 5 and 11. Control flow and loop results
 
 - [ ] Regressions for Number-returning zero-iteration loops and valued `break`.
