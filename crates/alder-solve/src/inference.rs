@@ -1197,6 +1197,8 @@ struct Infer<'a, 'db> {
     generic_contracts: Vec<GenericContract<'a>>,
     annotation_scope: BTreeMap<&'a str, Ty<'a>>,
     active_scc: BTreeSet<QualifiedName<'a>>,
+    loop_results: Vec<Ty<'a>>,
+    reachable: bool,
 }
 
 pub fn run<'a>(
@@ -1256,6 +1258,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             generic_contracts: Vec::new(),
             annotation_scope: BTreeMap::new(),
             active_scc: BTreeSet::new(),
+            loop_results: Vec::new(),
+            reachable: true,
         }
     }
 
@@ -1872,24 +1876,52 @@ impl<'a, 'db> Infer<'a, 'db> {
         inferred
     }
 
+    fn with_reachability<T>(
+        &mut self,
+        reachable: bool,
+        infer: impl FnOnce(&mut Self) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let outer = self.reachable;
+        self.reachable &= reachable;
+        let result = infer(self);
+        self.reachable = outer;
+        result
+    }
+
     fn infer_block(
         &mut self,
         env: &mut Env<'a>,
         block: &'a Located<Block<'a>>,
         return_type: Option<Ty<'a>>,
     ) -> Result<Ty<'a>, Error> {
-        for statement in block.value.statements {
-            self.infer_stmt(env, statement, return_type.clone())?;
-        }
-        let result = match block.value.tail {
-            Some(tail) => self.infer_expr(env, tail, return_type),
-            None => Ok(Ty::Unit),
-        }?;
-        if alder_ast::flow::block(block).falls_through {
-            Ok(result)
-        } else {
-            Ok(self.fresh())
-        }
+        self.with_reachability(true, |this| {
+            for statement in block.value.statements {
+                this.infer_stmt(env, statement, return_type.clone())?;
+                this.reachable &= alder_ast::flow::statement(statement).falls_through;
+            }
+            let result = match block.value.tail {
+                Some(tail) => this.infer_expr(env, tail, return_type),
+                None => Ok(Ty::Unit),
+            }?;
+            if alder_ast::flow::block(block).falls_through {
+                Ok(result)
+            } else {
+                Ok(this.fresh())
+            }
+        })
+    }
+
+    fn infer_loop_body(
+        &mut self,
+        env: &mut Env<'a>,
+        block: &'a Located<Block<'a>>,
+        return_type: Option<Ty<'a>>,
+        result: Ty<'a>,
+    ) -> Result<Ty<'a>, Error> {
+        self.loop_results.push(result);
+        let body = self.infer_block(env, block, return_type);
+        self.loop_results.pop();
+        body
     }
 
     fn infer_stmt(
@@ -1940,7 +1972,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                 )?;
                 let mut nested = env.clone();
                 self.infer_pattern(&mut nested, pattern, item, false)?;
-                self.infer_block(&mut nested, body, return_type)?;
+                self.with_reachability(alder_ast::flow::expression(iter).falls_through, |this| {
+                    this.infer_loop_body(&mut nested, body, return_type, Ty::Unit)
+                })?;
             }
             Stmt::While { condition, body } => {
                 let condition_type = self.infer_expr(env, condition, return_type.clone())?;
@@ -1949,7 +1983,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.named("Bool", Vec::new()),
                     condition.region,
                 )?;
-                self.infer_block(&mut env.clone(), body, return_type)?;
+                self.with_reachability(
+                    alder_ast::flow::expression(condition).falls_through
+                        && !matches!(condition.value, Expr::Bool(false)),
+                    |this| this.infer_loop_body(&mut env.clone(), body, return_type, Ty::Unit),
+                )?;
             }
             Stmt::Return(value) => {
                 let expected = return_type.unwrap_or(Ty::Unit);
@@ -1960,8 +1998,19 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.unify_return(actual, expected, statement.region)?;
             }
             Stmt::Break(value) => {
-                if let Some(value) = value {
-                    self.infer_expr(env, value, return_type)?;
+                let actual = match value {
+                    Some(value) => self.infer_expr(env, value, return_type)?,
+                    None => Ty::Unit,
+                };
+                let expected = self
+                    .loop_results
+                    .last()
+                    .cloned()
+                    .expect("canonicalization rejects break outside a loop");
+                if self.reachable
+                    && value.is_none_or(|value| alder_ast::flow::expression(value).falls_through)
+                {
+                    self.unify(actual, expected, statement.region)?;
                 }
             }
             Stmt::Continue => {}
@@ -2187,7 +2236,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                     (declared_result.clone(), declared_result)
                 };
                 let outer_annotation_scope = std::mem::replace(&mut self.annotation_scope, vars);
+                let outer_loops = std::mem::take(&mut self.loop_results);
+                let outer_reachable = std::mem::replace(&mut self.reachable, true);
                 let body_type = self.infer_expr(&local, body, Some(body_result.clone()));
+                self.reachable = outer_reachable;
+                self.loop_results = outer_loops;
                 self.annotation_scope = outer_annotation_scope;
                 let body_type = body_type?;
                 self.unify(body_type, body_result, region)?;
@@ -2198,19 +2251,28 @@ impl<'a, 'db> Infer<'a, 'db> {
                 final_else,
             } => {
                 let result = self.fresh();
+                let mut remaining = self.reachable;
                 for branch in *branches {
-                    let condition = self.infer_expr(env, branch.condition, return_type.clone())?;
+                    let condition = self.with_reachability(remaining, |this| {
+                        this.infer_expr(env, branch.condition, return_type.clone())
+                    })?;
                     self.unify(
                         condition,
                         self.named("Bool", Vec::new()),
                         branch.condition.region,
                     )?;
-                    let body =
-                        self.infer_block(&mut env.clone(), branch.body, return_type.clone())?;
+                    remaining &= alder_ast::flow::expression(branch.condition).falls_through;
+                    let body = self.with_reachability(
+                        remaining && !matches!(branch.condition.value, Expr::Bool(false)),
+                        |this| this.infer_block(&mut env.clone(), branch.body, return_type.clone()),
+                    )?;
                     self.unify(body, result.clone(), branch.body.region)?;
+                    remaining &= !matches!(branch.condition.value, Expr::Bool(true));
                 }
                 if let Some(final_else) = final_else {
-                    let body = self.infer_block(&mut env.clone(), final_else, return_type)?;
+                    let body = self.with_reachability(remaining, |this| {
+                        this.infer_block(&mut env.clone(), final_else, return_type)
+                    })?;
                     self.unify(body, result.clone(), final_else.region)?;
                 } else {
                     self.unify(Ty::Unit, result.clone(), region)?;
@@ -2240,9 +2302,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                 Ok(self.prune(result))
             }
             Expr::Loop(block) => {
-                self.infer_block(&mut env.clone(), block, return_type)?;
+                let result = self.fresh();
+                self.infer_loop_body(&mut env.clone(), block, return_type, result.clone())?;
                 if alder_ast::flow::expression(expression).falls_through {
-                    Ok(Ty::Unit)
+                    Ok(self.prune(result))
                 } else {
                     Ok(self.fresh())
                 }

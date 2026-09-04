@@ -43,6 +43,36 @@ fn break_payload_effects() Number {
     Array.length(values)
 }
 
+fn nested_loop_values(flag: Bool) Number {
+    loop {
+        let inner: String = loop { break "inner" }
+        assert(inner == "inner")
+        while true { break }
+        for value in [1] { break }
+        if flag { return 41 }
+        break 42
+    }
+}
+
+fn awaited_loop_value() Number {
+    loop {
+        Task.sleep(1).await
+        break 42
+    }
+}
+
+fn loop_payload_once() Number {
+    let values = []
+    let result: Number = loop {
+        break {
+            Array.push(values, 42)
+            Array.length(values)
+        }
+    }
+    assert(result == 1)
+    Array.length(values)
+}
+
 pub fn main() {
     assert(choose(true) == 42)
     assert(choose(false) == 43)
@@ -58,4 +88,10 @@ pub fn main() {
     assert(loop_tail_return(false) == 43)
     assert(loop_tail_effects() == 2)
     assert(break_payload_effects() == 1)
+    assert(nested_loop_values(true) == 41)
+    assert(nested_loop_values(false) == 42)
+    assert(awaited_loop_value().await == 42)
+    assert(loop_payload_once() == 1)
+    let unit = loop { break }
+    assert(unit == ())
 }

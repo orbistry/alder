@@ -8,6 +8,72 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn loop_break_values_determine_the_result_type() {
+    let source = indoc! {r#"
+        fn answer() Number { loop { break 42 } }
+        fn nested() Number {
+            loop {
+                let inner: String = loop { break "inner" }
+                while false { break }
+                break 42
+            }
+        }
+        fn suspended() Number {
+            loop {
+                Task.sleep(1).await
+                break 42
+            }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn incompatible_breaks_and_statement_loop_values_are_rejected() {
+    for source in [
+        indoc! {r#"
+            fn incompatible(flag: Bool) {
+                loop {
+                    if flag { break 42 }
+                    break "wrong"
+                }
+            }
+        "#},
+        indoc! {r#"
+            fn incompatible(flag: Bool) {
+                loop {
+                    if flag { break }
+                    break 42
+                }
+            }
+        "#},
+        "fn incompatible() { while true { break 42 } }",
+        "fn incompatible() { for value in [42] { break value } }",
+    ] {
+        assert!(infer(&Bump::new(), source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn unreachable_breaks_do_not_constrain_a_live_loop_result() {
+    let source = indoc! {r#"
+        fn after_break() Number {
+            loop {
+                break 42
+                break "unreachable"
+            }
+        }
+        fn false_branch() Number {
+            loop {
+                if false { break "unreachable" }
+                break 42
+            }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
 fn zero_iteration_loops_do_not_satisfy_a_return_contract() {
     for source in [
         indoc! {r#"

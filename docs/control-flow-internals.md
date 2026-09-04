@@ -20,7 +20,16 @@ their effects. Break payloads are evaluated even when the surrounding statement
 loop has no result slot. While/for bodies isolate themselves from enclosing
 loop-expression result slots.
 
-This is an initial control-flow checkpoint, not the entire loop implementation:
-valued-break inference, further unreachable-path constraints, function-boundary
-loop targets, and additional expression-order interactions remain in the
+Each loop expression owns a fresh result variable. Reachable break payloads
+unify with that variable; a bare break supplies unit. While/for bodies use a
+unit target instead, and nested loops do not constrain an enclosing target.
+Lambda inference saves and clears the target stack, restoring it afterward.
+A loop with no structurally reachable exit remains divergent rather than
+producing unit.
+
+Inference tracks reachability across block statements and literal conditional
+branches so a break after another unconditional exit, or inside `if false`,
+does not determine a live loop's result. Unreachable code is still inferred
+and subject to ordinary type checks. Further unreachable-path constraints
+(including match guards and expression evaluation order) remain in the
 hardening acceptance matrix. No interprocedural termination analysis is claimed.

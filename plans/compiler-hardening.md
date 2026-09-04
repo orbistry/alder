@@ -79,7 +79,7 @@ changed or remain pending. Final release packaging remains an open gate.
 
 ### 5 and 11. Control flow and loop results
 
-- [ ] Regressions for Number-returning zero-iteration loops and valued `break`.
+- [x] Regressions for Number-returning zero-iteration loops and valued `break`.
 - [x] Explicit fallthrough/divergence model, distinct from contains-return.
 - [ ] Each loop owns a result variable and the correct break/continue target.
 - [ ] Check blocks, branches, matches, early exits, `?`, lambdas, functions,
@@ -157,6 +157,22 @@ Root cause: virtual module imports lack a physical importer location.
 - [ ] Identify inactive Elm-era Rust modules and correct obsolete claims.
 
 ## Evidence log
+
+- Loop-result checkpoint: positive valued/nested/async loops and negative
+  incompatible break/statement-loop cases failed before target-stack inference.
+  Each loop now owns a result type; bare breaks supply unit and while/for
+  targets require unit. Lambda inference clears enclosing loop targets.
+  An additional failing regression exposed dead breaks constraining live results;
+  block sequencing and literal conditional reachability now isolate those exits.
+  All 138 solver integration tests pass. Executed CLI fixtures verify nested
+  String/Number loops, enclosing early return, statement-loop isolation, async
+  loop values, unit breaks, and exactly-once payload effects. Match guards and
+  general expression-sequencing reachability remain open, as does the broader
+  flow/diagnostic acceptance matrix.
+  Validation: full workspace tests, strict all-target/all-feature Clippy,
+  formatting, and diff checks pass. No snapshots changed or remain pending.
+  The original `loops` CLI counterexample now executes successfully and prints
+  42. Release packaging remains a final acceptance gate.
 
 - Control-flow checkpoint: four solver regressions failed before the change:
   zero-iteration loops could satisfy a return contract, all-return branches and
