@@ -355,6 +355,13 @@ Interruption therefore unwinds these frames through ordinary generator
 completion participates in the shared operation budget. Sequential awaits
 do not create child fibers or child scopes.
 
+Malformed yielded operations and synchronous operation-handler exceptions are
+thrown back into the yielding iterator. They therefore follow the same cleanup
+and caller-unwinding path as Promise failure rather than closing the fiber
+behind its suspended generators. The shared drain restores its queue bookkeeping
+in `finally`, so an escaping internal exception cannot leave the queue marked
+as permanently scheduled.
+
 Calling a task-producing function therefore performs no effects, and the same
 task value can be executed more than once. Non-task functions stay plain
 JavaScript functions. Generated entry modules call `$runMain`, which accepts

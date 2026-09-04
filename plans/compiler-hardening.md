@@ -176,10 +176,20 @@ Root cause: virtual module imports lack a physical importer location.
   formatting, and diff checks pass. Kernel packaging verifies successfully.
   No snapshots changed or remain pending. Final changed-crate packaging and
   the full acceptance audit remain open.
-- Follow-up from task-frame review: malformed yielded operations currently
-  close the fiber directly, bypassing iterator `finally` blocks. Reproduce and
-  route these defects through normal unwinding; also audit unexpected operation
-  handler exceptions so the shared ready queue cannot be left wedged.
+- Operation-defect checkpoint: a null-operation regression confirmed that
+  directly closing the fiber skipped nested generator finally blocks. A
+  throwing operation-tag getter also escaped into the host event loop. Invalid
+  operations and synchronous handler exceptions now resume the yielding
+  iterator with throw, preserving suspended cleanup and caller unwinding.
+  Queue bookkeeping is restored in finally. Tests include null operations,
+  a throwing tag getter, a Mask-handler coercion failure, suspending cleanup,
+  and unrelated concurrent work completing normally. Revisited the pinned
+  Effect interpreter exception boundary; Alder uses iterative throw resumption
+  rather than recursive interpreter reentry, and no code was copied.
+  Validation: all thirteen kernel tests, full workspace tests including CLI
+  execution, strict Clippy, formatting, and diff checks pass. Kernel packaging
+  verifies successfully. No snapshots changed or remain pending. Broader
+  runtime and compiler acceptance work remains open.
 
 - Scheduler-budget checkpoint: the original Node probe printed `false` for
   timer progress across 10,000 fulfilled Promise awaits. A permanent bounded

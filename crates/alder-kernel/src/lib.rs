@@ -331,6 +331,63 @@ for (const interrupt of [false, true]) {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn malformed_operations_unwind_task_cleanup() {
+        let harness = r#"
+let cleaned = 0;
+let observed;
+try {
+    await $runTask($task(function* () {
+        try {
+            yield* $task(function* () {
+                try { yield null; }
+                finally { yield* $tryPromise(() => Promise.resolve()); cleaned++; }
+            });
+        } finally { cleaned++; }
+    }));
+} catch (error) { observed = error; }
+if (!(observed instanceof TypeError)) throw new Error("missing invalid-operation defect");
+if (cleaned !== 2) throw new Error("invalid operation skipped task cleanup");
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn operation_handler_exceptions_do_not_strand_the_scheduler() {
+        let harness = r#"
+const expected = new Error("operation getter failed");
+for (const operation of [
+    { get $() { throw expected; } },
+    { $: "Mask", delta: Symbol("invalid delta") },
+]) {
+    let cleaned = 0;
+    const bad = $runTask($task(function* () {
+        try { yield operation; }
+        finally { yield* $tryPromise(() => Promise.resolve()); cleaned++; }
+    }));
+    const good = $runTask($task(function* () { return 42; }));
+    let timer;
+    let exits;
+    try {
+        exits = await Promise.race([
+            Promise.allSettled([bad, good]),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error("scheduler was stranded")), 1000);
+            }),
+        ]);
+    } finally { clearTimeout(timer); }
+    if (exits[0].status !== "rejected") throw new Error("operation failure disappeared");
+    if (exits[0].reason !== expected && !(exits[0].reason instanceof TypeError)) {
+        throw exits[0].reason;
+    }
+    if (cleaned !== 1 || exits[1].value !== 42) throw new Error("operation failure damaged other work");
+}
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn fiber_runtime_obeys_lifecycle_and_promise_invariants() {
         let harness = r#"
 const check = (condition, message) => { if (!condition) throw new Error(message); };

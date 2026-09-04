@@ -799,11 +799,19 @@ class FiberImpl {
                     this.beginClose(success(step.value));
                     return;
                 }
-                if (!step.value || typeof step.value.$ !== "string") {
-                    this.beginClose(failure(new TypeError("A task yielded an invalid runtime operation")));
-                    return;
+                try {
+                    const operation = step.value;
+                    if (!operation || typeof operation.$ !== "string") {
+                        throw new TypeError("A task yielded an invalid runtime operation");
+                    }
+                    if (this.handle(operation)) return;
+                } catch (error) {
+                    // A rejected operation fails at the yield site, just like
+                    // a rejected Promise. Do not skip this iterator's finally
+                    // blocks or its caller frames by closing the fiber here.
+                    this.resumeMethod = "throw";
+                    this.resumeValue = error;
                 }
-                if (this.handle(step.value)) return;
             }
             if (this.state === "Running") schedule(this);
         } finally {
@@ -1126,14 +1134,17 @@ function scheduleDrain() {
 
 function drainReadyFibers() {
     let index = 0;
-    while (index < readyFibers.length && operationsRemaining > 0) {
-        const fiber = readyFibers[index++];
-        fiber.queued = false;
-        fiber.run();
+    try {
+        while (index < readyFibers.length && operationsRemaining > 0) {
+            const fiber = readyFibers[index++];
+            fiber.queued = false;
+            fiber.run();
+        }
+    } finally {
+        readyFibers = readyFibers.slice(index);
+        drainScheduled = false;
+        scheduleDrain();
     }
-    readyFibers = readyFibers.slice(index);
-    drainScheduled = false;
-    scheduleDrain();
 }
 
 function runFinalizer(task, context) {
