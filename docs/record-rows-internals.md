@@ -84,9 +84,10 @@ updates, independent instantiations, two distinct tails, inferred field
 requirements, and optional results. Driver tests exercise owned-interface
 binary serialization and rehydration after source-arena destruction, retaining
 tail identity and optional presence, plus negative imported compatibility cases.
-This does not complete the interface audit: record type aliases were found to
-remain nominal named types rather than expanding in active canonicalization.
-The alias reproduction and required follow-up are recorded in the hardening plan.
+That audit exposed aliases remaining nominal instead of expanding. Core local
+and imported alias expansion is now implemented, and the CLI fixture uses
+actual optional-record and generic aliases. Remaining alias/interface acceptance
+work is tracked in `type-alias-hardening.md` and the hardening plan.
 
 ## Required representation and operations
 

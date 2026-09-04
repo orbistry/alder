@@ -523,6 +523,44 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Final gates
 
+- Alias follow-up: reproduced rejection of an AbortSignal extern returning a
+  chained Task alias; the canonical Task check now unwraps alias targets, as
+  codegen already did. Both canonicalizer and executable Promise-backed CLI
+  regressions pass. Added passing tests for open/concrete record-row arguments,
+  capture avoidance with swapped caller/declaration variable names, and rejection
+  of generic specialization or incompatible payloads through aliases. Core
+  checkpoint validation passes: full workspace tests (170 solver integration,
+  63 canonicalizer and 89 driver tests), strict all-target/all-feature Clippy,
+  formatting and diff checks. One existing inference snapshot was deliberately
+  corrected and one new no-color diagnostic snapshot reviewed; none are pending.
+  Higher-kinded/error-row/interface acceptance work
+  remains explicit in `docs/type-alias-hardening.md`.
+
+- Alias expansion checkpoint: registered imported definitions by canonical
+  identity and local definitions in dependency order; type references now emit
+  instantiated Filled alias targets. Added capture-avoiding canonical type
+  substitution. All three initial solver regressions pass, and the CLI records
+  fixture now executes imported optional and generic aliases. Reviewed the one
+  changed existing snapshot (Wrapped now correctly expands to Result). Strict
+  Clippy and full workspace tests pass (167 solver integration tests); acceptance work listed
+  in `docs/type-alias-hardening.md` remains open. Changes remain uncommitted.
+
+- Alias implementation in progress: added iterative dependency-first alias
+  ordering and cycle rejection before enum/trait canonicalization in both full
+  and header-only modes. All 62 canonicalizer tests pass, including direct and
+  indirect cycles and shared dependency ordering. Reviewed the new no-color
+  recursive-alias diagnostic snapshot. Alias expansion/substitution is still
+  unimplemented, so the three new solver regression tests remain failing.
+  The worktree is intentionally uncommitted pending a coherent green fix.
+
+- Alias investigation baseline: added intended-contract solver regressions for
+  optional record aliases, generic forward-reference chains, independent
+  instantiations, and generic identity aliases, plus a canonicalization test for
+  recursive aliases in full/header-only modes. They are failing regressions,
+  not completed fixes. Read `docs/type-alias-hardening.md` for the traced active
+  path, Elm references, and required substitution/interface work. No production
+  code has changed in this baseline; do not commit it as a completed green fix.
+
 - Cross-module record evidence: the records CLI fixture now imports a separate
   `rows` module, independently instantiates a row-preserving rename function,
   reads two inferred fields, preserves two independent input/output tails,

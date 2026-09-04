@@ -87,6 +87,10 @@ pub enum ItemError<'a> {
 #[derive(Clone, Debug)]
 pub enum TypeError<'a> {
     Name(NameError<'a>),
+    RecursiveAlias {
+        name: &'a str,
+    },
+    InvalidAliasArgument,
     BadArity {
         name: &'a str,
         expected: usize,

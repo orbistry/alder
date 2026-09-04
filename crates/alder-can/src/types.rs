@@ -10,6 +10,82 @@ use bumpalo::Bump;
 use crate::environment::Env;
 use crate::{Error, ErrorKind, TypeError};
 
+/// Dependency-first order for local aliases. Enums deliberately remain nominal
+/// boundaries; an alias naming an enum does not expand its payload recursively.
+pub(crate) fn alias_order<'a>(
+    source: &alder_source::Module<'a>,
+) -> Result<Vec<&'a alder_source::TypeAlias<'a>>, Vec<Error<'a>>> {
+    let aliases: BTreeMap<_, _> = source
+        .items
+        .iter()
+        .filter_map(|item| match item.value.kind {
+            alder_source::ItemKind::TypeAlias(alias) => Some((alias.name.value, alias)),
+            _ => None,
+        })
+        .collect();
+    let mut dependencies = BTreeMap::new();
+    for (&name, alias) in &aliases {
+        let mut pending = vec![alias.typ];
+        let mut names = BTreeSet::new();
+        while let Some(typ) = pending.pop() {
+            match typ.value {
+                SourceType::Named { path, args } => {
+                    if path.segments.len() == 1 && aliases.contains_key(path.segments[0].value) {
+                        names.insert(path.segments[0].value);
+                    }
+                    pending.extend(args);
+                }
+                SourceType::Var { args, .. } => pending.extend(args),
+                SourceType::Fn { params, ret } => {
+                    pending.extend(params);
+                    pending.push(ret);
+                }
+                SourceType::Tuple {
+                    first,
+                    second,
+                    rest,
+                } => {
+                    pending.extend([first, second]);
+                    pending.extend(rest);
+                }
+                SourceType::Record { fields, .. } => {
+                    pending.extend(fields.iter().map(|field| field.typ))
+                }
+                SourceType::ErrorRow { tags, .. } => {
+                    for tag in tags {
+                        pending.extend(tag.args);
+                    }
+                }
+                SourceType::Hole | SourceType::Unit => {}
+            }
+        }
+        dependencies.insert(name, names);
+    }
+    let mut active = BTreeSet::new();
+    let mut finished = BTreeSet::new();
+    let mut ordered = Vec::new();
+    for &root in aliases.keys() {
+        let mut pending = vec![(root, false)];
+        while let Some((name, exiting)) = pending.pop() {
+            if exiting {
+                active.remove(name);
+                finished.insert(name);
+                ordered.push(aliases[name]);
+            } else if !finished.contains(name) {
+                if !active.insert(name) {
+                    return Err(vec![Error::new(
+                        aliases[name].name.region,
+                        ErrorKind::Type(TypeError::RecursiveAlias { name }),
+                    )]);
+                }
+                pending.push((name, true));
+                pending.extend(dependencies[name].iter().rev().map(|&name| (name, false)));
+            }
+        }
+    }
+    Ok(ordered)
+}
+
 pub fn canonicalize_type<'a>(
     bump: &'a Bump,
     env: &Env<'a>,
@@ -56,6 +132,15 @@ pub fn canonicalize_type<'a>(
                         actual: args.len(),
                     }),
                 )]);
+            }
+            if let Some(alias) = env.aliases.get(&binding.reference) {
+                return crate::aliases::instantiate(
+                    bump,
+                    binding.reference,
+                    alias,
+                    args,
+                    source.region,
+                );
             }
             CanType::Named {
                 reference: binding.reference,
@@ -187,6 +272,12 @@ pub fn canonicalize_impl_head_type<'a>(
 }
 
 pub(crate) fn is_task_type(typ: &Located<CanType<'_>>) -> bool {
+    if let CanType::Alias { target, .. } = typ.value {
+        let target = match target {
+            alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => target,
+        };
+        return is_task_type(target);
+    }
     matches!(
         typ.value,
         CanType::Named {
@@ -275,6 +366,21 @@ fn canonicalize_extension<'a>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn aliases_are_ordered_after_dependencies_without_repeating_shared_nodes() {
+        let bump = bumpalo::Bump::new();
+        let text = bump.alloc_str(indoc::indoc! {r#"
+            type Root = (Left, Right)
+            type Right = Leaf
+            type Left = Leaf
+            type Leaf = Number
+        "#});
+        let source = alder_parse::parse_module(&bump, text).unwrap();
+        let order = super::alias_order(&source).unwrap();
+        let names: Vec<_> = order.iter().map(|alias| alias.name.value).collect();
+        assert_eq!(names, ["Leaf", "Left", "Right", "Root"]);
+    }
+
     use alder_ast::{ModuleId, PackageId};
     use bumpalo::Bump;
 

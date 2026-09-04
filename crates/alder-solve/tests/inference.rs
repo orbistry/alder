@@ -8,6 +8,96 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn record_aliases_substitute_open_and_concrete_row_arguments() {
+    let source = indoc! {r#"
+        type WithX[r] = { r | x: Number }
+        fn preserve(record: WithX[r]) WithX[r] { record }
+        fn run() String {
+            let record: WithX[{ label: String }] = { x: 42, label: "kept" }
+            preserve(record).label
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn alias_expansion_does_not_capture_caller_variable_names() {
+    let source = indoc! {r#"
+        type Pair[a, b] = (a, b)
+        fn swap_names(left: b, right: a) Pair[b, a] { (left, right) }
+        fn run() String { swap_names(42, "kept").1 }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn aliases_cannot_hide_generic_specialization_or_wrong_payloads() {
+    for source in [
+        indoc! {r#"
+            type Identity[a] = a
+            fn invalid(value: a) Identity[a] { 42 }
+        "#},
+        indoc! {r#"
+            type Boxed[a] = { value: a }
+            fn read(record: Boxed[String]) String { record.value }
+            fn run() String { read({ value: 42 }) }
+        "#},
+    ] {
+        assert!(infer(&Bump::new(), source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn record_aliases_expand_at_value_boundaries() {
+    let source = indoc! {r#"
+        type OptionalName = { name?: String }
+        fn choose(flag: Bool, record: OptionalName) {
+            if flag { { name: "present" } } else { record }
+        }
+        fn run() Option[String] { choose(false, {}).name }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn generic_aliases_substitute_independently_through_forward_references() {
+    let source = indoc! {r#"
+        type Outer[a] = Inner[a]
+        type Inner[b] = { value: b }
+        fn number(record: Outer[Number]) Number { record.value }
+        fn text(record: Outer[String]) String { record.value }
+        fn run() Number {
+            let label: String = text({ value: "hello" })
+            number({ value: 42 })
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn alias_expansion_preserves_a_generic_contract() {
+    let source = indoc! {r#"
+        type Identity[a] = a
+        fn identity(value: a) Identity[a] { value }
+        fn run() Number {
+            let label: String = identity("hello")
+            identity(42)
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
 fn loop_results_preserve_optional_fields_in_both_break_orders() {
     for source in [
         indoc! {r#"

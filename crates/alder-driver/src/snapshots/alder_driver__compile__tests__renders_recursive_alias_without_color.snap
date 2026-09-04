@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "type First = { next: Second }\ntype Second = Array[First]\n"
+---
+alder::canonicalize::recursive_alias
+
+  × type alias `First` refers back to itself
+   ╭─[/project/src/main.ald:1:6]
+ 1 │ type First = { next: Second }
+   ·      ──┬──
+   ·        ╰── reported here
+ 2 │ type Second = Array[First]
+   ╰────
+  help: an alias must expand to a finite type; use an enum to represent
+        recursive data

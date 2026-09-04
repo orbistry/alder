@@ -1715,6 +1715,18 @@ fn item_error(error: &ItemError<'_>) -> CanDetails {
 fn type_error(error: &TypeError<'_>) -> CanDetails {
     match error {
         TypeError::Name(error) => name_error(error),
+        TypeError::RecursiveAlias { name } => (
+            "recursive_alias",
+            format!("type alias `{name}` refers back to itself"),
+            Some("an alias must expand to a finite type; use an enum to represent recursive data".to_owned()),
+            None,
+        ),
+        TypeError::InvalidAliasArgument => (
+            "invalid_alias_argument",
+            "this alias argument cannot be used in the required type or row position".to_owned(),
+            Some("check the argument's kind and any overlapping row fields".to_owned()),
+            None,
+        ),
         TypeError::BadArity {
             name,
             expected,

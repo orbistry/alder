@@ -82,6 +82,7 @@ pub struct ControlContext {
 #[derive(Clone, Debug)]
 pub struct Env<'a> {
     pub home: ModuleId<'a>,
+    pub(crate) aliases: BTreeMap<QualifiedName<'a>, crate::aliases::Definition<'a>>,
     pub scopes: Vec<Scope<'a>>,
     pub types: BTreeMap<&'a str, Candidate<'a, TypeBinding<'a>>>,
     pub enums: BTreeMap<&'a str, Candidate<'a, EnumBinding<'a>>>,
@@ -99,6 +100,7 @@ impl<'a> Env<'a> {
     pub fn new(bump: &'a Bump, home: ModuleId<'a>) -> Self {
         let mut env = Self {
             home,
+            aliases: BTreeMap::new(),
             scopes: vec![Scope::default()],
             types: BTreeMap::new(),
             enums: BTreeMap::new(),

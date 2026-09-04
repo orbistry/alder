@@ -62,6 +62,42 @@ fn canonicalize_mode<'a>(
     let mut env = Env::new(bump, context.home);
     let mut errors = load_imports(bump, &mut env, context.imports, context.interfaces);
     errors.extend(predeclare(&mut env, source));
+    let alias_order = crate::types::alias_order(source)?;
+    for interface in context.interfaces {
+        for typ in interface.types {
+            if let alder_ast::PublicTypeBody::Alias(body) = typ.body {
+                env.aliases.insert(
+                    typ.reference,
+                    crate::aliases::Definition {
+                        params: bump.alloc_slice_copy(
+                            &typ.params
+                                .iter()
+                                .map(|param| param.name.value)
+                                .collect::<Vec<_>>(),
+                        ),
+                        body,
+                    },
+                );
+            }
+        }
+    }
+    for alias in alias_order {
+        let variables = alias.params.iter().map(|param| param.value).collect();
+        let body = canonicalize_type(bump, &env, &variables, alias.typ)?;
+        env.aliases.insert(
+            top_level_type_name(&env, alias.name.value),
+            crate::aliases::Definition {
+                params: bump.alloc_slice_copy(
+                    &alias
+                        .params
+                        .iter()
+                        .map(|param| param.value)
+                        .collect::<Vec<_>>(),
+                ),
+                body,
+            },
+        );
+    }
     let enums = canonicalize_enums(bump, &mut env, source, &mut errors);
     errors.extend(predeclare_trait_members(bump, &mut env, source));
     if !errors.is_empty() {
@@ -1378,11 +1414,11 @@ fn canonicalize_item<'a>(
             }))
         }
         SourceItemKind::TypeAlias(decl) => {
-            let variables: BTreeSet<_> = decl.params.iter().map(|param| param.value).collect();
+            let name = top_level_type_name(env, decl.name.value);
             ItemKind::TypeAlias(bump.alloc(TypeAlias {
-                name: top_level_type_name(env, decl.name.value),
+                name,
                 params: decl.params,
-                typ: canonicalize_type(bump, env, &variables, decl.typ)?,
+                typ: env.aliases[&name].body,
             }))
         }
         SourceItemKind::OpaqueType(name) => {
@@ -2774,6 +2810,40 @@ mod tests {
             "{:#?}",
             canonicalize(&bump, context(), &source).unwrap_err()
         )
+    }
+
+    #[test]
+    fn abort_extern_accepts_a_transparent_task_alias() {
+        let bump = Bump::new();
+        can(
+            &bump,
+            indoc::indoc! {r#"
+            type Operation[a] = Task[a]
+            type NumberOperation = Operation[Number]
+            #[extern("./client.js", "fetch_number", "abort")]
+            fn fetch_number() NumberOperation
+        "#},
+        );
+    }
+
+    #[test]
+    fn recursive_aliases_are_rejected_before_body_checking() {
+        for text in [
+            "type Loop = Loop",
+            indoc::indoc! {r#"
+                type First = { next: Second }
+                type Second = Array[First]
+            "#},
+        ] {
+            let bump = Bump::new();
+            let source_text = bump.alloc_str(text);
+            let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
+            assert!(canonicalize(&bump, context(), &source).is_err(), "{text}");
+            assert!(
+                canonicalize_headers(&bump, context(), &source).is_err(),
+                "{text}"
+            );
+        }
     }
 
     #[test]

@@ -1,4 +1,5 @@
 import ~/rows
+import ~/rows.{ OptionalName, Boxed }
 
 fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {
     { ..user, name }
@@ -62,7 +63,11 @@ pub fn main() {
     assert(pair.0.left == "left")
     assert(pair.1.y == 3)
     assert(pair.1.right)
-    let optional: { name?: String } = {}
+    let optional: OptionalName = {}
+    let number: Boxed[Number] = rows.boxed(42)
+    let label: Boxed[String] = rows.boxed("hello")
+    assert(number.value == 42)
+    assert(label.value == "hello")
     assert(rows.choose(false, optional).name == Option.none())
     assert(rows.choose(true, optional).name == Option.some("present"))
     let user = rename({ name: "old", score: 42 }, "new")

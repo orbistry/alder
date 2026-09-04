@@ -2187,6 +2187,14 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_recursive_alias_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            type First = { next: Second }
+            type Second = Array[First]
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_generic_method_specialization_without_color() {
         assert_diagnostic_snapshot! {r#"
             trait Convert[a] { fn convert(value: a, other: b) b }

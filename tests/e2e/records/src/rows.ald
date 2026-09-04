@@ -8,6 +8,12 @@ pub fn preserve_two(left: { r | x: Number }, right: { s | y: Number }) {
     ({ ..left, x: left.x + 1 }, { ..right, y: right.y + 1 })
 }
 
-pub fn choose(flag: Bool, record: { name?: String }) {
+pub type OptionalName = { name?: String }
+
+pub type Boxed[a] = { value: a }
+
+pub fn boxed(value: a) Boxed[a] { { value } }
+
+pub fn choose(flag: Bool, record: OptionalName) {
     if flag { { name: "present" } } else { record }
 }

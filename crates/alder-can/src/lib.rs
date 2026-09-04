@@ -2,6 +2,7 @@
 //!
 //! The implementation follows the contract in `docs/canonical-internals.md`.
 
+mod aliases;
 mod canonicalize;
 pub mod environment;
 mod error;

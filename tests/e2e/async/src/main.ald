@@ -1,5 +1,10 @@
 import ~/helper.{ delayed }
 
+type Operation[a] = Task[a]
+
+#[extern("globalThis", "Promise.resolve", "abort")]
+fn aliasedOperation(value: Number) Operation[Number]
+
 #[extern("globalThis", "Promise.resolve")]
 fn resolved(value: a) Task[a]
 
@@ -82,6 +87,7 @@ fn deepResult(depth: Number) Result[Number, [:deep(String)]] {
 }
 
 pub fn main() Result[()] {
+    assert(aliasedOperation(42).await == 42)
     assert(deep(20000).await == 42)
     assert(deepSuspended(20000).await == 42)
     assert(match deepResult(20000).await {
