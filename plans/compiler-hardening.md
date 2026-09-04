@@ -91,8 +91,8 @@ always infer unit and break payloads do not constrain a target result.
 
 ### 6 and 7. Scheduler fairness and task frames
 
-- [ ] Regressions for immediately fulfilled Promise starvation and deep awaits.
-- [ ] Stack-safe task frames/trampoline with scheduler-visible composition;
+- [x] Regressions for immediately fulfilled Promise starvation and deep awaits.
+- [x] Stack-safe task frames/trampoline with scheduler-visible composition;
   sequential await remains in the current fiber.
 - [ ] Bounded host yielding across resumptions, Promise/Join/All/Race/Fork,
   completion, and cleanup; avoid recursive scheduler execution/reentrancy.
@@ -157,6 +157,29 @@ Root cause: virtual module imports lack a physical importer location.
 - [ ] Identify inactive Elm-era Rust modules and correct obsolete claims.
 
 ## Evidence log
+
+- Task-frame checkpoint: the original compiled 20,000-deep await probe and a
+  permanent kernel regression both failed with RangeError before the fix.
+  Task iteration now yields one Call operation. Each fiber owns an explicit
+  stack of caller iterators, driving child entry, success, and thrown failure
+  through the budgeted scheduler loop. Existing direct-AST `yield* task`
+  emission remains valid and no sequential-await child fiber is introduced.
+  Kernel tests exercise 20,000 calls before suspension, suspension at every
+  level, task reuse/laziness, same-fiber execution, and deep defect/interruption
+  unwinding with suspending finally blocks and exactly-once scope finalization.
+  Compiled async fixtures add deep success, Promise suspension, and typed
+  Result propagation. Rechecked pinned Effect continuation-stack/Iterator
+  code; no code copied. Broader lifecycle and provider-context audit remains
+  open, along with the other hardening acceptance gates.
+  Validation: the original deep CLI probe now exits successfully. All eleven
+  kernel tests, full workspace tests including CLI execution, strict Clippy,
+  formatting, and diff checks pass. Kernel packaging verifies successfully.
+  No snapshots changed or remain pending. Final changed-crate packaging and
+  the full acceptance audit remain open.
+- Follow-up from task-frame review: malformed yielded operations currently
+  close the fiber directly, bypassing iterator `finally` blocks. Reproduce and
+  route these defects through normal unwinding; also audit unexpected operation
+  handler exceptions so the shared ready queue cannot be left wedged.
 
 - Scheduler-budget checkpoint: the original Node probe printed `false` for
   timer progress across 10,000 fulfilled Promise awaits. A permanent bounded

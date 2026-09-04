@@ -185,7 +185,10 @@ position. The left value is evaluated before the callee and existing arguments.
 
 `Try` evaluates its `Result` once, returns an `Err` unchanged from the current
 function, and otherwise yields `_0`. `Await` emits `yield*` inside the
-enclosing task generator. `state(x)` is identity in M2.
+enclosing task generator. Task iteration yields a scheduler `Call` operation;
+the runtime maintains explicit caller frames, so this syntax does not imply
+unbounded native generator delegation. No new codegen helper or child fiber
+is needed for sequential awaits. `state(x)` is identity in M2.
 
 `provide` pushes the value under its canonical provider key, executes the body
 inside `try/finally`, and pops in `finally`, which remains correct across await.

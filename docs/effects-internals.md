@@ -345,6 +345,16 @@ are not.
 
 Task-producing functions lower to plain JavaScript functions which return a
 fresh lazy `$task(function* () { ... })`. `.await` lowers to `yield* task`.
+Task iteration yields one internal `Call` operation rather than delegating
+directly into the task body. The fiber owns the body iterator and an explicit
+stack of suspended caller iterators. Call entry pushes a caller; normal child
+completion resumes it with the value, and a child throw resumes it with the
+same exception. Both transitions use the scheduler loop, not recursive calls.
+Interruption therefore unwinds these frames through ordinary generator
+`throw`/`finally`, including cleanup that itself awaits. Each task entry and
+completion participates in the shared operation budget. Sequential awaits
+do not create child fibers or child scopes.
+
 Calling a task-producing function therefore performs no effects, and the same
 task value can be executed more than once. Non-task functions stay plain
 JavaScript functions. Generated entry modules call `$runMain`, which accepts
@@ -438,8 +448,8 @@ counts, including timer-driven interruption and exactly-once cleanup.
 This is a cooperative boundary, not a wall-clock or instruction limit inside
 an individual generator step. Ordinary synchronous computation and runtime
 bulk work inside one operation cannot be preempted by this budget. Stack-safe
-composition and the broader bulk-operation/cancellation audit remain tracked
-in the compiler-hardening plan.
+composition is covered by deep success/failure/interruption tests; the broader
+bulk-operation/cancellation audit remains tracked in the compiler-hardening plan.
 Fiber contexts are cloned at child construction so provider state is inherited
 without later sibling mutation leaks; compile-time provider checking remains
 the separate unfinished M4 context wave.
@@ -456,6 +466,9 @@ Intentional divergences are:
 
 - Alder uses compiler-generated JavaScript generators and a small yielded
   operation ABI instead of Effect's full instruction algebra.
+  The task-frame hardening rechecked the pinned interpreter's continuation
+  stack and Iterator primitive. Alder stores suspended generator iterators,
+  preserving JavaScript cleanup semantics rather than copying those primitives.
 - Alder keeps its erased `Result` value as typed recoverable failure; it does
   not reproduce Effect's `Cause`, checked-error channel, dependency `Context`,
   tracing stack, supervision API, or public fiber-ref system.

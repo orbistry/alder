@@ -63,7 +63,31 @@ fn early() Number {
     return 42
 }
 
+fn deep(depth: Number) Number {
+    if depth == 0 { 42 } else { deep(depth - 1).await }
+}
+
+fn deepSuspended(depth: Number) Number {
+    resolved(depth).await
+    if depth == 0 { 42 } else { deepSuspended(depth - 1).await }
+}
+
+fn deepResult(depth: Number) Result[Number, [:deep(String)]] {
+    if depth == 0 {
+        Err(:deep("bottom"))
+    } else {
+        let value = deepResult(depth - 1).await?
+        Ok(value)
+    }
+}
+
 pub fn main() Result[()] {
+    assert(deep(20000).await == 42)
+    assert(deepSuspended(20000).await == 42)
+    assert(match deepResult(20000).await {
+        Ok(_) => false,
+        Err(:deep(message)) => message == "bottom",
+    })
     let direct = delayed(40).await
     let piped = 2 |> resolved().await
     let loaded = 42 |> load().await?

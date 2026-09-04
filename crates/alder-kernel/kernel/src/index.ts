@@ -599,6 +599,7 @@ export function $refSame(left, right) { return left === right; }
 export function $cliArgs() { return globalThis.__alderHost?.args ?? []; }
 
 const taskType = Symbol.for("alder/Task");
+const taskFactory = Symbol("alder/TaskFactory");
 const maxOperationsBeforeYield = 1024;
 let operationsRemaining = maxOperationsBeforeYield;
 let readyFibers = [];
@@ -631,10 +632,10 @@ function cloneContext(context) {
 }
 
 function taskIterator(task) {
-    if (!task || task[taskType] !== true || typeof task[Symbol.iterator] !== "function") {
+    if (!task || task[taskType] !== true || typeof task[taskFactory] !== "function") {
         throw new TypeError("Expected an Alder Task value");
     }
-    const iterator = task[Symbol.iterator]();
+    const iterator = task[taskFactory]();
     if (!iterator || typeof iterator.next !== "function" || typeof iterator.throw !== "function") {
         throw new TypeError("An Alder Task factory did not return a generator");
     }
@@ -645,7 +646,12 @@ export function $task(factory) {
     if (typeof factory !== "function") throw new TypeError("Task factory must be a function");
     return Object.freeze({
         [taskType]: true,
-        [Symbol.iterator]: factory,
+        [taskFactory]: factory,
+        *[Symbol.iterator]() {
+            // Native delegation stops at this single operation. The scheduler
+            // enters the task body using its own continuation stack.
+            return yield { $: "Call", task: this };
+        },
     });
 }
 
@@ -714,6 +720,7 @@ class FiberImpl {
         this.resumeMethod = "next";
         this.resumeValue = undefined;
         this.iterator = taskIterator(task);
+        this.taskFrames = [];
         this.exitPromise = new Promise((resolve) => { this.resolveExit = resolve; });
         if (parent) parent.children.add(this);
     }
@@ -774,10 +781,21 @@ class FiberImpl {
                 try {
                     step = this.iterator[method](value);
                 } catch (error) {
+                    if (this.taskFrames.length > 0) {
+                        this.iterator = this.taskFrames.pop();
+                        this.resumeMethod = "throw";
+                        this.resumeValue = error;
+                        continue;
+                    }
                     this.beginClose(failure(error));
                     return;
                 }
                 if (step.done) {
+                    if (this.taskFrames.length > 0) {
+                        this.iterator = this.taskFrames.pop();
+                        this.resumeValue = step.value;
+                        continue;
+                    }
                     this.beginClose(success(step.value));
                     return;
                 }
@@ -795,6 +813,17 @@ class FiberImpl {
 
     handle(operation) {
         switch (operation.$) {
+            case "Call": {
+                try {
+                    const iterator = taskIterator(operation.task);
+                    this.taskFrames.push(this.iterator);
+                    this.iterator = iterator;
+                } catch (error) {
+                    this.resumeMethod = "throw";
+                    this.resumeValue = error;
+                }
+                return false;
+            }
             case "Promise": return this.handlePromise(operation);
             case "Fork": {
                 let child;
@@ -1059,6 +1088,8 @@ class FiberImpl {
     complete(exit) {
         if (this.state === "Done") return;
         this.state = "Done";
+        this.iterator = null;
+        this.taskFrames.length = 0;
         this.exit = exit;
         if (this.parent) this.parent.children.delete(this);
         const observers = [...this.observers];

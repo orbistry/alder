@@ -268,6 +268,69 @@ for (const combine of [$fiberAll, $fiberRace]) {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn task_composition_is_stack_safe_before_and_after_suspension() {
+        let harness = r#"
+let entries = 0;
+let owner;
+const descend = (depth, suspend) => $task(function* () {
+    entries++;
+    if (owner === undefined) owner = currentFiber;
+    if (currentFiber !== owner) throw new Error("sequential await forked a fiber");
+    if (suspend) yield* $tryPromise(() => Promise.resolve());
+    if (depth === 0) return 42;
+    return yield* descend(depth - 1, suspend);
+});
+const reusable = descend(20000, false);
+if (entries !== 0) throw new Error("task construction was not lazy");
+for (const task of [reusable, reusable, descend(20000, true)]) {
+    owner = undefined;
+    if (await $runTask(task) !== 42) throw new Error("deep task lost its result");
+}
+if (entries !== 60003) throw new Error("reusable task did not execute independently");
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn deep_task_failure_and_interruption_unwind_suspending_cleanup() {
+        let harness = r#"
+for (const interrupt of [false, true]) {
+    let unwound = 0;
+    let finalized = 0;
+    const expected = new Error("deep failure");
+    const descend = (depth) => $task(function* () {
+        try {
+            if (depth > 0) return yield* descend(depth - 1);
+            if (!interrupt) throw expected;
+            const owner = currentFiber;
+            yield* $tryPromise(() => new Promise((resolve) => {
+                setTimeout(() => { owner.interruptUnsafe(); resolve(); }, 0);
+            }));
+        } finally {
+            yield* $tryPromise(() => Promise.resolve());
+            if (unwound !== depth) throw new Error("cleanup order changed");
+            unwound++;
+        }
+    });
+    let observed;
+    try {
+        await $runTask($task(function* () {
+            yield* $fiberAddFinalizer($task(function* () { finalized++; }));
+            yield* descend(20000);
+        }));
+    } catch (error) { observed = error; }
+    if (interrupt ? observed?.name !== "AlderInterrupted" : observed !== expected) {
+        throw observed ?? new Error("deep failure was lost");
+    }
+    if (unwound !== 20001 || finalized !== 1) throw new Error("cleanup was skipped or repeated");
+}
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn fiber_runtime_obeys_lifecycle_and_promise_invariants() {
         let harness = r#"
 const check = (condition, message) => { if (!condition) throw new Error(message); };
