@@ -158,6 +158,19 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Workspace application regression reproduced two distinct members both being
+  assigned `Application`. Workspace-aware package mapping now assigns opaque
+  `ApplicationMember` keys from the full relative member path. Keys are bounded
+  SHA-256 hex strings so deep member paths do not exceed a cache path segment's
+  length limit. The regression checks distinct graph edges, successful Number
+  versus String calls to same-named local modules, separate emitted IDs, four
+  distinct interface-cache paths, and two instance indexes. Reordering members
+  and relocating the workspace preserve package identities. Standalone app
+  identities are unchanged. External members and overlapping roots remain open.
+  Validation: the regression failed before the fix, then passed after it;
+  full workspace tests (85 driver tests), strict Clippy, and formatting pass.
+  No snapshots changed or remain pending. Final release packaging is still open.
+
 - Module identity checkpoint: duplicate-source regression failed before the fix.
   Preflight now rejects conflicting package-qualified identities before any
   interface discovery, with a reviewed colorless diagnostic labeling both

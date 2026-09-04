@@ -111,7 +111,26 @@ impl Project {
                         .iter()
                         .any(|source| path.starts_with(source))
                 })?;
-                Some((uri.clone(), member.package_id()))
+                let package = if matches!(self.config, Config::Workspace(_))
+                    && matches!(member.config, Config::Application(_))
+                {
+                    // A workspace member key is opaque and forms a single safe
+                    // path segment in emitted URLs and interface caches. Hash
+                    // the full relative path, not only its last component, and
+                    // bound its length independently of member nesting depth.
+                    let relative = member.root.strip_prefix(&self.root).unwrap_or(&member.root);
+                    let relative = relative
+                        .components()
+                        .map(|part| part.as_os_str().to_string_lossy())
+                        .collect::<Vec<_>>()
+                        .join("/");
+                    use sha2::Digest;
+                    let key = format!("w{:x}", sha2::Sha256::digest(relative.as_bytes()));
+                    OwnedPackageId::ApplicationMember(key)
+                } else {
+                    member.package_id()
+                };
+                Some((uri.clone(), package))
             })
             .collect()
     }
@@ -376,6 +395,119 @@ mod tests {
     use super::*;
     use crate::interface::{InterfaceFile, OwnedModuleId, PackageInstanceIndexFile};
     use crate::source::InMemorySource;
+
+    #[tokio::test]
+    async fn workspace_applications_keep_separate_modules_and_interfaces() {
+        let root = PathBuf::from("/workspace");
+        let app = Config::Application(alder_config::Application {
+            compiler: None,
+            target: alder_config::Target::Standalone,
+            dependencies: BTreeMap::new(),
+            test_dependencies: BTreeMap::new(),
+        });
+        let project = Project {
+            root: root.clone(),
+            config: Config::Workspace(Workspace {
+                compiler: None,
+                members: vec![],
+                dependencies: BTreeMap::new(),
+            }),
+            members: vec![
+                make_member(&root.join("one/client"), app.clone()),
+                make_member(&root.join("two/client"), app),
+            ],
+        };
+        let main_one = Url::from_file_path(root.join("one/client/src/main.ald")).unwrap();
+        let util_one = Url::from_file_path(root.join("one/client/src/util.ald")).unwrap();
+        let main_two = Url::from_file_path(root.join("two/client/src/main.ald")).unwrap();
+        let util_two = Url::from_file_path(root.join("two/client/src/util.ald")).unwrap();
+        let sources = InMemorySource::with_files([
+            (
+                main_one.clone(),
+                indoc::indoc! {r#"
+                import ~/util
+                pub fn main() Number { util.answer() }
+            "#}
+                .to_owned(),
+            ),
+            (util_one.clone(), "pub fn answer() Number { 42 }".to_owned()),
+            (
+                main_two.clone(),
+                indoc::indoc! {r#"
+                import ~/util
+                pub fn main() String { util.answer() }
+            "#}
+                .to_owned(),
+            ),
+            (
+                util_two.clone(),
+                "pub fn answer() String { \"two\" }".to_owned(),
+            ),
+        ]);
+        let modules = vec![
+            main_one.clone(),
+            main_two.clone(),
+            util_one.clone(),
+            util_two.clone(),
+        ];
+        let packages = project.module_packages(&modules);
+        assert_ne!(packages[&main_one], packages[&main_two]);
+        let relocated_root = PathBuf::from("/relocated/src/workspace");
+        let relocated = Project {
+            root: relocated_root.clone(),
+            config: project.config.clone(),
+            members: project
+                .members
+                .iter()
+                .rev()
+                .map(|member| {
+                    make_member(
+                        &relocated_root.join(member.root.strip_prefix(&root).unwrap()),
+                        member.config.clone(),
+                    )
+                })
+                .collect(),
+        };
+        let relocated_modules = modules
+            .iter()
+            .map(|uri| {
+                Url::from_file_path(
+                    relocated_root.join(uri.to_file_path().unwrap().strip_prefix(&root).unwrap()),
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let relocated_packages = relocated.module_packages(&relocated_modules);
+        for (original, moved) in modules.iter().zip(&relocated_modules) {
+            assert_eq!(packages[original], relocated_packages[moved]);
+        }
+        let dependencies = BuildDependencies {
+            module_packages: packages,
+            module_paths: project.module_paths(&modules).unwrap(),
+            ..BuildDependencies::default()
+        };
+        let db = std::sync::Arc::new(tokio::sync::Mutex::new(Database::new(sources)));
+        let graph = crate::build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+            .await
+            .unwrap();
+        assert_eq!(graph.edges[&main_one], vec![util_one]);
+        assert_eq!(graph.edges[&main_two], vec![util_two]);
+        let result =
+            crate::build_with_dependencies(db, &graph, crate::BuildMode::Build, dependencies).await;
+        assert!(result.is_success(), "{:?}", result.modules);
+        assert_ne!(
+            result.artifacts[&main_one].module_id,
+            result.artifacts[&main_two].module_id
+        );
+        let cache = InterfaceCache::new(&root);
+        let paths = result
+            .interfaces
+            .iter()
+            .map(|interface| cache.interface_path(&interface.module))
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(paths.len(), 4);
+        assert_eq!(result.package_instance_indexes.len(), 2);
+    }
 
     #[test]
     fn package_modules_receive_the_declared_package_identity() {

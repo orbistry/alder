@@ -11,6 +11,15 @@ named package. Graph edges use exact package/path lookup, not URI suffixes.
 Consequently a `src` directory in a checkout ancestor or within a module path
 cannot redefine the project's source root.
 
+Applications checked together from a workspace use `ApplicationMember` identities
+instead of sharing `Application`. The opaque member key is `w` followed by the
+SHA-256 digest of the slash-separated workspace-relative member path. It is
+stable under member reordering and workspace relocation, distinguishes equal
+directory basenames, and occupies one fixed-length URL/cache path segment.
+Standalone application builds retain the `Application` identity. Members outside
+the workspace root currently use their full path as the key input; relocatability
+for those and overlapping source roots remain audit items.
+
 Before hydrating interfaces or discovering headers, compilation groups source
 URIs by canonical identity. Multiple distinct URIs for one identity stop the
 build. A shared source-aware diagnostic shows the conflicting files, ordered
@@ -23,6 +32,6 @@ roots; project-aware callers should supply `BuildDependencies::module_paths`
 and `module_packages` and use `build_graph_with_dependencies`.
 
 Remaining audits are tracked in `plans/compiler-hardening.md`, including
-workspace application identities, overlapping roots, cache consistency, and
+overlapping roots, external workspace members, cache consistency, and
 public re-exports. Deterministic graph traversal alone does not establish
 determinism of every downstream artifact or initialization order.
