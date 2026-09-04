@@ -1,6 +1,6 @@
 [package]
 name = "alder-can"
-version = "0.3.0"
+version = "0.4.0"
 edition.workspace = true
 description = "Canonicalize a alder source tree, resolving symbols, re-ordering definitions, and preparing a module for type inference."
 homepage.workspace = true
@@ -9,7 +9,7 @@ license.workspace = true
 
 [dependencies]
 bumpalo.workspace = true
-alder-ast = { path = "../alder-ast", version = "0.2.0" }
+alder-ast = { path = "../alder-ast", version = "0.3.0" }
 alder-region = { path = "../alder-region", version = "0.2.0" }
 alder-source = { path = "../alder-source", version = "0.2.0" }
 alder-parse = { path = "../alder-parse", version = "0.2.0" }
