@@ -67,6 +67,7 @@ mod tests {
             "async",
             "externs",
             "control_flow",
+            "records",
             "traits",
             "docs_traits",
         ] {

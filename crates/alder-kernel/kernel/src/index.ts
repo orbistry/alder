@@ -412,6 +412,9 @@ export function $optionSome(value) {
     return value === null || optionBoxes.has(value) ? $optionBox(value) : value;
 }
 export function $optionNone() { return null; }
+export function $optionalField(record, field) {
+    return Object.hasOwn(record, field) ? $optionSome(record[field]) : null;
+}
 export function $optionMap(value, transform) {
     return value === null ? null : $optionSome(transform(optionValue(value)));
 }

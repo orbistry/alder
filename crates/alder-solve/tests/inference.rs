@@ -8,6 +8,188 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn branch_results_preserve_optional_field_presence() {
+    for source in [
+        indoc! {r#"
+            fn choose(flag: Bool, user: { name?: String }) {
+                if flag { { name: "present" } } else { user }
+            }
+            fn run() Option[String] { choose(false, {}).name }
+        "#},
+        indoc! {r#"
+            fn choose(flag: Bool, user: { name?: String }) {
+                if flag { user } else { { name: "present" } }
+            }
+            fn run() Option[String] { choose(false, {}).name }
+        "#},
+        indoc! {r#"
+            fn choose(flag: Bool, user: { name?: String }) {
+                match flag {
+                    true => ({ name: "present" }),
+                    false => user,
+                }
+            }
+            fn run() Option[String] { choose(false, {}).name }
+        "#},
+    ] {
+        assert!(infer(&Bump::new(), source).is_ok(), "{source}");
+    }
+}
+
+#[test]
+fn branch_results_cannot_hide_optional_fields_from_required_readers() {
+    let source = indoc! {r#"
+        fn choose(flag: Bool, user: { name?: String }) {
+            if flag { { name: "present" } } else { user }
+        }
+        fn run() Number { String.length(choose(false, {}).name) }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn pipes_cannot_turn_optional_fields_into_required_fields() {
+    let source = indoc! {r#"
+        fn required(user: { name: String }) Number { String.length(user.name) }
+        fn optional(user: { name?: String }) Number { user |> required }
+        fn run() Number { optional({}) }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn lambda_returns_cannot_turn_optional_fields_into_required_fields() {
+    let source = indoc! {r#"
+        fn run(user: { name?: String }) Number {
+            let get = () { name: String } -> user
+            String.length(get().name)
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn fresh_optional_record_containers_accept_present_fields() {
+    let source = indoc! {r#"
+        fn run() Option[String] {
+            let users: Array[{ name?: String }] = [{ name: "present" }]
+            users[0].name
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn shared_record_containers_cannot_weaken_field_presence() {
+    let source = indoc! {r#"
+        fn run() Number {
+            let users = [{ name: "present" }]
+            let alias: Array[{ name?: String }] = users
+            Array.push(alias, {})
+            String.length(users[1].name)
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn optional_record_annotations_survive_local_and_global_construction() {
+    let source = indoc! {r#"
+        let shared: { name?: String } = {}
+        fn read() Option[String] {
+            let local: { name?: String } = {}
+            let global: Option[String] = shared.name
+            local.name
+        }
+        fn present() Option[String] {
+            let local: { name?: String } = { name: "present" }
+            local.name
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn record_rows_instantiate_independently_and_retain_extra_fields() {
+    let source = indoc! {r#"
+        fn retain(row) {
+            let value: Number = row.x
+            row
+        }
+        fn run() Number {
+            let first = retain({ x: 1, extra: 42 })
+            let second = retain({ x: 2, label: "hello" })
+            let label: String = second.label
+            first.extra
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn shared_record_tails_reject_incompatible_extra_fields() {
+    let source = indoc! {r#"
+        fn both(left: { r | x: Number }, right: { r | y: Number }) Number {
+            left.x + right.y
+        }
+        fn run() Number {
+            both({ x: 1, extra: 42 }, { y: 2, extra: "wrong" })
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn record_rows_accumulate_fields_independently_of_access_order() {
+    for source in [
+        indoc! {r#"
+            fn sum(record) Number { record.x + record.y }
+            fn run() Number { sum({ x: 20, y: 22 }) }
+        "#},
+        indoc! {r#"
+            fn sum(record) Number { record.y + record.x }
+            fn run() Number { sum({ x: 20, y: 22 }) }
+        "#},
+    ] {
+        assert!(infer(&Bump::new(), source).is_ok(), "{source}");
+    }
+}
+
+#[test]
+fn record_rows_preserve_input_output_relationships_through_spread() {
+    let source = indoc! {r#"
+        fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {
+            { ..user, name }
+        }
+        fn run() Number {
+            let user = rename({ name: "old", score: 42 }, "new")
+            user.score
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn record_rows_do_not_allow_fabricating_a_promised_tail() {
+    let source = indoc! {r#"
+        fn lose(user: { r | name: String }) ({ r | name: String }) {
+            { name: "lost" }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn optional_record_fields_cannot_satisfy_required_field_access() {
+    let source = indoc! {r#"
+        fn required(user: { name: String }) Number { String.length(user.name) }
+        fn optional(user: { name?: String }) Number { required(user) }
+        fn run() Number { optional({}) }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
 fn skipped_boolean_operands_do_not_constrain_loop_exits() {
     let source = indoc! {r#"
         fn answer() Number {

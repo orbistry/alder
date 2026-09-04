@@ -1166,9 +1166,21 @@ impl<'src, 'js> Emitter<'src, 'js> {
             } => self.call(*use_id, function, arguments, self.js.vec(), None)?,
             Expr::Access { record, field } => {
                 let record = self.expr(record)?;
+                let expr = if self
+                    .solved
+                    .is_some_and(|solved| solved.optional_accesses.contains(&node.region))
+                {
+                    self.kernel.insert("$optionalField");
+                    self.js.call(
+                        self.js.identifier("$optionalField"),
+                        [record.expr, self.js.string(field.value)],
+                    )
+                } else {
+                    self.js.member(record.expr, field.value)
+                };
                 Value {
                     prefix: record.prefix,
-                    expr: self.js.member(record.expr, field.value),
+                    expr,
                 }
             }
             Expr::TupleAccess { tuple, index } => {

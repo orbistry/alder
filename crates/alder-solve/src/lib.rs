@@ -3,7 +3,7 @@
 mod inference;
 mod traits;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{DictionaryKind, ImplId, MethodId, ModuleId, QualifiedName, TraitId, UseId};
 use alder_can::Annotations;
@@ -20,6 +20,7 @@ pub struct SolveOutput<'a> {
     pub uses: BTreeMap<UseId, UseAction<'a>>,
     pub impl_superclasses: BTreeMap<(ImplId<'a>, u16), Evidence<'a>>,
     pub derived_fields: BTreeMap<DerivedFieldKey<'a>, Evidence<'a>>,
+    pub optional_accesses: BTreeSet<Region>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

@@ -158,6 +158,73 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Record-row investigation: added four regression tests to active solver
+  integration tests. Multi-field inference and the documented row-preserving
+  rename/spread example are rejected; discarding an explicitly promised row
+  and passing an optional record field to a required reader are accepted.
+  All four new tests fail as expected before implementation. The false-row
+  promise is checked at the declaration alone so rejection at a later caller
+  cannot conceal unchecked universality. Inspected active conversions,
+  access/spread, unification, substitution, generalization, and publication,
+  plus Elm's unifyRecord/gatherFields. Added `docs/record-rows-internals.md`
+  with the required representation/boundary changes. No solver fix has landed
+  for these tests yet; the worktree intentionally contains failing regressions.
+- Record-row implementation checkpoint (uncommitted): replaced Boolean tails
+  with typed variable tails and a distinct record-fragment wrapper. Added
+  residual-row unification, open-tail field access, single-spread preservation,
+  tail-aware traversal/instantiation/publication, and normalization of empty
+  row fragments. Original CLI records probe now exits successfully. Three of
+  the four original row regressions pass; optional-to-required flow still fails.
+  New independent-instantiation and shared-tail-incompatibility tests pass.
+  Last complete solver integration run: 145 passed, one expected outstanding
+  optional regression failed; two subsequently added focused tests also pass.
+  Strict solver all-target/all-feature Clippy passes. No snapshots changed.
+  Multiple open spread semantics, lacks/shadowing, kind consistency, trait
+  matching, and cross-module tests remain required. Work remains uncommitted.
+- Optional compatibility checkpoint (uncommitted): annotated let bindings now
+  retain their declared shape; a new positive local/global construction test
+  failed before that fix. Deferred directional presence checks now cover calls,
+  annotated bindings, assignment values, and returns, rejecting the original
+  optional-to-required counterexample. Container/nested-payload invariance
+  rejects field weakening through shared arrays. Contextual checking of fresh
+  array literals preserves safe annotated construction; both cases have tests.
+  All 151 solver integration tests pass without snapshot updates. Five temporary
+  snapshot failures exposed reversed actual/expected call diagnostics; restored
+  diagnostic unification order and removed the generated pending snapshots.
+  Remaining work includes branch-result presence, bare pipe destinations,
+  lambda returns, optional field writes/reads in codegen, deeper contextual
+  construction, and the rest of the row acceptance matrix. No completion claim.
+- Presence-boundary follow-up (uncommitted): negative regressions reproduced
+  bypasses through bare pipe destinations and annotated lambda returns; both
+  now use compatibility checks. Branch joining promotes common optional fields
+  in the resulting record rather than selecting the first branch's presence.
+  Tests cover both if orders, match arms, and rejection by required-field
+  readers; all 155 solver integration tests pass and strict solver Clippy passes.
+  CLI validation is currently red: existing `modules` fixture passes a fresh
+  nested record literal to an optional-field parameter and is over-rejected.
+  Extend contextual construction to call arguments and nested records instead
+  of weakening mutable-alias checks. Added `tests/e2e/records` and registered
+  it for execution to cover renamed row tails and optional missing/present reads.
+  Running that new fixture directly compiles but exits with an assertion
+  failure. Code inspection shows Access still emits raw member reads while
+  Option.none is null; investigate omitted-field undefined versus Option
+  representation, and nested/nullable present payloads, in the codegen seam.
+- Contextual construction/runtime checkpoint: fresh record fields now receive
+  recursive expected types, and fresh record/array call arguments receive their
+  parameter context. This fixes the existing modules fixture without weakening
+  alias invariance. The records runtime failure was fixed by carrying optional
+  read sites in SolveOutput and emitting direct Oxc calls to `$optionalField`.
+  Its own-property check distinguishes absence from present None/unit payloads.
+  Extended CLI fixture verifies nullable nesting and exactly-once record
+  evaluation; kernel regression verifies absent/null/unit and getter count.
+  All standalone CLI fixtures now execute successfully. Broader row, pattern,
+  write, kind, and cross-module acceptance work remains open.
+  Checkpoint validation: full workspace tests (155 solver integration tests,
+  14 kernel tests, CLI fixtures), strict all-target/all-feature Clippy,
+  formatting, and diff checks pass. No snapshots changed or remain pending.
+  Added a solve/codegen/kernel changeset. Changed-crate release packaging and
+  the complete acceptance audit remain open.
+
 - Task-frame checkpoint: the original compiled 20,000-deep await probe and a
   permanent kernel regression both failed with RangeError before the fix.
   Task iteration now yields one Call operation. Each fiber owns an explicit

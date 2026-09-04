@@ -36,6 +36,7 @@ mod tests {
             "$refSame",
             "$matchFailure",
             "$optionBox",
+            "$optionalField",
             "$providerPush",
             "$registerTest",
             "$task",
@@ -54,6 +55,25 @@ mod tests {
         ] {
             assert!(KERNEL_JS.contains(&format!("export function {symbol}")));
         }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn optional_record_access_distinguishes_absence_and_nullable_payloads() {
+        let harness = r#"
+$assert($optionalField({}, "value") === $optionNone());
+const presentNone = $optionalField({ value: $optionNone() }, "value");
+$assert(presentNone !== $optionNone());
+$assert($optionUnbox(presentNone) === $optionNone());
+const presentUnit = $optionalField({ value: undefined }, "value");
+$assert(presentUnit !== $optionNone());
+$assert($optionUnbox(presentUnit) === undefined);
+let reads = 0;
+const record = { get value() { reads++; return 42; } };
+$assert($optionalField(record, "value") === 42);
+$assert(reads === 1);
+"#;
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
     }
 
     #[tokio::test(flavor = "current_thread")]

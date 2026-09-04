@@ -1,0 +1,27 @@
+fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {
+    { ..user, name }
+}
+
+fn choose(flag: Bool, user: { name?: String }) {
+    if flag { { name: "present" } } else { user }
+}
+
+fn counted(counter: Array[Number]) ({ value?: Number }) {
+    Array.push(counter, 1)
+    { value: 42 }
+}
+
+pub fn main() {
+    let user = rename({ name: "old", score: 42 }, "new")
+    assert(user.score == 42)
+    assert(user.name == "new")
+    assert(choose(false, {}).name == Option.none())
+    assert(choose(true, {}).name == Option.some("present"))
+    let absent: { value?: Option[Number] } = {}
+    let present: { value?: Option[Number] } = { value: Option.none() }
+    assert(absent.value == Option.none())
+    assert(present.value == Option.some(Option.none()))
+    let counter = []
+    assert(counted(counter).value == Option.some(42))
+    assert(Array.length(counter) == 1)
+}

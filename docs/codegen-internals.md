@@ -190,6 +190,12 @@ the runtime maintains explicit caller frames, so this syntax does not imply
 unbounded native generator delegation. No new codegen helper or child fiber
 is needed for sequential awaits. `state(x)` is identity in M2.
 
+Optional record reads use solved per-region evidence and emit
+`$optionalField(record, fieldName)`. The helper tests property presence rather
+than payload truthiness/nullability, returning None for absence and Some of the
+payload otherwise. This preserves nested Options and evaluates the record once.
+Required field reads remain direct member access.
+
 `provide` pushes the value under its canonical provider key, executes the body
 inside `try/finally`, and pops in `finally`, which remains correct across await.
 `use` reads that key. M4 may change provider validation/storage without changing
