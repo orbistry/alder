@@ -43,7 +43,10 @@ bindings retain their declared shape. Fresh array and non-spread record literals
 are checked recursively against their expected type, including call arguments,
 allowing construction without weakening an already-shared container. Bare pipe
 destinations and lambda returns also participate in compatibility checking.
-If/match record results retain optional presence from either branch.
+If/match record results retain optional presence from either branch. Loop
+frames likewise accumulate joined reachable break types and return the final
+joined type, not the type fixed by the first break. Optional presence from any
+reachable exit is retained; nested loops keep independent result frames.
 
 Solved output records optional read sites by source region. Codegen emits an
 Oxc call to `$optionalField(record, name)` only at those sites; required reads

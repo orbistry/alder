@@ -6,6 +6,20 @@ fn choose(flag: Bool, user: { name?: String }) {
     if flag { { name: "present" } } else { user }
 }
 
+fn choose_loop(flag: Bool, user: { name?: String }) {
+    loop {
+        if flag { break { name: "present" } }
+        break user
+    }
+}
+
+fn choose_loop_reversed(flag: Bool, user: { name?: String }) {
+    loop {
+        if flag { break user }
+        break loop { break { name: "present" } }
+    }
+}
+
 fn counted(counter: Array[Number]) ({ value?: Number }) {
     Array.push(counter, 1)
     { value: 42 }
@@ -39,6 +53,10 @@ pub fn main() {
     assert(user.name == "new")
     assert(choose(false, {}).name == Option.none())
     assert(choose(true, {}).name == Option.some("present"))
+    assert(choose_loop(false, {}).name == Option.none())
+    assert(choose_loop(true, {}).name == Option.some("present"))
+    assert(choose_loop_reversed(true, {}).name == Option.none())
+    assert(choose_loop_reversed(false, {}).name == Option.some("present"))
     let absent: { value?: Option[Number] } = {}
     let present: { value?: Option[Number] } = { value: Option.none() }
     assert(absent.value == Option.none())

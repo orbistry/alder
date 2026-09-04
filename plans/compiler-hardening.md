@@ -523,6 +523,18 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Final gates
 
+- Loop/record interaction follow-up: reproduced first-break-order dependence
+  that accepted an absent optional field as a `Number` and rejected the correct
+  `Option[Number]` result. Ordinary unification retained the first record's
+  presence map. Reachable breaks now update their loop frame with `join_values`,
+  and loop-body inference returns that accumulated exit type rather than the
+  body type or original result variable. Solver tests cover both orders and
+  reject the required-value escape; CLI cases cover both paths and a nested
+  value-producing loop. Full workspace tests pass (164 solver integration
+  tests, including existing loop/divergence cases, and the CLI fixtures).
+  Strict all-target/all-feature Clippy, formatting, and diff checks pass; no
+  snapshots changed or pending snapshot files remain.
+
 - Optional record-pattern follow-up: reproduced acceptance of a `Number`
   return extracted from an absent optional field, alongside rejection of the
   correct `Option[Number]` return. Regular record patterns invented required

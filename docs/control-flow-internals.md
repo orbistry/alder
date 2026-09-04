@@ -20,8 +20,11 @@ their effects. Break payloads are evaluated even when the surrounding statement
 loop has no result slot. While/for bodies isolate themselves from enclosing
 loop-expression result slots.
 
-Each loop expression owns a fresh result variable. Reachable break payloads
-unify with that variable; a bare break supplies unit. While/for bodies use a
+Each loop expression starts with a fresh result variable. Reachable break
+payloads join with the accumulated result; this unifies payload types while
+retaining optional record presence from any exit. The final frame result,
+rather than the first break's shape, becomes the loop type. A bare break
+supplies unit. While/for bodies use a
 unit target instead, and nested loops do not constrain an enclosing target.
 Lambda inference saves and clears the target stack, restoring it afterward.
 A loop with no structurally reachable exit remains divergent rather than

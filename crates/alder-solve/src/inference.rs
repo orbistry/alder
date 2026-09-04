@@ -1961,8 +1961,8 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<Ty<'a>, Error> {
         self.loop_results.push(result);
         let body = self.infer_block(env, block, return_type);
-        self.loop_results.pop();
-        body
+        let result = self.loop_results.pop().expect("loop result frame");
+        body.map(|_| result)
     }
 
     fn infer_stmt(
@@ -2052,7 +2052,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 if self.reachable
                     && value.is_none_or(|value| alder_ast::flow::expression(value).falls_through)
                 {
-                    self.unify(actual, expected, statement.region)?;
+                    let joined = self.join_values(expected, actual, statement.region)?;
+                    *self.loop_results.last_mut().expect("loop result frame") = joined;
                 }
             }
             Stmt::Continue => {}
@@ -2357,7 +2358,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             Expr::Loop(block) => {
                 let result = self.fresh();
-                self.infer_loop_body(&mut env.clone(), block, return_type, result.clone())?;
+                let result = self.infer_loop_body(&mut env.clone(), block, return_type, result)?;
                 if alder_ast::flow::expression(expression).falls_through {
                     Ok(self.prune(result))
                 } else {

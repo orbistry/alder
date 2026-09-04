@@ -8,6 +8,48 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn loop_results_preserve_optional_fields_in_both_break_orders() {
+    for source in [
+        indoc! {r#"
+            fn choose(flag: Bool, record: { value?: Number }) {
+                loop {
+                    if flag { break { value: 42 } }
+                    break record
+                }
+            }
+            fn run() Option[Number] { choose(false, {}).value }
+        "#},
+        indoc! {r#"
+            fn choose(flag: Bool, record: { value?: Number }) {
+                loop {
+                    if flag { break record }
+                    break { value: 42 }
+                }
+            }
+            fn run() Option[Number] { choose(true, {}).value }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let result = infer(&bump, source);
+        assert!(result.is_ok(), "{source}\n{result:?}");
+    }
+}
+
+#[test]
+fn loop_results_cannot_hide_optional_fields_from_required_readers() {
+    let source = indoc! {r#"
+        fn choose(flag: Bool, record: { value?: Number }) {
+            loop {
+                if flag { break { value: 42 } }
+                break record
+            }
+        }
+        fn run() Number { choose(false, {}).value }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
 fn optional_record_patterns_bind_option_valued_reads() {
     let source = indoc! {r#"
         fn read(record: { value?: Number }) Option[Number] {
