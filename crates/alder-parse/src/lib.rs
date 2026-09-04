@@ -49,6 +49,7 @@ pub(crate) struct ParserState {
     row: Row,
     col: Col,
     comments_len: usize,
+    verbatim_len: usize,
 }
 
 /// Parser for Alder source code.
@@ -78,6 +79,7 @@ pub struct Parser<'a> {
     /// Transactional comment side table. Backtracking truncates it alongside
     /// restoring the byte cursor so speculative parses cannot duplicate comments.
     comments: BumpVec<'a, Comment<'a>>,
+    verbatim: BumpVec<'a, (usize, usize)>,
 }
 
 /// Entry point used by the driver and by tests.
@@ -86,6 +88,19 @@ pub fn parse_module<'a>(bump: &'a Bump, src: &'a str) -> Result<Module<'a>, erro
     parser
         .module()
         .map_err(|e| error::Error::ParseError(bump.alloc(e)))
+}
+
+/// Parse with byte ranges whose source spelling must be preserved by formatters.
+/// Ranges can nest and are transactional across parser backtracking.
+pub fn parse_module_with_verbatim<'a>(
+    bump: &'a Bump,
+    src: &'a str,
+) -> Result<(Module<'a>, Vec<(usize, usize)>), error::Error<'a>> {
+    let mut parser = Parser::new(bump, src.as_bytes());
+    let module = parser
+        .module()
+        .map_err(|e| error::Error::ParseError(bump.alloc(e)))?;
+    Ok((module, parser.verbatim.to_vec()))
 }
 
 impl<'a> Parser<'a> {
@@ -103,6 +118,7 @@ impl<'a> Parser<'a> {
             no_record_ctor: false,
             depth: 0,
             comments: BumpVec::new_in(bump),
+            verbatim: BumpVec::new_in(bump),
         }
     }
 
@@ -155,6 +171,7 @@ impl<'a> Parser<'a> {
             row: self.row,
             col: self.col,
             comments_len: self.comments.len(),
+            verbatim_len: self.verbatim.len(),
         }
     }
 
@@ -165,6 +182,7 @@ impl<'a> Parser<'a> {
         self.row = state.row;
         self.col = state.col;
         self.comments.truncate(state.comments_len);
+        self.verbatim.truncate(state.verbatim_len);
     }
 
     /// Inline `Located` spanning `start`..current (for names and other Copy leaves).
@@ -610,6 +628,18 @@ mod tests {
         });
         assert_eq!(seen, Some(b'c'));
         assert_eq!(parser.position(), (1, 1));
+    }
+
+    #[test]
+    fn lookahead_rolls_back_verbatim_ranges() {
+        let bump = Bump::new();
+        let src = "`outer ${`inner`}`";
+        let mut parser = Parser::new(&bump, src.as_bytes());
+        parser.lookahead(|parser| parser.template_parts().unwrap());
+        assert!(parser.verbatim.is_empty());
+        parser.template_parts().unwrap();
+        assert_eq!(parser.verbatim.len(), 2);
+        assert_eq!(parser.verbatim.last(), Some(&(0, src.len())));
     }
 
     #[test]

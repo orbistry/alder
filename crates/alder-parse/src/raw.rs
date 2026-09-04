@@ -64,6 +64,7 @@ impl<'a> Parser<'a> {
         to_error: impl FnOnce(RawTokens, Row, Col) -> E,
     ) -> Result<Located<&'a str>, E> {
         let (open_row, open_col) = self.position();
+        let verbatim_start = self.pos;
         if self.peek() != Some(open) {
             return Err(to_error(RawTokens::Open, open_row, open_col));
         }
@@ -78,6 +79,7 @@ impl<'a> Parser<'a> {
                 let text = self.slice_from(start_pos);
                 let located = self.located(start, text);
                 self.advance();
+                self.verbatim.push((verbatim_start, self.pos));
                 Ok(located)
             }
             Err((err, row, col)) => Err(to_error(err, row, col)),

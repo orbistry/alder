@@ -66,12 +66,14 @@ impl<'a> Parser<'a> {
         start: Position,
     ) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
         let (row, col) = (start.line, start.column);
+        let verbatim_start = self.pos;
         let markup = if self.peek_at(1) == Some(b'>') {
             self.fragment().map(Markup::Fragment)
         } else {
             self.element().map(Markup::Element)
         }
         .map_err(|e| error::Expr::Markup(self.alloc(e), row, col))?;
+        self.verbatim.push((verbatim_start, self.pos));
         Ok(self.add_end(start, Expr::Markup(self.alloc(markup))))
     }
 

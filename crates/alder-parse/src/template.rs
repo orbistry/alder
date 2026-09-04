@@ -32,6 +32,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn template_parts(&mut self) -> Result<&'a [TemplatePart<'a>], error::Template<'a>> {
         debug_assert_eq!(self.peek(), Some(b'`'), "template_parts: not at a backtick");
         let (open_row, open_col) = self.position();
+        let verbatim_start = self.pos;
         self.advance(); // opening `
 
         let mut parts = BumpVec::new_in(self.bump);
@@ -44,6 +45,7 @@ impl<'a> Parser<'a> {
                 Some(b'`') => {
                     self.push_text(&mut parts, text_start, needs_cook);
                     self.advance(); // closing `
+                    self.verbatim.push((verbatim_start, self.pos));
                     return Ok(parts.into_bump_slice());
                 }
                 Some(b'$') if self.peek_at(1) == Some(b'{') => {

@@ -44,7 +44,7 @@ bindings can contain shared mutable objects.
 
 ### 3. Formatter semantics
 
-- [ ] Regressions for whitespace-only/trailing-space template payloads.
+- [x] Regressions for whitespace-only/trailing-space template payloads.
 - [ ] Syntax-aware preservation of templates, interpolation, escapes, raw macro
   bodies, markup text, comments, and supported line-ending semantics.
 - [ ] Compare meaning/literal payloads as well as reparsing and idempotence;
@@ -141,6 +141,16 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Formatter checkpoint: 12 formatter tests, 1,292 parser tests, and the CLI
+  no-write regression pass. A further CLI test applies a real formatting change,
+  runs format-check, bundles the application, and executes exact template-value
+  and length assertions. Full workspace tests pass; the additional execution
+  test also passes separately. Strict Clippy and formatting checks pass.
+  `alder-parse` package verification passes; `alder-fmt` package verification
+  passes with pending local parser/source/region dependency patches. No
+  snapshots were changed or left pending. Remaining formatter audit is tracked
+  above rather than inferred complete from these regressions.
+
 - Baseline review at `21994e0`: eleven defects reproduced through CLI or direct
   kernel execution; temporary probes remain under `/tmp/alder-review.D3XIzP`.
 - Start: clean `main`, dedicated branch created; saved objective read in full.
@@ -235,6 +245,16 @@ Root cause: virtual module imports lack a physical importer location.
   workspace suite pass (131 solver integration tests, 79 driver tests). The
   original shared-array CLI reproduction now fails at the incompatible String
   annotation. No pending snapshots or whitespace errors remain.
+- Formatter checkpoint replaces backtick guessing with parser-produced verbatim
+  byte ranges for templates/interpolation, markup, raw macros, and comments.
+  Backtracking rolls the range table back transactionally. Protected lines and
+  their line endings remain byte-identical; payload delimiters are masked from
+  indentation counting. No global CR/CRLF replacement remains.
+- Output validation compares raw protected slices and physical token lines,
+  besides reparsing/comments. Tests compare actual cooked literal values and
+  separately check idempotence. CLI no-write-on-invalid-input and parser
+  lookahead regressions cover the safety boundary. Broader adversarial formatting
+  and final CLI execution checks remain in the final audit.
 - First checkpoint validation: formatting, strict Clippy, and full workspace
   tests pass (100 solver integration tests). The original trait reproduction
   now fails at CLI check with `alder::type::generic_specialization`, before JS

@@ -64,6 +64,7 @@ impl<'a> Parser<'a> {
     ) {
         let text = std::str::from_utf8(&self.src[start_byte..self.pos])
             .expect("the parser source is valid UTF-8");
+        self.verbatim.push((start_byte, self.pos));
         self.comments.push(Comment {
             region: Region::new(start, self.get_position()),
             text,
