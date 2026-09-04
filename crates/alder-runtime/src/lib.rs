@@ -71,7 +71,7 @@ globalThis.console = {
 };
 globalThis.setTimeout = (callback, milliseconds = 0, ...args) => {
     let cancelled = false;
-    core.opAsync("op_alder_sleep", milliseconds).then(() => { if (!cancelled) callback(...args); });
+    core.ops.op_alder_sleep(milliseconds).then(() => { if (!cancelled) callback(...args); });
     return { cancel: () => { cancelled = true; } };
 };
 globalThis.clearTimeout = (timer) => timer?.cancel?.();

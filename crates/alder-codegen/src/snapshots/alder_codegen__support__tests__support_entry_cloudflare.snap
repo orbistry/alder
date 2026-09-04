@@ -3,4 +3,7 @@ source: crates/alder-codegen/src/support.rs
 expression: "entry_module(\"alder://app/main.mjs\", EntryKind::Cloudflare, &modules).code()"
 ---
 import { fetch as $fetch } from "alder://app/main.mjs";
-export default { "fetch": $fetch };
+import { $runMain } from "alder:kernel";
+export default { "fetch": async ($request, $env, $context) => {
+	return await $runMain($fetch($request, $env, $context));
+} };

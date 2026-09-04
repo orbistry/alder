@@ -76,7 +76,7 @@ pub struct ControlContext {
     pub match_depth: u16,
     pub query_depth: u16,
     pub opaque_names_depth: u16,
-    pub task_return: bool,
+    pub test_depth: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -127,6 +127,7 @@ impl<'a> Env<'a> {
             ("Map", 2),
             ("Set", 1),
             ("Task", 1),
+            ("Fiber", 1),
             ("Option", 1),
             ("Result", 2),
             ("Ordering", 0),

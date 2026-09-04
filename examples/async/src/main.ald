@@ -1,0 +1,59 @@
+#[extern("globalThis", "Promise.resolve")]
+fn resolved(value: a) Task[a]
+
+#[extern("globalThis", "Promise.resolve")]
+fn resolvedResult(
+    value: Result[String, [:load(String)]],
+) Task[Result[String, [:load(String)]]]
+
+fn load(message: String) Result[String] {
+    let value = resolvedResult(Ok(message)).await?
+    Ok(value)
+}
+
+fn delayed(value: Number, milliseconds: Number) Number {
+    Task.sleep(milliseconds).await
+    value
+}
+
+fn recordCleanup(events: Array[String]) {
+    Task.sleep(1).await
+    Array.push(events, "race loser cleaned up")
+}
+
+fn slow(events: Array[String]) Number {
+    Fiber.addFinalizer(recordCleanup(events)).await
+    delayed(99, 50).await
+}
+
+pub fn main() Result[()] {
+    let greeting = "Promise extern is alive"
+        |> resolved().await
+        |> load().await?
+
+    let values = Fiber.all([
+        delayed(20, 3),
+        delayed(22, 1),
+    ]).await
+
+    let joinedFiber = Fiber.fork(delayed(42, 1)).await
+    let joined = Fiber.join(joinedFiber).await
+
+    let pipedWithArgument = 42
+        |> delayed(1).await
+
+    let cleanupEvents = []
+    let winner = Fiber.race([
+        delayed(42, 5),
+        slow(cleanupEvents),
+    ]).await
+
+    assert(greeting == "Promise extern is alive")
+    assert(values == [20, 22])
+    assert(joined == 42)
+    assert(pipedWithArgument == 42)
+    assert(winner == 42)
+    assert(cleanupEvents == ["race loser cleaned up"])
+    Io.print("Async fibers are alive!")
+    Ok(())
+}

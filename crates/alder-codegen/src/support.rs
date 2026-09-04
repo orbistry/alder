@@ -24,7 +24,12 @@ pub fn entry_module(
         match kind {
             EntryKind::Standalone => {
                 body.push(js.import(application_entry, &[("main".to_owned(), "main".to_owned())]));
-                let result = js.await_expression(js.call(js.identifier("main"), []));
+                body.push(js.import(
+                    "alder:kernel",
+                    &[("$runMain".to_owned(), "$runMain".to_owned())],
+                ));
+                let main = js.call(js.identifier("main"), []);
+                let result = js.await_expression(js.call(js.identifier("$runMain"), [main]));
                 body.push(js.variable(VariableDeclarationKind::Const, "$result", Some(result)));
                 let is_present = js.identifier("$result");
                 let is_error = js.binary(
@@ -49,9 +54,24 @@ pub fn entry_module(
                     application_entry,
                     &[("fetch".to_owned(), "$fetch".to_owned())],
                 ));
-                let properties = js
-                    .builder
-                    .vec1(js.property("fetch", js.identifier("$fetch")));
+                body.push(js.import(
+                    "alder:kernel",
+                    &[("$runMain".to_owned(), "$runMain".to_owned())],
+                ));
+                let args = [
+                    "$request".to_owned(),
+                    "$env".to_owned(),
+                    "$context".to_owned(),
+                ];
+                let call = js.call(
+                    js.identifier("$fetch"),
+                    args.iter().map(|argument| js.identifier(argument)),
+                );
+                let run = js.call(js.identifier("$runMain"), [call]);
+                let mut fetch_body = js.vec();
+                fetch_body.push(js.return_statement(js.await_expression(run)));
+                let fetch = js.arrow(&args, fetch_body, true);
+                let properties = js.builder.vec1(js.property("fetch", fetch));
                 body.push(js.export_default(js.object(properties)));
             }
             EntryKind::Test => {

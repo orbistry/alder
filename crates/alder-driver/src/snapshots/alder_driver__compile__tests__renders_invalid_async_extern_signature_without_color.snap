@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "#[extern(\"globalThis\", \"fetch\")]\nfn fetch(url: String) Task\n"
+---
+alder::canonicalize::type_arity
+
+  × type `Task` expects 1 arguments, found 0
+   ╭─[/project/src/main.ald:2:23]
+ 1 │ #[extern("globalThis", "fetch")]
+ 2 │ fn fetch(url: String) Task
+   ·                       ──┬─
+   ·                         ╰── reported here
+   ╰────

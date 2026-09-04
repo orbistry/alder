@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "#[extern(\"globalThis\", \"fetch\", \"cancel\")]\nfn fetch(url: String) Task[String]\n"
+---
+alder::canonicalize::invalid_extern
+
+  × invalid extern attribute: the only supported extern convention is the
+  │ string `abort`
+   ╭─[/project/src/main.ald:1:1]
+ 1 │ #[extern("globalThis", "fetch", "cancel")]
+   · ─────────────────────┬────────────────────
+   ·                      ╰── reported here
+ 2 │ fn fetch(url: String) Task[String]
+   ╰────

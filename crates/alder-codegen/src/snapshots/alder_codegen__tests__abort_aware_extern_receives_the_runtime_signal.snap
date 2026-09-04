@@ -1,0 +1,20 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "#[extern(\"globalThis\", \"fetch\", \"abort\")]\nfn fetch(url: String) Task[String]\n\npub fn request(url: String) String {\n    fetch(url).await\n}\n"
+---
+import { $task, $tryPromise } from "alder:kernel";
+function $v_fetch($a0) {
+	return $task(function* () {
+		return yield* $tryPromise(($signal) => {
+			return globalThis["fetch"]($a0, $signal);
+		}, true, "alder://app/main.mjs:2:23 extern globalThis:fetch");
+	});
+}
+function $v_request($a0) {
+	return $task(function* () {
+		let $l1_url = $a0;
+		const $t0 = $v_fetch;
+		return yield* $t0($l1_url);
+	});
+}
+export { $v_request as request };

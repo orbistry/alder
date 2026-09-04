@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let invalid = Task.sleep(1).await\n"
+---
+alder::canonicalize::await_outside_function
+
+  × `.await` can only be used inside a function or test
+   ╭─[/project/src/main.ald:1:15]
+ 1 │ let invalid = Task.sleep(1).await
+   ·               ─────────┬─────────
+   ·                        ╰── reported here
+   ╰────
+  help: move this expression into a function; Alder will infer its Task return

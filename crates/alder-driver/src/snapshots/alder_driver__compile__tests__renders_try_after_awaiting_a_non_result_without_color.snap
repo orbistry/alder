@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "#[extern(\"alder:kernel\", \"$taskSleep\")]\nfn sleep(milliseconds: Number) Task[()]\n\nfn invalid() Result[Number] {\n    sleep(1).await?\n    Ok(42)\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Result[a, [_]]`, found `()`
+   ╭─[/project/src/main.ald:5:5]
+ 4 │ fn invalid() Result[Number] {
+ 5 │     sleep(1).await?
+   ·     ───────┬───────
+   ·            ╰── type requirement originates here
+ 6 │     Ok(42)
+   ╰────

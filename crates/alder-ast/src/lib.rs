@@ -279,6 +279,9 @@ pub enum ExternDecl<'a> {
     Fn {
         module: &'a str,
         symbol: &'a str,
+        /// Append an `AbortSignal` supplied by the task runtime to the
+        /// JavaScript call. This is valid only for Promise-returning externs.
+        abort_signal: bool,
         name: QualifiedName<'a>,
         params: &'a [Param<'a>],
         ret: Node<'a, Type<'a>>,
@@ -1140,4 +1143,202 @@ pub enum Namespace {
 pub struct PrivateName<'a> {
     pub name: &'a str,
     pub namespace: Namespace,
+}
+
+/// Whether this block suspends directly. Await points inside nested lambdas
+/// belong to those lambdas and deliberately do not mark the outer function.
+pub fn contains_await_block(block: &Located<Block<'_>>) -> bool {
+    block.value.tail.is_some_and(contains_await_expr)
+        || block
+            .value
+            .statements
+            .iter()
+            .any(|statement| contains_await_stmt(statement))
+}
+
+fn contains_await_stmt(statement: &Located<Stmt<'_>>) -> bool {
+    match &statement.value {
+        Stmt::Let(decl) => contains_await_expr(decl.value),
+        Stmt::Assign { value, .. } | Stmt::Assert(value) | Stmt::Expr(value) => {
+            contains_await_expr(value)
+        }
+        Stmt::Return(Some(value)) | Stmt::Break(Some(value)) => contains_await_expr(value),
+        Stmt::For { iter, body, .. } => contains_await_expr(iter) || contains_await_block(body),
+        Stmt::While { condition, body } => {
+            contains_await_expr(condition) || contains_await_block(body)
+        }
+        Stmt::Use { .. } | Stmt::Return(None) | Stmt::Break(None) | Stmt::Continue => false,
+    }
+}
+
+/// Whether this expression suspends directly, excluding nested lambdas.
+pub fn contains_await_expr(expression: &Located<Expr<'_>>) -> bool {
+    match &expression.value {
+        Expr::Await(_) => true,
+        Expr::Array(items) | Expr::Tuple(items) => {
+            items.iter().any(|item| contains_await_expr(item))
+        }
+        Expr::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            contains_await_expr(function)
+                || arguments
+                    .iter()
+                    .any(|argument| contains_await_expr(argument))
+        }
+        Expr::Access { record, .. } => contains_await_expr(record),
+        Expr::Index { target, index } => contains_await_expr(target) || contains_await_expr(index),
+        Expr::Try(expr) | Expr::Pin(expr) | Expr::Not(expr) | Expr::State(expr) => {
+            contains_await_expr(expr)
+        }
+        Expr::Negate { expr, .. } => contains_await_expr(expr),
+        Expr::Binop { left, right, .. } => contains_await_expr(left) || contains_await_expr(right),
+        Expr::Block(block) | Expr::Loop(block) => contains_await_block(block),
+        Expr::If {
+            branches,
+            final_else,
+        } => {
+            branches.iter().any(|branch| {
+                contains_await_expr(branch.condition) || contains_await_block(branch.body)
+            }) || final_else.is_some_and(contains_await_block)
+        }
+        Expr::Match { scrutinee, arms } => {
+            contains_await_expr(scrutinee)
+                || arms.iter().any(|arm| {
+                    arm.guard.is_some_and(contains_await_expr) || contains_await_expr(arm.body)
+                })
+        }
+        Expr::Provide { value, body, .. } => {
+            contains_await_expr(value) || contains_await_block(body)
+        }
+        Expr::Record(fields) | Expr::RecordConstructor { fields, .. } => {
+            fields.iter().any(|field| match field {
+                RecordField::Field { value, .. } | RecordField::Spread(value) => {
+                    contains_await_expr(value)
+                }
+            })
+        }
+        Expr::TaggedTemplate { tag, parts } => {
+            contains_await_expr(tag)
+                || parts.iter().any(
+                    |part| matches!(part, TemplatePart::Expr(expr) if contains_await_expr(expr)),
+                )
+        }
+        Expr::Template(parts) => parts
+            .iter()
+            .any(|part| matches!(part, TemplatePart::Expr(expr) if contains_await_expr(expr))),
+        Expr::Lambda { .. }
+        | Expr::Number { .. }
+        | Expr::BigInt(_)
+        | Expr::Str(_)
+        | Expr::Bool(_)
+        | Expr::Unit
+        | Expr::Var { .. }
+        | Expr::Constructor(_)
+        | Expr::Tag { .. }
+        | Expr::TupleAccess { .. }
+        | Expr::MacroCall { .. } => false,
+        Expr::Style(style) => contains_await_style(style),
+        Expr::Query(query) => contains_await_query(query),
+        Expr::Markup(markup) => contains_await_markup(markup),
+    }
+}
+
+fn contains_await_style(style: &Style<'_>) -> bool {
+    style.entries.iter().any(|entry| match entry.value {
+        StyleValue::Dimension { .. } => false,
+        StyleValue::Expr(expression) => contains_await_expr(expression),
+        StyleValue::Nested(nested) => contains_await_style(nested),
+    })
+}
+
+fn contains_await_query(query: &Query<'_>) -> bool {
+    match query {
+        Query::Select(select) => {
+            let projection = match select.projection {
+                Projection::Star(_) => false,
+                Projection::Fields(fields) => fields.iter().any(|field| contains_await_expr(field)),
+            };
+            projection
+                || select.joins.iter().any(|join| contains_await_expr(join.on))
+                || select.where_.is_some_and(contains_await_expr)
+                || select.group_by.iter().any(|item| contains_await_expr(item))
+                || select
+                    .order_by
+                    .iter()
+                    .any(|order| contains_await_expr(order.expr))
+                || select.limit.is_some_and(contains_await_expr)
+                || select.offset.is_some_and(contains_await_expr)
+        }
+        Query::Insert { values, .. } => contains_await_expr(values),
+        Query::Update { set, where_, .. } => {
+            set.iter().any(|field| match field {
+                RecordField::Field { value, .. } | RecordField::Spread(value) => {
+                    contains_await_expr(value)
+                }
+            }) || where_.is_some_and(contains_await_expr)
+        }
+        Query::Delete { where_, .. } => where_.is_some_and(contains_await_expr),
+    }
+}
+
+fn contains_await_markup(markup: &Markup<'_>) -> bool {
+    match markup {
+        Markup::Element(element) => contains_await_element(element),
+        Markup::Fragment(children) => children.iter().any(|child| contains_await_child(child)),
+    }
+}
+
+fn contains_await_element(element: &Element<'_>) -> bool {
+    element.attrs.iter().any(|attribute| {
+        matches!(attribute.value, Some(AttrValue::Expr(expression)) if contains_await_expr(expression))
+    }) || element
+        .children
+        .iter()
+        .any(|child| contains_await_child(child))
+}
+
+fn contains_await_child(child: &Located<Child<'_>>) -> bool {
+    match &child.value {
+        Child::Element(element) => contains_await_element(element),
+        Child::Fragment(children) => children.iter().any(|child| contains_await_child(child)),
+        Child::Text(_) => false,
+        Child::Hole(expression) => contains_await_expr(expression),
+        Child::If {
+            branches,
+            final_else,
+        } => {
+            branches.iter().any(|branch| {
+                contains_await_expr(branch.condition) || contains_await_child_block(branch.body)
+            }) || final_else.is_some_and(contains_await_child_block)
+        }
+        Child::For {
+            iter,
+            key,
+            body,
+            empty,
+            ..
+        } => {
+            contains_await_expr(iter)
+                || key.is_some_and(contains_await_expr)
+                || contains_await_child_block(body)
+                || empty.is_some_and(contains_await_child_block)
+        }
+        Child::Match { scrutinee, arms } => {
+            contains_await_expr(scrutinee)
+                || arms.iter().any(|arm| {
+                    arm.guard.is_some_and(contains_await_expr)
+                        || contains_await_child_block(arm.body)
+                })
+        }
+    }
+}
+
+fn contains_await_child_block(block: &Located<ChildBlock<'_>>) -> bool {
+    block.value.items.iter().any(|item| match item {
+        ChildItem::Stmt(statement) => contains_await_stmt(statement),
+        ChildItem::Child(child) => contains_await_child(child),
+    })
 }

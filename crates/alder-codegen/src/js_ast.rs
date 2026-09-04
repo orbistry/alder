@@ -269,6 +269,15 @@ impl<'a> JsAst<'a> {
         self.builder.expression_await(SPAN, argument)
     }
 
+    pub(crate) fn yield_expression(
+        &self,
+        argument: Expression<'a>,
+        delegate: bool,
+    ) -> Expression<'a> {
+        self.builder
+            .expression_yield(SPAN, delegate, Some(argument))
+    }
+
     pub(crate) fn conditional(
         &self,
         test: Expression<'a>,
@@ -397,6 +406,47 @@ impl<'a> JsAst<'a> {
                 Some(body),
             ),
         )
+    }
+
+    pub(crate) fn function_expression(
+        &self,
+        parameters: &[String],
+        body: ArenaVec<'a, Statement<'a>>,
+        generator: bool,
+    ) -> Expression<'a> {
+        let parameters = self.formal_parameters(parameters, FormalParameterKind::FormalParameter);
+        let body = self.builder.function_body(SPAN, self.builder.vec(), body);
+        self.builder.expression_function(
+            SPAN,
+            FunctionType::FunctionExpression,
+            None,
+            generator,
+            false,
+            false,
+            NONE,
+            NONE,
+            parameters,
+            NONE,
+            Some(body),
+        )
+    }
+
+    fn formal_parameters(
+        &self,
+        parameters: &[String],
+        kind: FormalParameterKind,
+    ) -> FormalParameters<'a> {
+        let parameters = self.builder.vec_from_iter(parameters.iter().map(|name| {
+            self.builder.formal_parameter(
+                SPAN,
+                self.builder.vec(),
+                self.binding(name),
+                None,
+                false,
+                false,
+            )
+        }));
+        self.builder.formal_parameters(SPAN, kind, parameters, NONE)
     }
 
     pub(crate) fn arrow(

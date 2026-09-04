@@ -1,4 +1,3 @@
-const providerStacks = new Map();
 const tests = [];
 
 export function $equal(left, right) {
@@ -584,11 +583,559 @@ function prefixJsonPath(prefix, message) {
 export function $ioPrint(value) { console.log(value); }
 export function $refSame(left, right) { return left === right; }
 export function $cliArgs() { return globalThis.__alderHost?.args ?? []; }
-export function $taskSleep(milliseconds) {
-    return new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const taskType = Symbol.for("alder/Task");
+const maxOperationsBeforeYield = 1024;
+let nextFiberId = 0;
+let currentFiber = null;
+const synchronousProviderContext = new Map();
+
+class ForeignDefect extends Error {
+    constructor(cause, origin) {
+        super(`Foreign task failed at ${origin}: ${describe(cause)}`, { cause });
+        this.name = "AlderForeignDefect";
+        this.origin = origin;
+    }
 }
-export function $fiberAll(tasks) { return Promise.all(tasks); }
-export function $fiberRace(tasks) { return Promise.race(tasks); }
+
+class Interrupted extends Error {
+    constructor(fiberId) {
+        super(`Fiber ${fiberId} was interrupted`);
+        this.name = "AlderInterrupted";
+        this.fiberId = fiberId;
+    }
+}
+
+function success(value) { return { $: "Success", value }; }
+function failure(error) { return { $: "Failure", error }; }
+
+function cloneContext(context) {
+    return new Map([...context].map(([key, values]) => [key, [...values]]));
+}
+
+function taskIterator(task) {
+    if (!task || task[taskType] !== true || typeof task[Symbol.iterator] !== "function") {
+        throw new TypeError("Expected an Alder Task value");
+    }
+    const iterator = task[Symbol.iterator]();
+    if (!iterator || typeof iterator.next !== "function" || typeof iterator.throw !== "function") {
+        throw new TypeError("An Alder Task factory did not return a generator");
+    }
+    return iterator;
+}
+
+export function $task(factory) {
+    if (typeof factory !== "function") throw new TypeError("Task factory must be a function");
+    return Object.freeze({
+        [taskType]: true,
+        [Symbol.iterator]: factory,
+    });
+}
+
+class FiberScope {
+    constructor(owner) {
+        this.owner = owner;
+        this.state = "Empty";
+        this.finalizers = [];
+        this.exit = null;
+        this.closePromise = null;
+    }
+
+    add(finalizer) {
+        if (this.state === "Closed") {
+            return runFinalizer(finalizer(this.exit), this.owner.context);
+        }
+        if (this.state === "Empty") this.state = "Open";
+        this.finalizers.push(finalizer);
+        return null;
+    }
+
+    async close(exit) {
+        if (this.state === "Closed") return this.exit;
+        if (this.state === "Closing") return this.closePromise;
+        this.state = "Closing";
+        this.exit = exit;
+        this.closePromise = (async () => {
+            const children = [...this.owner.children];
+            for (const child of children) child.interruptUnsafe();
+            await Promise.all(children.map((child) => child.awaitExit()));
+
+            while (this.finalizers.length > 0) {
+                const finalizer = this.finalizers.pop();
+                let finalizerExit;
+                try {
+                    finalizerExit = await runFinalizer(finalizer(exit), this.owner.context);
+                } catch (error) {
+                    finalizerExit = failure(error);
+                }
+                if (exit.$ === "Success" && finalizerExit.$ === "Failure") exit = finalizerExit;
+            }
+            this.exit = exit;
+            this.state = "Closed";
+            return exit;
+        })();
+        return this.closePromise;
+    }
+}
+
+class FiberImpl {
+    constructor(task, parent = null, context = null) {
+        this.id = ++nextFiberId;
+        this.parent = parent;
+        this.context = cloneContext(context ?? parent?.context ?? synchronousProviderContext);
+        this.children = new Set();
+        this.scope = new FiberScope(this);
+        this.state = "Running";
+        this.exit = null;
+        this.observers = new Set();
+        this.interruptRequested = false;
+        this.interruptDelivered = false;
+        this.interruptError = new Interrupted(this.id);
+        this.interruptMask = 0;
+        this.suspendedCancel = null;
+        this.queued = false;
+        this.resumeMethod = "next";
+        this.resumeValue = undefined;
+        this.iterator = taskIterator(task);
+        this.exitPromise = new Promise((resolve) => { this.resolveExit = resolve; });
+        if (parent) parent.children.add(this);
+    }
+
+    start() {
+        schedule(this, false);
+        return this;
+    }
+
+    awaitExit() { return this.exitPromise; }
+
+    observe(observer) {
+        if (this.state === "Done") {
+            observer(this.exit);
+            return () => {};
+        }
+        this.observers.add(observer);
+        let active = true;
+        return () => {
+            if (!active) return;
+            active = false;
+            this.observers.delete(observer);
+        };
+    }
+
+    interruptUnsafe() {
+        if (this.state === "Done" || this.interruptRequested) return;
+        this.interruptRequested = true;
+        if (this.interruptMask === 0 && this.state === "Suspended") {
+            const cancel = this.suspendedCancel;
+            this.suspendedCancel = null;
+            if (cancel) cancel();
+            this.state = "Running";
+            this.resumeMethod = "throw";
+            this.resumeValue = this.interruptError;
+            this.interruptDelivered = true;
+            schedule(this, false);
+        }
+    }
+
+    run() {
+        if (this.state !== "Running") return;
+        const previousFiber = currentFiber;
+        currentFiber = this;
+        try {
+            let operations = 0;
+            while (this.state === "Running" && operations < maxOperationsBeforeYield) {
+                operations += 1;
+                if (this.interruptRequested && !this.interruptDelivered && this.interruptMask === 0) {
+                    this.resumeMethod = "throw";
+                    this.resumeValue = this.interruptError;
+                    this.interruptDelivered = true;
+                }
+                const method = this.resumeMethod;
+                const value = this.resumeValue;
+                this.resumeMethod = "next";
+                this.resumeValue = undefined;
+                let step;
+                try {
+                    step = this.iterator[method](value);
+                } catch (error) {
+                    this.beginClose(failure(error));
+                    return;
+                }
+                if (step.done) {
+                    this.beginClose(success(step.value));
+                    return;
+                }
+                if (!step.value || typeof step.value.$ !== "string") {
+                    this.beginClose(failure(new TypeError("A task yielded an invalid runtime operation")));
+                    return;
+                }
+                if (this.handle(step.value)) return;
+            }
+            if (this.state === "Running") schedule(this, true);
+        } finally {
+            currentFiber = previousFiber;
+        }
+    }
+
+    handle(operation) {
+        switch (operation.$) {
+            case "Promise": return this.handlePromise(operation);
+            case "Fork": {
+                let child;
+                try { child = new FiberImpl(operation.task, this).start(); }
+                catch (error) { this.resumeMethod = "throw"; this.resumeValue = error; return false; }
+                this.resumeValue = child;
+                return false;
+            }
+            case "Join": return this.handleJoin(operation.fiber);
+            case "Interrupt": return this.handleInterrupt(operation.fiber);
+            case "All": return this.handleAll(operation.tasks);
+            case "Race": return this.handleRace(operation.tasks);
+            case "Scope": return this.handleScope(operation.task);
+            case "Finalizer": return this.handleFinalizer(operation.finalizer);
+            case "Mask":
+                this.interruptMask = Math.max(0, this.interruptMask + operation.delta);
+                return false;
+            default:
+                this.resumeMethod = "throw";
+                this.resumeValue = new TypeError(`Unknown task operation: ${operation.$}`);
+                return false;
+        }
+    }
+
+    suspend(register) {
+        this.state = "Suspended";
+        let active = true;
+        let cleanup = null;
+        const resume = (method, value) => {
+            if (!active || this.state === "Done") return;
+            active = false;
+            this.suspendedCancel = null;
+            this.state = "Running";
+            this.resumeMethod = method;
+            this.resumeValue = value;
+            schedule(this, false);
+        };
+        try {
+            cleanup = register(resume) ?? null;
+        } catch (error) {
+            resume("throw", error);
+        }
+        if (active && this.state === "Suspended") {
+            this.suspendedCancel = () => {
+                if (!active) return;
+                active = false;
+                if (cleanup) cleanup();
+            };
+        }
+        return true;
+    }
+
+    handlePromise(operation) {
+        return this.suspend((resume) => {
+            let controller = null;
+            let promise;
+            try {
+                controller = operation.abort ? new AbortController() : null;
+                const returned = operation.thunk(controller?.signal);
+                let then;
+                try { then = returned?.then; }
+                catch (error) { throw new ForeignDefect(error, operation.origin); }
+                if ((typeof returned !== "object" && typeof returned !== "function")
+                    || returned === null || typeof then !== "function") {
+                    throw new ForeignDefect(
+                        new TypeError("an asynchronous extern did not return a Promise"),
+                        operation.origin,
+                    );
+                }
+                promise = Promise.resolve(returned);
+            } catch (error) {
+                resume("throw", error instanceof ForeignDefect
+                    ? error
+                    : new ForeignDefect(error, operation.origin));
+                return null;
+            }
+            promise.then(
+                (value) => resume("next", value),
+                (error) => {
+                    if (operation.mapRejected) {
+                        try { resume("next", operation.mapRejected(error)); }
+                        catch (mappingError) {
+                            resume("throw", new ForeignDefect(mappingError, operation.origin));
+                        }
+                    } else {
+                        resume("throw", new ForeignDefect(error, operation.origin));
+                    }
+                },
+            );
+            let aborted = false;
+            return () => {
+                if (controller && !aborted) {
+                    aborted = true;
+                    controller.abort();
+                }
+            };
+        });
+    }
+
+    handleJoin(fiber) {
+        if (!(fiber instanceof FiberImpl)) {
+            this.resumeMethod = "throw";
+            this.resumeValue = new TypeError("Fiber.join expected a Fiber value");
+            return false;
+        }
+        if (fiber.state === "Done") {
+            this.resumeMethod = fiber.exit.$ === "Success" ? "next" : "throw";
+            this.resumeValue = fiber.exit.$ === "Success" ? fiber.exit.value : fiber.exit.error;
+            return false;
+        }
+        return this.suspend((resume) => fiber.observe((exit) => {
+            resume(exit.$ === "Success" ? "next" : "throw", exit.$ === "Success" ? exit.value : exit.error);
+        }));
+    }
+
+    handleInterrupt(fiber) {
+        if (!(fiber instanceof FiberImpl)) {
+            this.resumeMethod = "throw";
+            this.resumeValue = new TypeError("Fiber.interrupt expected a Fiber value");
+            return false;
+        }
+        fiber.interruptUnsafe();
+        if (fiber.state === "Done") return false;
+        return this.suspend((resume) => fiber.observe(() => resume("next", undefined)));
+    }
+
+    createChildren(tasks) {
+        const children = [];
+        try {
+            for (const task of tasks) children.push(new FiberImpl(task, this));
+        } catch (error) {
+            for (const child of children) child.interruptUnsafe();
+            throw error;
+        }
+        for (const child of children) child.start();
+        return children;
+    }
+
+    handleAll(tasks) {
+        if (!Array.isArray(tasks)) {
+            this.resumeMethod = "throw";
+            this.resumeValue = new TypeError("Fiber.all expected an Array of tasks");
+            return false;
+        }
+        let children;
+        try { children = this.createChildren(tasks); }
+        catch (error) { this.resumeMethod = "throw"; this.resumeValue = error; return false; }
+        if (children.length === 0) { this.resumeValue = []; return false; }
+        return this.suspend((resume) => {
+            const results = new Array(children.length);
+            const removers = [];
+            let remaining = children.length;
+            let settled = false;
+            const finishFailure = async (error, winner) => {
+                if (settled) return;
+                settled = true;
+                removers.forEach((remove) => remove());
+                children.forEach((child) => { if (child !== winner) child.interruptUnsafe(); });
+                await Promise.all(children.map((child) => child.awaitExit()));
+                resume("throw", error);
+            };
+            children.forEach((child, index) => {
+                removers.push(child.observe((exit) => {
+                    if (settled) return;
+                    if (exit.$ === "Failure") {
+                        finishFailure(exit.error, child);
+                        return;
+                    }
+                    results[index] = exit.value;
+                    remaining -= 1;
+                    if (remaining === 0) {
+                        settled = true;
+                        removers.forEach((remove) => remove());
+                        resume("next", results);
+                    }
+                }));
+            });
+            return () => {
+                if (settled) return;
+                settled = true;
+                removers.forEach((remove) => remove());
+                children.forEach((child) => child.interruptUnsafe());
+            };
+        });
+    }
+
+    handleRace(tasks) {
+        if (!Array.isArray(tasks) || tasks.length === 0) {
+            this.resumeMethod = "throw";
+            this.resumeValue = new TypeError("Fiber.race expected a non-empty Array of tasks");
+            return false;
+        }
+        let children;
+        try { children = this.createChildren(tasks); }
+        catch (error) { this.resumeMethod = "throw"; this.resumeValue = error; return false; }
+        return this.suspend((resume) => {
+            const removers = [];
+            let settled = false;
+            const choose = async (winner, exit) => {
+                if (settled) return;
+                settled = true;
+                removers.forEach((remove) => remove());
+                children.forEach((child) => { if (child !== winner) child.interruptUnsafe(); });
+                await Promise.all(children.filter((child) => child !== winner).map((child) => child.awaitExit()));
+                resume(exit.$ === "Success" ? "next" : "throw", exit.$ === "Success" ? exit.value : exit.error);
+            };
+            children.forEach((child) => removers.push(child.observe((exit) => choose(child, exit))));
+            return () => {
+                if (settled) return;
+                settled = true;
+                removers.forEach((remove) => remove());
+                children.forEach((child) => child.interruptUnsafe());
+            };
+        });
+    }
+
+    handleScope(task) {
+        let child;
+        try { child = new FiberImpl(task, this).start(); }
+        catch (error) { this.resumeMethod = "throw"; this.resumeValue = error; return false; }
+        return this.suspend((resume) => {
+            const remove = child.observe((exit) => {
+                resume(exit.$ === "Success" ? "next" : "throw", exit.$ === "Success" ? exit.value : exit.error);
+            });
+            return () => { remove(); child.interruptUnsafe(); };
+        });
+    }
+
+    handleFinalizer(finalizer) {
+        let pending;
+        try { pending = this.scope.add(finalizer); }
+        catch (error) { this.resumeMethod = "throw"; this.resumeValue = error; return false; }
+        if (!pending) return false;
+        return this.suspend((resume) => pending.then(
+            (exit) => resume(exit.$ === "Success" ? "next" : "throw", exit.$ === "Success" ? undefined : exit.error),
+        ));
+    }
+
+    beginClose(exit) {
+        if (this.state === "Closing" || this.state === "Done") return;
+        this.state = "Closing";
+        this.suspendedCancel = null;
+        this.scope.close(exit).then(
+            (closedExit) => this.complete(closedExit),
+            (error) => this.complete(failure(error)),
+        );
+    }
+
+    complete(exit) {
+        if (this.state === "Done") return;
+        this.state = "Done";
+        this.exit = exit;
+        if (this.parent) this.parent.children.delete(this);
+        const observers = [...this.observers];
+        this.observers.clear();
+        this.resolveExit(exit);
+        for (const observer of observers) {
+            try { observer(exit); }
+            catch (error) { console.error("Fiber observer failed", error); }
+        }
+    }
+}
+
+function schedule(fiber, yieldToHost) {
+    if (fiber.queued || fiber.state !== "Running") return;
+    fiber.queued = true;
+    const run = () => {
+        fiber.queued = false;
+        fiber.run();
+    };
+    if (yieldToHost) setTimeout(run, 0);
+    else queueMicrotask(run);
+}
+
+function runFinalizer(task, context) {
+    let fiber;
+    try {
+        fiber = new FiberImpl(task, null, context);
+        fiber.interruptMask = 1;
+        fiber.start();
+    } catch (error) {
+        return Promise.resolve(failure(error));
+    }
+    return fiber.awaitExit();
+}
+
+export function $runTask(task) {
+    let fiber;
+    try { fiber = new FiberImpl(task).start(); }
+    catch (error) { return Promise.reject(error); }
+    return fiber.awaitExit().then((exit) => {
+        if (exit.$ === "Success") return exit.value;
+        throw exit.error;
+    });
+}
+
+export function $runMain(value) {
+    return value?.[taskType] === true ? $runTask(value) : Promise.resolve(value);
+}
+
+export function $tryPromise(thunk, abort = false, origin = "JavaScript extern", mapRejected = null) {
+    return $task(function* () {
+        return yield { $: "Promise", thunk, abort, origin, mapRejected };
+    });
+}
+
+export function $taskSleep(milliseconds) {
+    return $tryPromise((signal) => new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, milliseconds);
+        signal.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new Interrupted("sleep"));
+        }, { once: true });
+    }), true, "Task.sleep");
+}
+
+export function $fiberFork(task) {
+    return $task(function* () { return yield { $: "Fork", task }; });
+}
+
+export function $fiberJoin(fiber) {
+    return $task(function* () { return yield { $: "Join", fiber }; });
+}
+
+export function $fiberInterrupt(fiber) {
+    return $task(function* () { return yield { $: "Interrupt", fiber }; });
+}
+
+export function $fiberAll(tasks) {
+    return $task(function* () { return yield { $: "All", tasks }; });
+}
+
+export function $fiberRace(tasks) {
+    return $task(function* () { return yield { $: "Race", tasks }; });
+}
+
+export function $fiberScope(task) {
+    return $task(function* () { return yield { $: "Scope", task }; });
+}
+
+export function $fiberAddFinalizer(task) {
+    return $task(function* () {
+        return yield { $: "Finalizer", finalizer: () => task };
+    });
+}
+
+export function $fiberAddFinalizerExit(finalizer) {
+    return $task(function* () { return yield { $: "Finalizer", finalizer }; });
+}
+
+export function $fiberUninterruptible(task) {
+    return $task(function* () {
+        yield { $: "Mask", delta: 1 };
+        try { return yield* task; }
+        finally { yield { $: "Mask", delta: -1 }; }
+    });
+}
 
 export function $tryCatch(thunk) {
     try {
@@ -598,29 +1145,24 @@ export function $tryCatch(thunk) {
     }
 }
 
-export async function $tryCatchAsync(thunk) {
-    try {
-        return { $: "Ok", _0: await thunk() };
-    } catch (error) {
-        return { $: "Err", _0: error };
-    }
-}
-
 export function $providerPush(key, value) {
-    let stack = providerStacks.get(key);
-    if (!stack) providerStacks.set(key, stack = []);
+    const context = currentFiber?.context ?? synchronousProviderContext;
+    let stack = context.get(key);
+    if (!stack) context.set(key, stack = []);
     stack.push(value);
 }
 
 export function $providerPop(key) {
-    const stack = providerStacks.get(key);
+    const context = currentFiber?.context ?? synchronousProviderContext;
+    const stack = context.get(key);
     if (!stack?.length) throw new Error(`Provider stack underflow: ${key}`);
     stack.pop();
-    if (stack.length === 0) providerStacks.delete(key);
+    if (stack.length === 0) context.delete(key);
 }
 
 export function $providerGet(key) {
-    const stack = providerStacks.get(key);
+    const context = currentFiber?.context ?? synchronousProviderContext;
+    const stack = context.get(key);
     if (!stack?.length) throw new Error(`No value was provided for ${key}`);
     return stack[stack.length - 1];
 }
@@ -645,7 +1187,7 @@ export async function $runTests(report = console.log) {
     let failed = 0;
     for (const test of tests) {
         try {
-            const result = await test.run();
+            const result = await $runMain(test.run());
             if (result?.$ === "Err") throw result._0;
             report(`pass ${test.moduleName} — ${test.name}`);
         } catch (error) {

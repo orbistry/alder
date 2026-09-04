@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn invalid() {\n    (42).await\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Task[a]`, found `Number`
+   ╭─[/project/src/main.ald:2:5]
+ 1 │ fn invalid() {
+ 2 │     (42).await
+   ·     ─────┬────
+   ·          ╰── type requirement originates here
+ 3 │ }
+   ╰────

@@ -187,7 +187,16 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
         ("Task", exports(&[("$taskSleep", "sleep")])),
         (
             "Fiber",
-            exports(&[("$fiberAll", "all"), ("$fiberRace", "race")]),
+            exports(&[
+                ("$fiberFork", "fork"),
+                ("$fiberJoin", "join"),
+                ("$fiberInterrupt", "interrupt"),
+                ("$fiberAll", "all"),
+                ("$fiberRace", "race"),
+                ("$fiberScope", "scope"),
+                ("$fiberAddFinalizer", "addFinalizer"),
+                ("$fiberUninterruptible", "uninterruptible"),
+            ]),
         ),
         ("Http", String::new()),
     ])
@@ -309,7 +318,7 @@ mod tests {
         .await
         .unwrap();
         assert!(code.contains("return 42"));
-        assert!(code.contains("await main"));
+        assert!(code.contains("await $runMain(main())"), "{code}");
     }
 
     #[tokio::test]

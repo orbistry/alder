@@ -1,0 +1,40 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "#[extern(\"globalThis\", \"Promise.resolve\")]\nfn resolved(value: a) Task[a]\n\nfn load(value: Number) Result[Number] {\n    Task.sleep(1).await\n    Ok(value)\n}\n\npub fn main() Result[Number] {\n    let value = 42 |> resolved().await |> load().await?\n    Ok(value)\n}\n"
+---
+import { $task, $tryPromise } from "alder:kernel";
+import { sleep as $i_alder_3A_2F_2Fstd_2FTask_2Emjs_sleep } from "alder://std/Task.mjs";
+import { $resultOk as $x_alder_3Akernel__24resultOk } from "alder:kernel";
+function $v_resolved($a0) {
+	return $task(function* () {
+		return yield* $tryPromise(() => {
+			return globalThis["Promise"]["resolve"]($a0);
+		}, false, "alder://app/main.mjs:2:23 extern globalThis:Promise.resolve");
+	});
+}
+function $v_load($a0) {
+	return $task(function* () {
+		let $l1_value = $a0;
+		const $t0 = $i_alder_3A_2F_2Fstd_2FTask_2Emjs_sleep;
+		yield* $t0(1);
+		const $t1 = $x_alder_3Akernel__24resultOk;
+		return $t1($l1_value);
+	});
+}
+function $v_main() {
+	return $task(function* () {
+		const $t2 = 42;
+		const $t3 = $v_resolved;
+		const $t4 = yield* $t3($t2);
+		const $t5 = $v_load;
+		const $t6 = yield* $t5($t4);
+		if ($t6["$"] === "Err") {
+			return $t6;
+		}
+		const $t7 = $t6["_0"];
+		let $l2_value = $t7;
+		const $t8 = $x_alder_3Akernel__24resultOk;
+		return $t8($l2_value);
+	});
+}
+export { $v_main as main };

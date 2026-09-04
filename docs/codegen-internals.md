@@ -78,8 +78,10 @@ Later `else if` condition prefixes stay inside the preceding `else`. A loop in
 value position uses a labeled `for (;;)`, and `break value` assigns its result
 temporary before breaking. A bare break produces `undefined`.
 
-At a function boundary, emit the block directly and `return` its tail. Scan for
-`Await` outside nested functions and emit that function as `async`.
+At a function boundary, emit the block directly and `return` its tail. An
+`Await` outside nested lambdas marks the function task-producing. Such a
+function remains a plain JavaScript declaration whose body returns a lazy
+`$task(function* () { ... })`; it is not emitted as a native `async` function.
 
 ## 3. Stable runtime ABI
 
@@ -91,7 +93,7 @@ At a function boundary, emit the block directly and `return` its tail. Scan for
 | record | ordinary plain object |
 | `Map`, `Set` | native JS `Map`, `Set` |
 | function | native n-ary function |
-| `Task[a]` in M2 | `Promise<a>` |
+| `Task[a]` | frozen reusable generator factory owned by the kernel |
 | enum / `Result` / error tag | tagged object |
 | `Option[a]` | nullable encoding with dynamic boxing |
 | extern opaque type | unchanged JS value |
@@ -182,8 +184,8 @@ position. The left value is evaluated before the callee and existing arguments.
 `??` preserves short-circuit RHS lifting.
 
 `Try` evaluates its `Result` once, returns an `Err` unchanged from the current
-function, and otherwise yields `_0`. `Await` emits native `await`. `state(x)` is
-identity in M2.
+function, and otherwise yields `_0`. `Await` emits `yield*` inside the
+enclosing task generator. `state(x)` is identity in M2.
 
 `provide` pushes the value under its canonical provider key, executes the body
 inside `try/finally`, and pops in `finally`, which remains correct across await.
@@ -223,17 +225,26 @@ module string `globalThis` for validated dotted global paths emitted as bracket
 access. Empty/unsafe segments are canonicalization errors. `node:` imports are
 rejected for Cloudflare and for standalone while `deno_node` is excluded.
 
-Direct and `Task` extern results pass through. `Result` results use synchronous
-or async kernel try/catch wrappers; argument evaluation remains outside the
-catch. Until M4 specifies exception-to-row mapping, a catching extern may only
-use one closed unary error tag.
+Direct results pass through. For a non-kernel extern, declared `Task[a]` is the
+explicit Promise ABI: emit a plain function returning a lazy generator task,
+and invoke the foreign symbol inside a `$tryPromise` thunk only when that task
+runs. Kernel `Task` externs already return Alder tasks and pass through. The
+compiler never probes ordinary extern results to infer async behavior.
+
+`#[extern("module", "symbol", "abort")]` selects the cancellable ABI. It is
+valid only with a `Task` return and appends the bridge-created `AbortSignal` to
+the foreign call. Generated origin metadata records the Alder module/location
+and foreign module/symbol. Raw throws and rejections become foreign defects;
+typed errors cross this boundary only as fulfillment values such as
+`Task[Result[a, e]]`. Synchronous `Result` externs retain `$tryCatch`.
 
 ## 8. Kernel, stdlib, bundling, and runtime
 
 Kernel TypeScript exports a versioned ABI: enum/option helpers, structural
-equality, interpolation, provider stack, result wrappers, `runMain`, match
-failure, and test registration. Generated code imports `alder:kernel`, never a
-physical filename.
+equality, interpolation, fiber-local provider context, result wrappers,
+`$task`, `$tryPromise`, `$runMain`, fiber operations, match failure, and test
+registration. Generated code imports `alder:kernel`, never a physical
+filename.
 
 The standalone bootstrap installs one frozen, non-enumerable
 `globalThis.__alderHost` with `args`, stdout/stderr writes, exit status, and test
@@ -242,8 +253,8 @@ Cloudflare entry supplies the same target-neutral kernel contract with a worker
 adapter.
 
 Pin one coherent Deno release family with exact Cargo versions and document the
-matrix in `docs/runtime.md`. The implementation baseline is Deno 2.8.1
-(`deno_core` 0.402.0); in this family URL and console support live in
+matrix in `docs/runtime.md`. The implementation baseline uses `deno_core`
+0.403.0; in this family URL and console support live in
 `deno_web`, so obsolete separate `deno_url`/`deno_console` dependencies are not
 added. Extension order is copied from that release and frozen in one function.
 Start without a V8 startup snapshot: construct with `try_new`, load the entry
@@ -269,9 +280,11 @@ module-worker default export.
 
 ## 9. Tests and commands
 
-`runMain` accepts sync/promise main, maps unit/`Ok` to exit 0, `Err` to a stable
-stderr rendering and exit 1, and maps thrown/rejected JS exceptions to a panic
-exit. Rust reads host state rather than scraping console output.
+`$runMain` accepts either a synchronous value or an Alder task and runs the
+latter through the fiber scheduler. The standalone entry maps unit/`Ok` to exit
+0, `Err` to stable stderr rendering and exit 1, and thrown foreign defects or
+panics to a failed module evaluation. Rust reads host state rather than
+scraping console output.
 
 Test mode retains `test`/`tests` declarations and emits lazy registry entries.
 The registry reports structured events to the host; only the CLI formats plain

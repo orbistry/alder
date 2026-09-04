@@ -412,15 +412,39 @@ fn profile(id: Id) Result[Profile] {
     Ok({ user, posts })
 }
 
-let (a, b) = Fiber.all(profile(1), profile(2)).await
+let profiles = Fiber.all([profile(1), profile(2)]).await
 ```
 
 - `Task` is a visible type. Signatures may write it
   (`fn load(id: Id) Task[Result[User]]`), hover shows
   it when inferred, and an un-awaited call is a `Task` value you can pass
   to `Fiber.fork`, `Fiber.all`, or `Fiber.race`.
-- **Open:** how a top-level entry point runs the scheduler; the exact fiber
-  API.
+- `.await?` means “await, then propagate the resolved `Result` error.” It is
+  ordinary postfix composition, not a special fused operation.
+- Pipe forwarding happens before postfix operations on a destination. Thus
+  `request |> send(client).await?` means
+  `send(request, client).await?`.
+- The last task-producing stage can be awaited directly, without wrapping the
+  whole pipeline:
+
+  ```alder
+  value
+      |> prepare
+      |> startOperation().await?
+  ```
+
+  To sequence multiple asynchronous stages, await each stage before its value
+  is forwarded: `value |> start().await? |> transform().await?`. Omitting
+  `.await` passes the `Task` itself.
+- `Fiber.fork` returns a fiber handle, `join` awaits it, `interrupt` requests
+  cooperative interruption, `all` preserves input order, and `race` returns
+  the first exit after interrupting and cleaning up its losers.
+- Every fiber owns its child scope. Leaving that scope interrupts and joins
+  remaining children, then runs registered finalizers once in LIFO order.
+  `Fiber.scope`, `Fiber.addFinalizer`, and `Fiber.uninterruptible` expose the
+  minimal structured-cleanup surface.
+- `main` and test declarations may produce tasks. Generated entries recognize
+  and run them on the kernel scheduler automatically.
 
 ## Context (dependency injection)
 
@@ -595,19 +619,33 @@ wrap important libraries. Alder also emits `.d.ts` for its `pub` items so
 TypeScript can consume Alder modules.
 
 ```alder
-#[extern("node:crypto", "randomUUID")]
+#[extern("globalThis", "crypto.randomUUID")]
 fn randomUUID() String
 
-#[extern("node:fs/promises", "readFile")]
+#[extern("./files.js", "readFile")]
 fn readFile(path: String, encoding: String) Task[Result[String, [:io(String)]]]
+
+#[extern("./client.js", "request", "abort")]
+fn request(url: String) Task[Response]
 
 #[extern("globalThis", "JSON.parse")]
 fn parseJson(s: String) Result[Json, [:syntax(String)]]
 ```
 
-- If the declared return type is `Result`, the kernel wraps the call in
-  try/catch and tags the thrown error. Otherwise a throw is a panic.
-- A JS function returning a promise must be declared `Task[...]`.
+- A JS function returning a Promise must be declared `Task[...]`. The Promise
+  producer is lazy: calling the Alder extern constructs a task, and the JS
+  function is invoked only when that task runs.
+- Promise fulfillment becomes task success. A synchronous foreign throw or raw
+  Promise rejection is a contextual foreign-runtime defect; Alder does not
+  invent a typed error row from an arbitrary JavaScript value.
+- `Task[Result[a, e]]` means the Promise fulfills with Alder `Result` data.
+  `.await?` propagates that declared `e` normally.
+- The optional `"abort"` convention requires a `Task` return and appends an
+  `AbortSignal` to the JS call. Interruption aborts it once. Without the
+  convention, interruption detaches the waiter but cannot cancel the foreign
+  operation; late settlement is ignored and late rejection remains observed.
+- If a synchronous extern declares `Result`, the kernel wraps its call in
+  try/catch. Otherwise a synchronous throw is a panic/defect.
 - Plain-data JS objects are typed as records and used directly at zero
   cost. Class instances are opaque types declared with
   `#[extern] type Response` and accessed through extern functions.
@@ -616,7 +654,6 @@ fn parseJson(s: String) Result[Json, [:syntax(String)]]
 ## Open questions (collected)
 
 - Convention or attribute for package-internal modules.
-- Entry-point scheduler and the fiber API surface.
 - Macro hygiene and the compile-time API surface.
 - Enum and record runtime representation (see `runtime.md`).
 - Whether `provide … { }` is a statement or an expression (M2).

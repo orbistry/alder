@@ -137,7 +137,8 @@ are kept through the redesign and adapted incrementally.
 
 **Architecture Decisions:**
 
-- **Async model:** Runtime-agnostic (async traits, entry points pick runtime)
+- **Async model:** Inferred lazy `Task` functions on a target-neutral
+  generator/fiber kernel; postfix `.await` and structured concurrency
 - **FileSource trait:** In driver crate with implementations:
   - `FileSystemSource` (native, `#[cfg(not(wasm32))]`)
   - `InMemorySource` (universal, for LSP unsaved buffers)
@@ -276,7 +277,8 @@ then, by design.
 - [x] Row-typed `:tag` errors in `Result`'s error position, `?` row merging, inferred rows for `Result[a]`
 - [x] `error` groups and their unification with open rows
 - [x] Exhaustiveness on closed groups, `_` requirement on open rows
-- [ ] Inferred `Task` from `.await`; generator codegen; fiber scheduler in the kernel
+- [x] Inferred `Task` from `.await`; generator codegen; Promise extern lifting;
+  fiber scheduler, scopes, interruption, and structured concurrency in the kernel
 - [ ] `provide`/`use` context resolution and compile-time provider checking
 
 ### M5: Macros and comptime
@@ -463,6 +465,10 @@ tests_block   = 'tests' '{' { item } '}' ;                            (* line-br
 "name")]`) or a trait signature; `opaque_type` requires `#[extern]`.
   The parser accepts both anywhere and canonicalization checks the
   attribute (§10.26). A trait `type Item` takes no `= type`.
+- A non-kernel extern returning `Task[a]` explicitly declares a lazy
+  Promise-producing foreign function. `#[extern("module", "name", "abort")]`
+  additionally appends a runtime-created `AbortSignal` and is invalid without
+  a `Task` return. Other third-argument conventions are rejected.
 - A return type is juxtaposed after a declaration's parameter list and must
   begin on that same line. A record return type must be parenthesized
   (`fn f() ({ value: Number })`) because an unparenthesized `{` starts the

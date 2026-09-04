@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "#[extern(\"globalThis\", \"JSON.parse\", \"abort\")]\nfn parse(value: String) String\n"
+---
+alder::canonicalize::invalid_extern
+
+  × invalid extern attribute: the `abort` convention requires a Task return
+  │ type
+   ╭─[/project/src/main.ald:1:1]
+ 1 │ ╭─▶ #[extern("globalThis", "JSON.parse", "abort")]
+ 2 │ ├─▶ fn parse(value: String) String
+   · ╰──── reported here
+   ╰────

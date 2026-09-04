@@ -1813,6 +1813,59 @@ mod tests {
         "#};
     }
 
+    #[tokio::test]
+    async fn renders_await_outside_a_function_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            let invalid = Task.sleep(1).await
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_awaiting_a_non_task_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn invalid() {
+                (42).await
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_try_after_awaiting_a_non_result_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            #[extern("alder:kernel", "$taskSleep")]
+            fn sleep(milliseconds: Number) Task[()]
+
+            fn invalid() Result[Number] {
+                sleep(1).await?
+                Ok(42)
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_abort_convention_on_a_synchronous_extern_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            #[extern("globalThis", "JSON.parse", "abort")]
+            fn parse(value: String) String
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_invalid_async_extern_signature_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            #[extern("globalThis", "fetch")]
+            fn fetch(url: String) Task
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_an_unknown_extern_convention_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            #[extern("globalThis", "fetch", "cancel")]
+            fn fetch(url: String) Task[String]
+        "#};
+    }
+
     /// Unannotated mutually recursive exports used from another module:
     /// Elm 0.19.1 crashes on this exact shape ("Map.!: given key is not an
     /// element in the map") because `getVarNames`' visit marks persist
