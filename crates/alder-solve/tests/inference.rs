@@ -8,6 +8,44 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn higher_order_error_rows_preserve_forwarding_constraints() {
+    let source = indoc! {r#"
+        fn forward(value: Result[Number, [:known | e]]) {
+            let number = value?
+            Ok(number)
+        }
+        fn factory() { forward }
+        fn apply(operation, value) { operation(value) }
+        fn source() Result[Number, [:known | :extra]] { Err(:extra) }
+        fn run() Number {
+            match apply(factory(), source()) {
+                Ok(number) => number,
+                Err(:known) => 0,
+                Err(:extra) => 1,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn higher_order_error_rows_cannot_drop_a_forwarded_tag() {
+    let source = indoc! {r#"
+        fn forward(value: Result[Number, [:known | e]]) {
+            let number = value?
+            Ok(number)
+        }
+        fn factory() { forward }
+        fn apply(operation, value) { operation(value) }
+        fn source() Result[Number, [:known | :extra]] { Err(:extra) }
+        fn run() Result[Number, [:known]] { apply(factory(), source()) }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
 fn inferred_error_union_includes_an_early_success_and_final_error() {
     let source = indoc! {r#"
         fn choose(flag: Bool) {

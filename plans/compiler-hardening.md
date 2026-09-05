@@ -158,6 +158,21 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Higher-order error-row boundary check: added positive exhaustive-matching and
+  negative narrowed-result tests where a factory returns a row-polymorphic
+  function and a separate function invokes it. Both pass without solver changes.
+  The CLI errors fixture now traverses the imported factory and indirect call
+  for its existing left failure, right failure, and successful sum assertions;
+  execution passes. This verifies those paths, not all higher-order contracts.
+  Next stdlib audit target remains Json: code inspection confirms not only the
+  unbounded `std/Json.ald` decode extern but also `Intrinsic::JsonKernel` primitive
+  dictionaries route decoding through the same unchecked `$jsonDecode` parser.
+  Adding a bound to the module wrapper alone would therefore not establish
+  typed decoding. Runtime reproductions and type-specific validation are next.
+  Validation: full workspace tests, strict all-target/all-feature Clippy,
+  formatting, and diff checks pass. No snapshots changed. This checkpoint adds
+  tests/documentation only and does not need a publishable-crate changeset.
+
 - Recursive error-union follow-up: two mutually recursive functions first
   reproduced a closed-row mismatch because an early `return Err` fixed the
   unannotated output to its first tag. Early row-valued Result returns now create

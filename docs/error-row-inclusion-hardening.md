@@ -149,7 +149,10 @@ true }` and now pass. The explicit-open-contract negative still rejects.
 Driver tests cover imported exhaustive matching and preservation of the exact
 marker through stored interfaces. The CLI errors fixture executes an imported
 union on its left failure, right failure, and successful sum paths without a
-wildcard error arm.
+wildcard error arm. These execution paths also pass through a factory returning
+the function and a separate higher-order invocation. Solver regressions verify
+that the corresponding indirect call still rejects a narrowed result omitting
+a forwarded tag.
 
 Checkpoint validation: full workspace tests pass (186 solver integration tests,
 92 driver tests, plus existing runtime and CLI fixtures); strict all-target,

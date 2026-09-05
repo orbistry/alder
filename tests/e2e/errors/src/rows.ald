@@ -4,6 +4,8 @@ pub fn combine(left: Result[Number, [:storage(String) | e]], right: Result[Numbe
     Ok(x + y)
 }
 
+pub fn factory() { combine }
+
 pub fn recursive(n: Number) {
     if n == 0 { return Err(:first) }
     let value = second(n - 1)?
