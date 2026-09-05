@@ -68,7 +68,7 @@ struct Emitter<'src, 'js> {
     next_temp: u32,
     imports: BTreeSet<Import>,
     kernel: BTreeSet<&'static str>,
-    loop_results: Vec<Option<String>>,
+    loop_results: Vec<(String, Option<String>)>,
     solved: Option<&'src SolveOutput<'src>>,
 }
 
@@ -1938,7 +1938,9 @@ impl<'src, 'js> Emitter<'src, 'js> {
 
     fn loop_value(&mut self, block: &Located<alder_ast::Block<'src>>) -> Result<Value<'js>, Error> {
         let result = self.temp();
-        self.loop_results.push(Some(result.clone()));
+        let label = self.temp();
+        self.loop_results
+            .push((label.clone(), Some(result.clone())));
         let body = self.block_discard(block)?;
         self.loop_results.pop();
         let mut prefix = self.js.vec();
@@ -1946,7 +1948,10 @@ impl<'src, 'js> Emitter<'src, 'js> {
             self.js
                 .variable(VariableDeclarationKind::Let, &result, None),
         );
-        prefix.push(self.js.while_statement(self.js.boolean(true), body));
+        prefix.push(
+            self.js
+                .labeled_statement(&label, self.js.while_statement(self.js.boolean(true), body)),
+        );
         Ok(Value {
             prefix,
             expr: self.js.identifier(&result),
@@ -2115,18 +2120,26 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 let item = self.temp();
                 let mut loop_body = self.js.vec();
                 self.bind_pattern(pattern, &item, &[], &mut loop_body);
-                self.loop_results.push(None);
+                let label = self.temp();
+                self.loop_results.push((label.clone(), None));
                 loop_body.extend(self.block_discard(body)?);
                 self.loop_results.pop();
-                statements.push(self.js.for_of(&item, iter.expr, loop_body));
+                statements.push(
+                    self.js
+                        .labeled_statement(&label, self.js.for_of(&item, iter.expr, loop_body)),
+                );
             }
             alder_ast::Stmt::While { condition, body } => {
                 let condition = self.expr(condition)?;
-                self.loop_results.push(None);
+                let label = self.temp();
+                self.loop_results.push((label.clone(), None));
                 let loop_body = self.block_discard(body)?;
                 self.loop_results.pop();
                 if condition.prefix.is_empty() {
-                    statements.push(self.js.while_statement(condition.expr, loop_body));
+                    statements.push(self.js.labeled_statement(
+                        &label,
+                        self.js.while_statement(condition.expr, loop_body),
+                    ));
                 } else {
                     let mut repeated = condition.prefix;
                     let not_condition = self.js.unary(UnaryOperator::LogicalNot, condition.expr);
@@ -2134,7 +2147,10 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     break_body.push(self.js.break_statement(None));
                     repeated.push(self.js.if_statement(not_condition, break_body, None));
                     repeated.extend(loop_body);
-                    statements.push(self.js.while_statement(self.js.boolean(true), repeated));
+                    statements.push(self.js.labeled_statement(
+                        &label,
+                        self.js.while_statement(self.js.boolean(true), repeated),
+                    ));
                 }
             }
             alder_ast::Stmt::Return(value) => {
@@ -2152,7 +2168,12 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     None => self.pure(self.js.undefined()),
                 };
                 statements.extend(value.prefix);
-                if let Some(result) = self.loop_results.last().cloned().flatten() {
+                let (label, result) = self
+                    .loop_results
+                    .last()
+                    .cloned()
+                    .expect("canonical loop target");
+                if let Some(result) = result {
                     statements.push(
                         self.js
                             .expression_statement(self.js.assign_identifier(&result, value.expr)),
@@ -2160,9 +2181,12 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 } else if has_value {
                     statements.push(self.js.expression_statement(value.expr));
                 }
-                statements.push(self.js.break_statement(None));
+                statements.push(self.js.break_statement(Some(&label)));
             }
-            alder_ast::Stmt::Continue => statements.push(self.js.continue_statement()),
+            alder_ast::Stmt::Continue => {
+                let (label, _) = self.loop_results.last().expect("canonical loop target");
+                statements.push(self.js.continue_statement(label));
+            }
             alder_ast::Stmt::Assert(expression) => {
                 self.kernel.insert("$assert");
                 let value = self.expr(expression)?;

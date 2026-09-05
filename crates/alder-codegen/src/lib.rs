@@ -504,6 +504,17 @@ mod tests {
             }
         "#};
     }
+    #[test]
+    fn while_condition_break_preserves_outer_target() {
+        assert_emit_snapshot! {r#"
+            pub fn answer() Number {
+                loop {
+                    while { break 42 } {}
+                    break 0
+                }
+            }
+        "#};
+    }
 
     #[test]
     fn generic_ordering_uses_the_compare_result_tag() {

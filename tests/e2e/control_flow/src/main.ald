@@ -76,6 +76,28 @@ fn loop_payload_once() Number {
     Array.length(values)
 }
 
+fn while_condition_exits_enclosing_loop() Number {
+    loop {
+        while { break 42 } {}
+        break 0
+    }
+}
+
+async fn while_condition_continues_enclosing_loop() Number {
+    let checks = 0
+    let rounds = 0
+    loop {
+        rounds += 1
+        while {
+            Task.sleep(0).await
+            checks += 1
+            if checks == 1 { continue }
+            false
+        } {}
+        break rounds
+    }
+}
+
 fn short_circuit_loop() Number {
     loop {
         let skipped = false && { break "unreachable" }
@@ -333,6 +355,8 @@ pub async fn main() {
     assert(nested_loop_values(false) == 42)
     assert(awaited_loop_value().await == 42)
     assert(loop_payload_once() == 1)
+    assert(while_condition_exits_enclosing_loop() == 42)
+    assert(while_condition_continues_enclosing_loop().await == 2)
     let unit = loop { break }
     assert(unit == ())
     assert(short_circuit_loop() == 42)

@@ -5,7 +5,7 @@ description: "pub fn sum() {\n    let total = 0\n    for value in [1, 2] { total
 function $v_sum() {
 	const $t0 = 0;
 	let $l0_total = $t0;
-	for (const $t1 of [1, 2]) {
+	$t2: for (const $t1 of [1, 2]) {
 		let $l1_value = $t1;
 		$l0_total += $l1_value;
 	}

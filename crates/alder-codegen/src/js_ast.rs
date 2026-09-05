@@ -338,8 +338,20 @@ impl<'a> JsAst<'a> {
         self.builder.statement_break(SPAN, label)
     }
 
-    pub(crate) fn continue_statement(&self) -> Statement<'a> {
-        self.builder.statement_continue(SPAN, None)
+    pub(crate) fn continue_statement(&self, label: &str) -> Statement<'a> {
+        let label = self
+            .builder
+            .label_identifier(SPAN, self.builder.allocator.alloc_str(label));
+        self.builder.statement_continue(SPAN, Some(label))
+    }
+
+    pub(crate) fn labeled_statement(&self, label: &str, body: Statement<'a>) -> Statement<'a> {
+        self.builder.statement_labeled(
+            SPAN,
+            self.builder
+                .label_identifier(SPAN, self.builder.allocator.alloc_str(label)),
+            body,
+        )
     }
 
     pub(crate) fn labeled(&self, label: &str, body: ArenaVec<'a, Statement<'a>>) -> Statement<'a> {

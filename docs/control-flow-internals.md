@@ -20,6 +20,12 @@ their effects. Break payloads are evaluated even when the surrounding statement
 loop has no result slot. While/for bodies isolate themselves from enclosing
 loop-expression result slots.
 
+Generated loops carry explicit labels, and source break/continue statements
+refer to their lexical loop label. A while condition is lowered before entering
+that while body's target scope: its exits belong to an enclosing source loop,
+even when condition setup is physically emitted inside the generated while.
+This distinction also applies when the condition suspends via await.
+
 Each loop expression starts with a fresh result variable. Reachable break
 payloads join with the accumulated result; this unifies payload types while
 retaining optional record presence from any exit. The final frame result,

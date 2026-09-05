@@ -1,0 +1,22 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn answer() Number {\n    loop {\n        while { break 42 } {}\n        break 0\n    }\n}\n"
+---
+function $v_answer() {
+	let $t0;
+	$t1: while (true) {
+		$t3: while (true) {
+			let $t2;
+			$t0 = 42;
+			break $t1;
+			$t2 = undefined;
+			if (!$t2) {
+				break;
+			}
+		}
+		$t0 = 0;
+		break $t1;
+	}
+	return $t0;
+}
+export { $v_answer as answer };
