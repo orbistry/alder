@@ -91,10 +91,13 @@ mod tests {
         .unwrap();
         let path = root.join("src/main.ald");
         let source = indoc::indoc! {r#"
-            pub fn main() {
-            let message = `start
+            pub async fn main() {
+            let deferred = async {
+            `start
             <spaces>
             end<spaces>`
+            }
+            let message = deferred.await
             assert(message == "start\n   \nend   ")
             assert(String.length(message) == 16)
             }

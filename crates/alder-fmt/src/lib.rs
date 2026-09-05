@@ -242,6 +242,70 @@ mod tests {
     use super::*;
     use indoc::indoc;
 
+    /// Compare the complete parsed structure, ignoring only source regions.
+    /// Debug escapes literal newlines, so source text cannot masquerade as a
+    /// structural `Region {` line. Keep literal payloads and comment text intact.
+    fn semantic_structure(source: &str) -> String {
+        let bump = Bump::new();
+        let module = alder_parse::parse_module(&bump, source).unwrap();
+        let rendered = format!("{module:#?}");
+        let mut region_depth = 0;
+        let mut result = String::new();
+        for line in rendered.lines() {
+            if region_depth == 0 && line.trim_end().ends_with("Region {") {
+                region_depth = 1;
+                continue;
+            }
+            if region_depth > 0 {
+                region_depth += line.bytes().filter(|byte| *byte == b'{').count();
+                region_depth -= line.bytes().filter(|byte| *byte == b'}').count();
+                continue;
+            }
+            result.push_str(line);
+            result.push('\n');
+        }
+        assert_eq!(region_depth, 0);
+        result
+    }
+
+    #[test]
+    fn async_template_formatting_preserves_full_source_structure() {
+        let source = indoc! {r#"
+            pub async fn message() String {
+            let task = async {
+            let value = `outer ${`inner\` ${"x"}
+            <spaces>
+            end`}
+            <spaces>
+            final`
+            // A comment with braces: { }
+            value
+            }
+            task.await
+            }
+        "#}
+        .replace("<spaces>", " \t ");
+        for newline in ["\n", "\r\n"] {
+            let source = source.replace('\n', newline);
+            let formatted = format_source(&source).unwrap();
+            assert_ne!(formatted, source, "exercise a real layout change");
+            assert_eq!(semantic_structure(&source), semantic_structure(&formatted));
+            assert_eq!(format_source(&formatted).unwrap(), formatted);
+        }
+    }
+
+    #[test]
+    fn semantic_comparison_retains_literal_payloads() {
+        assert_ne!(
+            semantic_structure("let value = `a   `"),
+            semantic_structure("let value = `a`"),
+        );
+        assert_ne!(
+            semantic_structure("let value = \"Region {\""),
+            semantic_structure("let value = \"Region\""),
+        );
+    }
+
     fn template_payload(source: &str) -> String {
         let bump = Bump::new();
         let module = alder_parse::parse_module(&bump, source).unwrap();
@@ -399,6 +463,12 @@ mod tests {
             let once = format_source(&source)
                 .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
             let twice = format_source(&once).unwrap();
+            assert_eq!(
+                semantic_structure(&source),
+                semantic_structure(&once),
+                "semantic structure changed: {}",
+                path.display()
+            );
             assert_eq!(once, twice, "{}", path.display());
         }
     }
