@@ -3171,6 +3171,80 @@ mod tests {
     }
 
     #[test]
+    fn assignment_roots_connect_recursive_value_groups() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                let mut operation = value -> replace(value)
+                fn replace(value) {
+                    operation = next -> next
+                    value
+                }
+            "#},
+        );
+        let groups = result.module.value_sccs;
+        assert_eq!(
+            groups.len(),
+            1,
+            "assignment must close the dependency cycle"
+        );
+        assert!(groups[0].recursive);
+        assert_eq!(
+            groups[0]
+                .members
+                .iter()
+                .map(|name| name.name)
+                .collect::<Vec<_>>(),
+            ["operation", "replace"]
+        );
+    }
+
+    #[test]
+    fn assignment_dependencies_include_nested_writers_and_computed_indices() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                fn writer() { () -> { values[index()] = 42 } }
+                fn index() { 0 }
+                let mut values = [0]
+            "#},
+        );
+        let groups = result.module.value_sccs;
+        let position = |name| {
+            groups
+                .iter()
+                .position(|group| group.members.iter().any(|member| member.name == name))
+                .expect("value belongs to an inference group")
+        };
+        assert!(position("values") < position("writer"));
+        assert!(position("index") < position("writer"));
+        assert!(groups.iter().all(|group| !group.recursive));
+    }
+
+    #[test]
+    fn assignment_to_shadowing_local_does_not_create_top_level_dependency() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+                let operation = value -> replace(value)
+                fn replace(value) {
+                    let mut operation = 0
+                    operation = 42
+                    value
+                }
+            "#},
+        );
+        let groups = result.module.value_sccs;
+        assert_eq!(groups.len(), 2);
+        assert!(groups.iter().all(|group| !group.recursive));
+        assert_eq!(groups[0].members[0].name, "replace");
+        assert_eq!(groups[1].members[0].name, "operation");
+    }
+
+    #[test]
     fn value_sccs_are_complete_dependency_ordered_and_recursive() {
         let bump = Bump::new();
         let result = can(

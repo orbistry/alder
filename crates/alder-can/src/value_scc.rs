@@ -112,6 +112,13 @@ fn stmt<'a>(home: ModuleId<'a>, value: Node<'a, Stmt<'a>>, out: &mut BTreeSet<&'
         }
         Stmt::Use { .. } | Stmt::Continue => {}
         Stmt::Assign { place, value, .. } => {
+            // A write constrains the target's type even without a read. Keep
+            // writers in the same dependency analysis as ordinary references.
+            if let alder_ast::BindingName::TopLevel(reference) = place.root
+                && reference.module == home
+            {
+                out.insert(reference.name);
+            }
             for step in place.steps {
                 if let alder_ast::PlaceStep::Index(index) = step {
                     expr(home, index, out);
