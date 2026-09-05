@@ -3,8 +3,12 @@
 //! No normal continuation is distinct from producing unit. Loops consume their
 //! own breaks/continues; lambda creation does not execute its body. Calls and
 //! deferred DSL constructs conservatively retain a normal continuation.
+//!
+//! Match evaluation distinguishes pattern rejection from entering an arm.
+//! Sibling patterns execute after matching; alternatives execute after rejection.
+//! Pin expressions can exit before either outcome, including from nested patterns.
 
-use crate::{BinOp, Block, Expr, PlaceStep, RecordField, Stmt, TemplatePart};
+use crate::{BinOp, Block, Expr, Pattern, PlaceStep, RecordField, Stmt, TemplatePart};
 use alder_region::Located;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -79,6 +83,108 @@ pub fn block(block: &Located<Block<'_>>) -> Flow {
     statements.then(block.value.tail.map_or(Flow::NEXT, expression))
 }
 
+/// Pattern evaluation can match, reject and try another alternative, or exit
+/// through a pin expression. Rejection is not normal execution of the arm body.
+#[derive(Clone, Copy, Debug)]
+pub struct PatternFlow {
+    pub matches: bool,
+    pub rejects: bool,
+    pub exits: Flow,
+}
+
+impl PatternFlow {
+    fn test(rejects: bool) -> Self {
+        Self {
+            matches: true,
+            rejects,
+            exits: Flow::default(),
+        }
+    }
+
+    fn then(self, other: Self) -> Self {
+        Self {
+            matches: self.matches && other.matches,
+            rejects: self.rejects || (self.matches && other.rejects),
+            exits: if self.matches {
+                self.exits.either(other.exits)
+            } else {
+                self.exits
+            },
+        }
+    }
+
+    fn or(self, other: Self) -> Self {
+        Self {
+            matches: self.matches || (self.rejects && other.matches),
+            rejects: self.rejects && other.rejects,
+            exits: if self.rejects {
+                self.exits.either(other.exits)
+            } else {
+                self.exits
+            },
+        }
+    }
+}
+
+pub fn pattern(pattern: &Located<Pattern<'_>>) -> PatternFlow {
+    match &pattern.value {
+        Pattern::Anything | Pattern::Bind(_) | Pattern::Unit => PatternFlow::test(false),
+        Pattern::Pin { value, .. } => {
+            let flow = expression(value);
+            PatternFlow {
+                matches: flow.falls_through,
+                rejects: flow.falls_through,
+                exits: Flow {
+                    falls_through: false,
+                    ..flow
+                },
+            }
+        }
+        Pattern::Alias { pattern: inner, .. } => self::pattern(inner),
+        Pattern::Tuple(items) => items.iter().fold(PatternFlow::test(false), |flow, item| {
+            flow.then(self::pattern(item))
+        }),
+        Pattern::Array { elements, rest } => elements.iter().fold(
+            PatternFlow::test(rest.is_none() || !elements.is_empty()),
+            |flow, item| flow.then(self::pattern(item)),
+        ),
+        Pattern::Record { fields, .. } => {
+            fields.iter().fold(PatternFlow::test(false), |flow, field| {
+                flow.then(self::pattern(field.pattern))
+            })
+        }
+        Pattern::Constructor { constructor, args } => args.iter().fold(
+            PatternFlow::test(constructor.alternatives > 1),
+            |flow, arg| flow.then(self::pattern(arg)),
+        ),
+        Pattern::ConstructorRecord {
+            constructor,
+            fields,
+            ..
+        } => fields.iter().fold(
+            PatternFlow::test(constructor.alternatives > 1),
+            |flow, field| flow.then(self::pattern(field.pattern)),
+        ),
+        Pattern::Tag { args, .. } => args.iter().fold(PatternFlow::test(true), |flow, arg| {
+            flow.then(self::pattern(arg))
+        }),
+        Pattern::Number { .. } | Pattern::BigInt(_) | Pattern::Str(_) | Pattern::Bool(_) => {
+            PatternFlow::test(true)
+        }
+    }
+}
+
+pub fn patterns(alternatives: &[&Located<Pattern<'_>>]) -> PatternFlow {
+    alternatives.iter().fold(
+        PatternFlow {
+            matches: false,
+            rejects: true,
+            exits: Flow::default(),
+        },
+        |flow, alternative| flow.or(pattern(alternative)),
+    )
+}
+
 /// Whether evaluation can reach the right operand. Unknown values are
 /// conservative; Boolean literals expose the two definite short circuits.
 pub fn binary_rhs_reachable(op: BinOp, left: &Located<Expr<'_>>) -> bool {
@@ -146,20 +252,34 @@ pub fn expression(expr: &Located<Expr<'_>>) -> Flow {
             flow
         }
         Expr::Match { scrutinee, arms } => {
-            let branches = arms.iter().fold(Flow::default(), |flow, arm| {
-                flow.either(
-                    arm.guard.map_or(Flow::NEXT, expression).then(
-                        if arm
+            let mut branches = Flow::default();
+            let mut remaining = true;
+            for arm in *arms {
+                if !remaining {
+                    break;
+                }
+                let pattern = patterns(arm.patterns);
+                branches = branches.either(pattern.exits);
+                remaining = pattern.rejects;
+                if pattern.matches {
+                    let guard = arm.guard.map_or(Flow::NEXT, expression);
+                    branches = branches.either(Flow {
+                        falls_through: false,
+                        ..guard
+                    });
+                    if guard.falls_through {
+                        if !arm
                             .guard
                             .is_some_and(|guard| matches!(guard.value, Expr::Bool(false)))
                         {
-                            Flow::default()
-                        } else {
-                            expression(arm.body)
-                        },
-                    ),
-                )
-            });
+                            branches = branches.either(expression(arm.body));
+                        }
+                        remaining |= arm
+                            .guard
+                            .is_some_and(|guard| !matches!(guard.value, Expr::Bool(true)));
+                    }
+                }
+            }
             expression(scrutinee).then(branches)
         }
         Expr::Provide { value, body, .. } => expression(value).then(block(body)),
@@ -232,7 +352,53 @@ pub fn expression(expr: &Located<Expr<'_>>) -> Flow {
 
 #[cfg(test)]
 mod tests {
-    use super::Flow;
+    use super::{Flow, PatternFlow};
+
+    #[test]
+    fn pattern_children_run_only_after_a_match() {
+        let exit = PatternFlow {
+            matches: false,
+            rejects: false,
+            exits: Flow::RETURN,
+        };
+        let later = PatternFlow {
+            matches: true,
+            rejects: true,
+            exits: Flow::BREAK,
+        };
+        let sequence = exit.then(later);
+        assert!(!sequence.matches);
+        assert!(!sequence.rejects);
+        assert_eq!(sequence.exits, Flow::RETURN);
+
+        let sequence = PatternFlow::test(true).then(exit);
+        assert!(!sequence.matches);
+        assert!(sequence.rejects);
+        assert_eq!(sequence.exits, Flow::RETURN);
+    }
+
+    #[test]
+    fn pattern_alternatives_run_only_after_rejection() {
+        let exit = PatternFlow {
+            matches: false,
+            rejects: false,
+            exits: Flow::BREAK,
+        };
+        let selected = PatternFlow::test(false).or(exit);
+        assert!(selected.matches);
+        assert!(!selected.rejects);
+        assert_eq!(selected.exits, Flow::default());
+
+        let conditional = PatternFlow::test(true).or(exit);
+        assert!(conditional.matches);
+        assert!(!conditional.rejects);
+        assert_eq!(conditional.exits, Flow::BREAK);
+
+        let exited = exit.or(PatternFlow::test(false));
+        assert!(!exited.matches);
+        assert!(!exited.rejects);
+        assert_eq!(exited.exits, Flow::BREAK);
+    }
 
     #[test]
     fn unreachable_successors_cannot_add_exits() {
