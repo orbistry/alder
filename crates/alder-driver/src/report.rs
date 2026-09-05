@@ -1042,6 +1042,16 @@ fn expression_problem(error: &alder_parse::error::Expr<'_>) -> SyntaxProblem {
             "expected an expression",
             None,
         ),
+        Expr::TupleIndexOverflow(row, column) => expected_problem(
+            "this tuple index is too large",
+            *row,
+            *column,
+            "tuple index exceeds the supported integer range",
+            Some(
+                "tuple indices must fit in an unsigned 32-bit integer (0 through 4294967295)"
+                    .to_owned(),
+            ),
+        ),
         Expr::PinOutsideQuery(row, column) => expected_problem(
             "expression pins are only allowed inside queries",
             *row,

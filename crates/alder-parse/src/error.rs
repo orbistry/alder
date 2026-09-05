@@ -407,6 +407,8 @@ pub enum Expr<'a> {
     Access(Row, Col),
     /// Missing operand after `-` or `!` (or `^` inside `query { }`, via
     /// `pinned_value`): `postfix()` failed with `Start` at the operand
+    /// A tuple index cannot be represented without changing its value.
+    TupleIndexOverflow(Row, Col),
     /// position. Any other operand error propagates unchanged (§6.0).
     Unary(Row, Col),
     /// `^` outside `query { }` and patterns.

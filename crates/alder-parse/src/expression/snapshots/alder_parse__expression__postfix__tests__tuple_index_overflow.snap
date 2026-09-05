@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/expression/postfix.rs
+description: t.4294967296
+---
+TupleIndexOverflow(
+    1,
+    3,
+)

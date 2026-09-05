@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn read(pair) { pair.4294967296 }\n"
+---
+alder::syntax
+
+  × this tuple index is too large
+   ╭─[/project/src/main.ald:1:22]
+ 1 │ fn read(pair) { pair.4294967296 }
+   ·                      ┬
+   ·                      ╰── tuple index exceeds the supported integer range
+   ╰────
+  help: tuple indices must fit in an unsigned 32-bit integer (0 through
+        4294967295)

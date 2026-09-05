@@ -2981,6 +2981,13 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_tuple_index_overflow_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn read(pair) { pair.4294967296 }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_invalid_builtin_argument_without_color() {
         assert_diagnostic_snapshot! {r#"
             fn bad() Number { String.length(42) }

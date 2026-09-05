@@ -145,18 +145,21 @@ impl<'a> Parser<'a> {
 
     /// Bare digit run for tuple indices (`t.0`). None without consuming if no digit.
     ///
-    /// Saturates at `u32::MAX` rather than failing: the run is still consumed.
-    pub(crate) fn digits(&mut self) -> Option<Located<u32>> {
+    /// Reports overflow at the start of the index without changing its value.
+    pub(crate) fn digits(&mut self) -> Result<Option<Located<u32>>, alder_region::Position> {
         if !self.peek_digit() {
-            return None;
+            return Ok(None);
         }
         let start = self.get_position();
         let mut n: u32 = 0;
         while let Some(b) = self.peek().filter(u8::is_ascii_digit) {
-            n = n.saturating_mul(10).saturating_add(u32::from(b - b'0'));
+            n = n
+                .checked_mul(10)
+                .and_then(|n| n.checked_add(u32::from(b - b'0')))
+                .ok_or(start)?;
             self.advance();
         }
-        Some(self.located(start, n))
+        Ok(Some(self.located(start, n)))
     }
 
     /// Hex digits after `0x`; `start` is the byte offset of the literal's
@@ -363,38 +366,41 @@ mod tests {
 
     #[test]
     fn digits_run() {
-        let (index, pos) = with_parser("0.1", |p| p.digits());
+        let (index, pos) = with_parser("0.1", |p| p.digits().unwrap());
         let index = index.expect("a digit run");
         assert_eq!(index.value, 0);
         assert_eq!((index.region.start.column, index.region.end.column), (1, 2));
         assert_eq!(pos, (1, 2));
 
-        let (index, pos) = with_parser("12x", |p| p.digits());
+        let (index, pos) = with_parser("12x", |p| p.digits().unwrap());
         assert_eq!(index.map(|i| i.value), Some(12));
         assert_eq!(pos, (1, 3));
 
         // Bare run: leading zeros and trailing letters are not its business.
-        let (index, pos) = with_parser("007abc", |p| p.digits());
+        let (index, pos) = with_parser("007abc", |p| p.digits().unwrap());
         assert_eq!(index.map(|i| i.value), Some(7));
         assert_eq!(pos, (1, 4));
     }
 
     #[test]
     fn digits_none_without_consuming() {
-        let (index, pos) = with_parser("x", |p| p.digits());
+        let (index, pos) = with_parser("x", |p| p.digits().unwrap());
         assert!(index.is_none());
         assert_eq!(pos, (1, 1));
 
-        let (index, pos) = with_parser("", |p| p.digits());
+        let (index, pos) = with_parser("", |p| p.digits().unwrap());
         assert!(index.is_none());
         assert_eq!(pos, (1, 1));
     }
 
     #[test]
-    fn digits_saturate_on_overflow() {
+    fn digits_reject_overflow() {
         let (index, pos) = with_parser("99999999999", |p| p.digits());
-        assert_eq!(index.map(|i| i.value), Some(u32::MAX));
-        assert_eq!(pos, (1, 12));
+        assert_eq!(
+            index.unwrap_err(),
+            alder_region::Position { line: 1, column: 1 }
+        );
+        assert_eq!(pos, (1, 10));
     }
 
     #[test]

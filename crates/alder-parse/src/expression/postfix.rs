@@ -118,7 +118,10 @@ impl<'a> Parser<'a> {
             self.advance_by(5);
             return Ok(self.expr_at(start, self.get_position(), Expr::Await(target)));
         }
-        if let Some(index) = self.digits() {
+        if let Some(index) = self
+            .digits()
+            .map_err(|position| error::Expr::TupleIndexOverflow(position.line, position.column))?
+        {
             return Ok(self.expr_at(
                 start,
                 self.get_position(),
@@ -234,6 +237,16 @@ mod tests {
     #[test]
     fn tuple_index() {
         assert_expression_snapshot!("t.0");
+    }
+
+    #[test]
+    fn tuple_index_overflow() {
+        assert_expression_error_snapshot!("t.4294967296");
+    }
+
+    #[test]
+    fn tuple_index_maximum_is_preserved() {
+        assert_expression_snapshot!("t.4294967295");
     }
 
     #[test]
