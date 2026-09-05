@@ -165,6 +165,7 @@ impl<'a> Env<'a> {
             name: "Ordering",
         };
         let annotation = bump.alloc(Annotation {
+            error_row_inclusions: &[],
             params: &[],
             trait_predicates: &[],
             projection_equalities: &[],
@@ -237,6 +238,7 @@ impl<'a> Env<'a> {
                         alternatives: 2,
                         payload: VariantPayload::Tuple(payloads),
                         annotation: bump.alloc(Annotation {
+                            error_row_inclusions: &[],
                             params,
                             trait_predicates: &[],
                             projection_equalities: &[],
@@ -332,6 +334,7 @@ impl<'a> Env<'a> {
                         })) as &'a Located<Type<'a>>
                     };
                     let annotation = bump.alloc(Annotation {
+                        error_row_inclusions: &[],
                         params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
                             name: Located::at_zero("a"),
                             kind: alder_ast::Kind::Type,
@@ -440,6 +443,7 @@ impl<'a> Env<'a> {
             ret: b,
         }));
         let annotation = bump.alloc(Annotation {
+            error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 alder_ast::TypeParam {
                     name: Located::at_zero("f"),
@@ -512,6 +516,7 @@ impl<'a> Env<'a> {
             kind,
         };
         let pure = bump.alloc(Annotation {
+            error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 type_param("f", constructor_kind),
                 type_param("a", alder_ast::Kind::Type),
@@ -524,6 +529,7 @@ impl<'a> Env<'a> {
             })),
         });
         let apply = bump.alloc(Annotation {
+            error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 type_param("f", constructor_kind),
                 type_param("a", alder_ast::Kind::Type),
@@ -575,6 +581,7 @@ impl<'a> Env<'a> {
             ret: result,
         }));
         let annotation = bump.alloc(Annotation {
+            error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 alder_ast::TypeParam {
                     name: Located::at_zero("f"),
@@ -625,6 +632,7 @@ impl<'a> Env<'a> {
         }));
         let t_of_b = applied_variable(bump, "t", b);
         let annotation = bump.alloc(Annotation {
+            error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 alder_ast::TypeParam {
                     name: Located::at_zero("t"),
@@ -687,6 +695,7 @@ impl<'a> Env<'a> {
             },
         ))) as &'a Located<Type<'a>>;
         let annotation = bump.alloc(Annotation {
+            error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
                 name: Located::at_zero("i"),
                 kind: alder_ast::Kind::Type,
@@ -1463,6 +1472,7 @@ fn interface_constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
+        error_row_inclusions: &[],
         params: enum_.params,
         trait_predicates: &[],
         projection_equalities: &[],

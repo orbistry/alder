@@ -1101,6 +1101,7 @@ pub(crate) fn trait_method_annotation<'a>(
             kind: kind_from_arity(bump, arities.get(name).copied().unwrap_or(0)),
         }));
     Ok(bump.alloc(Annotation {
+        error_row_inclusions: &[],
         params: type_params,
         trait_predicates: bump.alloc_slice_copy(&predicates),
         projection_equalities: projection_equalities_from_constraints(bump, constraints),
@@ -1285,6 +1286,7 @@ fn constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
+        error_row_inclusions: &[],
         params: bump.alloc_slice_fill_iter(enum_.params.iter().map(|param| alder_ast::TypeParam {
             name: *param,
             kind: alder_ast::Kind::Type,
@@ -1335,6 +1337,7 @@ fn interface_constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
+        error_row_inclusions: &[],
         params: enum_.params,
         trait_predicates: &[],
         projection_equalities: &[],

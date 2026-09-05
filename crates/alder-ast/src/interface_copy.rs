@@ -239,6 +239,17 @@ fn copy_projection_equality<'a>(
 
 fn copy_annotation<'a>(bump: &'a Bump, annotation: &Annotation<'_>) -> &'a Annotation<'a> {
     bump.alloc(Annotation {
+        error_row_inclusions: bump.alloc_slice_fill_iter(
+            annotation
+                .error_row_inclusions
+                .iter()
+                .map(|inclusion| crate::ErrorRowInclusion {
+                    exact_target: inclusion.exact_target,
+                    source: copy_type_node(bump, inclusion.source),
+                    target: copy_type_node(bump, inclusion.target),
+                    region: inclusion.region,
+                }),
+        ),
         params: copy_type_params(bump, annotation.params),
         trait_predicates: copy_trait_refs(bump, annotation.trait_predicates),
         projection_equalities: bump.alloc_slice_fill_iter(

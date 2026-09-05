@@ -744,12 +744,37 @@ pub struct ArrayRest<'a> {
 // Types
 // ============================================================================
 
-#[derive(Debug)]
 pub struct Annotation<'a> {
     pub params: &'a [TypeParam<'a>],
     pub trait_predicates: &'a [TraitRef<'a>],
     pub projection_equalities: &'a [ProjectionEquality<'a>],
+    pub error_row_inclusions: &'a [ErrorRowInclusion<'a>],
     pub typ: Node<'a, Type<'a>>,
+}
+
+/// Every error admitted by `source` must also be admitted by `target`.
+#[derive(Clone, Copy, Debug)]
+pub struct ErrorRowInclusion<'a> {
+    /// The target is the least union of the sources included into it, rather
+    /// than an independently open upper bound supplied by an annotation.
+    pub exact_target: bool,
+    pub source: Node<'a, Type<'a>>,
+    pub target: Node<'a, Type<'a>>,
+    pub region: Region,
+}
+
+impl std::fmt::Debug for Annotation<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("Annotation");
+        debug
+            .field("params", &self.params)
+            .field("trait_predicates", &self.trait_predicates)
+            .field("projection_equalities", &self.projection_equalities);
+        if !self.error_row_inclusions.is_empty() {
+            debug.field("error_row_inclusions", &self.error_row_inclusions);
+        }
+        debug.field("typ", &self.typ).finish()
+    }
 }
 
 #[derive(Debug)]

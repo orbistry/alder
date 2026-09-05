@@ -8,6 +8,240 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn error_row_inclusion_metadata_tracks_instantiated_function_rows() {
+    let source = indoc! {r#"
+        fn forward(value: Result[Number, [:known | e]]) {
+            let number = value?
+            Ok(number)
+        }
+        fn relay(value: Result[Number, [:known | f]]) { forward(value) }
+    "#};
+    let bump = Bump::new();
+    let annotations = infer(&bump, source).expect("forwarding infers");
+    for name in ["forward", "relay"] {
+        let annotation = annotations
+            .iter()
+            .find(|(key, _)| key.name == name)
+            .unwrap()
+            .1;
+        let Type::Fn { params, ret } = annotation.typ.value else {
+            panic!("expected function");
+        };
+        let Type::Named {
+            args: source_args, ..
+        } = params[0].value
+        else {
+            panic!("expected Result parameter");
+        };
+        let Type::Named {
+            args: target_args, ..
+        } = ret.value
+        else {
+            panic!("expected Result return");
+        };
+        let source_row = render_type(source_args[1]);
+        let target_row = render_type(target_args[1]);
+        assert_ne!(
+            source_row, target_row,
+            "this test exercises distinct related rows"
+        );
+        assert!(
+            annotation.error_row_inclusions.iter().any(|inclusion| {
+                render_type(inclusion.source) == source_row
+                    && render_type(inclusion.target) == target_row
+            }),
+            "{name} must preserve its input-to-output inclusion: {annotation:?}"
+        );
+    }
+}
+
+#[test]
+fn error_row_inclusion_cannot_lose_an_inferred_forwarded_tail() {
+    let source = indoc! {r#"
+        fn forward(value: Result[Number, [:known | e]]) {
+            let number = value?
+            Ok(number)
+        }
+        fn run() Result[Number, [:known]] { forward(Err(:hidden)) }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn error_row_inclusion_combines_independent_source_tails() {
+    let source = indoc! {r#"
+        fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
+            let x = left?
+            let y = right?
+            Ok(x + y)
+        }
+        fn left() Result[Number, [:known | :left]] { Err(:left) }
+        fn right() Result[Number, [:known | :right]] { Err(:right) }
+        fn run() Result[Number, [:known | :left | :right]] {
+            combine(left(), right())
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn error_row_inclusion_union_rejects_a_missing_source_tag() {
+    let source = indoc! {r#"
+        fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
+            let x = left?
+            let y = right?
+            Ok(x + y)
+        }
+        fn left() Result[Number, [:known | :left]] { Err(:left) }
+        fn right() Result[Number, [:known | :right]] { Err(:right) }
+        fn run() Result[Number, [:known | :left]] { combine(left(), right()) }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn error_row_inclusion_infers_a_closed_concrete_union_without_an_annotation() {
+    let source = indoc! {r#"
+        fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
+            let x = left?
+            let y = right?
+            Ok(x + y)
+        }
+        fn left() Result[Number, [:known | :left]] { Err(:left) }
+        fn right() Result[Number, [:known | :right]] { Err(:right) }
+        fn run() Number {
+            match combine(left(), right()) {
+                Ok(value) => value,
+                Err(:known) => 0,
+                Err(:left) => 1,
+                Err(:right) => 2,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn error_row_inclusion_respects_multiple_closed_upper_bounds() {
+    let source = indoc! {r#"
+        fn forward(value: Result[Number, [:known | e]]) {
+            let number = value?
+            Ok(number)
+        }
+        fn fail() Result[Number, [:known]] { Err(:known) }
+        fn run() {
+            let shared = forward(fail())
+            let first = () Result[Number, [:known | :left]] -> shared
+            let second = () Result[Number, [:known | :right]] -> shared
+            (first(), second())
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn error_row_inclusion_inferred_union_preserves_an_unannotated_return_source() {
+    let source = indoc! {r#"
+        fn fail() Result[Number, [:known]] { Err(:known) }
+        fn forward(value) {
+            let ignored = fail()?
+            value
+        }
+        fn other() Result[Number, [:other]] { Err(:other) }
+        fn run() Result[Number, [:known | :other]] { forward(other()) }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn error_row_inclusion_does_not_close_an_explicit_open_contract() {
+    let source = indoc! {r#"
+        fn run(value: Result[Number, [:known | e]]) Number {
+            match value {
+                Ok(number) => number,
+                Err(:known) => 0,
+            }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn error_row_inclusion_exact_lambda_result_supports_exhaustive_matching() {
+    let source = indoc! {r#"
+        fn fail() Result[Number, [:known]] { Err(:known) }
+        fn run() Number {
+            let forward = value -> {
+                let number = value?
+                Ok(number)
+            }
+            match forward(fail()) {
+                Ok(number) => number,
+                Err(:known) => 0,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn error_row_inclusion_cannot_replace_an_arbitrary_tail() {
+    let source = indoc! {r#"
+        fn forget(value: Result[Number, [:known | e]]) Result[Number, [:known | f]] {
+            value
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn error_row_inclusion_preserves_a_shared_tail_when_widening() {
+    let source = indoc! {r#"
+        fn widen(value: Result[Number, [:known | e]]) Result[Number, [:known | :extra | e]] {
+            value
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn error_row_inclusion_cannot_erase_a_tail_during_try() {
+    let source = indoc! {r#"
+        fn forget(value: Result[Number, [:known | e]]) Result[Number, [:known | f]] {
+            let number = value?
+            Ok(number)
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn error_row_inclusion_cannot_replace_a_tail_through_an_inferred_helper() {
+    let source = indoc! {r#"
+        fn forward(value: Result[Number, [:known | e]]) {
+            let number = value?
+            Ok(number)
+        }
+        fn forget(value: Result[Number, [:known | e]]) Result[Number, [:known | f]] {
+            forward(value)
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
 fn generic_error_row_identity_does_not_specialize_its_tail() {
     let source = indoc! {r#"
         fn preserve(value: Result[a, [:missing(String) | e]]) Result[a, [:missing(String) | e]] {

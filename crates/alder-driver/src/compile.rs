@@ -1639,6 +1639,73 @@ mod tests {
     }
 
     #[test]
+    fn imported_error_row_inclusions_preserve_both_source_tails() {
+        for (return_type, succeeds) in [
+            ("Result[Number, [:known | :left | :right]]", true),
+            ("Result[Number, [:known | :left]]", false),
+        ] {
+            let library = indoc::indoc! {r#"
+                pub fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
+                    let x = left?
+                    let y = right?
+                    Ok(x + y)
+                }
+            "#};
+            let consumer = indoc::indoc! {r#"
+                import ~/utils
+                fn left() Result[Number, [:known | :left]] { Err(:left) }
+                fn right() Result[Number, [:known | :right]] { Err(:right) }
+                pub fn run() RETURN_TYPE { utils.combine(left(), right()) }
+            "#}
+            .replace("RETURN_TYPE", return_type);
+            let result = build_sync(
+                vec![
+                    (url("project/src/utils.ald"), Ok(library.to_owned())),
+                    (url("project/src/main.ald"), Ok(consumer)),
+                ],
+                BuildMode::Check,
+                BuildDependencies::default(),
+            );
+            assert_eq!(
+                result.is_success(),
+                succeeds,
+                "return contract {return_type}"
+            );
+        }
+    }
+
+    #[test]
+    fn imported_exact_error_union_supports_exhaustive_matching() {
+        let result = build_sync(
+            vec![
+                (url("project/src/utils.ald"), Ok(indoc::indoc! {r#"
+                    pub fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
+                        let x = left?
+                        let y = right?
+                        Ok(x + y)
+                    }
+                "#}.to_owned())),
+                (url("project/src/main.ald"), Ok(indoc::indoc! {r#"
+                    import ~/utils
+                    fn left() Result[Number, [:known | :left]] { Err(:left) }
+                    fn right() Result[Number, [:known | :right]] { Err(:right) }
+                    pub fn run() Number {
+                        match utils.combine(left(), right()) {
+                            Ok(value) => value,
+                            Err(:known) => 0,
+                            Err(:left) => 1,
+                            Err(:right) => 2,
+                        }
+                    }
+                "#}.to_owned())),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(result.is_success());
+    }
+
+    #[test]
     fn trait_methods_support_every_import_form_across_interfaces() {
         let traits = url("project/src/traits.ald");
         let qualified = url("project/src/qualified.ald");

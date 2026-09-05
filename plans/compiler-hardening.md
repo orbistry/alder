@@ -158,6 +158,56 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Exact error-union checkpoint: inferred `?` result rows now retain exact-target
+  metadata through schemes and owned interfaces. Stable lower bounds determine
+  concrete union closure without closing declared open rows. Annotation-free
+  exhaustive matching passes locally, in a lambda, and across a module boundary.
+  An additional regression exposed equality of an unknown returned value with
+  the accumulated output; returned values and bare error variables now contribute
+  directional inclusions instead. Module-final existential simplification covers
+  local lambdas while preserving binding/obligation/universal dependencies.
+  Full workspace tests pass (186 solver integration tests, 92 driver tests,
+  runtime and CLI suites), as does strict all-target/all-feature Clippy. The
+  extended CLI errors fixture executes imported left/right failure and success
+  cases with an exhaustive error match. Formatting and diff checks pass. No
+  expected snapshot changes or pending snapshots. The earlier failing union and
+  pipe snapshot checkpoints below are historical and now resolved. Follow-up
+  remains for cyclic/SCC/higher-order cases, aliases, diagnostic source attribution,
+  and the broader hardening acceptance matrix; see the error-row design note.
+
+- Error-row bound-solving continuation: replaying known inclusion lower bounds
+  after input instantiation now accepts the covering concrete union and rejects
+  a missing source tag, both locally and through an imported interface. Flexible
+  source tails under closed upper bounds are resolved only after known bounds
+  stabilize. An overlapping-upper-bound test exposed lambda return equality;
+  lambdas now use the named-function directional check. Scheme-local removal of
+  hidden source-only existential tails restores the existing pipe/await snapshot
+  unchanged. Full workspace tests passed with 182 solver tests and 91 driver
+  tests, and strict Clippy passed. A subsequent adversarial regression adds the
+  still-failing annotation-free exhaustive-union case (183rd solver test): all
+  known cases are matched but an unrelated open tail remains. Current work is
+  therefore not fully green or ready to commit. Preserve this test and finish
+  exact inferred-union semantics without closing intentionally open contracts.
+
+- Error-row inclusion continuation: solver schemes now collect connected
+  inclusion relationships and preserve their variable identity through fresh
+  instantiation and annotation publication. Permanent solver and driver tests
+  exercise real generated metadata, local helper calls, binary storage,
+  hydration, and arena copying. Universal-contract checking follows directed
+  tail-inclusion paths and now rejects the confirmed direct-return and `?`
+  independent-universal counterexamples; shared-tail widening still passes.
+  This is not complete: independent-source concrete union inference still
+  fails, and the wider solver suite exposes a hidden quantified parameter in
+  the existing pipe/await snapshot. Do not accept that snapshot or commit this
+  checkpoint as finished. See `docs/error-row-inclusion-hardening.md` for the
+  remaining solving, simplification, and imported-call acceptance work.
+  Validation: strict all-target/all-feature Clippy passes; all 90 driver tests
+  pass. The full workspace run reaches solver integration with 178 passing and
+  two failing tests (the concrete union and unchanged pipe/await snapshot).
+  This also verifies rejection through an inferred helper's instantiated
+  inclusion metadata. The generated `.snap.new` was removed without accepting
+  it; the original expected snapshot remains unchanged. No commit yet.
+
 - Record-row investigation: added four regression tests to active solver
   integration tests. Multi-field inference and the documented row-preserving
   rename/spread example are rejected; discarding an explicitly promised row
@@ -522,6 +572,25 @@ Root cause: virtual module imports lack a physical importer location.
   can execute. Other hardening findings are not claimed fixed.
 
 ## Final gates
+
+- Error-inclusion representation work: added canonical/owned annotation metadata
+  carrying source row, target row and source region, with lossless arena copy
+  and binary serialization/hydration. Bumped interface format to 3. The explicit
+  metadata round-trip test passes after destroying the source arena; workspace
+  `cargo check`, strict all-target/all-feature Clippy, formatting and diff checks
+  pass; all 90 driver unit tests pass. This is infrastructure only: active solver scheme
+  generation, instantiation and constraint solving remain unimplemented, and
+  the three directional-inclusion regressions remain expected failures. No
+  completed fix or green workspace is claimed; changes are uncommitted.
+
+- Directional error-row audit: confirmed declaration-level acceptance of
+  arbitrary tail replacement (`e` to unrelated universal `f`) for direct return
+  and `?`. Added failing negative regressions and a failing positive regression
+  for precise union of independent source tails. Shared-tail widening remains
+  a passing positive control. See `docs/error-row-inclusion-hardening.md` for
+  the source-tail-loss root cause and required scheme/interface preservation.
+  These five tests are uncommitted baseline work (three failures); no production
+  fix or green workspace is claimed at this point.
 
 - Error-row alias follow-up: reproduced generic Result identity rejection both
   directly and through an alias (`GenericSpecialization e = [_]`). Error-row

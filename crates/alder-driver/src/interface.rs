@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::DriverError;
 
-pub const INTERFACE_FORMAT_VERSION: u32 = 2;
+pub const INTERFACE_FORMAT_VERSION: u32 = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InterfaceFile {
@@ -430,6 +430,62 @@ mod tests {
         let hydrated = file.hydrate(&bump);
         let round_trip = InterfaceFile::dehydrate(&hydrated).unwrap();
         assert_eq!(file, round_trip);
+    }
+
+    #[test]
+    fn error_row_inclusion_metadata_survives_storage_and_arena_copy() {
+        let file = {
+            let source = Bump::new();
+            let interface = compile_interface(
+                &source,
+                indoc::indoc! {r#"
+                pub fn forward(value: Result[Number, [:known | e]]) {
+                    let number = value?
+                    Ok(number)
+                }
+            "#},
+            );
+            InterfaceFile::dehydrate(&interface).unwrap()
+        };
+        let scheme = &file.values[0].scheme;
+        let OwnedType::Fn { params, ret } = &scheme.typ.typ else {
+            panic!("function")
+        };
+        let OwnedType::Named {
+            args: source_args, ..
+        } = &params[0].typ
+        else {
+            panic!("Result parameter")
+        };
+        let OwnedType::Named {
+            args: target_args, ..
+        } = &ret.typ
+        else {
+            panic!("Result return")
+        };
+        assert!(!scheme.error_row_inclusions.is_empty());
+        assert!(
+            scheme.error_row_inclusions.iter().any(|inclusion| {
+                inclusion.exact_target
+                    && inclusion.source.typ == source_args[1].typ
+                    && inclusion.target.typ == target_args[1].typ
+            }),
+            "inference must publish the input-to-output inclusion"
+        );
+        let bytes = bincode::serialize(&file).unwrap();
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let destination = Bump::new();
+        let copied = {
+            let hydrated_arena = Bump::new();
+            let hydrated = stored.hydrate(&hydrated_arena);
+            alder_ast::copy_interface(&destination, &hydrated)
+        };
+        let restored = InterfaceFile::dehydrate(&copied).unwrap();
+        assert_eq!(stored.values, restored.values);
+        assert_eq!(
+            restored.values[0].scheme.error_row_inclusions.len(),
+            scheme.error_row_inclusions.len()
+        );
     }
 
     #[test]

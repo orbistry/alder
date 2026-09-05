@@ -1,0 +1,5 @@
+pub fn combine(left: Result[Number, [:storage(String) | e]], right: Result[Number, [:invalid(String) | f]]) {
+    let x = left?
+    let y = right?
+    Ok(x + y)
+}

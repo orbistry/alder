@@ -1035,7 +1035,16 @@ struct Scheme<'a> {
     quantified: Vec<usize>,
     predicates: Vec<Predicate<'a>>,
     projection_eqs: Vec<ProjectionEquation<'a>>,
+    error_row_inclusions: Vec<ErrorRowInclusion<'a>>,
     typ: Ty<'a>,
+}
+
+#[derive(Clone, Debug)]
+struct ErrorRowInclusion<'a> {
+    exact_target: bool,
+    source: Ty<'a>,
+    target: Ty<'a>,
+    region: Region,
 }
 
 #[derive(Clone, Debug)]
@@ -1205,7 +1214,9 @@ struct Infer<'a, 'db> {
     obligations: Vec<Obligation<'a>>,
     givens: Vec<Given<'a>>,
     projection_equations: Vec<ProjectionEquation<'a>>,
+    error_row_inclusions: Vec<ErrorRowInclusion<'a>>,
     calls: Vec<CallSite<'a>>,
+    inferred_error_rows: Vec<Ty<'a>>,
     match_sites: Vec<MatchSite<'a>>,
     tag_sites: Vec<Region>,
     legal_tag_sites: Vec<Region>,
@@ -1265,7 +1276,9 @@ impl<'a, 'db> Infer<'a, 'db> {
             obligations: Vec::new(),
             givens: Vec::new(),
             projection_equations: Vec::new(),
+            error_row_inclusions: Vec::new(),
             calls: Vec::new(),
+            inferred_error_rows: Vec::new(),
             match_sites: Vec::new(),
             tag_sites: Vec::new(),
             legal_tag_sites: Vec::new(),
@@ -1382,6 +1395,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
         }
 
+        self.solve_error_row_inclusions(&env)?;
         self.check_generic_contracts()?;
         for (actual, expected, region) in std::mem::take(&mut self.value_checks) {
             self.check_field_presence(actual, expected, region)?;
@@ -1454,6 +1468,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         env.globals.insert(
             name,
             Scheme {
+                error_row_inclusions: Vec::new(),
                 quantified: Vec::new(),
                 predicates: Vec::new(),
                 projection_eqs: Vec::new(),
@@ -2288,7 +2303,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.loop_results = outer_loops;
                 self.annotation_scope = outer_annotation_scope;
                 let body_type = body_type?;
-                self.check_value(body_type, body_result, region)?;
+                if alder_ast::flow::expression(body).falls_through {
+                    self.unify_return(body_type, body_result, region)?;
+                }
                 Ok(Ty::Fn(args, Box::new(self.prune(result))))
             }
             Expr::If {
@@ -2524,6 +2541,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     env.locals.insert(
                         local.id.0,
                         Scheme {
+                            error_row_inclusions: Vec::new(),
                             quantified: Vec::new(),
                             predicates: Vec::new(),
                             projection_eqs: Vec::new(),
@@ -2691,6 +2709,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     env.locals.insert(
                         local.id.0,
                         Scheme {
+                            error_row_inclusions: Vec::new(),
                             quantified: Vec::new(),
                             predicates: Vec::new(),
                             projection_eqs: Vec::new(),
@@ -2706,6 +2725,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     env.locals.insert(
                         local.id.0,
                         Scheme {
+                            error_row_inclusions: Vec::new(),
                             quantified: Vec::new(),
                             predicates: Vec::new(),
                             projection_eqs: Vec::new(),
@@ -3294,9 +3314,44 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         let mut vars = BTreeSet::new();
         self.free_vars(&typ, &mut vars);
+        for predicate in &predicates {
+            for argument in &predicate.args {
+                self.free_vars(argument, &mut vars);
+            }
+        }
         for equation in &projection_eqs {
             self.free_vars(&equation.projection, &mut vars);
             self.free_vars(&equation.typ, &mut vars);
+        }
+        // Constraints may connect a visible result tail to otherwise hidden
+        // intermediate tails. Preserve the whole connected component, not just
+        // constraints whose endpoints both occur directly in the function type.
+        let mut error_row_inclusions = Vec::new();
+        let mut selected = BTreeSet::new();
+        let pending = self.scheme_error_row_inclusions(&vars, outer_free);
+        loop {
+            let before = selected.len();
+            for (index, inclusion) in pending.iter().enumerate() {
+                if selected.contains(&index) {
+                    continue;
+                }
+                let mut related = BTreeSet::new();
+                self.free_vars(&inclusion.source, &mut related);
+                self.free_vars(&inclusion.target, &mut related);
+                if !related.is_disjoint(&vars) {
+                    vars.extend(related);
+                    selected.insert(index);
+                    error_row_inclusions.push(ErrorRowInclusion {
+                        exact_target: inclusion.exact_target,
+                        source: self.prune(inclusion.source.clone()),
+                        target: self.prune(inclusion.target.clone()),
+                        region: inclusion.region,
+                    });
+                }
+            }
+            if before == selected.len() {
+                break;
+            }
         }
         if generalizable {
             vars.retain(|variable| !outer_free.contains(variable));
@@ -3307,12 +3362,63 @@ impl<'a, 'db> Infer<'a, 'db> {
         env.globals.insert(
             name,
             Scheme {
+                error_row_inclusions,
                 quantified: vars.into_iter().collect(),
                 predicates,
                 projection_eqs,
                 typ,
             },
         );
+    }
+
+    fn scheme_error_row_inclusions(
+        &mut self,
+        visible: &BTreeSet<usize>,
+        outer_free: &BTreeSet<usize>,
+    ) -> Vec<ErrorRowInclusion<'a>> {
+        let mut pending = self.error_row_inclusions.clone();
+        for inclusion in &mut pending {
+            inclusion.source = self.prune(inclusion.source.clone());
+            inclusion.target = self.prune(inclusion.target.clone());
+        }
+        pending.retain(|inclusion| inclusion.exact_target || inclusion.source != inclusion.target);
+        let mut protected = visible.union(outer_free).copied().collect::<BTreeSet<_>>();
+        let universals = self
+            .generic_contracts
+            .iter()
+            .flat_map(|contract| contract.variables.values().cloned())
+            .collect::<Vec<_>>();
+        for variable in universals {
+            self.free_vars(&variable, &mut protected);
+        }
+        for inclusion in &pending {
+            self.free_vars(&inclusion.target, &mut protected);
+            if let Ty::ErrorRow { tags, .. } = &inclusion.source {
+                for payload in tags.values().flatten() {
+                    self.free_vars(payload, &mut protected);
+                }
+            }
+        }
+        // A variable occurring only as a hidden source tail is existential:
+        // choosing its empty row satisfies every upper bound. Eliminate that
+        // variable from this scheme, not from global substitutions. Input tails,
+        // payload variables, shared state, universals and intermediate targets
+        // must retain their relationships.
+        for inclusion in &mut pending {
+            if let Ty::ErrorRow { tail, .. } = &mut inclusion.source
+                && let Some(value) = tail
+                && let Ty::Var(id) = **value
+                && !protected.contains(&id)
+            {
+                *tail = None;
+            }
+        }
+        pending.retain(|inclusion| {
+            inclusion.exact_target
+                || !matches!(&inclusion.source,
+            Ty::ErrorRow { tags, tail: None } if tags.is_empty())
+        });
+        pending
     }
 
     fn environment_free_vars(
@@ -3337,6 +3443,10 @@ impl<'a, 'db> Infer<'a, 'db> {
     fn scheme_free_vars(&mut self, scheme: &Scheme<'a>) -> BTreeSet<usize> {
         let mut free = BTreeSet::new();
         self.free_vars(&scheme.typ, &mut free);
+        for inclusion in &scheme.error_row_inclusions {
+            self.free_vars(&inclusion.source, &mut free);
+            self.free_vars(&inclusion.target, &mut free);
+        }
         for predicate in &scheme.predicates {
             for argument in &predicate.args {
                 self.free_vars(argument, &mut free);
@@ -3382,6 +3492,17 @@ impl<'a, 'db> Infer<'a, 'db> {
             })
             .collect::<Vec<_>>();
         self.projection_equations.extend(projection_eqs);
+        let inclusions = scheme
+            .error_row_inclusions
+            .iter()
+            .map(|inclusion| ErrorRowInclusion {
+                exact_target: inclusion.exact_target,
+                source: self.replace_vars(&inclusion.source, &replacements),
+                target: self.replace_vars(&inclusion.target, &replacements),
+                region: inclusion.region,
+            })
+            .collect::<Vec<_>>();
+        self.error_row_inclusions.extend(inclusions);
         (typ, predicates)
     }
 
@@ -3395,6 +3516,16 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> (Ty<'a>, BTreeMap<&'a str, Ty<'a>>) {
         let mut vars = BTreeMap::new();
         let typ = self.from_ast(annotation.typ, &mut vars);
+        for inclusion in annotation.error_row_inclusions {
+            let source = self.convert_ast_error_type(inclusion.source, &mut vars);
+            let target = self.convert_ast_error_type(inclusion.target, &mut vars);
+            self.error_row_inclusions.push(ErrorRowInclusion {
+                exact_target: inclusion.exact_target,
+                source,
+                target,
+                region: inclusion.region,
+            });
+        }
         for equality in annotation.projection_equalities {
             let projection = self.projection_from_ast(equality.projection, &mut vars);
             let typ = self.from_ast(equality.typ, &mut vars);
@@ -3896,6 +4027,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         let errors = self.fresh_error_row();
         let result = self.named("Result", vec![value.clone(), errors.clone()]);
         self.bind(id, result, region)?;
+        self.inferred_error_rows.push(errors.clone());
         Ok((value, errors))
     }
 
@@ -3911,15 +4043,24 @@ impl<'a, 'db> Infer<'a, 'db> {
         let Some((expected_value, expected_errors)) = expected_parts else {
             return self.unify(actual, expected, region);
         };
-        let Some((actual_value, actual_errors)) = self.result_parts(actual.clone()) else {
-            return self.unify(actual, expected, region);
+        let actual_parts = match self.result_parts(actual.clone()) {
+            Some(parts) => parts,
+            None => {
+                let Ty::Var(id) = self.prune(actual.clone()) else {
+                    return self.unify(actual, expected, region);
+                };
+                // An unknown returned value is another Result source, not an
+                // alias for the accumulating output row. Its input errors must
+                // stay independent from errors propagated earlier by `?`.
+                let errors = self.fresh_error_row();
+                let result = self.named("Result", vec![expected_value.clone(), errors.clone()]);
+                self.bind(id, result, region)?;
+                (expected_value.clone(), errors)
+            }
         };
+        let (actual_value, actual_errors) = actual_parts;
         self.unify(actual_value, expected_value, region)?;
-        if matches!(self.prune(actual_errors.clone()), Ty::Var(_)) {
-            self.unify(actual_errors, expected_errors, region)
-        } else {
-            self.include_error_rows(actual_errors, expected_errors, region)
-        }
+        self.include_error_rows(actual_errors, expected_errors, region)
     }
 
     fn include_error_rows(
@@ -3928,12 +4069,45 @@ impl<'a, 'db> Infer<'a, 'db> {
         target: Ty<'a>,
         region: Region,
     ) -> Result<(), Error> {
-        let source = self.prune(source);
-        let target = self.prune(target);
+        let source = self.prune_error_row(source);
+        let target = self.prune_error_row(target);
+        let resolved_target = self.prune(target.clone());
+        let exact_target = self
+            .inferred_error_rows
+            .clone()
+            .into_iter()
+            .any(|row| self.prune(row) == resolved_target);
+        self.error_row_inclusions.push(ErrorRowInclusion {
+            exact_target,
+            source: source.clone(),
+            target: target.clone(),
+            region,
+        });
+        self.propagate_error_row_inclusion(source, target, region)
+    }
+
+    fn prune_error_row(&mut self, typ: Ty<'a>) -> Ty<'a> {
+        match self.prune(typ) {
+            Ty::Var(id) => Ty::ErrorRow {
+                tags: BTreeMap::new(),
+                tail: Some(Box::new(Ty::Var(id))),
+            },
+            typ => typ,
+        }
+    }
+
+    fn propagate_error_row_inclusion(
+        &mut self,
+        source: Ty<'a>,
+        target: Ty<'a>,
+        region: Region,
+    ) -> Result<(), Error> {
+        let source = self.prune_error_row(source);
+        let target = self.prune_error_row(target);
         let (
             Ty::ErrorRow {
                 tags: mut source_tags,
-                tail: source_tail,
+                tail: _,
             },
             Ty::ErrorRow {
                 tags: target_tags,
@@ -3966,9 +4140,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
 
         match target_tail {
-            None if !source_tags.is_empty() || source_tail.is_some() => {
-                Err(self.mismatch(region, source, target))
-            }
+            None if !source_tags.is_empty() => Err(self.mismatch(region, source, target)),
             None => Ok(()),
             Some(target_tail) if source_tags.is_empty() => Ok(()),
             Some(target_tail) => {
@@ -3981,6 +4153,135 @@ impl<'a, 'db> Infer<'a, 'db> {
                     },
                     region,
                 )
+            }
+        }
+    }
+
+    fn solve_error_row_inclusions(&mut self, env: &Env<'a>) -> Result<(), Error> {
+        // Local lambdas do not pass through global scheme generalization. Apply
+        // the same existential-source simplification to their constraints, but
+        // retain every variable exposed by a module binding or trait obligation.
+        let mut visible = BTreeSet::new();
+        for scheme in env.globals.values().chain(env.locals.values()) {
+            self.free_vars(&scheme.typ, &mut visible);
+            for predicate in &scheme.predicates {
+                for argument in &predicate.args {
+                    self.free_vars(argument, &mut visible);
+                }
+            }
+            for equation in &scheme.projection_eqs {
+                self.free_vars(&equation.projection, &mut visible);
+                self.free_vars(&equation.typ, &mut visible);
+            }
+        }
+        let obligation_args = self
+            .obligations
+            .iter()
+            .flat_map(|obligation| obligation.predicate.args.iter().cloned())
+            .collect::<Vec<_>>();
+        for argument in obligation_args {
+            self.free_vars(&argument, &mut visible);
+        }
+        self.error_row_inclusions = self.scheme_error_row_inclusions(&visible, &BTreeSet::new());
+        // Calls refine previously unknown input rows. Replay known lower bounds
+        // before choosing any flexible tail under a closed upper bound; choosing
+        // that tail eagerly would discard errors from another input.
+        loop {
+            let before = self
+                .substitutions
+                .iter()
+                .filter(|value| value.is_some())
+                .count();
+            for inclusion in self.error_row_inclusions.clone() {
+                self.propagate_error_row_inclusion(
+                    inclusion.source,
+                    inclusion.target,
+                    inclusion.region,
+                )?;
+            }
+            let after = self
+                .substitutions
+                .iter()
+                .filter(|value| value.is_some())
+                .count();
+            if before != after {
+                continue;
+            }
+
+            let mut universals = BTreeSet::new();
+            let contract_variables = self
+                .generic_contracts
+                .iter()
+                .flat_map(|contract| contract.variables.values().cloned())
+                .collect::<Vec<_>>();
+            for variable in contract_variables {
+                self.free_vars(&variable, &mut universals);
+            }
+            let mut closed = false;
+            let mut exact_targets = BTreeMap::new();
+            let mut open_sources = BTreeSet::new();
+            for inclusion in self.error_row_inclusions.clone() {
+                let source = self.prune(inclusion.source.clone());
+                let target = self.prune(inclusion.target.clone());
+                if let Ty::ErrorRow {
+                    tail: Some(target), ..
+                } = target
+                    && let Ty::Var(target) = *target
+                {
+                    if inclusion.exact_target {
+                        exact_targets.insert(target, inclusion.region);
+                    }
+                    match source {
+                        Ty::ErrorRow { tail: None, .. } => {}
+                        Ty::ErrorRow {
+                            tail: Some(source), ..
+                        } if *source == Ty::Var(target) => {}
+                        _ => {
+                            open_sources.insert(target);
+                        }
+                    }
+                }
+            }
+            for (target, region) in exact_targets {
+                if !universals.contains(&target) && !open_sources.contains(&target) {
+                    self.bind(
+                        target,
+                        Ty::ErrorRow {
+                            tags: BTreeMap::new(),
+                            tail: None,
+                        },
+                        region,
+                    )?;
+                    closed = true;
+                }
+            }
+            for inclusion in self.error_row_inclusions.clone() {
+                let source = self.prune(inclusion.source.clone());
+                let target = self.prune(inclusion.target.clone());
+                if let (
+                    Ty::ErrorRow {
+                        tail: Some(tail), ..
+                    },
+                    Ty::ErrorRow { tail: None, .. },
+                ) = (&source, &target)
+                    && let Ty::Var(id) = **tail
+                {
+                    if universals.contains(&id) {
+                        return Err(self.mismatch(inclusion.region, source, target));
+                    }
+                    self.bind(
+                        id,
+                        Ty::ErrorRow {
+                            tags: BTreeMap::new(),
+                            tail: None,
+                        },
+                        inclusion.region,
+                    )?;
+                    closed = true;
+                }
+            }
+            if !closed {
+                return Ok(());
             }
         }
     }
@@ -4080,6 +4381,54 @@ impl<'a, 'db> Infer<'a, 'db> {
                             variable: name.to_owned(),
                         },
                     });
+                }
+            }
+            self.check_universal_error_row_inclusions(&representatives)?;
+        }
+        Ok(())
+    }
+
+    /// Independent universally quantified tails cannot acquire an inclusion
+    /// relationship from the implementation body. Follow intermediate inferred
+    /// tails too: `?` can forward an input through more than one result variable.
+    fn check_universal_error_row_inclusions(
+        &mut self,
+        universals: &BTreeMap<usize, &'a str>,
+    ) -> Result<(), Error> {
+        let mut edges = BTreeMap::<usize, Vec<(usize, ErrorRowInclusion<'a>)>>::new();
+        for inclusion in self.error_row_inclusions.clone() {
+            let source = self.prune(inclusion.source.clone());
+            let target = self.prune(inclusion.target.clone());
+            let tail_variable = |row: Ty<'a>| match row {
+                Ty::Var(id) => Some(id),
+                Ty::ErrorRow {
+                    tail: Some(tail), ..
+                } => match *tail {
+                    Ty::Var(id) => Some(id),
+                    _ => None,
+                },
+                _ => None,
+            };
+            if let (Some(source), Some(target)) = (tail_variable(source), tail_variable(target)) {
+                edges.entry(source).or_default().push((target, inclusion));
+            }
+        }
+        for source in universals.keys().copied() {
+            let mut visited = BTreeSet::new();
+            let mut pending = vec![source];
+            while let Some(current) = pending.pop() {
+                if !visited.insert(current) {
+                    continue;
+                }
+                for (target, inclusion) in edges.get(&current).into_iter().flatten() {
+                    if *target != source && universals.contains_key(target) {
+                        return Err(self.mismatch(
+                            inclusion.region,
+                            inclusion.source.clone(),
+                            inclusion.target.clone(),
+                        ));
+                    }
+                    pending.push(*target);
                 }
             }
         }
@@ -5064,6 +5413,10 @@ impl<'a, 'db> Infer<'a, 'db> {
             self.collect_kind_arities(&equation.projection, &mut arities);
             self.collect_kind_arities(&equation.typ, &mut arities);
         }
+        for inclusion in &scheme.error_row_inclusions {
+            self.collect_kind_arities(&inclusion.source, &mut arities);
+            self.collect_kind_arities(&inclusion.target, &mut arities);
+        }
         let mut names = BTreeMap::new();
         let typ = self.to_ast(&typ, &mut names);
         let trait_predicates = self
@@ -5091,10 +5444,20 @@ impl<'a, 'db> Infer<'a, 'db> {
                 region: Region::zero(),
             });
         }
+        let mut error_row_inclusions = Vec::new();
+        for inclusion in &scheme.error_row_inclusions {
+            error_row_inclusions.push(alder_ast::ErrorRowInclusion {
+                exact_target: inclusion.exact_target,
+                source: self.to_ast(&inclusion.source, &mut names),
+                target: self.to_ast(&inclusion.target, &mut names),
+                region: inclusion.region,
+            });
+        }
         let mut params = names.into_iter().collect::<Vec<_>>();
         params.retain(|(id, _)| scheme.quantified.contains(id));
         params.sort_by_key(|(_, name)| generated_type_name_rank(name));
         self.bump.alloc(Annotation {
+            error_row_inclusions: self.bump.alloc_slice_copy(&error_row_inclusions),
             params: self
                 .bump
                 .alloc_slice_fill_iter(params.into_iter().map(|(id, name)| alder_ast::TypeParam {

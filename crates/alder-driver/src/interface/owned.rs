@@ -100,7 +100,16 @@ pub struct OwnedScheme {
     pub params: Vec<OwnedTypeParam>,
     pub trait_predicates: Vec<OwnedTraitRef>,
     pub projection_equalities: Vec<OwnedProjectionEquality>,
+    pub error_row_inclusions: Vec<OwnedErrorRowInclusion>,
     pub typ: OwnedLocatedType,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnedErrorRowInclusion {
+    pub exact_target: bool,
+    pub source: OwnedLocatedType,
+    pub target: OwnedLocatedType,
+    pub region: Region,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -500,6 +509,16 @@ fn own_impl(implementation: &ast::InterfaceImpl<'_>) -> OwnedImplHeader {
 
 fn own_scheme(annotation: &ast::Annotation<'_>) -> OwnedScheme {
     OwnedScheme {
+        error_row_inclusions: annotation
+            .error_row_inclusions
+            .iter()
+            .map(|inclusion| OwnedErrorRowInclusion {
+                exact_target: inclusion.exact_target,
+                source: own_type_node(inclusion.source),
+                target: own_type_node(inclusion.target),
+                region: inclusion.region,
+            })
+            .collect(),
         params: annotation.params.iter().map(own_type_param).collect(),
         trait_predicates: annotation
             .trait_predicates
@@ -1042,6 +1061,14 @@ fn hydrate_variant_payload<'a>(
 
 fn hydrate_scheme<'a>(bump: &'a Bump, scheme: &OwnedScheme) -> &'a ast::Annotation<'a> {
     bump.alloc(ast::Annotation {
+        error_row_inclusions: bump.alloc_slice_fill_iter(scheme.error_row_inclusions.iter().map(
+            |inclusion| ast::ErrorRowInclusion {
+                exact_target: inclusion.exact_target,
+                source: hydrate_type_node(bump, &inclusion.source),
+                target: hydrate_type_node(bump, &inclusion.target),
+                region: inclusion.region,
+            },
+        )),
         params: hydrate_type_params(bump, &scheme.params),
         trait_predicates: hydrate_trait_refs(bump, &scheme.trait_predicates),
         projection_equalities: bump.alloc_slice_fill_iter(

@@ -1186,6 +1186,7 @@ mod tests {
     /// Stand-in for a solver-produced annotation in tests: `Forall [a] a`.
     fn test_annotation<'a>(bump: &'a Bump) -> &'a alder_ast::Annotation<'a> {
         bump.alloc(alder_ast::Annotation {
+            error_row_inclusions: &[],
             free_vars: bump.alloc_slice_fill_iter(["a"]),
             typ: var_type(bump, "a"),
         })

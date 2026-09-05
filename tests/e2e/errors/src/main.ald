@@ -1,3 +1,5 @@
+import ~/rows
+
 fn storage() Result[Number, [:storage(String)]] {
     Err(:storage("disk"))
 }
@@ -63,5 +65,22 @@ pub fn main() Result[()] {
     assert(is_expected(2))
     assert(closed_match(0))
     assert(closed_match(1))
+    assert(exact_union(0) == 1)
+    assert(exact_union(1) == 2)
+    assert(exact_union(2) == 42)
     Ok(())
+}
+
+fn stored() Result[Number, [:storage(String)]] { Ok(20) }
+
+fn decoded() Result[Number, [:invalid(String)]] { Ok(22) }
+
+fn exact_union(which: Number) Number {
+    let left = if which == 0 { storage() } else { stored() }
+    let right = if which == 1 { decode() } else { decoded() }
+    match rows.combine(left, right) {
+        Ok(value) => value,
+        Err(:storage(message)) => 1,
+        Err(:invalid(message)) => 2,
+    }
 }
