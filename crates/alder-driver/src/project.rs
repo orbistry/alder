@@ -98,6 +98,22 @@ impl Project {
             .collect()
     }
 
+    /// A nested workspace member owns its source tree, even when discovery
+    /// also reaches it through an enclosing member. Use the same owner for
+    /// package identity and source-relative module paths.
+    fn source_owner(&self, path: &Path) -> Option<(&ProjectMember, &Path)> {
+        self.members
+            .iter()
+            .flat_map(|member| {
+                member
+                    .source_dirs
+                    .iter()
+                    .map(move |root| (member, root.as_path()))
+            })
+            .filter(|(_, root)| path.starts_with(root))
+            .max_by_key(|(_, root)| root.components().count())
+    }
+
     /// Resolve each discovered source module to the package identity used by
     /// canonicalization, coherence, and persistent interface artifacts.
     pub fn module_packages(&self, modules: &[Url]) -> BTreeMap<Url, OwnedPackageId> {
@@ -105,12 +121,7 @@ impl Project {
             .iter()
             .filter_map(|uri| {
                 let path = uri.to_file_path().ok()?;
-                let member = self.members.iter().find(|member| {
-                    member
-                        .source_dirs
-                        .iter()
-                        .any(|source| path.starts_with(source))
-                })?;
+                let (member, _) = self.source_owner(&path)?;
                 let package = if matches!(self.config, Config::Workspace(_))
                     && matches!(member.config, Config::Application(_))
                 {
@@ -144,13 +155,12 @@ impl Project {
                 let path = uri
                     .to_file_path()
                     .map_err(|_| DriverError::InvalidFileUri { uri: uri.clone() })?;
-                let relative = self
-                    .members
-                    .iter()
-                    .flat_map(|member| &member.source_dirs)
-                    .filter_map(|root| path.strip_prefix(root).ok())
-                    .next()
+                let (_, root) = self
+                    .source_owner(&path)
                     .ok_or_else(|| DriverError::InvalidModulePath { path: path.clone() })?;
+                let relative = path
+                    .strip_prefix(root)
+                    .expect("the selected source root contains the module");
                 let mut parts = relative
                     .with_extension("")
                     .components()
@@ -507,6 +517,117 @@ mod tests {
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(paths.len(), 4);
         assert_eq!(result.package_instance_indexes.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn nested_workspace_member_owns_its_source_independent_of_member_order() {
+        let root = PathBuf::from("/workspace");
+        let app = Config::Application(alder_config::Application {
+            compiler: None,
+            target: alder_config::Target::Standalone,
+            dependencies: BTreeMap::new(),
+            test_dependencies: BTreeMap::new(),
+        });
+        let outer = root.join("outer");
+        let inner = outer.join("src/inner");
+        let outer_module = Url::from_file_path(outer.join("src/main.ald")).unwrap();
+        let inner_module = Url::from_file_path(inner.join("src/main.ald")).unwrap();
+        let outer_util = Url::from_file_path(outer.join("src/util.ald")).unwrap();
+        let inner_util = Url::from_file_path(inner.join("src/util.ald")).unwrap();
+        let mut modules = vec![
+            outer_module.clone(),
+            inner_module.clone(),
+            outer_util.clone(),
+            inner_util.clone(),
+        ];
+        let mut project = Project {
+            root,
+            config: Config::Workspace(Workspace {
+                compiler: None,
+                members: vec![],
+                dependencies: BTreeMap::new(),
+            }),
+            members: vec![make_member(&outer, app.clone()), make_member(&inner, app)],
+        };
+        let packages = project.module_packages(&modules);
+        let paths = project.module_paths(&modules).unwrap();
+        assert_ne!(packages[&outer_module], packages[&inner_module]);
+        assert_eq!(paths[&outer_module], ["main"]);
+        assert_eq!(paths[&inner_module], ["main"]);
+        project.members.reverse();
+        assert_eq!(project.module_packages(&modules), packages);
+        assert_eq!(project.module_paths(&modules).unwrap(), paths);
+
+        let sources = InMemorySource::with_files([
+            (
+                outer_module.clone(),
+                indoc::indoc! {r#"
+                import ~/util
+                pub fn answer() Number { util.answer() }
+            "#}
+                .to_owned(),
+            ),
+            (
+                inner_module.clone(),
+                indoc::indoc! {r#"
+                import ~/util
+                pub fn answer() String { util.answer() }
+            "#}
+                .to_owned(),
+            ),
+            (
+                outer_util.clone(),
+                "pub fn answer() Number { 42 }".to_owned(),
+            ),
+            (
+                inner_util.clone(),
+                "pub fn answer() String { \"inner\" }".to_owned(),
+            ),
+        ]);
+        let db = std::sync::Arc::new(tokio::sync::Mutex::new(Database::new(sources)));
+        let mut previous = None;
+        for _ in 0..2 {
+            let dependencies = BuildDependencies {
+                module_packages: project.module_packages(&modules),
+                module_paths: project.module_paths(&modules).unwrap(),
+                ..BuildDependencies::default()
+            };
+            let graph = crate::build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+                .await
+                .unwrap();
+            assert_eq!(graph.edges[&outer_module], vec![outer_util.clone()]);
+            assert_eq!(graph.edges[&inner_module], vec![inner_util.clone()]);
+            let result = crate::build_with_dependencies(
+                db.clone(),
+                &graph,
+                crate::BuildMode::Build,
+                dependencies,
+            )
+            .await;
+            assert!(result.is_success(), "{:?}", result.modules);
+            let artifacts = result
+                .artifacts
+                .iter()
+                .map(|(uri, artifact)| (uri.clone(), (artifact.module_id.clone(), artifact.code())))
+                .collect::<BTreeMap<_, _>>();
+            let interfaces = result
+                .interfaces
+                .iter()
+                .map(|interface| {
+                    (
+                        interface.module.clone(),
+                        bincode::serialize(interface).unwrap(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+            let current = (artifacts, interfaces);
+            if let Some(previous) = &previous {
+                assert_eq!(&current, previous);
+            }
+            previous = Some(current);
+            project.members.reverse();
+            modules.reverse();
+        }
     }
 
     #[test]

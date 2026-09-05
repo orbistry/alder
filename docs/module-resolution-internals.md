@@ -18,7 +18,10 @@ stable under member reordering and workspace relocation, distinguishes equal
 directory basenames, and occupies one fixed-length URL/cache path segment.
 Standalone application builds retain the `Application` identity. Members outside
 the workspace root currently use their full path as the key input; relocatability
-for those and overlapping source roots remain audit items.
+for those remains an audit item. When source roots nest, the most specific
+containing source root owns the file. Package identity and module paths use the
+same ownership lookup; member ordering cannot move an inner member's files into
+an enclosing package.
 
 Before hydrating interfaces or discovering headers, compilation groups source
 URIs by canonical identity. Multiple distinct URIs for one identity stop the
@@ -49,6 +52,6 @@ roots; project-aware callers should supply `BuildDependencies::module_paths`
 and `module_packages` and use `build_graph_with_dependencies`.
 
 Remaining audits are tracked in `plans/compiler-hardening.md`, including
-overlapping roots, external workspace members, cache consistency, and
+external workspace members, cache consistency, and
 public re-exports. Deterministic graph traversal alone does not establish
 determinism of every downstream artifact or initialization order.
