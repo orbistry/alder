@@ -37,6 +37,14 @@ pub enum DriverError {
     #[error("workspace member not found: {pattern}")]
     MemberNotFound { pattern: String },
 
+    #[error("workspace package {name} is declared by both {first} and {second}")]
+    #[diagnostic(code(alder::driver::duplicate_workspace_package))]
+    DuplicateWorkspacePackage {
+        name: String,
+        first: PathBuf,
+        second: PathBuf,
+    },
+
     #[error("import cycle detected: {cycle}")]
     ImportCycle { cycle: String },
 

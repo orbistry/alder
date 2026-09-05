@@ -17,6 +17,12 @@ matches, `..` spellings, direct config-file matches, and symlink aliases of the
 same member therefore discover one source tree. Canonicalization failures retain
 the underlying filesystem error and offending member path.
 
+Distinct canonical workspace roots cannot declare the same named package,
+even if their module paths do not overlap. Loading rejects the conflict before
+module discovery and identifies both roots in canonical path order. This avoids
+silently merging separate source trees into one package and interface index;
+repeated paths to the same physical package remain valid.
+
 Applications checked together from a workspace use `ApplicationMember` identities
 instead of sharing `Application`. The opaque member key is `w` followed by the
 SHA-256 digest of the slash-separated workspace-relative member path. It is

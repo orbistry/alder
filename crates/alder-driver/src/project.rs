@@ -371,6 +371,21 @@ async fn load_workspace_members(
         }
     }
 
+    // Roots are already canonicalized and sorted. Repeated paths are one
+    // member, but distinct roots must not silently share a named package.
+    let mut packages = BTreeMap::new();
+    for member in members.values() {
+        if let Config::Package(package) = &member.config {
+            let name = package.name.to_string();
+            if let Some(first) = packages.insert(name.clone(), member.root.clone()) {
+                return Err(DriverError::DuplicateWorkspacePackage {
+                    name,
+                    first,
+                    second: member.root.clone(),
+                });
+            }
+        }
+    }
     Ok(members.into_values().collect())
 }
 
@@ -761,6 +776,75 @@ mod tests {
             dependencies.module_packages[&source_uri],
             OwnedPackageId::Application
         );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn workspace_rejects_distinct_roots_with_one_package_name() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-duplicate-package-test-{}-{nonce}",
+            std::process::id()
+        ));
+        for (member, module) in [("first", "one"), ("second", "two")] {
+            let directory = root.join(member);
+            std::fs::create_dir_all(directory.join("src")).unwrap();
+            std::fs::write(
+                directory.join("alder.jsonc"),
+                indoc::indoc! {r#"
+                    {
+                        "type": "package",
+                        "name": "vendor/widgets",
+                        "version": "0.1.0",
+                        "summary": "Widgets",
+                        "license": "MIT"
+                    }
+                "#},
+            )
+            .unwrap();
+            std::fs::write(
+                directory.join(format!("src/{module}.ald")),
+                "pub fn answer() Number { 42 }",
+            )
+            .unwrap();
+        }
+        let mut messages = Vec::new();
+        for members in [r#"["first", "second"]"#, r#"["second", "first"]"#] {
+            std::fs::write(
+                root.join("alder.jsonc"),
+                format!(r#"{{"type":"workspace","members":{members}}}"#),
+            )
+            .unwrap();
+            let error = Project::load(&root).await.unwrap_err();
+            assert!(matches!(
+                error,
+                DriverError::DuplicateWorkspacePackage { .. }
+            ));
+            messages.push(error.to_string());
+        }
+        assert_eq!(messages[0], messages[1]);
+        assert!(messages[0].contains("vendor/widgets"));
+        for member in ["first", "second"] {
+            assert!(
+                messages[0].contains(
+                    &root
+                        .join(member)
+                        .canonicalize()
+                        .unwrap()
+                        .display()
+                        .to_string()
+                )
+            );
+        }
+        std::fs::write(
+            root.join("alder.jsonc"),
+            r#"{"type":"workspace","members":["first","first/../first"]}"#,
+        )
+        .unwrap();
+        assert_eq!(Project::load(&root).await.unwrap().members.len(), 1);
         std::fs::remove_dir_all(root).unwrap();
     }
 
