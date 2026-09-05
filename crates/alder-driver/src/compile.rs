@@ -921,6 +921,141 @@ mod tests {
     }
 
     #[test]
+    fn wildcard_reexport_publishes_only_public_declarations() {
+        let leaf = indoc::indoc! {r#"
+            fn secret() Number { 42 }
+            type HiddenAlias = Number
+            enum HiddenEnum { Hidden }
+            trait HiddenTrait[a] { fn hidden_method(value: a) Number }
+            pub fn answer() Number { secret() }
+            pub type PublicAlias = Number
+            pub enum PublicEnum { Visible }
+            pub trait PublicTrait[a] { fn public_method(value: a) Number }
+        "#};
+        let leaf = dependency_interface(leaf, &["leaf"], &[]);
+        let facade = dependency_interface("pub import ~/leaf.*", &["facade"], &[leaf]);
+        assert_eq!(
+            facade
+                .values
+                .iter()
+                .map(|value| value.exported_as.as_str())
+                .collect::<Vec<_>>(),
+            ["answer", "public_method"]
+        );
+        assert_eq!(
+            facade
+                .types
+                .iter()
+                .map(|typ| typ.exported_as.as_str())
+                .collect::<Vec<_>>(),
+            ["PublicAlias", "PublicEnum"]
+        );
+        assert_eq!(
+            facade
+                .traits
+                .iter()
+                .map(|trait_| trait_.exported_as.as_str())
+                .collect::<Vec<_>>(),
+            ["PublicTrait"]
+        );
+        assert!(facade.private_names.is_empty());
+        assert!(
+            facade.instances.is_empty(),
+            "instances must not become facade-owned"
+        );
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets/facade.{ answer, PublicAlias, PublicEnum, PublicTrait }
+            pub fn read(value: a) Number where a: PublicTrait { PublicTrait::public_method(value) }
+            pub fn main() PublicAlias {
+                let visible = PublicEnum::Visible
+                answer()
+            }
+        "#};
+        let checked = build_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![facade.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(
+            checked.is_success(),
+            "public declarations must remain usable: {checked:?}"
+        );
+        for source in [
+            "import @vendor/widgets/facade.{ secret }",
+            "import @vendor/widgets/facade.{ HiddenAlias }",
+            "import @vendor/widgets/facade.{ HiddenEnum }",
+            "import @vendor/widgets/facade.{ HiddenTrait }",
+            "import @vendor/widgets/facade.{ hidden_method }",
+        ] {
+            let consumer = url("project/src/main.ald");
+            let result = build_sync(
+                vec![(consumer.clone(), Ok(source.to_owned()))],
+                BuildMode::Build,
+                BuildDependencies {
+                    interfaces: vec![facade.clone()],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert!(!result.is_success(), "private import accepted: {source}");
+            assert!(result.artifacts.is_empty());
+            assert!(
+                !result
+                    .interfaces
+                    .iter()
+                    .any(|interface| interface.module.path == ["main"])
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&consumer] else {
+                panic!("private import must fail")
+            };
+            assert_eq!(diagnostics.len(), 1);
+            assert!(
+                diagnostics[0].to_string().contains("does not export"),
+                "unexpected failure: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn wildcard_reexport_collision_rejects_publication() {
+        let source = indoc::indoc! {r#"
+            pub import ~/left.*
+            pub import ~/right.*
+        "#};
+        let facade = url("project/src/facade.ald");
+        let result = build_sync(
+            vec![
+                (
+                    url("project/src/left.ald"),
+                    Ok("pub fn answer() Number { 1 }".to_owned()),
+                ),
+                (
+                    url("project/src/right.ald"),
+                    Ok("pub fn answer() String { \"two\" }".to_owned()),
+                ),
+                (facade.clone(), Ok(source.to_owned())),
+            ],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert!(!result.is_success());
+        assert!(!result.artifacts.contains_key(&facade));
+        assert!(
+            !result
+                .interfaces
+                .iter()
+                .any(|interface| interface.module.path == ["facade"])
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&facade] else {
+            panic!("ambiguous facade must fail")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
     fn named_reexport_cannot_publish_a_private_value() {
         let source = "pub import ~/leaf.{ secret }";
         let facade = url("project/src/facade.ald");

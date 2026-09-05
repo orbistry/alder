@@ -36,6 +36,12 @@ Coverage at this checkpoint:
 - Explicitly re-exporting a private value fails at the imported name, with a
   reviewed colorless diagnostic; the failed facade publishes no interface or
   executable artifact.
+- Wildcard publication has exact interface assertions for public values, aliases,
+  enums, and traits. A consumer supplied only the facade interface can use the
+  public declarations but cannot import private functions, aliases, enums,
+  traits, or methods. Private diagnostic names and dependency instances are not
+  copied into the facade. Conflicting wildcard value exports reject facade
+  publication with a reviewed diagnostic labeling both source imports.
 - Shared array exports preserve reference identity through repeated aliases and
   a named/wildcard chain. Mutations through each route affect the original.
 - Renamed trait methods retain their method identity but bind under the selected
@@ -56,7 +62,7 @@ Coverage at this checkpoint:
   order. Driver tests check the retained metadata too.
 
 Remaining required audit: broader alias/chain combinations and package runtime
-execution, collision/wildcard-privacy diagnostics, broader mutable binding and
+execution, cross-namespace collisions and broader privacy cases, mutable binding and
 dictionary instance ownership, cyclic imports, and more complex
 emitted-module initialization/export behavior. The shared copying paths do not
 by themselves prove those contracts. Do not mark the whole re-export audit done.

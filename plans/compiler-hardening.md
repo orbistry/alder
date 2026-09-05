@@ -160,6 +160,19 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Wildcard privacy/collision coverage: exact owned-interface assertions verify
+  that only public values, aliases, enums, and traits are published, without
+  copying private diagnostic names or dependency instances. A consumer with
+  only the facade interface checks public declarations successfully, while
+  attempts to import private functions, aliases, enums, traits, and methods
+  fail without publishing consumer artifacts/interfaces. Conflicting wildcard
+  value exports reject facade publication and label both imports in a reviewed
+  colorless snapshot. No implementation defect was found in these cases.
+  Full workspace tests (108 driver tests), strict all-target/all-feature
+  Clippy, formatting, and diff checks pass; no pending snapshots. Tests/docs
+  only, so no changeset needed. Cross-namespace and broader package/cycle
+  boundaries remain open.
+
 - Trait-method import aliases: the CLI reproduced a false collision when one
   method was re-exported under two distinct aliases. Environment insertion used
   the method identity's original name instead of the selected local binding.
