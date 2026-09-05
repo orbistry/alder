@@ -93,6 +93,29 @@ pub struct PatternFlow {
 }
 
 impl PatternFlow {
+    /// Guard failure retries the next alternative with that alternative's bindings.
+    pub fn guarded(self, guard: Option<&Located<Expr<'_>>>) -> Self {
+        let Some(guard) = guard else { return self };
+        let guard_flow = expression(guard);
+        Self {
+            matches: self.matches
+                && guard_flow.falls_through
+                && !matches!(guard.value, Expr::Bool(false)),
+            rejects: self.rejects
+                || (self.matches
+                    && guard_flow.falls_through
+                    && !matches!(guard.value, Expr::Bool(true))),
+            exits: if self.matches {
+                self.exits.either(Flow {
+                    falls_through: false,
+                    ..guard_flow
+                })
+            } else {
+                self.exits
+            },
+        }
+    }
+
     fn test(rejects: bool) -> Self {
         Self {
             matches: true,
@@ -174,14 +197,17 @@ pub fn pattern(pattern: &Located<Pattern<'_>>) -> PatternFlow {
     }
 }
 
-pub fn patterns(alternatives: &[&Located<Pattern<'_>>]) -> PatternFlow {
+pub fn patterns(
+    alternatives: &[&Located<Pattern<'_>>],
+    guard: Option<&Located<Expr<'_>>>,
+) -> PatternFlow {
     alternatives.iter().fold(
         PatternFlow {
             matches: false,
             rejects: true,
             exits: Flow::default(),
         },
-        |flow, alternative| flow.or(pattern(alternative)),
+        |flow, alternative| flow.or(pattern(alternative).guarded(guard)),
     )
 }
 
@@ -258,26 +284,11 @@ pub fn expression(expr: &Located<Expr<'_>>) -> Flow {
                 if !remaining {
                     break;
                 }
-                let pattern = patterns(arm.patterns);
+                let pattern = patterns(arm.patterns, arm.guard);
                 branches = branches.either(pattern.exits);
                 remaining = pattern.rejects;
                 if pattern.matches {
-                    let guard = arm.guard.map_or(Flow::NEXT, expression);
-                    branches = branches.either(Flow {
-                        falls_through: false,
-                        ..guard
-                    });
-                    if guard.falls_through {
-                        if !arm
-                            .guard
-                            .is_some_and(|guard| matches!(guard.value, Expr::Bool(false)))
-                        {
-                            branches = branches.either(expression(arm.body));
-                        }
-                        remaining |= arm
-                            .guard
-                            .is_some_and(|guard| !matches!(guard.value, Expr::Bool(true)));
-                    }
+                    branches = branches.either(expression(arm.body));
                 }
             }
             expression(scrutinee).then(branches)
@@ -353,6 +364,40 @@ pub fn expression(expr: &Located<Expr<'_>>) -> Flow {
 #[cfg(test)]
 mod tests {
     use super::{Flow, PatternFlow};
+    use crate::Expr;
+    use alder_region::Located;
+
+    #[test]
+    fn guard_failure_retries_an_alternative_after_an_irrefutable_pattern() {
+        let guard = Located::at_zero(Expr::Bool(false));
+        let later_exit = PatternFlow {
+            matches: false,
+            rejects: false,
+            exits: Flow::BREAK,
+        };
+        let flow = PatternFlow::test(false)
+            .guarded(Some(&guard))
+            .or(later_exit);
+        assert!(!flow.matches);
+        assert!(!flow.rejects);
+        assert_eq!(flow.exits, Flow::BREAK);
+    }
+
+    #[test]
+    fn guard_success_skips_later_alternative_exits() {
+        let guard = Located::at_zero(Expr::Bool(true));
+        let later_exit = PatternFlow {
+            matches: false,
+            rejects: false,
+            exits: Flow::BREAK,
+        };
+        let flow = PatternFlow::test(false)
+            .guarded(Some(&guard))
+            .or(later_exit);
+        assert!(flow.matches);
+        assert!(!flow.rejects);
+        assert_eq!(flow.exits, Flow::default());
+    }
 
     #[test]
     fn pattern_children_run_only_after_a_match() {
