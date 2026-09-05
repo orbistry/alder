@@ -324,7 +324,7 @@ async fn load_workspace_members(
     workspace_root: &Path,
     workspace: &Workspace,
 ) -> Result<Vec<ProjectMember>, DriverError> {
-    let mut members = Vec::new();
+    let mut members = BTreeMap::new();
 
     for pattern in &workspace.members {
         let full_pattern = workspace_root.join(pattern);
@@ -356,12 +356,22 @@ async fn load_workspace_members(
                 continue;
             }
 
-            let config = alder_config::parse_file(&config_path)?;
-            members.push(make_member(&member_root, config));
+            let member_root =
+                member_root
+                    .canonicalize()
+                    .map_err(|source| DriverError::ReadError {
+                        path: member_root,
+                        source,
+                    })?;
+            if members.contains_key(&member_root) {
+                continue;
+            }
+            let config = alder_config::parse_file(member_root.join("alder.jsonc"))?;
+            members.insert(member_root.clone(), make_member(&member_root, config));
         }
     }
 
-    Ok(members)
+    Ok(members.into_values().collect())
 }
 
 /// Create a ProjectMember from config.
@@ -751,6 +761,91 @@ mod tests {
             dependencies.module_packages[&source_uri],
             OwnedPackageId::Application
         );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn workspace_member_aliases_share_one_source_identity() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-workspace-parent-test-{}-{nonce}",
+            std::process::id()
+        ));
+        let workspace = root.join("workspace");
+        let member = root.join("external");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(member.join("src")).unwrap();
+        std::fs::write(
+            workspace.join("alder.jsonc"),
+            indoc::indoc! {r#"
+                {
+                    "type": "workspace",
+                    "members": ["../external", "../external/../external", "../external/alder.jsonc"]
+                }
+            "#},
+        )
+        .unwrap();
+        std::fs::write(
+            member.join("alder.jsonc"),
+            r#"{"type":"application","target":"standalone"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            member.join("src/main.ald"),
+            indoc::indoc! {r#"
+            import ~/util
+            pub fn answer() Number { util.answer() }
+        "#},
+        )
+        .unwrap();
+        std::fs::write(member.join("src/util.ald"), "pub fn answer() Number { 42 }").unwrap();
+
+        let project = Project::load(&workspace).await.unwrap();
+        let db = std::sync::Arc::new(tokio::sync::Mutex::new(Database::new(
+            crate::source::FileSystemSource::new(),
+        )));
+        let modules = project.discover_modules(&*db.lock().await).await.unwrap();
+        assert_eq!(modules.len(), 2);
+        assert_eq!(project.members.len(), 1);
+        let dependencies = project
+            .build_dependencies(&mut *db.lock().await, &modules, false)
+            .await
+            .unwrap();
+        assert_eq!(project.members[0].root, member.canonicalize().unwrap());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&member, workspace.join("alias")).unwrap();
+            std::fs::write(
+                workspace.join("alder.jsonc"),
+                r#"{"type":"workspace","members":["alias","../external"]}"#,
+            )
+            .unwrap();
+            let aliased = Project::load(&workspace).await.unwrap();
+            assert_eq!(aliased.members.len(), 1);
+            assert_eq!(aliased.members[0].root, project.members[0].root);
+            assert_eq!(
+                aliased.module_packages(&modules),
+                dependencies.module_packages
+            );
+            assert_eq!(
+                aliased.module_paths(&modules).unwrap(),
+                dependencies.module_paths
+            );
+            assert_eq!(
+                aliased.discover_modules(&*db.lock().await).await.unwrap(),
+                modules
+            );
+        }
+        let graph = crate::build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+            .await
+            .unwrap();
+        let result =
+            crate::build_with_dependencies(db, &graph, crate::BuildMode::Build, dependencies).await;
+        assert!(result.is_success(), "{:?}", result.modules);
+        assert_eq!(result.artifacts.len(), 2);
         std::fs::remove_dir_all(root).unwrap();
     }
 }

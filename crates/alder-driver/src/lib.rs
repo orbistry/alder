@@ -11,8 +11,8 @@
 //!
 //! # Example
 //!
-//! ```ignore
-//! use alder_driver::{Project, Database, build, build_graph};
+//! ```no_run
+//! use alder_driver::{Project, Database, BuildMode, build_with_dependencies, build_graph_with_dependencies};
 //! use alder_driver::source::FileSystemSource;
 //! use std::sync::Arc;
 //! use tokio::sync::Mutex;
@@ -26,13 +26,19 @@
 //!     let db = Arc::new(Mutex::new(Database::new(FileSystemSource::new())));
 //!
 //!     // Discover modules
-//!     let modules = project.discover_modules(&db.lock().await).await?;
+//!     let mut modules = project.discover_modules(&*db.lock().await).await?;
+//!     let dependencies = project
+//!         .build_dependencies(&mut *db.lock().await, &modules, false)
+//!         .await?;
+//!     modules.extend(dependencies.source_modules.iter().cloned());
+//!     modules.sort();
+//!     modules.dedup();
 //!
 //!     // Build dependency graph
-//!     let graph = build_graph(db.clone(), &modules).await?;
+//!     let graph = build_graph_with_dependencies(db.clone(), &modules, &dependencies).await?;
 //!
 //!     // Compile everything
-//!     let result = build(db, &graph).await;
+//!     let result = build_with_dependencies(db, &graph, BuildMode::Check, dependencies).await;
 //!
 //!     println!("Compiled {} modules ({} success, {} failed)",
 //!         result.total, result.success, result.failed);

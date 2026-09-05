@@ -11,6 +11,12 @@ named package. Graph edges use exact package/path lookup, not URI suffixes.
 Consequently a `src` directory in a checkout ancestor or within a module path
 cannot redefine the project's source root.
 
+Workspace member roots are canonicalized before constructing source directories
+or identities, then deduplicated and sorted by canonical path. Repeated glob
+matches, `..` spellings, direct config-file matches, and symlink aliases of the
+same member therefore discover one source tree. Canonicalization failures retain
+the underlying filesystem error and offending member path.
+
 Applications checked together from a workspace use `ApplicationMember` identities
 instead of sharing `Application`. The opaque member key is `w` followed by the
 SHA-256 digest of the slash-separated workspace-relative member path. It is
