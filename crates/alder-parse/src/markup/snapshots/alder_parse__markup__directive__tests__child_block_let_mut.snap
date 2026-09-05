@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/markup/directive.rs
-description: "<div>\n    @if x {\n        let mut n = 0\n        <p>{n}</p>\n    }\n</div>\n"
+description: "<div>\n    @if x {\n        let n = 0\n        <p>{n}</p>\n    }\n</div>\n"
 ---
 Located {
     region: Region {
@@ -84,32 +84,20 @@ Located {
                                                             },
                                                             end: Position {
                                                                 line: 3,
-                                                                column: 22,
+                                                                column: 18,
                                                             },
                                                         },
                                                         value: Let(
                                                             LetDecl {
-                                                                mutable: Some(
-                                                                    Region {
+                                                                pattern: Located {
+                                                                    region: Region {
                                                                         start: Position {
                                                                             line: 3,
                                                                             column: 13,
                                                                         },
                                                                         end: Position {
                                                                             line: 3,
-                                                                            column: 16,
-                                                                        },
-                                                                    },
-                                                                ),
-                                                                pattern: Located {
-                                                                    region: Region {
-                                                                        start: Position {
-                                                                            line: 3,
-                                                                            column: 17,
-                                                                        },
-                                                                        end: Position {
-                                                                            line: 3,
-                                                                            column: 18,
+                                                                            column: 14,
                                                                         },
                                                                     },
                                                                     value: Var(
@@ -121,11 +109,11 @@ Located {
                                                                     region: Region {
                                                                         start: Position {
                                                                             line: 3,
-                                                                            column: 21,
+                                                                            column: 17,
                                                                         },
                                                                         end: Position {
                                                                             line: 3,
-                                                                            column: 22,
+                                                                            column: 18,
                                                                         },
                                                                     },
                                                                     value: Number(

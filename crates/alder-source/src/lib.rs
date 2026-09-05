@@ -142,7 +142,6 @@ pub struct FnDecl<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Param<'a> {
-    pub mutable: Option<Region>,
     pub pattern: &'a Located<Pattern<'a>>,
     pub annotation: Option<&'a Located<Type<'a>>>,
 }
@@ -162,10 +161,9 @@ pub enum Constraint<'a> {
     },
 }
 
-/// `let [mut] pattern [: Type] = expr` — shared by items and statements.
+/// `let pattern [: Type] = expr` — shared by items and statements.
 #[derive(Debug)]
 pub struct LetDecl<'a> {
-    pub mutable: Option<Region>,
     pub pattern: &'a Located<Pattern<'a>>,
     pub annotation: Option<&'a Located<Type<'a>>>,
     pub value: &'a Located<Expr<'a>>,

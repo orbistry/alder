@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ number }\npub fn main() Number {\n    number`value: ${\"wrong\"}`\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/project/src/main.ald:3:5]
+ 2 │ pub fn main() Number {
+ 3 │     number`value: ${"wrong"}`
+   ·     ────────────┬────────────
+   ·                 ╰── type requirement originates here
+ 4 │ }
+   ╰────

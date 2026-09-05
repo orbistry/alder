@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn identity(value) { value }\nfn replace() { identity = value -> value }\n"
+---
+alder::canonicalize::non_assignable_binding
+
+  × `identity` does not name an assignable binding
+   ╭─[/project/src/main.ald:2:16]
+ 1 │ fn identity(value) { value }
+   ·    ────┬───
+   ·        ╰── binding declared here
+ 2 │ fn replace() { identity = value -> value }
+   ·                ────┬───
+   ·                    ╰── reported here
+   ╰────
+  help: use a local `let` binding when you need to replace a value

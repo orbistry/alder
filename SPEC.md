@@ -244,7 +244,7 @@ then, by design.
 - [x] Lexer: `//` comments, template literals, `:tag` tokens, `#[`, `::`, `=>`, `->`, `|>`, `??`, `?`, `^`, `@if`/`@for`/`@match`
 - [x] Items: `pub`, path-first `import` with `.{ }`/`.*`/`as`, re-exports (`pub import`)
 - [x] `fn` declarations with optional juxtaposed return types; arrow lambdas without a leading `fn`
-- [x] Statements: `let`/`let mut`, assignment and compound assignment, `for`, `while`, `loop`, `break`/`continue` with values, `return`, `assert`
+- [x] Statements: `let`, assignment and compound assignment, `for`, `while`, `loop`, `break`/`continue` with values, `return`, `assert`
 - [x] Expressions: blocks, `if`/`else if`, `match` with `=>` and guards, `|>`, `.await`, `?`, `??`, calls, `_` placeholders, field/tuple access, paths (`Option::Some`)
 - [x] Literals: numbers (JS semantics), template literals, arrays, tuples, records with spread and optional fields
 - [x] Types: `Name[a, b]`, `fn(A) B`, tuples, records with `?` fields and rows, error rows `[:tag(A) | r]`, `Result[a]` shorthand, `where` clauses
@@ -260,7 +260,7 @@ then, by design.
 
 ### M2: Core language to JavaScript
 
-- [x] Adapt `alder-can` to namespaced constructors, `pub` visibility, statements, `mut`
+- [x] Adapt `alder-can` to namespaced constructors, `pub` visibility, statements, assignment
 - [x] `alder-codegen`: JS emission for the core language; decide enum/record representation
 - [x] Prelude and stdlib skeleton: `Option`, `Result`, `Array`, `String`, `Number`, `BigInt`, `Map`
 - [x] JS kernel skeleton and `extern` binding
@@ -430,9 +430,9 @@ where_clause  = 'where' [ constraint { ',' constraint } [ ',' ] ] ;
 constraint    = lower_ident ':' bound { '+' bound } | lower_ident '.' upper_ident '==' type ;
 bound         = path ;
 params        = param { ',' param } [ ',' ] ;
-param         = [ 'mut' ] pattern [ ':' type ] ;
+param         = pattern [ ':' type ] ;
 
-let_decl      = 'let' [ 'mut' ] pattern [ ':' type ] '=' expression ;
+let_decl      = 'let' pattern [ ':' type ] '=' expression ;
 
 type_alias    = 'type' upper_ident [ type_params ] '=' type ;
 opaque_type   = 'type' upper_ident ;                                  (* requires #[extern] (§10.26) *)
@@ -585,7 +585,7 @@ child_block   = '{' { let_decl | 'use' path | child } '}' ;   (* §10.23 *)
 text          = (* any run of characters not containing '<', '{' or '}'; a '@' ends it only before if/for/match/else/empty followed by a non-identifier byte *) ;
 ```
 
-Inside a `child_block`, `let` / `let mut` / `use` are setup and do not
+Inside a `child_block`, `let` / `use` are setup and do not
 render; markup and `{expr}` holes become children; any other statement
 form is written as `{expr}`. Whitespace-only text runs containing a
 newline are dropped; all other text is kept verbatim (§10.22). `@else`
@@ -650,7 +650,7 @@ error_row     = '[' [ tag_variant { '|' tag_variant } [ '|' lower_ident ] | lowe
 
 ```
 as assert await break comptime component continue else enum error false
-fn for if impl import in let loop macro match mut pub provide query
+fn for if impl import in let loop macro match pub provide query
 return schema state style table test tests trait true type use where
 while
 ```

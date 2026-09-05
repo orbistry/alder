@@ -613,8 +613,8 @@ mod tests {
     }
 
     #[test]
-    fn let_mut() {
-        assert_statement_snapshot!("let mut count = 0");
+    fn let_count() {
+        assert_statement_snapshot!("let count = 0");
     }
 
     #[test]

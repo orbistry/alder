@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "component App() {\n    let mut selected = state(0)\n    <box direction=\"column\" border=\"round\">\n        <text bold>Tasks</text>\n        @for (task, i) in tasks; key task {\n            <text inverse={i == selected}>{task}</text>\n        }\n    </box>\n}\n"
+description: "component App() {\n    let selected = state(0)\n    <box direction=\"column\" border=\"round\">\n        <text bold>Tasks</text>\n        @for (task, i) in tasks; key task {\n            <text inverse={i == selected}>{task}</text>\n        }\n    </box>\n}\n"
 ---
 Module {
     items: [
@@ -55,32 +55,20 @@ Module {
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 32,
+                                                column: 28,
                                             },
                                         },
                                         value: Let(
                                             LetDecl {
-                                                mutable: Some(
-                                                    Region {
+                                                pattern: Located {
+                                                    region: Region {
                                                         start: Position {
                                                             line: 2,
                                                             column: 9,
                                                         },
                                                         end: Position {
                                                             line: 2,
-                                                            column: 12,
-                                                        },
-                                                    },
-                                                ),
-                                                pattern: Located {
-                                                    region: Region {
-                                                        start: Position {
-                                                            line: 2,
-                                                            column: 13,
-                                                        },
-                                                        end: Position {
-                                                            line: 2,
-                                                            column: 21,
+                                                            column: 17,
                                                         },
                                                     },
                                                     value: Var(
@@ -92,11 +80,11 @@ Module {
                                                     region: Region {
                                                         start: Position {
                                                             line: 2,
-                                                            column: 24,
+                                                            column: 20,
                                                         },
                                                         end: Position {
                                                             line: 2,
-                                                            column: 32,
+                                                            column: 28,
                                                         },
                                                     },
                                                     value: State(
@@ -104,11 +92,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 2,
-                                                                    column: 30,
+                                                                    column: 26,
                                                                 },
                                                                 end: Position {
                                                                     line: 2,
-                                                                    column: 31,
+                                                                    column: 27,
                                                                 },
                                                             },
                                                             value: Number(

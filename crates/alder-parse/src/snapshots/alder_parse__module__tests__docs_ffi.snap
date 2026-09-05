@@ -225,7 +225,6 @@ Module {
                         },
                         params: [
                             Param {
-                                mutable: None,
                                 pattern: Located {
                                     region: Region {
                                         start: Position {
@@ -277,7 +276,6 @@ Module {
                                 ),
                             },
                             Param {
-                                mutable: None,
                                 pattern: Located {
                                     region: Region {
                                         start: Position {
@@ -592,7 +590,6 @@ Module {
                         },
                         params: [
                             Param {
-                                mutable: None,
                                 pattern: Located {
                                     region: Region {
                                         start: Position {

@@ -334,7 +334,7 @@ mod tests {
     fn mutable_loop_emission() {
         assert_emit_snapshot! {r#"
             pub fn sum() {
-                let mut total = 0
+                let total = 0
                 for value in [1, 2] { total += value }
                 total
             }
@@ -638,7 +638,7 @@ mod tests {
                 fn negate(value: Token) Token { value }
             }
             pub fn update() Token {
-                let mut value = Token::Token
+                let value = Token::Token
                 value += Token::Token
                 value
             }
@@ -662,7 +662,7 @@ mod tests {
             }
             fn next_index() Number { 0 }
             pub fn update() Token {
-                let mut values = [Token::Token]
+                let values = [Token::Token]
                 values[next_index()] += Token::Token
                 values[0]
             }

@@ -58,7 +58,6 @@ impl<'a> Parser<'a> {
             }
             (
                 self.alloc_slice_copy(&[Param {
-                    mutable: None,
                     pattern,
                     annotation: None,
                 }]),
@@ -234,8 +233,8 @@ mod tests {
     }
 
     #[test]
-    fn lambda_mut_param() {
-        assert_expression_snapshot!("(mut x) -> x");
+    fn lambda_parenthesized_parameter() {
+        assert_expression_snapshot!("(x) -> x");
     }
 
     #[test]

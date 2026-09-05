@@ -4,7 +4,6 @@ description: "(a, b, c)"
 ---
 [
     Param {
-        mutable: None,
         pattern: Located {
             region: Region {
                 start: Position {
@@ -23,7 +22,6 @@ description: "(a, b, c)"
         annotation: None,
     },
     Param {
-        mutable: None,
         pattern: Located {
             region: Region {
                 start: Position {
@@ -42,7 +40,6 @@ description: "(a, b, c)"
         annotation: None,
     },
     Param {
-        mutable: None,
         pattern: Located {
             region: Region {
                 start: Position {

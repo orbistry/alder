@@ -14,8 +14,8 @@ syntax, JavaScript runtime semantics.
 
 - **Honest about JavaScript.** `Number` and `BigInt` instead of `Int`/`Float`,
   arrays are JS arrays, `Option` compiles to `null`, mutation is real.
-- **Rust-like mutability, not Rust-like ownership.** `mut` is a binding
-  permission. There is no borrow checker; aliasing has JS semantics.
+- **Shared-reference mutation.** Lets and parameters are writable. There is no
+  mutation permission or borrow checker; aliasing has JS semantics.
 - **Errors are values.** `Result` everywhere, no exceptions, open error
   tags so nobody writes wrapper types.
 - **Async without ceremony.** Postfix `.await`, asyncness is inferred,
@@ -79,19 +79,21 @@ pub import ~/leaf.*                   // typical for mod.ald
 
 ```alder
 let x = 1
-let mut count = 0
+let count = 0
 count += 1
 
-let mut items = [1, 2]
-items.push(3)          // allowed: binding is mut
-
+let items = [1, 2]
 let alias = items      // same array, JS reference semantics
+Array.push(items, 3)   // alias observes the push
 ```
 
-- `let` bindings are immutable; reassignment or calling a mutating method
-  requires `let mut`.
-- `mut` does not prevent aliasing. `alias` above observes the push.
-- Function parameters may be declared `mut` to mutate in place.
+- Ordinary lets and parameters permit reassignment and field/index writes;
+  assignments must preserve their inferred or declared types.
+- Local `for` and `match` pattern bindings are writable too. Imported names and
+  named function declarations are not replaceable local bindings.
+- Rebinding a parameter changes that local binding. Mutating an array or record
+  through it is visible to aliases, including the caller.
+- Shared replaceable bindings remain subject to the value restriction below.
 
 ## Functions
 
@@ -138,8 +140,11 @@ references to existing values, constructor functions, and scalar literals can ge
 only type variables not tied to shared state. Calls and newly constructed
 arrays, records, tuples, maps, sets, or tasks are not generalized at that
 binding. This prevents one shared object from being used at incompatible types;
-it does not change JavaScript-style aliasing. `let mut` and local block lets
-remain monomorphic.
+it does not change JavaScript-style aliasing. Top-level bindings assigned anywhere
+in the module, including inside nested functions, remain monomorphic. This is
+based on resolved binding identity, not the presence of `mut`: a never-assigned
+function binding can generalize. The analysis conservatively includes writes in
+unreachable code. Local block lets remain monomorphic.
 
 For example, `let shared = []` has one element type inferred from its uses,
 whereas `fn fresh() { [] }` can be called independently for `Array[Number]` and
@@ -563,7 +568,7 @@ directives with no wrapping braces, following Octane's TSRX.
 
 ```alder
 pub component Counter(props: { start?: Number, label: String }) {
-    let mut count = state(props.start ?? 0)
+    let count = state(props.start ?? 0)
     let double = count * 2                     // memoized automatically
 
     <button onClick={() -> count += 1}>

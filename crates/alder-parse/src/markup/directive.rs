@@ -618,7 +618,7 @@ mod tests {
             r#"
             <div>
                 @if x {
-                    let mut n = 0
+                    let n = 0
                     <p>{n}</p>
                 }
             </div>

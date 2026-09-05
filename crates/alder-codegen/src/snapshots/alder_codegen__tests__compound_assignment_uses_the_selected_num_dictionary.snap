@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-description: "enum Token { Token }\nimpl Ord[Token] {\n    fn compare(left: Token, right: Token) -> Ordering { Ordering::Equal }\n}\nimpl Num[Token] {\n    fn add(left: Token, right: Token) -> Token { right }\n    fn sub(left: Token, right: Token) -> Token { right }\n    fn mul(left: Token, right: Token) -> Token { right }\n    fn div(left: Token, right: Token) -> Token { right }\n    fn rem(left: Token, right: Token) -> Token { right }\n    fn negate(value: Token) -> Token { value }\n}\npub fn update() -> Token {\n    let mut value = Token::Token\n    value += Token::Token\n    value\n}\n"
+description: "enum Token { Token }\nimpl Ord[Token] {\n    fn compare(left: Token, right: Token) Ordering { Ordering::Equal }\n}\nimpl Num[Token] {\n    fn add(left: Token, right: Token) Token { right }\n    fn sub(left: Token, right: Token) Token { right }\n    fn mul(left: Token, right: Token) Token { right }\n    fn div(left: Token, right: Token) Token { right }\n    fn rem(left: Token, right: Token) Token { right }\n    fn negate(value: Token) Token { value }\n}\npub fn update() Token {\n    let value = Token::Token\n    value += Token::Token\n    value\n}\n"
 ---
 import { $equalDerived } from "alder:kernel";
 const $dict$Eq$0 = {};
@@ -79,7 +79,8 @@ Object["freeze"]($dict$Num$2);
 function $v_update() {
 	const $t0 = $c_Token_Token;
 	let $l13_value = $t0;
-	$l13_value = $dict$Num$2["add"]($l13_value, $c_Token_Token);
+	const $t1 = $l13_value;
+	$l13_value = $dict$Num$2["add"]($t1, $c_Token_Token);
 	return $l13_value;
 }
 export { $dict$Eq$0, $dict$Num$2, $dict$Ord$1, $v_update as update };

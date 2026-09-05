@@ -207,7 +207,6 @@ pub struct FnDecl<'a> {
 #[derive(Debug)]
 pub struct TopLevelLet<'a> {
     pub bindings: &'a [QualifiedName<'a>],
-    pub mutable: bool,
     pub pattern: Node<'a, Pattern<'a>>,
     pub annotation: Option<Node<'a, Type<'a>>>,
     pub value: Node<'a, Expr<'a>>,
@@ -215,7 +214,6 @@ pub struct TopLevelLet<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Param<'a> {
-    pub mutable: bool,
     pub pattern: Node<'a, Pattern<'a>>,
     pub annotation: Option<Node<'a, Type<'a>>>,
 }
@@ -399,7 +397,6 @@ pub struct Block<'a> {
 
 #[derive(Debug)]
 pub struct LocalLet<'a> {
-    pub mutable: bool,
     pub pattern: Node<'a, Pattern<'a>>,
     pub annotation: Option<Node<'a, Type<'a>>>,
     pub value: Node<'a, Expr<'a>>,
@@ -423,7 +420,6 @@ pub enum Stmt<'a> {
 pub struct Place<'a> {
     pub root: BindingName<'a>,
     pub root_region: Region,
-    pub mutable: bool,
     pub steps: &'a [PlaceStep<'a>],
 }
 
@@ -831,7 +827,7 @@ pub struct Scope<'a> { pub values: BTreeMap<&'a str, ValueBinding<'a>> }
 pub struct ValueBinding<'a> {
     pub reference: ValueRef<'a>,
     pub region: Region,
-    pub mutable: bool,
+    pub assignable: bool,
     pub origin: Origin,
     pub annotation: Option<&'a Annotation<'a>>,
 }
@@ -867,10 +863,14 @@ enum's subnamespace. Imports nested in `tests {}` are scoped to that group and
 do not leak or participate in the ordinary module SCC; test bodies are
 canonicalized only in test mode.
 
-`let mut pattern` and mutable parameters mark every binding introduced by the
-pattern mutable. Field/index assignment permission comes from the resolved
-root. Imports, prelude entries, module bindings, and immutable locals cannot
-be assigned.
+Every local pattern binding and top-level let denotes writable storage;
+parameters, loop variables, and match bindings follow the same rule. Imports,
+prelude entries, module bindings, and named function declarations do not denote
+replaceable local storage. Assignment targets retain resolved binding identity.
+Canonicalization collects assigned module bindings, including nested writers,
+for the solver's flow-insensitive value restriction; assignment roots also
+participate in top-level dependency grouping. This is type safety for shared
+state, not a mutation-permission system.
 
 ## 9. Import and visibility contract
 

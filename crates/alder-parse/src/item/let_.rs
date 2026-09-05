@@ -1,6 +1,6 @@
-//! `let [mut] pattern [: Type] = expr` — shared by items, statements and child blocks.
+//! `let pattern [: Type] = expr` — shared by items, statements and child blocks.
 //!
-//! Grammar (SPEC.md): `let_decl = 'let' [ 'mut' ] pattern [ ':' type ] '=' expression ;`
+//! Grammar (SPEC.md): `let_decl = 'let' pattern [ ':' type ] '=' expression ;`
 //! (`let card = style { … }` is the same production with a `style` value).
 //!
 //! `let_decl` runs after the `let` keyword; the `=` must be a bare `=` (`==`
@@ -18,15 +18,6 @@ impl<'a> Parser<'a> {
     /// After `let`.
     pub(crate) fn let_decl(&mut self) -> Result<&'a LetDecl<'a>, error::Let<'a>> {
         self.chomp();
-        let mutable = if self.peek_keyword(b"mut") {
-            let start = self.get_position();
-            self.advance_by(3);
-            let region = self.located(start, ()).region;
-            self.chomp();
-            Some(region)
-        } else {
-            None
-        };
         let pattern = self.specialize(
             |bump, e, row, col| error::Let::Pattern(bump.alloc(e), row, col),
             |p| p.pattern(),
@@ -52,7 +43,6 @@ impl<'a> Parser<'a> {
             |p| p.expression(),
         )?;
         Ok(self.alloc(LetDecl {
-            mutable,
             pattern,
             annotation,
             value,
@@ -75,8 +65,8 @@ mod tests {
     }
 
     #[test]
-    fn let_top_mut_state() {
-        assert_item_snapshot!("let mut count = state(0)");
+    fn let_top_state() {
+        assert_item_snapshot!("let count = state(0)");
     }
 
     #[test]

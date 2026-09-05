@@ -167,7 +167,7 @@ component UserCard(props: { id: Id }) {
 Fine-grained signals with compile-time dependency tracking (Svelte 5
 runes style). Components run once.
 
-- `state(x)` creates a signal bound to a `let mut`. Reads inside
+- `state(x)` creates a signal bound to a `let`. Reads inside
   expressions and markup are tracked; derived `let` bindings that read
   state are memoized.
 - Markup compiles to direct DOM operations bound to signals; `if`, `for`,
@@ -183,7 +183,7 @@ request-scoped during SSR, so state never leaks between requests.
 
 ```alder
 // src/stores/cart.ald
-pub let mut items = state([])
+pub let items = state([])
 pub fn add(item: Item) { items.push(item) }
 ```
 
@@ -256,7 +256,7 @@ embedded runtime).
 
 ```alder
 component App() {
-    let mut selected = state(0)
+    let selected = state(0)
     <box direction="column" border="round">
         <text bold>Tasks</text>
         @for (task, i) in tasks; key task {

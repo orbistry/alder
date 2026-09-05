@@ -55,7 +55,7 @@ fn choose(flag: Bool) Number {
 }
 
 fn counted() Number {
-    let mut count = 0
+    let count = 0
     while count < 2 {
         Task.sleep(1).await
         count += 1

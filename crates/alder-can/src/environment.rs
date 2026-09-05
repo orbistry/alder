@@ -1,5 +1,5 @@
-use std::cell::Cell;
-use std::collections::BTreeMap;
+use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use alder_ast::{
@@ -23,7 +23,9 @@ pub enum Candidate<'a, T> {
 pub struct ValueBinding<'a> {
     pub reference: ValueRef<'a>,
     pub region: Region,
-    pub mutable: bool,
+    /// Whether this name denotes writable local/module storage rather than
+    /// an import, function declaration, constructor, or built-in operation.
+    pub assignable: bool,
     pub annotation: Option<&'a Annotation<'a>>,
 }
 
@@ -94,6 +96,7 @@ pub struct Env<'a> {
     builtin_annotations: BTreeMap<ModuleId<'a>, BTreeMap<&'a str, &'a Annotation<'a>>>,
     next_local: Rc<Cell<u32>>,
     next_use: Rc<Cell<u32>>,
+    assigned_bindings: Rc<RefCell<BTreeSet<QualifiedName<'a>>>>,
 }
 
 impl<'a> Env<'a> {
@@ -112,6 +115,7 @@ impl<'a> Env<'a> {
             builtin_annotations: BTreeMap::new(),
             next_local: Rc::new(Cell::new(0)),
             next_use: Rc::new(Cell::new(0)),
+            assigned_bindings: Rc::new(RefCell::new(BTreeSet::new())),
         };
         env.add_builtin_types();
         env.add_builtin_ordering(bump);
@@ -165,6 +169,7 @@ impl<'a> Env<'a> {
             name: "Ordering",
         };
         let annotation = bump.alloc(Annotation {
+            record_overlays: &[],
             error_row_inclusions: &[],
             params: &[],
             trait_predicates: &[],
@@ -238,6 +243,7 @@ impl<'a> Env<'a> {
                         alternatives: 2,
                         payload: VariantPayload::Tuple(payloads),
                         annotation: bump.alloc(Annotation {
+                            record_overlays: &[],
                             error_row_inclusions: &[],
                             params,
                             trait_predicates: &[],
@@ -334,6 +340,7 @@ impl<'a> Env<'a> {
                         })) as &'a Located<Type<'a>>
                     };
                     let annotation = bump.alloc(Annotation {
+                        record_overlays: &[],
                         error_row_inclusions: &[],
                         params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
                             name: Located::at_zero("a"),
@@ -401,7 +408,7 @@ impl<'a> Env<'a> {
                             annotation: method.annotation,
                         },
                         region: Region::zero(),
-                        mutable: false,
+                        assignable: false,
                         annotation: Some(method.annotation),
                     },
                 );
@@ -443,6 +450,7 @@ impl<'a> Env<'a> {
             ret: b,
         }));
         let annotation = bump.alloc(Annotation {
+            record_overlays: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 alder_ast::TypeParam {
@@ -494,7 +502,7 @@ impl<'a> Env<'a> {
                     annotation,
                 },
                 region: Region::zero(),
-                mutable: false,
+                assignable: false,
                 annotation: Some(annotation),
             },
         );
@@ -516,6 +524,7 @@ impl<'a> Env<'a> {
             kind,
         };
         let pure = bump.alloc(Annotation {
+            record_overlays: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 type_param("f", constructor_kind),
@@ -529,6 +538,7 @@ impl<'a> Env<'a> {
             })),
         });
         let apply = bump.alloc(Annotation {
+            record_overlays: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 type_param("f", constructor_kind),
@@ -581,6 +591,7 @@ impl<'a> Env<'a> {
             ret: result,
         }));
         let annotation = bump.alloc(Annotation {
+            record_overlays: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 alder_ast::TypeParam {
@@ -632,6 +643,7 @@ impl<'a> Env<'a> {
         }));
         let t_of_b = applied_variable(bump, "t", b);
         let annotation = bump.alloc(Annotation {
+            record_overlays: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 alder_ast::TypeParam {
@@ -695,6 +707,7 @@ impl<'a> Env<'a> {
             },
         ))) as &'a Located<Type<'a>>;
         let annotation = bump.alloc(Annotation {
+            record_overlays: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
                 name: Located::at_zero("i"),
@@ -745,7 +758,7 @@ impl<'a> Env<'a> {
                     annotation,
                 },
                 region: Region::zero(),
-                mutable: false,
+                assignable: false,
                 annotation: Some(annotation),
             },
         );
@@ -776,11 +789,21 @@ impl<'a> Env<'a> {
                         annotation: method.annotation,
                     },
                     region: Region::zero(),
-                    mutable: false,
+                    assignable: false,
                     annotation: Some(method.annotation),
                 },
             );
         }
+    }
+
+    pub(crate) fn record_assignment(&self, root: alder_ast::BindingName<'a>) {
+        if let alder_ast::BindingName::TopLevel(name) = root {
+            self.assigned_bindings.borrow_mut().insert(name);
+        }
+    }
+
+    pub(crate) fn assigned_bindings(&self, bump: &'a Bump) -> &'a [QualifiedName<'a>] {
+        bump.alloc_slice_fill_iter(self.assigned_bindings.borrow().iter().copied())
     }
 
     pub fn push_scope(&mut self) {
@@ -810,12 +833,7 @@ impl<'a> Env<'a> {
         UseId(id)
     }
 
-    pub fn insert_local(
-        &mut self,
-        text: &'a str,
-        region: Region,
-        mutable: bool,
-    ) -> Result<LocalName<'a>, Region> {
+    pub fn insert_local(&mut self, text: &'a str, region: Region) -> Result<LocalName<'a>, Region> {
         if let Some(existing) = self.scopes.last().expect("scope exists").values.get(text) {
             return Err(existing.region);
         }
@@ -825,7 +843,7 @@ impl<'a> Env<'a> {
             ValueBinding {
                 reference: ValueRef::Local(local),
                 region,
-                mutable,
+                assignable: true,
                 annotation: None,
             },
         );
@@ -836,7 +854,7 @@ impl<'a> Env<'a> {
         &mut self,
         text: &'a str,
         region: Region,
-        mutable: bool,
+        assignable: bool,
     ) -> Result<QualifiedName<'a>, Region> {
         if let Some(existing) = self.scopes[0].values.get(text) {
             let shadows_builtin = matches!(
@@ -857,7 +875,7 @@ impl<'a> Env<'a> {
             ValueBinding {
                 reference: ValueRef::TopLevel(reference),
                 region,
-                mutable,
+                assignable,
                 annotation: None,
             },
         );
@@ -917,7 +935,7 @@ impl<'a> Env<'a> {
                     annotation,
                 },
                 region,
-                mutable: false,
+                assignable: false,
                 annotation: Some(annotation),
             },
         );
@@ -1182,7 +1200,7 @@ impl<'a> Env<'a> {
                     annotation: binding.annotation,
                 },
                 region: binding.region,
-                mutable: false,
+                assignable: false,
                 annotation: Some(binding.annotation),
             },
         );
@@ -1480,6 +1498,7 @@ fn interface_constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
+        record_overlays: &[],
         error_row_inclusions: &[],
         params: enum_.params,
         trait_predicates: &[],
@@ -1612,11 +1631,11 @@ mod tests {
                 path: &[],
             },
         );
-        let x = env.insert_local("x", Region::one(), false).unwrap();
+        let x = env.insert_local("x", Region::one()).unwrap();
         env.push_scope();
-        let inner_x = env.insert_local("x", Region::zero(), true).unwrap();
+        let inner_x = env.insert_local("x", Region::zero()).unwrap();
         assert_ne!(x.id, inner_x.id);
-        assert!(env.find_value("x").unwrap().mutable);
+        assert!(env.find_value("x").unwrap().assignable);
     }
 
     #[test]

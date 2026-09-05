@@ -44,7 +44,6 @@ Located {
                 },
                 params: [
                     Param {
-                        mutable: None,
                         pattern: Located {
                             region: Region {
                                 start: Position {
@@ -63,7 +62,6 @@ Located {
                         annotation: None,
                     },
                     Param {
-                        mutable: None,
                         pattern: Located {
                             region: Region {
                                 start: Position {

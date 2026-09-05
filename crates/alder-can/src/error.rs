@@ -203,7 +203,7 @@ pub enum ExprError<'a> {
 #[derive(Clone, Debug)]
 pub enum StmtError<'a> {
     Name(NameError<'a>),
-    ImmutableAssignment { name: &'a str, binding: Region },
+    NonAssignableBinding { name: &'a str, binding: Region },
     InvalidAssignmentTarget,
     BreakOutsideLoop,
     ContinueOutsideLoop,

@@ -999,6 +999,7 @@ fn expression_problem(error: &alder_parse::error::Expr<'_>) -> SyntaxProblem {
             syntax_problem("invalid record expression", *row, *column)
         }
         Expr::Block(error, ..) | Expr::Loop(error, ..) => block_problem(error),
+        Expr::Lambda(alder_parse::error::Lambda::Params(error, ..), ..) => params_problem(error),
         Expr::Lambda(_, row, column) => syntax_problem("invalid anonymous function", *row, *column),
         Expr::If(_, row, column) => syntax_problem("invalid `if` expression", *row, *column),
         Expr::Match(_, row, column) => syntax_problem("invalid `match` expression", *row, *column),
@@ -1911,10 +1912,10 @@ fn expression_error(error: &ExprError<'_>) -> CanDetails {
 fn statement_error(error: &StmtError<'_>) -> CanDetails {
     match error {
         StmtError::Name(error) => name_error(error),
-        StmtError::ImmutableAssignment { name, binding } => (
-            "immutable_assignment",
-            format!("cannot assign to immutable binding `{name}`"),
-            Some("declare the binding with `let mut`".to_owned()),
+        StmtError::NonAssignableBinding { name, binding } => (
+            "non_assignable_binding",
+            format!("`{name}` does not name an assignable binding"),
+            Some("use a local `let` binding when you need to replace a value".to_owned()),
             Some((*binding, "binding declared here")),
         ),
         StmtError::InvalidAssignmentTarget => (

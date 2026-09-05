@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/lambda.rs
-description: (mut x) -> x
+description: (x) -> x
 ---
 Located {
     region: Region {
@@ -10,34 +10,22 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 13,
+            column: 9,
         },
     },
     value: Lambda(
         Lambda {
             params: [
                 Param {
-                    mutable: Some(
-                        Region {
+                    pattern: Located {
+                        region: Region {
                             start: Position {
                                 line: 1,
                                 column: 2,
                             },
                             end: Position {
                                 line: 1,
-                                column: 5,
-                            },
-                        },
-                    ),
-                    pattern: Located {
-                        region: Region {
-                            start: Position {
-                                line: 1,
-                                column: 6,
-                            },
-                            end: Position {
-                                line: 1,
-                                column: 7,
+                                column: 3,
                             },
                         },
                         value: Var(
@@ -52,11 +40,11 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 12,
+                        column: 8,
                     },
                     end: Position {
                         line: 1,
-                        column: 13,
+                        column: 9,
                     },
                 },
                 value: Var(

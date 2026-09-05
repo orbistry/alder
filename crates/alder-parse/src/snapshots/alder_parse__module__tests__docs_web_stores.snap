@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "// src/stores/cart.ald\npub let mut items = state([])\npub fn add(item: Item) { items.push(item) }\n"
+description: "// src/stores/cart.ald\npub let items = state([])\npub fn add(item: Item) { items.push(item) }\n"
 ---
 Module {
     items: [
@@ -12,7 +12,7 @@ Module {
                 },
                 end: Position {
                     line: 2,
-                    column: 30,
+                    column: 26,
                 },
             },
             value: Item {
@@ -31,27 +31,15 @@ Module {
                 ),
                 kind: Let(
                     LetDecl {
-                        mutable: Some(
-                            Region {
+                        pattern: Located {
+                            region: Region {
                                 start: Position {
                                     line: 2,
                                     column: 9,
                                 },
                                 end: Position {
                                     line: 2,
-                                    column: 12,
-                                },
-                            },
-                        ),
-                        pattern: Located {
-                            region: Region {
-                                start: Position {
-                                    line: 2,
-                                    column: 13,
-                                },
-                                end: Position {
-                                    line: 2,
-                                    column: 18,
+                                    column: 14,
                                 },
                             },
                             value: Var(
@@ -63,11 +51,11 @@ Module {
                             region: Region {
                                 start: Position {
                                     line: 2,
-                                    column: 21,
+                                    column: 17,
                                 },
                                 end: Position {
                                     line: 2,
-                                    column: 30,
+                                    column: 26,
                                 },
                             },
                             value: State(
@@ -75,11 +63,11 @@ Module {
                                     region: Region {
                                         start: Position {
                                             line: 2,
-                                            column: 27,
+                                            column: 23,
                                         },
                                         end: Position {
                                             line: 2,
-                                            column: 29,
+                                            column: 25,
                                         },
                                     },
                                     value: Array(
@@ -134,7 +122,6 @@ Module {
                         },
                         params: [
                             Param {
-                                mutable: None,
                                 pattern: Located {
                                     region: Region {
                                         start: Position {

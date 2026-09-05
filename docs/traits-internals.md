@@ -264,7 +264,6 @@ pub struct AssocTypeDecl<'a> {
 }
 
 pub struct MethodParam<'a> {
-    pub mutable: bool,
     pub pattern: Node<'a, Pattern<'a>>,
     pub typ: Node<'a, Type<'a>>,
 }

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "let mut identity = (value) -> { value }\nfn forward(value) { identity(value) }\nfn number() { forward(1) }\nfn text() { forward(\"text\") }\n"
+description: "let identity = (value) -> { value }\nfn forward(value) { identity(value) }\nfn number() { forward(1) }\nfn text() { forward(\"text\") }\nfn replace() { identity = value -> value }\n"
 ---
 [
     Error {

@@ -348,7 +348,6 @@ Module {
                         },
                         params: [
                             Param {
-                                mutable: None,
                                 pattern: Located {
                                     region: Region {
                                         start: Position {

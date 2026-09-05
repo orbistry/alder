@@ -285,19 +285,14 @@ pub fn canonicalize_expr<'a>(
                 let mut patterns = Vec::with_capacity(arm.patterns.len());
                 if let Some((first, rest)) = arm.patterns.split_first() {
                     let base = env.clone();
-                    patterns.push(canonicalize_pattern(
-                        bump,
-                        env,
-                        first,
-                        BindingMode::Local { mutable: false },
-                    )?);
+                    patterns.push(canonicalize_pattern(bump, env, first, BindingMode::Local)?);
                     for pattern in rest {
                         let mut alternative_env = base.clone();
                         patterns.push(canonicalize_pattern(
                             bump,
                             &mut alternative_env,
                             pattern,
-                            BindingMode::Local { mutable: false },
+                            BindingMode::Local,
                         )?);
                     }
                 }
@@ -411,16 +406,8 @@ pub(crate) fn canonicalize_stmt<'a>(
                 Some(typ) => Some(canonicalize_type(bump, env, &BTreeSet::new(), typ)?),
                 None => None,
             };
-            let pattern = canonicalize_pattern(
-                bump,
-                env,
-                decl.pattern,
-                BindingMode::Local {
-                    mutable: decl.mutable.is_some(),
-                },
-            )?;
+            let pattern = canonicalize_pattern(bump, env, decl.pattern, BindingMode::Local)?;
             CanStmt::Let(bump.alloc(LocalLet {
-                mutable: decl.mutable.is_some(),
                 pattern,
                 annotation,
                 value,
@@ -447,10 +434,10 @@ pub(crate) fn canonicalize_stmt<'a>(
                     place.value.root.value,
                 )]);
             };
-            if !binding.mutable {
+            if !binding.assignable {
                 return Err(vec![Error::new(
                     place.value.root.region,
-                    ErrorKind::Stmt(StmtError::ImmutableAssignment {
+                    ErrorKind::Stmt(StmtError::NonAssignableBinding {
                         name: place.value.root.value,
                         binding: binding.region,
                     }),
@@ -467,6 +454,7 @@ pub(crate) fn canonicalize_stmt<'a>(
                 }
             };
             let mut steps = Vec::with_capacity(place.value.steps.len());
+            env.record_assignment(root);
             for step in place.value.steps {
                 steps.push(match step {
                     alder_source::PlaceStep::Field(name) => CanPlaceStep::Field(*name),
@@ -483,7 +471,6 @@ pub(crate) fn canonicalize_stmt<'a>(
                 place: bump.alloc(CanPlace {
                     root,
                     root_region: place.value.root.region,
-                    mutable: true,
                     steps: bump.alloc_slice_copy(&steps),
                 }),
                 op,
@@ -497,8 +484,7 @@ pub(crate) fn canonicalize_stmt<'a>(
         } => {
             let iter = canonicalize_expr(bump, env, iter)?;
             env.push_scope();
-            let pattern =
-                canonicalize_pattern(bump, env, pattern, BindingMode::Local { mutable: false })?;
+            let pattern = canonicalize_pattern(bump, env, pattern, BindingMode::Local)?;
             env.control.loop_depth += 1;
             let body = canonicalize_block(bump, env, body)?;
             env.control.loop_depth -= 1;
@@ -618,7 +604,6 @@ fn canonicalize_call<'a>(
                 alder_ast::Pattern::Bind(alder_ast::BindingName::Local(local)),
             ));
             params.push(CanParam {
-                mutable: false,
                 pattern,
                 annotation: None,
             });
@@ -677,16 +662,8 @@ fn canonicalize_lambda<'a>(
             )?),
             None => None,
         };
-        let pattern = canonicalize_pattern(
-            bump,
-            env,
-            param.pattern,
-            BindingMode::Local {
-                mutable: param.mutable.is_some(),
-            },
-        )?;
+        let pattern = canonicalize_pattern(bump, env, param.pattern, BindingMode::Local)?;
         params.push(CanParam {
-            mutable: param.mutable.is_some(),
             pattern,
             annotation,
         });
@@ -1052,8 +1029,7 @@ fn canonicalize_child<'a>(
         } => {
             let iter = canonicalize_expr(bump, env, iter)?;
             env.push_scope();
-            let pattern =
-                canonicalize_pattern(bump, env, pattern, BindingMode::Local { mutable: false })?;
+            let pattern = canonicalize_pattern(bump, env, pattern, BindingMode::Local)?;
             let key = canonicalize_optional_expr(bump, env, key)?;
             let body = canonicalize_child_block(bump, env, body)?;
             env.pop_scope();
@@ -1076,19 +1052,14 @@ fn canonicalize_child<'a>(
                 let base = env.clone();
                 let mut patterns = Vec::with_capacity(arm.patterns.len());
                 if let Some((first, rest)) = arm.patterns.split_first() {
-                    patterns.push(canonicalize_pattern(
-                        bump,
-                        env,
-                        first,
-                        BindingMode::Local { mutable: false },
-                    )?);
+                    patterns.push(canonicalize_pattern(bump, env, first, BindingMode::Local)?);
                     for pattern in rest {
                         let mut alternative_env = base.clone();
                         patterns.push(canonicalize_pattern(
                             bump,
                             &mut alternative_env,
                             pattern,
-                            BindingMode::Local { mutable: false },
+                            BindingMode::Local,
                         )?);
                     }
                 }

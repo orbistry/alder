@@ -459,7 +459,7 @@ mod tests {
     fn evidence_requirements_follow_stable_use_ids() {
         let bump = Bump::new();
         let source_text = bump.alloc_str(indoc! {r#"
-            fn requirements(mut x, y) {
+            fn requirements(x, y) {
                 x = y
                 x += -y
                 match x { ^y => x == y, _ => x < y }

@@ -345,7 +345,6 @@ Module {
                 visibility: Private,
                 kind: Let(
                     LetDecl {
-                        mutable: None,
                         pattern: Located {
                             region: Region {
                                 start: Position {
@@ -498,7 +497,6 @@ Module {
                 visibility: Private,
                 kind: Let(
                     LetDecl {
-                        mutable: None,
                         pattern: Located {
                             region: Region {
                                 start: Position {

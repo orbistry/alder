@@ -1086,18 +1086,22 @@ impl<'src, 'js> Emitter<'src, 'js> {
             Expr::Bool(value) => self.pure(self.js.boolean(*value)),
             Expr::Unit => self.pure(self.js.undefined()),
             Expr::Template(parts) => {
-                let mut prefix = self.js.vec();
-                let mut values = self.js.vec();
+                let mut operands = Vec::with_capacity(parts.len());
                 for part in *parts {
                     match part {
-                        alder_ast::TemplatePart::Text(text) => values.push(self.js.string(text)),
+                        alder_ast::TemplatePart::Text(text) => {
+                            operands.push(self.pure(self.js.string(text)));
+                        }
                         alder_ast::TemplatePart::Expr(expression) => {
-                            let value = self.expr(expression)?;
-                            prefix.extend(value.prefix);
-                            values.push(self.js.call(self.js.identifier("String"), [value.expr]));
+                            let mut value = self.expr(expression)?;
+                            // Convert at this interpolation's evaluation point,
+                            // before subsequent expressions can mutate its value.
+                            value.expr = self.js.call(self.js.identifier("String"), [value.expr]);
+                            operands.push(value);
                         }
                     }
                 }
+                let (prefix, values) = self.sequence_values(operands);
                 let join = self.js.member(self.js.array(values), "join");
                 Value {
                     prefix,
@@ -1109,17 +1113,21 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 let mut prefix = tag.prefix;
                 let tag = self.materialize(tag.expr, &mut prefix);
                 let mut strings = self.js.vec();
-                let mut arguments = self.js.vec();
+                let mut operands = Vec::new();
+                let mut segment = String::new();
                 for part in *parts {
                     match part {
-                        alder_ast::TemplatePart::Text(text) => strings.push(self.js.string(text)),
+                        alder_ast::TemplatePart::Text(text) => segment.push_str(text),
                         alder_ast::TemplatePart::Expr(expression) => {
-                            let value = self.expr(expression)?;
-                            prefix.extend(value.prefix);
-                            arguments.push(value.expr);
+                            strings.push(self.js.string(&segment));
+                            segment.clear();
+                            operands.push(self.expr(expression)?);
                         }
                     }
                 }
+                strings.push(self.js.string(&segment));
+                let (argument_prefix, mut arguments) = self.sequence_values(operands);
+                prefix.extend(argument_prefix);
                 arguments.insert(0, self.js.array(strings));
                 Value {
                     prefix,
@@ -1300,14 +1308,35 @@ impl<'src, 'js> Emitter<'src, 'js> {
         ),
         Error,
     > {
+        let operands = nodes
+            .iter()
+            .map(|node| self.expr(node))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(self.sequence_values(operands))
+    }
+
+    fn sequence_values(
+        &mut self,
+        operands: Vec<Value<'js>>,
+    ) -> (
+        ArenaVec<'js, Statement<'js>>,
+        ArenaVec<'js, Expression<'js>>,
+    ) {
         let mut prefix = self.js.vec();
-        let mut values = self.js.builder.vec_with_capacity(nodes.len());
-        for node in nodes {
-            let value = self.expr(node)?;
+        let mut values = self.js.builder.vec_with_capacity(operands.len());
+        let last_setup = operands.iter().rposition(|value| !value.prefix.is_empty());
+        for (index, value) in operands.into_iter().enumerate() {
             prefix.extend(value.prefix);
-            values.push(value.expr);
+            // Later setup statements must not run before an earlier operand.
+            // Capture the value, retaining ordinary reference/alias semantics.
+            let expression = if last_setup.is_some_and(|last| index < last) {
+                self.materialize(value.expr, &mut prefix)
+            } else {
+                value.expr
+            };
+            values.push(expression);
         }
-        Ok((prefix, values))
+        (prefix, values)
     }
 
     fn call(
@@ -1388,19 +1417,34 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     .property("$", self.js.string(constructor.name.variant)),
             );
         }
+        let mut values = Vec::with_capacity(fields.len());
         for field in fields {
-            match field {
-                RecordField::Field { name, value } => {
-                    let value = self.expr(value)?;
-                    prefix.extend(value.prefix);
-                    properties.push(self.js.property(name.value, value.expr));
+            let expression = match field {
+                RecordField::Field { value, .. } | RecordField::Spread(value) => value,
+            };
+            values.push((field, self.expr(expression)?));
+        }
+        let last_setup = values
+            .iter()
+            .rposition(|(_, value)| !value.prefix.is_empty());
+        for (index, (field, value)) in values.into_iter().enumerate() {
+            prefix.extend(value.prefix);
+            let mut expression = value.expr;
+            if last_setup.is_some_and(|last| index < last) {
+                // A later operand's setup must not run before this property is
+                // evaluated. Spreads also need a shallow copy here: retaining
+                // just their object reference would observe later mutations.
+                if matches!(field, RecordField::Spread(_)) {
+                    let mut snapshot = self.js.vec();
+                    snapshot.push(self.js.spread_property(expression));
+                    expression = self.js.object(snapshot);
                 }
-                RecordField::Spread(value) => {
-                    let value = self.expr(value)?;
-                    prefix.extend(value.prefix);
-                    properties.push(self.js.spread_property(value.expr));
-                }
+                expression = self.materialize(expression, &mut prefix);
             }
+            properties.push(match field {
+                RecordField::Field { name, .. } => self.js.property(name.value, expression),
+                RecordField::Spread(_) => self.js.spread_property(expression),
+            });
         }
         Ok(Value {
             prefix,
@@ -1987,7 +2031,6 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 value,
             } => {
                 let value = self.expr(value)?;
-                statements.extend(value.prefix);
                 let evidence = use_id.and_then(|use_id| {
                     self.solved
                         .and_then(|solved| solved.uses.get(&use_id))
@@ -1996,8 +2039,13 @@ impl<'src, 'js> Emitter<'src, 'js> {
                             _ => None,
                         })
                 });
-                let assignment = if op.value == alder_ast::AssignOp::Set
-                    || matches!(evidence, Some(Evidence::Intrinsic(_)) | None)
+                let intrinsic = matches!(evidence, Some(Evidence::Intrinsic(_)) | None);
+                let assignment = if (op.value == alder_ast::AssignOp::Set || intrinsic)
+                    && value.prefix.is_empty()
+                    && !place
+                        .steps
+                        .iter()
+                        .any(|step| matches!(step, alder_ast::PlaceStep::Index(_)))
                 {
                     let target = self.place(place)?;
                     let operator = match op.value {
@@ -2011,18 +2059,36 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 } else {
                     let (place_prefix, read, write) = self.place_pair(place)?;
                     statements.extend(place_prefix);
-                    let dictionary =
-                        self.evidence(&evidence.expect("non-intrinsic evidence exists"));
-                    let method = match op.value {
-                        alder_ast::AssignOp::Add => "add",
-                        alder_ast::AssignOp::Sub => "sub",
-                        alder_ast::AssignOp::Mul => "mul",
-                        alder_ast::AssignOp::Div => "div",
-                        alder_ast::AssignOp::Set => unreachable!("handled above"),
+                    let read = if op.value == alder_ast::AssignOp::Set {
+                        read
+                    } else {
+                        self.materialize(read, &mut statements)
                     };
-                    let result = self
-                        .js
-                        .call(self.js.member(dictionary, method), [read, value.expr]);
+                    statements.extend(value.prefix);
+                    let result = if op.value == alder_ast::AssignOp::Set {
+                        value.expr
+                    } else if intrinsic {
+                        let operator = match op.value {
+                            alder_ast::AssignOp::Add => BinaryOperator::Addition,
+                            alder_ast::AssignOp::Sub => BinaryOperator::Subtraction,
+                            alder_ast::AssignOp::Mul => BinaryOperator::Multiplication,
+                            alder_ast::AssignOp::Div => BinaryOperator::Division,
+                            alder_ast::AssignOp::Set => unreachable!(),
+                        };
+                        self.js.binary(read, operator, value.expr)
+                    } else {
+                        let dictionary =
+                            self.evidence(&evidence.expect("non-intrinsic evidence exists"));
+                        let method = match op.value {
+                            alder_ast::AssignOp::Add => "add",
+                            alder_ast::AssignOp::Sub => "sub",
+                            alder_ast::AssignOp::Mul => "mul",
+                            alder_ast::AssignOp::Div => "div",
+                            alder_ast::AssignOp::Set => unreachable!(),
+                        };
+                        self.js
+                            .call(self.js.member(dictionary, method), [read, value.expr])
+                    };
                     self.js
                         .assignment(write, AssignmentOperator::Assign, result)
                 };
@@ -2140,6 +2206,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let mut read = self.js.identifier(&binding_name(place.root));
         let mut write = self.js.identifier(&binding_name(place.root));
         for step in place.steps {
+            // Capture each receiver before an index or RHS can mutate the
+            // root or an intermediate member. Read and write share that place.
+            let receiver = self.temp();
+            prefix.push(
+                self.js
+                    .variable(VariableDeclarationKind::Const, &receiver, Some(read)),
+            );
+            read = self.js.identifier(&receiver);
+            write = self.js.identifier(&receiver);
             match step {
                 alder_ast::PlaceStep::Field(field) => {
                     read = self.js.member(read, field.value);
@@ -3147,7 +3222,7 @@ mod tests {
             "enum Maybe[a] { Nothing, Just(a) }\npub fn unwrap(value) { match value { Maybe::Just(x) => x, Maybe::Nothing => 0 } }",
             "pub fn choose(flag, fallback) { if flag && fallback() { 1 } else { 2 } }",
             "pub fn first(name) { let value = { name: name, scores: [10, 20] }\n value.scores[0] }",
-            "pub fn sum() { let mut total = 0\n for value in [1, 2] { total += value }\n total }",
+            "pub fn sum() { let total = 0\n for value in [1, 2] { total += value }\n total }",
             "#[extern(\"library\", \"parse\")]\npub fn parse(value: String) Result[Number, String]",
         ] {
             let generated = emit(source);

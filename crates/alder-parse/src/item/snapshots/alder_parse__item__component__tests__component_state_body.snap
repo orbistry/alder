@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/component.rs
-description: "component App() {\n    let mut selected = state(0)\n    selected\n}\n"
+description: "component App() {\n    let selected = state(0)\n    selected\n}\n"
 ---
 ComponentDecl {
     name: Located {
@@ -38,32 +38,20 @@ ComponentDecl {
                         },
                         end: Position {
                             line: 2,
-                            column: 32,
+                            column: 28,
                         },
                     },
                     value: Let(
                         LetDecl {
-                            mutable: Some(
-                                Region {
+                            pattern: Located {
+                                region: Region {
                                     start: Position {
                                         line: 2,
                                         column: 9,
                                     },
                                     end: Position {
                                         line: 2,
-                                        column: 12,
-                                    },
-                                },
-                            ),
-                            pattern: Located {
-                                region: Region {
-                                    start: Position {
-                                        line: 2,
-                                        column: 13,
-                                    },
-                                    end: Position {
-                                        line: 2,
-                                        column: 21,
+                                        column: 17,
                                     },
                                 },
                                 value: Var(
@@ -75,11 +63,11 @@ ComponentDecl {
                                 region: Region {
                                     start: Position {
                                         line: 2,
-                                        column: 24,
+                                        column: 20,
                                     },
                                     end: Position {
                                         line: 2,
-                                        column: 32,
+                                        column: 28,
                                     },
                                 },
                                 value: State(
@@ -87,11 +75,11 @@ ComponentDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 2,
-                                                column: 30,
+                                                column: 26,
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 31,
+                                                column: 27,
                                             },
                                         },
                                         value: Number(

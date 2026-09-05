@@ -27,3 +27,20 @@ pub fn fallback(record) Number {
     let result = { value: 42, ..record }
     result.value
 }
+pub fn merge(left, right) { { ..left, ..right } }
+
+pub fn merger(left) { right -> merge(left, right) }
+
+pub fn forward_merged(left, right) {
+    let value = merge(left, right).result?
+    Ok(value)
+}
+
+pub fn forward_optional(left: { result: Result[Number, e] }, right: { result?: Result[Number, f] }) {
+    let value = merge(left, right).result?
+    Ok(value)
+}
+
+pub fn read_merged_optional(record: { r | value?: Option[Number] }) Option[Option[Number]] {
+    merge({ marker: true }, record).value
+}

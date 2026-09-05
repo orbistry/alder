@@ -1,30 +1,18 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "(mut count: Number)"
+description: "(count: Number)"
 ---
 [
     Param {
-        mutable: Some(
-            Region {
+        pattern: Located {
+            region: Region {
                 start: Position {
                     line: 1,
                     column: 2,
                 },
                 end: Position {
                     line: 1,
-                    column: 5,
-                },
-            },
-        ),
-        pattern: Located {
-            region: Region {
-                start: Position {
-                    line: 1,
-                    column: 6,
-                },
-                end: Position {
-                    line: 1,
-                    column: 11,
+                    column: 7,
                 },
             },
             value: Var(
@@ -36,11 +24,11 @@ description: "(mut count: Number)"
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 13,
+                        column: 9,
                     },
                     end: Position {
                         line: 1,
-                        column: 19,
+                        column: 15,
                     },
                 },
                 value: Named {
@@ -50,11 +38,11 @@ description: "(mut count: Number)"
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 13,
+                                        column: 9,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 19,
+                                        column: 15,
                                     },
                                 },
                                 value: "Number",

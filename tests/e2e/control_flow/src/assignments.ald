@@ -1,0 +1,37 @@
+pub let identity = value -> value
+
+let operation = value -> value
+
+pub fn forward(value) { operation(value) }
+
+pub fn writer() {
+    () -> { operation = (value: Number) -> value + 1 }
+}
+
+pub fn update(value: Number, items: Array[Number], record: { count: Number }) Number {
+    value += 1
+    items[0] = value
+    record.count = value
+    let local = 0
+    local = value
+    let transform = item -> {
+        item += local
+        item
+    }
+    transform(value)
+}
+
+pub fn pattern_writes() Number {
+    let sum = 0
+    for item in [1, 2] {
+        item += 1
+        sum += item
+    }
+    let matched = match 36 {
+        value => {
+            value += 1
+            value
+        }
+    }
+    sum + matched
+}

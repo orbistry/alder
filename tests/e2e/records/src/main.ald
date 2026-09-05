@@ -50,7 +50,80 @@ fn field_matches(record: { value?: Number }, expected: Option[Number]) Bool {
     }
 }
 
+fn overlay_first() Result[Number, [:first]] { Err(:first) }
+fn overlay_second() Result[Number, [:second]] { Err(:second) }
+
+fn spread_source(record: { value: Number }, events: Array[Number]) {
+    Array.push(events, 1)
+    record
+}
+
+fn spread_mutation(record: { value: Number }, events: Array[Number]) {
+    Array.push(events, 2)
+    let target = record
+    target.value = 99
+    { marker: true }
+}
+
+fn spread_observation(record: { value: Number }, events: Array[Number]) Number {
+    Array.push(events, 3)
+    record.value
+}
+
 pub fn main() {
+    let spread_original = { value: 1 }
+    let spread_events = []
+    let spread_copy = {
+        ..spread_source(spread_original, spread_events),
+        ..spread_mutation(spread_original, spread_events),
+        observed: spread_observation(spread_original, spread_events),
+    }
+    assert(spread_copy.value == 1)
+    assert(spread_copy.observed == 99)
+    assert(spread_original.value == 99)
+    assert(spread_events == [1, 2, 3])
+    let call_original = { value: 1 }
+    let call_events = []
+    let call_copy = rows.merge(
+        spread_source(call_original, call_events),
+        spread_mutation(call_original, call_events),
+    )
+    assert(call_copy.value == 99)
+    assert(call_events == [1, 2])
+    let block_original = { value: 1 }
+    let block_events = []
+    let block_copy = {
+        ..spread_source(block_original, block_events),
+        ..{
+            let patch = spread_mutation(block_original, block_events)
+            patch
+        },
+    }
+    assert(block_copy.value == 1)
+    assert(block_events == [1, 2])
+    let overlay_empty_patch: { result?: Result[Number, [:second]] } = {}
+    let overlay_fallback = rows.forward_optional({ result: overlay_first() }, overlay_empty_patch)
+    assert(match overlay_fallback { Ok(_) => false, Err(:first) => true, Err(:second) => false })
+    let overlay_override = rows.forward_optional({ result: overlay_first() }, { result: overlay_second() })
+    assert(match overlay_override { Ok(_) => false, Err(:first) => false, Err(:second) => true })
+    let overlay_forwarded = rows.forward_merged(
+        { result: overlay_first() },
+        { result: overlay_second() },
+    )
+    assert(match overlay_forwarded { Ok(value) => value, Err(:second) => 42 } == 42)
+    let overlay_captured = [1]
+    let overlay_operation = rows.merger({ values: overlay_captured })
+    let overlay_result = overlay_operation({ marker: true })
+    Array.push(overlay_result.values, 2)
+    assert(Array.length(overlay_captured) == 2)
+    assert(overlay_captured[1] == 2)
+    let overlay_absent: { value?: Option[Number] } = {}
+    let overlay_nested: { value?: Option[Number] } = { value: Option.none() }
+    assert(rows.merge(overlay_absent, { marker: true }).value == Option.none())
+    assert(rows.merge(overlay_nested, { marker: true }).value == Option.some(Option.none()))
+    assert(rows.read_merged_optional({ marker: "overwritten" }) == Option.none())
+    assert(rows.read_merged_optional({ value: Option.none() }) == Option.some(Option.none()))
+    assert(rows.read_merged_optional({ value: Option.some(42) }) == Option.some(Option.some(42)))
     let outcome = rows.preserve_outcome(rows.failure())
     let error_value = match outcome {
         Ok(value) => value,
@@ -71,6 +144,9 @@ pub fn main() {
     assert(pair.1.y == 3)
     assert(pair.1.right)
     let optional: OptionalName = {}
+    let merged = rows.merge({ x: 20 }, { y: 22 })
+    assert(merged.x + merged.y == 42)
+    assert(rows.merge({ value: 42 }, { value: "right" }).value == "right")
     assert(rows.fallback({}) == 42)
     assert(rows.fallback({ extra: true }) == 42)
     assert(rows.fallback({ value: 7 }) == 7)
@@ -118,13 +194,13 @@ pub fn main() {
     assert(!field_matches({}, Option.some(42)))
     assert(config_field(Config::Config {}) == Option.none())
     assert(config_field(Config::Config { value: Option.none() }) == Option.some(Option.none()))
-    let mut assigned: { value?: Option[Number] } = {}
+    let assigned: { value?: Option[Number] } = {}
     assert(assigned.value == Option.none())
     assigned.value = Option.none()
     assert(assigned.value == Option.some(Option.none()))
     assigned.value = Option.some(42)
     assert(assigned.value == Option.some(Option.some(42)))
-    let mut nested: { child: { value?: Number } } = { child: {} }
+    let nested: { child: { value?: Number } } = { child: {} }
     nested.child.value = 42
     assert(nested.child.value == Option.some(42))
     let counter = []

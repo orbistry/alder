@@ -85,7 +85,6 @@ TraitDecl {
                 },
                 params: [
                     Param {
-                        mutable: None,
                         pattern: Located {
                             region: Region {
                                 start: Position {
@@ -121,7 +120,6 @@ TraitDecl {
                         ),
                     },
                     Param {
-                        mutable: None,
                         pattern: Located {
                             region: Region {
                                 start: Position {

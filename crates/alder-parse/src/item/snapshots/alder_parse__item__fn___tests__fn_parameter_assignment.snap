@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "fn bump(mut n: Number) { n += 1 }"
+description: "fn bump(n: Number) { n += 1 }"
 ---
 FnDecl {
     name: Located {
@@ -18,27 +18,15 @@ FnDecl {
     },
     params: [
         Param {
-            mutable: Some(
-                Region {
+            pattern: Located {
+                region: Region {
                     start: Position {
                         line: 1,
                         column: 9,
                     },
                     end: Position {
                         line: 1,
-                        column: 12,
-                    },
-                },
-            ),
-            pattern: Located {
-                region: Region {
-                    start: Position {
-                        line: 1,
-                        column: 13,
-                    },
-                    end: Position {
-                        line: 1,
-                        column: 14,
+                        column: 10,
                     },
                 },
                 value: Var(
@@ -50,11 +38,11 @@ FnDecl {
                     region: Region {
                         start: Position {
                             line: 1,
-                            column: 16,
+                            column: 12,
                         },
                         end: Position {
                             line: 1,
-                            column: 22,
+                            column: 18,
                         },
                     },
                     value: Named {
@@ -64,11 +52,11 @@ FnDecl {
                                     region: Region {
                                         start: Position {
                                             line: 1,
-                                            column: 16,
+                                            column: 12,
                                         },
                                         end: Position {
                                             line: 1,
-                                            column: 22,
+                                            column: 18,
                                         },
                                     },
                                     value: "Number",
@@ -88,11 +76,11 @@ FnDecl {
             region: Region {
                 start: Position {
                     line: 1,
-                    column: 24,
+                    column: 20,
                 },
                 end: Position {
                     line: 1,
-                    column: 34,
+                    column: 30,
                 },
             },
             value: Block {
@@ -101,11 +89,11 @@ FnDecl {
                         region: Region {
                             start: Position {
                                 line: 1,
-                                column: 26,
+                                column: 22,
                             },
                             end: Position {
                                 line: 1,
-                                column: 32,
+                                column: 28,
                             },
                         },
                         value: Assign {
@@ -113,11 +101,11 @@ FnDecl {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 26,
+                                        column: 22,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 27,
+                                        column: 23,
                                     },
                                 },
                                 value: Place {
@@ -125,11 +113,11 @@ FnDecl {
                                         region: Region {
                                             start: Position {
                                                 line: 1,
-                                                column: 26,
+                                                column: 22,
                                             },
                                             end: Position {
                                                 line: 1,
-                                                column: 27,
+                                                column: 23,
                                             },
                                         },
                                         value: "n",
@@ -141,11 +129,11 @@ FnDecl {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 28,
+                                        column: 24,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 30,
+                                        column: 26,
                                     },
                                 },
                                 value: Add,
@@ -154,11 +142,11 @@ FnDecl {
                                 region: Region {
                                     start: Position {
                                         line: 1,
-                                        column: 31,
+                                        column: 27,
                                     },
                                     end: Position {
                                         line: 1,
-                                        column: 32,
+                                        column: 28,
                                     },
                                 },
                                 value: Number(

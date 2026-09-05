@@ -239,6 +239,13 @@ fn copy_projection_equality<'a>(
 
 fn copy_annotation<'a>(bump: &'a Bump, annotation: &Annotation<'_>) -> &'a Annotation<'a> {
     bump.alloc(Annotation {
+        record_overlays: bump.alloc_slice_fill_iter(annotation.record_overlays.iter().map(
+            |overlay| crate::RecordOverlay {
+                operands: copy_type_nodes(bump, overlay.operands),
+                result: copy_type_node(bump, overlay.result),
+                region: overlay.region,
+            },
+        )),
         error_row_inclusions: bump.alloc_slice_fill_iter(
             annotation
                 .error_row_inclusions

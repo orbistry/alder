@@ -1,0 +1,21 @@
+pub fn identity(parts: Array[String], value: a) a { value }
+
+pub fn shown(parts: Array[String], value: a) String where a: Show { show(value) }
+
+pub fn later(parts: Array[String], value: Number) Number {
+    Task.sleep(1).await
+    value
+}
+
+pub fn overlay(parts: Array[String], left, right) { { ..left, ..right } }
+
+pub fn merge_pair((left, right)) { { ..left, ..right } }
+
+pub trait OverlayReader[a] {
+    fn overlay_value(subject: a, left: { r | other: Bool }, right: { s | value: Number }) Number {
+        let merged = { ..left, ..right }
+        merged.value
+    }
+}
+
+impl OverlayReader[Number] {}

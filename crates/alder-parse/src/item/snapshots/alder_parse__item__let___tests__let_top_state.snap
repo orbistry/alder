@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/let_.rs
-description: let mut count = state(0)
+description: let count = state(0)
 ---
 Located {
     region: Region {
@@ -10,7 +10,7 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 25,
+            column: 21,
         },
     },
     value: Item {
@@ -18,27 +18,15 @@ Located {
         visibility: Private,
         kind: Let(
             LetDecl {
-                mutable: Some(
-                    Region {
+                pattern: Located {
+                    region: Region {
                         start: Position {
                             line: 1,
                             column: 5,
                         },
                         end: Position {
                             line: 1,
-                            column: 8,
-                        },
-                    },
-                ),
-                pattern: Located {
-                    region: Region {
-                        start: Position {
-                            line: 1,
-                            column: 9,
-                        },
-                        end: Position {
-                            line: 1,
-                            column: 14,
+                            column: 10,
                         },
                     },
                     value: Var(
@@ -50,11 +38,11 @@ Located {
                     region: Region {
                         start: Position {
                             line: 1,
-                            column: 17,
+                            column: 13,
                         },
                         end: Position {
                             line: 1,
-                            column: 25,
+                            column: 21,
                         },
                     },
                     value: State(
@@ -62,11 +50,11 @@ Located {
                             region: Region {
                                 start: Position {
                                     line: 1,
-                                    column: 23,
+                                    column: 19,
                                 },
                                 end: Position {
                                     line: 1,
-                                    column: 24,
+                                    column: 20,
                                 },
                             },
                             value: Number(

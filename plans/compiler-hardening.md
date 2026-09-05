@@ -6,8 +6,21 @@ The eleven defects from the September 4 review are minimum acceptance scope.
 The M2–M4 milestone checkmarks describe the feature work that landed, not proof
 that the contracts below are sound. Further milestones remain out of scope.
 
+Approved scope amendments: removal of `mut` (section 2) and the explicit async,
+capture, synchronization, and bounded traversal decisions in
+`plans/async-concurrency-hardening.md`. These supersede conflicting inferred-
+async or mutation-permission assumptions; they do not waive original acceptance
+requirements. All amendment implementation remains tracked as pending.
+
 ## Working rules
 
+- User-approved pre-1.0 policy: no backward compatibility obligations for
+  syntax, APIs, runtime ABIs, interfaces, or caches. Remove superseded behavior
+  cleanly and migrate repository consumers; do not add compatibility shims,
+  legacy readers, deprecation paths, or migration-specific diagnostics.
+  Treat removed syntax as though it never existed: ordinary parsing rules and
+  errors apply. This supersedes earlier requests for helpful obsolete-syntax
+  errors, including the dedicated `mut` diagnostics currently in the worktree.
 - Reproduce before fixing; retain permanent regressions with actual Alder source.
 - Preserve JS aliasing, accepted syntax, arena ownership, direct Oxc emission,
   owned interfaces, and shared miette diagnostics.
@@ -33,14 +46,51 @@ flexible variables and unifies away the method's universal contract.
 
 ### 2. Mutation and polymorphism
 
+Detailed migration analysis: `plans/mutation-syntax-hardening.md`. Baseline
+direct/captured replaceable-function regressions pass under current syntax.
+Resolved assignment metadata now replaces the keyword's generalization role;
+syntax removal is implemented; further capture and generalization audits remain.
+Ordinary local/top-level lets and named/lambda parameters now permit writes;
+the replacement-safety regressions also run without `mut`. Actual CLI coverage
+checks rebinding and mutation visible through caller aliases. Canonical AST
+mutability fields and local pattern permission flags are now removed;
+nonassignable-reference diagnostics no longer suggest `mut`. The parser now
+uses the current grammar without `mut` or compatibility diagnostics, and source
+AST flags are removed. Standalone and embedded test fixtures are converted;
+1292 parser tests pass. All 113 changed parser snapshots preserve structure
+after removing mutation fields and source-position numbers. The remaining
+documentation/release audit and final validation are still required.
+Assignment roots now participate in value dependencies: write-only references
+close recursive groups, nested writers retain target/index dependencies, and
+shadowed local targets do not create false top-level edges. The recursive-group
+regression failed before the fix; 68 canonicalization tests and 258 solver
+integration tests pass after it. This is a prerequisite, not completion of the
+syntax migration. Follow-up coverage preserves independently instantiated
+never-assigned functions, rejects escaping nested writers used incompatibly,
+and avoids restricting a global because of assignment to a shadowed local.
+
+- [x] User-approved design amendment: remove `mut` from the language entirely,
+  rather than retaining an optional no-op keyword. Ordinary `let` bindings and
+  parameters permit reassignment and field/index writes. Preserve existing
+  shared-reference mutation semantics; do not introduce borrow checking or
+  mutation permissions.
+- [ ] Update grammar, parser/source/canonical ASTs, binding checks, diagnostics,
+  formatter, interfaces where affected, docs, examples, tests, and changesets.
+  Migrate repository source to ordinary lets and parameters, without legacy
+  syntax handling or migration diagnostics. Remove obsolete immutability claims
+  and unused tracking. Final release/docs audit remains before closing this item.
+- [ ] Preserve assignment type checking and alias-aware generalization. Audit
+  reassignment of previously generalized functions/aliases as well as mutable
+  containers: removing mutability flags must not allow a polymorphic contract
+  to be replaced with a specialized value. Retain safe function polymorphism.
 - [x] Regressions for a shared top-level empty Array used at incompatible types.
 - [ ] Sound generalization restriction accounting for reachable mutable state,
   while preserving safe function polymorphism and existing aliasing semantics.
 - [ ] Arrays, maps, sets, nested records, aliases, captured state, reusable tasks,
   SCCs, and cross-module escape tests; document the selected restriction.
 
-Root cause: `let mut` is used as the generalization criterion, although ordinary
-bindings can contain shared mutable objects.
+Original root cause: `let mut` was used as the generalization criterion, although
+ordinary bindings can contain shared mutable objects.
 
 ### 3. Formatter semantics
 
@@ -91,6 +141,14 @@ always infer unit and break payloads do not constrain a target result.
 
 ### 6 and 7. Scheduler fairness and task frames
 
+- [ ] Implement `async fn` and `async {}` with lazy execution, one explicit
+  Task layer, lexical binding capture, and async-local control-flow boundaries.
+- [ ] Introduce Ref, SynchronizedRef, and a cancellation-safe semaphore with
+  the contracts and tests in `plans/async-concurrency-hardening.md`.
+- [ ] Implement bounded Fiber.map/forEach/tryMap/tryForEach; distinguish ordinary
+  Result collection from explicit fail-fast propagation and parent cancellation.
+- [ ] Migrate inferred-async syntax, interfaces, examples, diagnostics, and docs;
+  validate all affected compiler/runtime and release boundaries.
 - [x] Regressions for immediately fulfilled Promise starvation and deep awaits.
 - [x] Stack-safe task frames/trampoline with scheduler-visible composition;
   sequential await remains in the current fiber.
@@ -159,6 +217,167 @@ Root cause: virtual module imports lack a physical importer location.
   stale union-find pipeline claim; see `docs/compiler-implementation-map.md`.
 
 ## Evidence log
+
+- Record spread evaluation order (active, uncommitted): CLI execution reproduced
+  later block setup running before an earlier spread copied its source. Record
+  codegen now captures earlier field values and shallow spread copies before
+  later setup. Runtime assertions verify exact event order, copy timing, and
+  the different ordinary-call argument behavior. Added a codegen patch changeset.
+  Full workspace tests including doctests, formatting, and strict Clippy pass;
+  no existing codegen snapshots changed. Other prefix-combining expressions
+  remain in the evaluation-order audit.
+
+- Declared overlay tail replacement (active, uncommitted): positive/negative
+  regressions distinguish an explicit replacement field from an invalid promise
+  to preserve the original universal tail unchanged. The valid case preserves
+  unrelated fields while replacing Number with String. All 244 solver tests,
+  formatting, and strict Clippy pass; general tail/cycle entailment remains open.
+
+- Late overlay unions (active, uncommitted): a three-way generic optional
+  fallback reproduced error-inclusion growth from 16 to 20 after error solving.
+  Constraint-producing overlay contract checks now run inside a joint fixed
+  point with both solvers; final generic rigidity validation runs afterward.
+  Three-way positive/negative contracts pass. All 242 solver tests, full
+  workspace tests including doctests, formatting, and strict Clippy pass.
+  General unresolved/cyclic overlay entailment remains open.
+
+- Result union isolation (active, uncommitted): three regressions verify
+  independent generic calls retain precise separate error rows and error
+  widening does not hide incompatible mutable array element types or nested
+  required/optional field presence. All 240 solver integration tests pass.
+  Broader late-constraint/cache acceptance remains open.
+
+- Result fallback union (active, uncommitted): row-valued Result alternatives
+  now join their error sets through a reused exact-union target, while success
+  payloads retain equality checking. Closed and independent generic fallback
+  positives pass; narrowed return contracts reject. Actual imported CLI calls
+  verify absent/present fallback behavior. All 237 solver tests, full workspace
+  tests including doctests, formatting, and strict Clippy pass. Cache reuse,
+  mutable payloads, and late-added constraints remain explicit audit work.
+
+- Optional Result fallback investigation (active, uncommitted): a new positive
+  regression fails when required/optional fallback Result values have different
+  closed error rows. `join_values` imposes row equality before propagation can
+  retain both possible errors. The unignored failure and implementation concerns
+  are recorded in `plans/record-overlay-hardening.md`. The paired negative fails
+  at the same early point and is not evidence of correct narrowed-row rejection.
+
+- Overlay/error-row soundness (active, uncommitted): reproduced a wrong closed
+  error promise accepted after `?` on a merged Result field. Scheme preparation
+  eliminated a tail referenced by the overlay before connected-variable
+  selection. It now protects residual overlay variables from existential
+  elimination. Positive selected-row and negative dropped-error regressions
+  pass; all 233 solver tests, full workspace tests including doctests,
+  formatting, and strict Clippy pass. Imported CLI coverage executes
+  propagation/matching of the rightmost selected error.
+
+- Captured overlay factories (active, uncommitted): three regressions verify
+  returned lambdas preserve merge relationships, reject incompatible overwrites,
+  and cannot re-generalize captured shared array payloads. Actual imported CLI
+  execution verifies mutation through the returned merge preserves the captured
+  array alias. All 231 solver integration tests and the CLI fixture suite pass.
+  This is additional boundary evidence, not completion of the overlay audit.
+
+- Shared overlay expansion (active, uncommitted): reproduced 12 shared binary
+  nodes expanding into 8,192 operands. Contract checking now expands each
+  producer once at its rightmost occurrence. A structural regression checks
+  the retained operand count and ordering around an intervening write. All
+  228 source-level solver tests, full workspace tests including doctests,
+  formatting, and strict Clippy pass. This removes exponential
+  DAG unfolding; it does not resolve the remaining general cycle-validity work.
+
+- Recursive overlay payloads (active, uncommitted): permanent paired tests
+  distinguish an infinite nested payload (asserting the precise InfiniteType
+  error) from a required overwrite that breaks the cycle. Both pass, alongside
+  recursive forwarding; all 228 solver integration tests pass. No compiler
+  implementation change was needed for these cases. Unknown-tail cycle
+  entailment and graph-expansion bounds still require investigation.
+
+- Overlay result consistency (active, uncommitted): reproduced conflicting
+  Number/String field promises from repeated merges of the same typed inputs
+  escaping without a concrete caller. Equal ordered operands now share result
+  constraints; reversed input order remains distinct. Recursive forwarding and
+  the reversed-order positive case pass. The fixed-point loop now notices
+  substitution bindings as well as new fields/discharged relations. All 226
+  solver tests, full workspace tests including doctests, formatting, and strict
+  Clippy pass. General cycle validity and
+  expansion complexity remain unfinished.
+
+- Partial overlay fields (active, uncommitted): reproduced optional-field reads
+  failing with an unrelated universal tail. Rejected an eager whole-row
+  reduction because it constrained unrelated hidden overwrites. The solver now
+  exposes only provable field presence/payloads and retains the residual ordered
+  relationship. All 223 solver tests pass, including known required fallbacks
+  and a negative unknown fallback contract. CLI fixtures execute imported open
+  row reads for absent, present-None, and present-Some values while allowing an
+  unrelated field's type to change. Full workspace tests including doctests,
+  formatting, and strict Clippy pass; broader termination,
+  cyclic validity, and constraint interaction work remain open.
+
+- Overlay shape timing (active, uncommitted): reproduced optional fields being
+  inferred as required because closed instantiated overlays were solved only
+  after field access. Calls now solve available closed shapes after argument
+  checking. The regression passes, and actual imported CLI merges preserve
+  absent versus present-None optional values. All 220 solver tests, full
+  workspace tests including doctests, formatting, and strict Clippy pass.
+  Reviewed the stored-interface diagnostic snapshot change to the consumer's
+  ordinary return-contract region. Truly partial open shapes remain unfinished.
+
+- Stored generic overlays (active, uncommitted): actual inferred merge metadata
+  now replaces the synthetic transport fixture. Driver consumers accept
+  independent valid calls and reject a wrong overwrite result using a serialized
+  interface after all producer/copy arenas are destroyed. Reviewed the new
+  colorless diagnostic snapshot: it labels the current consumer call, and the
+  failed consumer publishes no interface or artifact. All 110 driver tests pass.
+  This closes the basic stored-generic-merge evidence gap, not the wider overlay
+  solver/contract acceptance work.
+
+- Composed overlay contract check (active, uncommitted): reproduced an invalid
+  Number promise hidden by merging an intermediate generic overlay with an
+  unrelated closed field. Contract validation now follows exact intermediate
+  results back to ordered input operands, with path-local revisit protection.
+  The negative case rejects; composed disjoint merges, higher-order forwarding,
+  independent top-level alias calls, and a final required override pass. All
+  217 solver integration tests, full workspace tests (including doctests),
+  formatting, and strict all-target/all-feature Clippy pass.
+  Partial-shape propagation, cyclic validity, and full constraint entailment
+  remain open; the broader overlay implementation is not ready to commit.
+
+- Overlay generic-contract checks (active, uncommitted): field guarantees now
+  respect rightmost required presence and reject hidden restrictions on a
+  universal tail. All payload unification precedes final contract validation.
+  A second adversarial test reproduced treating independent input tails as the
+  left result tail; it now rejects that promise while accepting the shared-tail
+  counterpart. The 211 solver integration tests and strict Clippy pass. Broader
+  symbolic/partial overlay solving and contract entailment are still required;
+  do not treat these targeted checks as completion of overlay acceptance.
+
+- Overlay inference integration (active, uncommitted): added scheme transport,
+  connected-variable generalization, instantiation, and a fixed-point pass for
+  closed operand shapes. The two original independent-merge regressions now
+  pass, as did the original 207 solver integration tests. A new adversarial
+  declared-universal test fails, demonstrating that unresolved overlays can
+  impose an unproved hidden restriction on an annotated input tail. It remains
+  unignored. Strict Clippy passes, but this is not a sound completed overlay
+  implementation; see `plans/record-overlay-hardening.md` for next work.
+
+- Independent overlay transport (active, uncommitted): added ordered operand/
+  result metadata to canonical annotations, deep arena copy, and owned
+  interfaces; advanced the interface wire format to 4. A focused synthetic
+  transport test proves round-trip preservation after arena destruction and
+  operand-order-sensitive fingerprints. Workspace checking and strict Clippy
+  pass. Solver integration remains pending and the two merge regressions still
+  fail; this scaffold is not a completed semantic fix.
+
+- Independent overlay investigation: two new unignored regressions reproduce
+  rejection of disjoint fields and right-biased different-type overwrites in
+  `fn merge(left, right) { { ..left, ..right } }`. The explicit tail equality in
+  `infer_record` is the root cause. Revisited Elm's row equality implementation;
+  it does not implement ordered overlay. Integration requirements and the
+  deferred-overlay design direction are recorded in
+  `plans/record-overlay-hardening.md`. These tests currently fail and are left
+  uncommitted as active implementation work, not ignored or accepted as the
+  intended behavior. The overall hardening goal remains incomplete.
 
 - Open spread overlaps: reproduced an inferred spread operand accepting a
   String overwrite in a function promising Number. Fields hidden in open tails
@@ -1019,6 +1238,97 @@ Root cause: virtual module imports lack a physical importer location.
 - [ ] Release package verification for affected crates.
 - [ ] SPEC/design docs reflect behavior; per-crate Sampo changesets.
 - [ ] Clean committed branch; final requirement-by-requirement evidence audit.
+
+- Expression evaluation-order follow-up: the shared `values` lowering helper
+  collected every operand's setup before evaluating any final expressions.
+  A CLI array regression reproduced later block effects running before an
+  earlier call. The helper now materializes operands preceding later setup,
+  preserving left-to-right evaluation without cloning referenced values.
+  CLI coverage includes arrays, tuples, call arguments, an early return that
+  must retain preceding effects and skip later operands, scalar mutation, and
+  mutable-array alias preservation. The helper also lowers tag payloads;
+  dedicated tag and template coverage remains open. All 39 codegen snapshot
+  tests and strict all-target/all-feature Clippy pass without snapshot changes.
+  Full workspace tests, including the final doctest process exit, and the CLI
+  regression run pass. Formatting and diff checks pass; no pending snapshots.
+  The wider expression/pattern ordering audit is not complete.
+
+- Template follow-up: reproduced later interpolation setup running before
+  earlier effects in both ordinary and tagged templates. Both now use the
+  operand sequencing helper; ordinary templates sequence string conversion,
+  not just reference capture. CLI cases verify effect order and a mutable
+  array converted before a later interpolation mutates it.
+- Tagged-template contract follow-up: three solver regressions reproduced an
+  accepted non-function tag, accepted wrong interpolation type, and rejected
+  valid Number-returning tag. The solver previously skipped tag inference and
+  unconditionally returned String. It now checks the emitted call contract
+  (`Array[String]` followed by interpolation arguments), retains the real
+  return type, and resolves resulting record overlays before field access.
+  All three regressions pass; CLI coverage also executes independent generic
+  instantiations, Show dictionary evidence, and a task-returning tag. Further
+  cross-module and diagnostic snapshot coverage remains open.
+- Tagged-template segment follow-up: the adjacent-interpolation CLI regression
+  reproduced omission of empty leading, intermediate, and trailing strings.
+  Lowering now accumulates literal text into a segment and emits a segment at
+  each interpolation boundary plus the final segment. This is literal payload
+  assembly into Oxc string nodes, not generated JavaScript source/reparsing.
+  Checkpoint validation: full workspace tests including final doctest exit pass
+  (247 solver integration tests, 39 unchanged codegen snapshots), as do strict
+  all-target/all-feature Clippy, formatting, and diff checks. No pending
+  snapshots. Template typing and segment regressions were observed failing
+  before their respective fixes. This does not close the broader hardening
+  acceptance audit or the remaining template cross-module/diagnostic coverage.
+
+- Tagged-template boundary verification: a serialized dependency interface
+  accepts independently instantiated identity tags and a Show-constrained tag;
+  a wrong argument is rejected at the current consumer call. Added and reviewed
+  the source-aware, colorless diagnostic snapshot. Actual CLI coverage imports
+  generic, dictionary-constrained, task-returning, and record-overlay tags.
+- Assignment ordering follow-up: a CLI regression reproduced an assignment
+  incorrectly writing to a replacement root object installed by the RHS.
+  Setup statements previously ran before resolving the target. Nontrivial
+  targets now capture each receiver/index before subsequent target or RHS
+  effects; compound assignments capture the old value before RHS setup.
+  Indexed assignments no longer take the path rejecting lifted index setup.
+  CLI coverage includes root replacement, nested index mutation, exactly-once
+  index effects, old scalar payload retention, and generic Num dispatch.
+  Reviewed two codegen snapshot changes: explicit receiver and old-value
+  captures precede assignment; no dictionary ABI changes. The wider audit,
+  including async assignment targets, remains open.
+  Checkpoint validation: full workspace tests and final doctest exit pass,
+  including all CLI fixtures, 111 driver tests, and 39 codegen tests. Strict
+  Clippy, formatting, and diff checks pass; no pending snapshots remain.
+
+- Assignment-index effects follow-up: a CLI case with suspension in both the
+  index and RHS verifies captured receivers/old payloads survive suspension.
+  Removing the RHS await exposed a separate defect: `contains_await_stmt`
+  skipped assignment indices and published the function as synchronous. The
+  scan now visits every computed index while retaining nested-lambda boundaries.
+- Assignment-index return context follow-up: a Result-returning function using
+  `?` in its assignment index was rejected with `invalid_try`; `place_type`
+  discarded the enclosing return type. It now passes that context to index
+  inference. CLI regressions verify failed indices skip the write and early
+  returns preserve the original array. Solver negatives reject incompatible
+  errors and return payloads; a positive nested-async-lambda case guards the
+  suspension boundary. Runtime scheduler implementation was not changed.
+  Checkpoint validation: full workspace tests, including final doctest exit,
+  pass (250 solver integration tests and all CLI fixtures). Strict Clippy,
+  formatting, and diff checks pass; no snapshots changed or remain pending.
+
+- Bare-function pipe overlay timing: reproduced a valid optional-field read
+  rejecting because this call path delayed overlay solving until after access
+  had guessed required presence. It now discharges newly closed overlays like
+  ordinary and tagged calls. Solver and imported CLI regressions pass,
+  including absent versus present nested None. Updated the overlay plan to
+  distinguish historical reproduction states from current acceptance gaps.
+  Checkpoint validation: full workspace tests including final doctest exit pass
+  (251 solver integration tests); strict Clippy, formatting, and diff checks
+  pass, with no pending snapshots.
+- Tuple-inference investigation queued: the initial pipe fixture used
+  `fn merge_pair(pair) { merge(pair.0, pair.1) }`, which fails during inference
+  of the second access before reaching the overlay. Destructured parameters
+  isolate the overlay regression. Audit inferred tuple arity/access order
+  separately; do not attribute that rejection to overlay solving.
 
 Finite regression coverage is evidence for these contracts, not a claim of
 exhaustive compiler correctness. Do not mark unresolved items complete.

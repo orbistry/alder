@@ -6,7 +6,7 @@
 //!
 //! ```ebnf
 //! params       = param { ',' param } [ ',' ] ;
-//! param        = [ 'mut' ] pattern [ ':' type ] ;
+//! param        = pattern [ ':' type ] ;
 //! where_clause = 'where' constraint { ',' constraint } [ ',' ] ;
 //! constraint   = lower_ident ':' bound { '+' bound } | lower_ident '.' upper_ident '==' type ;
 //! bound        = path ;
@@ -34,7 +34,7 @@
 //! 3) because `block()` and `type_expr()` chomp past it.
 // OWNER: item/fn_.rs (Wave 3; `params` / `where_clause` may land in Wave 2, see §9 step 2.4)
 
-use alder_region::{Position, Region};
+use alder_region::Position;
 use alder_source::{Constraint, FnDecl, Param};
 use bumpalo::collections::Vec as BumpVec;
 
@@ -155,17 +155,8 @@ impl<'a> Parser<'a> {
         Ok(params.into_bump_slice())
     }
 
-    /// `[mut] pattern [: type]`.
+    /// `pattern [: type]`.
     fn param(&mut self) -> Result<Param<'a>, error::Params<'a>> {
-        let mutable = if self.peek_keyword(b"mut") {
-            let start = self.get_position();
-            self.advance_by(3);
-            let region = Region::new(start, self.get_position());
-            self.chomp();
-            Some(region)
-        } else {
-            None
-        };
         let pattern = self.specialize(
             |bump, e, row, col| error::Params::Pattern(bump.alloc(e), row, col),
             |p| p.pattern(),
@@ -181,7 +172,6 @@ impl<'a> Parser<'a> {
             None
         };
         Ok(Param {
-            mutable,
             pattern,
             annotation,
         })
@@ -431,8 +421,8 @@ mod tests {
     }
 
     #[test]
-    fn params_mut() {
-        assert_params_snapshot!("(mut count: Number)");
+    fn params_single_annotation() {
+        assert_params_snapshot!("(count: Number)");
     }
 
     #[test]
@@ -593,8 +583,8 @@ mod tests {
     }
 
     #[test]
-    fn fn_mut_param() {
-        assert_fn_decl_snapshot!("fn bump(mut n: Number) { n += 1 }");
+    fn fn_parameter_assignment() {
+        assert_fn_decl_snapshot!("fn bump(n: Number) { n += 1 }");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "let mut identity = (value) -> { value }\nfn number() { identity(1) }\nfn text() { identity(\"text\") }\n"
+description: "let identity = (value) -> { value }\nfn number() { identity(1) }\nfn text() { identity(\"text\") }\nfn replace() { identity = value -> value }\n"
 ---
 [
     Error {

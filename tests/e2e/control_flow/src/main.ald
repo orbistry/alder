@@ -1,3 +1,6 @@
+import ~/tags
+import ~/assignments
+
 fn choose(flag: Bool) Number {
     if flag { return 42 } else { return 43 }
 }
@@ -19,7 +22,7 @@ fn awaited(flag: Bool) Number {
 }
 
 fn loop_tail_return(flag: Bool) Number {
-    let mut count = 0
+    let count = 0
     while count < 1 {
         count += 1
         if flag { return 42 } else { return 43 }
@@ -90,7 +93,228 @@ fn guarded_loop(flag: Bool) Number {
     }
 }
 
+fn observe(events: Array[Number], value: Number) Number {
+    Array.push(events, value)
+    value
+}
+
+fn pair(left: Number, right: Number) (Number, Number) {
+    (left, right)
+}
+
+fn operand_return(events: Array[Number]) Number {
+    let ignored = [observe(events, 1), { return 42 }, observe(events, 3)]
+    0
+}
+
+fn render_tag(parts: Array[String], left: Number, right: Number) String {
+    assert(parts == ["before", "between", "after"])
+    `${left}:${right}`
+}
+
+fn identity_tag(parts: Array[String], value: a) a { value }
+
+fn tag_segments(parts: Array[String], left: Number, right: Number) Array[String] { parts }
+
+fn show_tag(parts: Array[String], value: a) String where a: Show { show(value) }
+
+fn async_tag(parts: Array[String], value: Number) Number {
+    Task.sleep(1).await
+    value
+}
+
+fn template_order() {
+    let events = []
+    let rendered = `${observe(events, 1)}:${{
+        observe(events, 2)
+        20
+    }}`
+    assert(events == [1, 2])
+    assert(rendered == "1:20")
+    let shared = [1]
+    let captured = `${shared}:${{
+        Array.push(shared, 2)
+        "after"
+    }}`
+    assert(captured == "1:after")
+    assert(shared == [1, 2])
+    let tagged_events = []
+    let tagged = render_tag`before${observe(tagged_events, 1)}between${{
+        observe(tagged_events, 2)
+        20
+    }}after`
+    assert(tagged_events == [1, 2])
+    assert(tagged == "1:20")
+    assert(identity_tag`number ${42}` == 42)
+    assert(identity_tag`text ${"hello"}` == "hello")
+    assert(show_tag`shown ${42}` == "42")
+    assert(tag_segments`${1}${2}` == ["", "", ""])
+    assert(tags.identity`${42}` == 42)
+    assert(tags.identity`${"text"}` == "text")
+    assert(tags.shown`${42}` == "42")
+    let merged = tags.overlay`${{ x: 20 }}${{ y: 22 }}`
+    assert(merged.x + merged.y == 42)
+    let absent: { value?: Option[Number] } = {}
+    let present: { value?: Option[Number] } = { value: Option.none() }
+    assert(((absent, {}) |> tags.merge_pair).value == Option.none())
+    assert(((present, {}) |> tags.merge_pair).value == Option.some(Option.none()))
+    assert(tags.overlay_value(0, { other: true, value: "old" }, { value: 42 }) == 42)
+}
+
+fn dictionary_assignment(value: a, replacement: a) a where a: Num {
+    let current = value
+    current += {
+        let next = replacement
+        current = next
+        replacement
+    }
+    current
+}
+
+fn assignment_order() {
+    assert(dictionary_assignment(10, 99) == 109)
+    let current = { value: 1 }
+    let original = current
+    current.value = {
+        let replacement = { value: 2 }
+        current = replacement
+        42
+    }
+    assert(original.value == 42)
+    assert(current.value == 2)
+    let events = []
+    let values = [10, 20]
+    values[observe(events, 0)] += {
+        observe(events, 1)
+        values[0] = 99
+        2
+    }
+    assert(events == [0, 1])
+    assert(values == [12, 20])
+    let nested = [[1], [2]]
+    let first = nested[0]
+    nested[0][{
+        let replacement = [3]
+        nested[0] = replacement
+        0
+    }] = 42
+    assert(first == [42])
+    assert(nested == [[3], [2]])
+}
+
+fn suspended_index(nested: Array[Array[Number]], events: Array[Number]) Number {
+    Array.push(events, 1)
+    Task.sleep(1).await
+    let target = nested
+    target[0] = [99]
+    Array.push(events, 2)
+    0
+}
+
+fn async_assignment_order() {
+    let events = []
+    let nested = [[10]]
+    let original = nested[0]
+    nested[0][suspended_index(nested, events).await] += {
+        Array.push(events, 3)
+        Task.sleep(1).await
+        original[0] = 100
+        2
+    }
+    assert(original == [12])
+    assert(nested == [[99]])
+    assert(events == [1, 2, 3])
+}
+
+fn async_index_only() {
+    let events = []
+    let nested = [[10]]
+    let original = nested[0]
+    nested[0][suspended_index(nested, events).await] = 42
+    assert(original == [42])
+    assert(nested == [[99]])
+}
+
+fn fallible_index() Result[Number, [:index_failed]] { Err(:index_failed) }
+
+fn index_propagation(values: Array[Number]) Result[(), [:index_failed]] {
+    let target = values
+    target[fallible_index()?] = 42
+    Ok(())
+}
+
+fn index_return(values: Array[Number]) Number {
+    let target = values
+    target[{ return 42 }] = 99
+    0
+}
+
+fn expression_order() {
+    let events = []
+    let array = [observe(events, 1), {
+        observe(events, 2)
+        20
+    }]
+    assert(events == [1, 2])
+    assert(array == [1, 20])
+    let tuple = (observe(events, 3), {
+        observe(events, 4)
+        40
+    })
+    assert(events == [1, 2, 3, 4])
+    assert(tuple == (3, 40))
+    let arguments = pair(observe(events, 5), {
+        observe(events, 6)
+        60
+    })
+    assert(events == [1, 2, 3, 4, 5, 6])
+    assert(arguments == (5, 60))
+    let exits = []
+    assert(operand_return(exits) == 42)
+    assert(exits == [1])
+    let shared = [1]
+    let aliases = [shared, {
+        Array.push(shared, 2)
+        shared
+    }]
+    assert(aliases == [[1, 2], [1, 2]])
+    let scalar = 1
+    let captured = [scalar, {
+        let next = 2
+        scalar = next
+        scalar
+    }]
+    assert(captured == [1, 2])
+}
+
 pub fn main() {
+    expression_order()
+    template_order()
+    assert(assignments.identity(42) == 42)
+    assert(assignments.identity("text") == "text")
+    assert(assignments.forward(41) == 41)
+    assignments.writer()()
+    assert(assignments.forward(41) == 42)
+    let assigned_items = [0]
+    let assigned_record = { count: 0 }
+    assert(assignments.update(20, assigned_items, assigned_record) == 42)
+    assert(assigned_items[0] == 21)
+    assert(assigned_record.count == 21)
+    assert(assignments.pattern_writes() == 42)
+    assignment_order()
+    async_assignment_order().await
+    async_index_only().await
+    let untouched = [10]
+    assert(index_return(untouched) == 42)
+    assert(untouched == [10])
+    match index_propagation(untouched) {
+        Ok(_) => { assert(false) },
+        Err(:index_failed) => { assert(untouched == [10]) },
+    }
+    let tagged_task = async_tag`later ${42}`
+    assert(tagged_task.await == 42)
+    let imported_tagged_task = tags.later`${42}`
+    assert(imported_tagged_task.await == 42)
     assert(choose(true) == 42)
     assert(choose(false) == 43)
     assert(mixed(true) == 42)

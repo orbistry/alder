@@ -7,7 +7,8 @@ operations and need separate invariants.
 Representation checkpoint: canonical `Annotation` now has
 `error_row_inclusions`, each with source/target row types, a source region, and
 an `exact_target` bit identifying a least-union target.
-Owned schemes serialize the same metadata; interface format is version 3.
+Owned schemes serialize the same metadata, introduced in interface format 3.
+The in-progress record-overlay work advances the format to 4.
 Arena interface copying and owned hydration preserve both endpoints. Solver
 schemes retain connected inclusion constraints, instantiate them with the same
 variable substitution as their function type, and publish them in annotations.

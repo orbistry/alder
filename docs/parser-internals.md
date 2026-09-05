@@ -285,7 +285,6 @@ pub struct FnDecl<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Param<'a> {
-    pub mutable: Option<Region>,
     pub pattern: &'a Located<Pattern<'a>>,
     pub annotation: Option<&'a Located<Type<'a>>>,
 }
@@ -298,10 +297,9 @@ pub enum Constraint<'a> {
     AssocEq { var: Name<'a>, assoc: Name<'a>, typ: &'a Located<Type<'a>> },
 }
 
-/// `let [mut] pattern [: Type] = expr` — shared by items and statements.
+/// `let pattern [: Type] = expr` — shared by items and statements.
 #[derive(Debug)]
 pub struct LetDecl<'a> {
-    pub mutable: Option<Region>,
     pub pattern: &'a Located<Pattern<'a>>,
     pub annotation: Option<&'a Located<Type<'a>>>,
     pub value: &'a Located<Expr<'a>>,
@@ -875,7 +873,7 @@ pub struct ChildBlock<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ChildItem<'a> {
-    /// Only `let` / `let mut` and `use` are recognized here.
+    /// Only `let` and `use` are recognized here.
     Stmt(&'a Located<Stmt<'a>>),
     Child(&'a Located<Child<'a>>),
 }
@@ -1917,7 +1915,7 @@ pub enum BadOperator {
 pub const RESERVED: &[&str] = &[
     "as", "assert", "await", "break", "comptime", "component", "continue", "else", "enum",
     "error", "false", "fn", "for", "if", "impl", "import", "in", "let", "loop", "macro",
-    "match", "mut", "pub", "provide", "query", "return", "schema", "state", "style", "table",
+    "match", "pub", "provide", "query", "return", "schema", "state", "style", "table",
     "test", "tests", "trait", "true", "type", "use", "where", "while",
 ];
 
@@ -2811,9 +2809,9 @@ One construct per test.
 
 **item/import.rs**: package_root, package_nested, package_alias, package_names, package_names_alias, package_all, package_reserved_segment_names (`import @alder/test.{ fakeDb }` — `test` is a legal segment, §2.4), package_reserved_segment_alias (`import @alder/test as t`), package_reserved_segment_all, local_root (`import ~/db`), local_nested (`import ~/db/users`), local_names, local_root_only_names (`import ~.{ config }`), pub_reexport_names, pub_reexport_all, trailing_comma, error_bad_root, error_missing_slash, error_tail, error_alias_uppercase, error_names_alias_no_name (`.{ x as }` → `Import::NameAlias`), error_pub_needs_names, error_reserved_binding (bare `import @alder/test` → `Import::ReservedBinding(Test)`), error_root_only (bare `import ~` → `Import::RootOnly`).
 
-**item/fn\_.rs**: fn_no_params, fn_params, fn_typed_params, fn_ret, fn_mut_param, fn_pattern_param, fn_where_single, fn_where_multi, fn_where_plus, fn_where_assoc, fn_where_multiline_trailing_comma, fn_pub, fn_bodiless, fn_bodiless_with_extern_attr, fn_trailing_comma_params, error_no_name, error_params_unclosed, error_where_bad_bound, error_body.
+**item/fn\_.rs**: fn_no_params, fn_params, fn_typed_params, fn_ret, fn_parameter_assignment, fn_pattern_param, fn_where_single, fn_where_multi, fn_where_plus, fn_where_assoc, fn_where_multiline_trailing_comma, fn_pub, fn_bodiless, fn_bodiless_with_extern_attr, fn_trailing_comma_params, error_no_name, error_params_unclosed, error_where_bad_bound, error_body.
 
-**item/let\_.rs**: let_top, let_top_pub, let_top_mut_state, let_top_annotated, let_style.
+**item/let\_.rs**: let_top, let_top_pub, let_top_state, let_top_annotated, let_style.
 
 **item/type_alias.rs**: alias_simple, alias_params, alias_record, alias_fn, opaque_type, opaque_type_with_attr, error_alias_no_body, error_params_unclosed, error_params_empty.
 
@@ -2960,7 +2958,7 @@ Each item is a proposed SPEC.md / docs change unless marked _(internal)_.
 20. **`^`** parses only in query mode and in patterns; elsewhere `Expr::PinOutsideQuery`. The pin operand is a **whole postfix chain** parsed with query mode off: `^user.id` pins `user.id`, `^f(x)` pins the call, `^select` and `^{ a, b }` work, and `^(a + b)` pins the sum — so `^` binds looser than `.`, calls and indexing but tighter than every binary operator. This follows data.md's example, not its prose sentence (flagged in §10.35). **`in`** is a binop only in query mode.
 21. **Query mode** is the `in_query` flag; `lower_name` refuses SQL words there so clause operands stop cleanly and a misplaced SQL word is `Expr::SqlKeyword`. Clauses must appear in grammar order and (except `join`) at most once; violations are `Query::ClauseOrder(clause)`, where `error::Clause` names the clause — including `Where`, which `SqlWord` cannot express because `where` is a reserved word rather than a SQL word. `select { … }` and `set { … }` are parsed by the query parser, not via the record-vs-block rule. Bare `join` is `JoinKind::Plain`.
 22. **Markup text** is kept raw except that whitespace-only runs containing a newline are dropped (JSX rule); text stops at `@` only before `if`/`for`/`match`/`else`/`empty` + non-ident byte, so `a@b.com` is text. Element names accept dashes (custom elements); attribute names accept dashes. Element, attribute and close-tag names are keyword-insensitive (§2.4, §10.36).
-23. **`child_block` items** are `let` / `let mut` / `use` statements or children; other statement forms are not recognized there (write `{expr}`). SPEC: `child_block = '{' { let_decl | 'use' path | child } '}'`.
+23. **`child_block` items** are `let` / `use` statements or children; other statement forms are not recognized there (write `{expr}`). SPEC: `child_block = '{' { let_decl | 'use' path | child } '}'`.
 24. **`@match` arm bodies** after `=>` must be an element, fragment, directive, or braced child block; bare text is `DirMatch::BareText` (it would swallow the next arm). A `{` after `=>` is always a child block.
 25. **`pub import`** requires `.{ … }` or `.*` (`Import::PubNeedsNames`), per SPEC's `reexport`.
 26. **Bodiless `fn`** parses as `FnDecl { body: None }` and `type Name` without `=` as `ItemKind::OpaqueType`; the `#[extern]` requirement (and the extern return type) is validated by canonicalization, not the parser. Trait `type Item = …` is `Trait::AssocTypeHasBody`.

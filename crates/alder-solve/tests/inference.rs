@@ -8,6 +8,334 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn ordinary_bindings_and_parameters_allow_type_checked_assignment() {
+    let source = indoc! {r#"
+        let total = 0
+        fn update(value: Number, items: Array[Number], record: { count: Number }) Number {
+            value += 1
+            items[0] = value
+            record.count = value
+            let local = 0
+            local = value
+            total = local
+            total
+        }
+        fn update_lambda() {
+            value -> {
+                value = 42
+                value
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn replacement_constraints_are_independent_of_declaration_order() {
+    for source in [
+        indoc! {r#"
+            fn invalid() String { forward("wrong") }
+            fn forward(value) { operation(value) }
+            fn writer() { operation = (value: Number) -> value + 1 }
+            let operation = value -> value
+        "#},
+        indoc! {r#"
+            fn writer() { operation = (value: Number) -> value + 1 }
+            let operation = value -> value
+            fn invalid() String { forward("wrong") }
+            fn forward(value) { operation(value) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source).unwrap_err();
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                alder_solve::SolveError::Core(Error {
+                    kind: ErrorKind::Mismatch { .. },
+                    ..
+                })
+            )),
+            "{source}\n{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn unassigned_function_binding_retains_independent_instantiations() {
+    let source = indoc! {r#"
+        let identity = value -> value
+        fn number() Number { identity(42) }
+        fn string() String { identity("text") }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn nested_writer_keeps_captured_function_monomorphic() {
+    let source = indoc! {r#"
+        let operation = value -> value
+        fn writer() { () -> { operation = (value: Number) -> value + 1 } }
+        fn forward(value) { operation(value) }
+        fn invalid() String {
+            writer()()
+            forward("text")
+        }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source).unwrap_err();
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn local_assignment_does_not_restrict_shadowed_function_polymorphism() {
+    let source = indoc! {r#"
+        let identity = value -> value
+        fn replace() {
+            let identity = 0
+            identity = 42
+        }
+        fn number() Number { identity(42) }
+        fn string() String { identity("text") }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn reassigned_function_cannot_be_instantiated_at_incompatible_types() {
+    let source = indoc! {r#"
+        let operation = value -> value
+        fn replace() { operation = (value: Number) -> 42 }
+        fn invalid() String {
+            replace()
+            operation("text")
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn captured_reassigned_function_cannot_escape_through_generalization() {
+    let source = indoc! {r#"
+        let operation = value -> value
+        fn forward(value) { operation(value) }
+        fn replace() { operation = (value: Number) -> 42 }
+        fn invalid() String {
+            replace()
+            forward("text")
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn reassigned_function_preserves_valid_monomorphic_calls() {
+    let source = indoc! {r#"
+        let operation = value -> value
+        fn forward(value) { operation(value) }
+        fn replace() { operation = (value: Number) -> value + 1 }
+        fn valid() Number {
+            let before = forward(10)
+            replace()
+            before + forward(20)
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn trait_overlay_default_rejects_hidden_overwrite() {
+    let source = indoc! {r#"
+        trait ReadOverlay[a] {
+            fn read_overlay(subject: a, left: { r | value: Number }, right: { s | other: Bool }) Number {
+                let merged = { ..left, ..right }
+                merged.value
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source).unwrap_err();
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::GenericSpecialization { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn trait_overlay_default_accepts_guaranteed_rightmost_field() {
+    let source = indoc! {r#"
+        trait ReadOverlay[a] {
+            fn read_overlay(subject: a, left: { r | other: Bool }, right: { s | value: Number }) Number {
+                let merged = { ..left, ..right }
+                merged.value
+            }
+        }
+        impl ReadOverlay[Number] {}
+        fn run() Number { read_overlay(0, { other: true, value: "old" }, { value: 42 }) }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn trait_overlay_rejects_hidden_overwrite_in_method_rows() {
+    let source = indoc! {r#"
+        trait ReadOverlay[a] {
+            fn read_overlay(subject: a, left: { r | value: Number }, right: { s | other: Bool }) Number
+        }
+        impl ReadOverlay[Number] {
+            fn read_overlay(subject, left, right) {
+                let merged = { ..left, ..right }
+                merged.value
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source).unwrap_err();
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::GenericSpecialization { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn trait_overlay_accepts_guaranteed_rightmost_field() {
+    let source = indoc! {r#"
+        trait ReadOverlay[a] {
+            fn read_overlay(subject: a, left: { r | other: Bool }, right: { s | value: Number }) Number
+        }
+        impl ReadOverlay[Number] {
+            fn read_overlay(subject, left, right) {
+                let merged = { ..left, ..right }
+                merged.value
+            }
+        }
+        fn run() Number { read_overlay(0, { other: true, value: "old" }, { value: 42 }) }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn piped_record_overlay_exposes_optional_fields_before_access() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn merge_pair((left, right)) { merge(left, right) }
+        fn read(left: { value?: Number }) Option[Number] {
+            ((left, {}) |> merge_pair).value
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn nested_async_lambda_in_assignment_index_does_not_suspend_the_function() {
+    let source = indoc! {r#"
+        fn valid() Number {
+            let values = [10]
+            values[{
+                let deferred = () -> { Task.sleep(1).await }
+                0
+            }] = 42
+            values[0]
+        }
+        fn caller() Number { valid() }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn assignment_index_propagation_cannot_escape_its_error_contract() {
+    let source = indoc! {r#"
+        fn index() Result[Number, [:index_failed]] { Err(:index_failed) }
+        fn invalid() Result[(), [:other]] {
+            let values = [10]
+            values[index()?] = 42
+            Ok(())
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn assignment_index_return_must_satisfy_the_function_contract() {
+    let source = indoc! {r#"
+        fn invalid() Number {
+            let values = [10]
+            values[{ return "wrong" }] = 42
+            0
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn tagged_template_checks_the_tag_function() {
+    let source = indoc! {r#"
+        fn invalid() String {
+            let tag = 42
+            tag`hello`
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn tagged_template_preserves_the_tag_return_type() {
+    let source = indoc! {r#"
+        fn count(parts: Array[String], value: Number) Number { value }
+        fn valid() Number { count`value: ${42}` }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn tagged_template_checks_interpolation_types() {
+    let source = indoc! {r#"
+        fn tag(parts: Array[String], value: Number) String { "text" }
+        fn invalid() String { tag`value: ${"wrong"}` }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
 fn json_module_decode_requires_a_json_instance() {
     let source = indoc! {r#"
         fn invalid() Result[fn(Number) Number, [:invalid_json(String)]] {
@@ -671,7 +999,7 @@ fn optional_record_patterns_cannot_extract_a_required_payload() {
 fn optional_record_assignment_stores_the_declared_payload() {
     let source = indoc! {r#"
         fn run() Option[Number] {
-            let mut record: { value?: Number } = {}
+            let record: { value?: Number } = {}
             record.value = 42
             record.value
         }
@@ -685,7 +1013,7 @@ fn optional_record_assignment_stores_the_declared_payload() {
 fn optional_record_assignment_rejects_an_option_instead_of_the_payload() {
     let source = indoc! {r#"
         fn run() {
-            let mut record: { value?: Number } = {}
+            let record: { value?: Number } = {}
             record.value = Option.some(42)
         }
     "#};
@@ -696,7 +1024,7 @@ fn optional_record_assignment_rejects_an_option_instead_of_the_payload() {
 fn optional_record_assignment_cannot_read_an_absent_compound_target() {
     let source = indoc! {r#"
         fn run() {
-            let mut record: { value?: Number } = {}
+            let record: { value?: Number } = {}
             record.value += 1
         }
     "#};
@@ -707,7 +1035,7 @@ fn optional_record_assignment_cannot_read_an_absent_compound_target() {
 fn optional_record_assignment_cannot_traverse_an_absent_parent() {
     let source = indoc! {r#"
         fn run() {
-            let mut record: { child?: { value: Number } } = {}
+            let record: { child?: { value: Number } } = {}
             record.child.value = 42
         }
     "#};
@@ -860,6 +1188,585 @@ fn record_rows_accumulate_fields_independently_of_access_order() {
     ] {
         assert!(infer(&Bump::new(), source).is_ok(), "{source}");
     }
+}
+
+#[test]
+fn independent_open_spreads_cannot_promise_only_the_left_universal_tail() {
+    let source = indoc! {r#"
+        fn invalid(left: { r | value: Number }, right: { s | value: Number }) ({ r | value: Number }) {
+            { ..left, ..right }
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn shared_open_spreads_preserve_their_common_universal_tail() {
+    let source = indoc! {r#"
+        fn valid(left: { r | value: Number }, right: { r | value: Number }) ({ r | value: Number }) {
+            { ..left, ..right }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn independent_open_spreads_allow_a_guaranteed_rightmost_field() {
+    let source = indoc! {r#"
+        fn valid(left: { r | other: Bool }, right: { s | value: Number }) Number {
+            let merged = { ..left, ..right }
+            merged.value
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn independent_open_spreads_cannot_strengthen_a_declared_universal_contract() {
+    let source = indoc! {r#"
+        fn invalid(left: { r | value: Number }, right: { s | other: Bool }) Number {
+            let merged = { ..left, ..right }
+            merged.value
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn independent_open_spreads_preserve_disjoint_fields() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn run() Number {
+            let merged = merge({ x: 20 }, { y: 22 })
+            merged.x + merged.y
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn independent_open_spreads_compose_through_intermediate_results() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn merge_three(first, second, third) { merge(merge(first, second), third) }
+        fn run() Number {
+            let merged = merge_three({ x: 20 }, { y: 22 }, { extra: true })
+            merged.x + merged.y
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn independent_open_spreads_survive_higher_order_forwarding() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn apply(operation, left, right) { operation(left, right) }
+        fn run() Number {
+            let merged = apply(merge, { x: 20 }, { y: 22 })
+            merged.x + merged.y
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn independent_open_spreads_reject_bad_composed_result_contracts() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn merge_three(first, second, third) { merge(merge(first, second), third) }
+        fn run() Number {
+            merge_three({ value: 42 }, { extra: true }, { value: "wrong" }).value
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn independent_open_spreads_reject_hidden_contracts_through_composition() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(left: { r | value: Number }, right: { s | other: Bool }) Number {
+            let intermediate = merge(left, right)
+            let merged = merge(intermediate, { marker: true })
+            merged.value
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn independent_open_spreads_allow_final_overrides_through_composition() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn valid(left: { r | value: Number }, right: { s | other: Bool }) Number {
+            let intermediate = merge(left, right)
+            let merged = merge(intermediate, { value: 42 })
+            merged.value
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn independent_open_spreads_instantiate_separately_through_an_alias() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        let operation = merge
+        fn run() Number {
+            let first = operation({ value: "discarded" }, { value: 42 })
+            let second = operation({ value: false }, { value: "text" })
+            first.value + String.length(second.value)
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn partial_overlay_preserves_a_guaranteed_generic_payload() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn read(left: { r | marker: Bool }, right: { s | value: a }) a {
+            merge(left, right).value
+        }
+        fn run() String { read({ marker: true, value: 42 }, { value: "right" }) }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn partial_overlay_rejects_wrong_known_payload_without_closed_inputs() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(left) Number { merge(left, { value: "wrong" }).value }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn partial_overlay_preserves_optional_presence_with_an_unrelated_open_tail() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn read(right: { r | value?: Number }) Option[Number] {
+            merge({ marker: true }, right).value
+        }
+        fn run() Option[Number] { read({ extra: "unrelated" }) }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn partial_overlay_does_not_assume_an_unknown_optional_fallback() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(left: { r | marker: Bool }, right: { value?: Number }) Option[Number] {
+            merge(left, right).value
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn partial_overlay_preserves_required_fallback_with_an_open_tail() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn read(right: { r | value?: Number }) Number {
+            merge({ value: 42, marker: true }, right).value
+        }
+        fn run() Number { read({ marker: "overwritten" }) }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn overlay_cannot_hide_a_known_overwrite_in_a_preserved_universal_tail() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(record: { r | marker: Bool }) ({ r | marker: Bool }) {
+            merge(record, { value: "replacement" })
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn overlay_can_describe_a_known_overwrite_explicitly_in_its_result() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn replace(record: { r | marker: Bool }) ({ r | marker: Bool, value: String }) {
+            merge(record, { value: "replacement" })
+        }
+        fn run() Number {
+            let result = replace({ marker: true, value: 42, extra: 7 })
+            String.length(result.value) + result.extra
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn composed_optional_result_unions_preserve_declared_generic_errors() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn forward(left: { r | result: Result[Number, e] }, middle: { s | result?: Result[Number, f] }, right: { t | result?: Result[Number, g] }) {
+            let value = merge(merge(left, middle), right).result?
+            Ok(value)
+        }
+        fn first() Result[Number, [:first]] { Err(:first) }
+        fn second() Result[Number, [:second]] { Err(:second) }
+        fn third() Result[Number, [:third]] { Err(:third) }
+        fn run() Number {
+            match forward({ result: first() }, { result: second() }, { result: third() }) {
+                Ok(value) => value,
+                Err(:first) => 1,
+                Err(:second) => 2,
+                Err(:third) => 3,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn composed_optional_result_unions_reject_a_missing_third_error() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(left: { r | result: Result[Number, [:first]] }, middle: { s | result?: Result[Number, [:second]] }, right: { t | result?: Result[Number, [:third]] }) Result[Number, [:first | :second]] {
+            let value = merge(merge(left, middle), right).result?
+            Ok(value)
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn optional_result_union_instantiations_remain_independent() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn forward(left: { result: Result[Number, e] }, right: { result?: Result[Number, f] }) {
+            let value = merge(left, right).result?
+            Ok(value)
+        }
+        fn first() Result[Number, [:first]] { Err(:first) }
+        fn second() Result[Number, [:second]] { Err(:second) }
+        fn run() Number {
+            let a = forward({ result: first() }, { result: first() })
+            let b = forward({ result: second() }, { result: second() })
+            let x = match a { Ok(value) => value, Err(:first) => 1 }
+            let y = match b { Ok(value) => value, Err(:second) => 2 }
+            x + y
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn optional_result_union_preserves_mutable_success_payload_types() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(left: { result: Result[Array[Number], [:first]] }, right: { result?: Result[Array[String], [:second]] }) {
+            merge(left, right)
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn optional_result_union_cannot_weaken_nested_mutable_field_presence() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(left: { result: Result[Array[{ value: Number }], [:first]] }, right: { result?: Result[Array[{ value?: Number }], [:second]] }) {
+            merge(left, right)
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn optional_overlay_generic_error_rows_preserve_both_sources() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn forward(left: { result: Result[Number, e] }, right: { result?: Result[Number, f] }) {
+            let value = merge(left, right).result?
+            Ok(value)
+        }
+        fn first() Result[Number, [:first]] { Err(:first) }
+        fn second() Result[Number, [:second]] { Err(:second) }
+        fn run() Number {
+            match forward({ result: first() }, { result: second() }) {
+                Ok(value) => value,
+                Err(:first) => 1,
+                Err(:second) => 2,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn optional_overlay_generic_error_rows_cannot_promise_only_one_source() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(left: { result: Result[Number, e] }, right: { result?: Result[Number, f] }) Result[Number, e] {
+            let value = merge(left, right).result?
+            Ok(value)
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn optional_overlay_error_rows_include_both_fallbacks() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn forward(left: { result: Result[Number, [:first]] }, right: { result?: Result[Number, [:second]] }) {
+            let value = merge(left, right).result?
+            Ok(value)
+        }
+        fn first() Result[Number, [:first]] { Err(:first) }
+        fn run() Number {
+            match forward({ result: first() }, {}) {
+                Ok(value) => value,
+                Err(:first) => 1,
+                Err(:second) => 2,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn optional_overlay_error_rows_cannot_drop_the_absent_field_fallback() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn forward(left: { result: Result[Number, [:first]] }, right: { result?: Result[Number, [:second]] }) {
+            let value = merge(left, right).result?
+            Ok(value)
+        }
+        fn first() Result[Number, [:first]] { Err(:first) }
+        fn run() Result[Number, [:second]] { forward({ result: first() }, {}) }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn overlay_error_rows_preserve_the_selected_payload() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn forward(left, right) {
+            let value = merge(left, right).result?
+            Ok(value)
+        }
+        fn first() Result[Number, [:first]] { Err(:first) }
+        fn second() Result[Number, [:second]] { Err(:second) }
+        fn run() Result[Number, [:second]] {
+            forward({ result: first() }, { result: second() })
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn overlay_error_rows_cannot_drop_the_selected_error() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn forward(left, right) {
+            let value = merge(left, right).result?
+            Ok(value)
+        }
+        fn first() Result[Number, [:first]] { Err(:first) }
+        fn second() Result[Number, [:second]] { Err(:second) }
+        fn run() Result[Number, [:first]] {
+            forward({ result: first() }, { result: second() })
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn overlay_factory_preserves_captured_input_relationships() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn factory(left) { right -> merge(left, right) }
+        fn run() Number {
+            let operation = factory({ x: 20 })
+            let result = operation({ y: 22 })
+            result.x + result.y
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn overlay_factory_rejects_a_wrong_captured_overwrite_result() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn factory(left) { right -> merge(left, right) }
+        fn run() Number {
+            let operation = factory({ value: 42 })
+            operation({ value: "wrong" }).value
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn overlay_factory_cannot_regeneralize_captured_mutable_payloads() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        let shared = []
+        fn factory() { patch -> merge({ values: shared }, patch) }
+        fn run() {
+            Array.push(shared, 42)
+            let operation = factory()
+            let strings: Array[String] = operation({ marker: true }).values
+            String.length(strings[0])
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn recursive_overlay_rejects_an_infinite_nested_payload() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(value, other: { marker: Bool }) {
+            let merged = merge(value, other)
+            invalid({ nested: merged }, other)
+        }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source).expect_err("nested payload must fail the occurs check");
+    assert!(
+        matches!(
+            errors.as_slice(),
+            [alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::InfiniteType,
+                ..
+            })]
+        ),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn recursive_overlay_allows_a_required_override_to_break_payload_recursion() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn repeat(value, other: { nested: Number }) {
+            let merged = merge(value, other)
+            repeat({ nested: merged }, other)
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn recursive_overlay_forwarding_preserves_independent_inputs() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn repeat(count: Number, left, right) {
+            if count == 0 { merge(left, right) }
+            else { repeat(count - 1, left, right) }
+        }
+        fn run() Number {
+            let result = repeat(3, { x: 20 }, { y: 22 })
+            result.x + result.y
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn reversed_overlay_inputs_can_have_different_result_payloads() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn both(left, right) {
+            let forward: Number = merge(left, right).value
+            let reverse: String = merge(right, left).value
+            (forward, reverse)
+        }
+        fn run() (Number, String) { both({ value: "left" }, { value: 42 }) }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn repeated_overlay_inputs_cannot_have_conflicting_result_payloads() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn invalid(left, right) {
+            let first: Number = merge(left, right).value
+            let second: String = merge(left, right).value
+            (first, second)
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn partial_overlay_preserves_optional_presence_of_a_known_field() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn read(left: { value?: Number }, right: { marker: Bool }) Option[Number] {
+            merge(left, right).value
+        }
+        fn run() Option[Number] { read({}, { marker: true }) }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn independent_open_spreads_preserve_right_biased_overwrites() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn run() String { merge({ value: 42 }, { value: "right" }).value }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
 }
 
 #[test]
@@ -1855,7 +2762,7 @@ fn generic_contract_rejects_escape_into_shared_mutable_state() {
             indoc! {r#"
         #[extern("alder:kernel", "$arrayPush")]
         fn push(values: Array[a], value: a) ()
-        let mut stored = []
+        let stored = []
         fn store(value: a) { push(stored, value) }
     "#}
         )
@@ -2618,6 +3525,7 @@ fn foreign_trait_for_foreign_subject_is_an_orphan() {
         imports: &[],
         items: &[],
         value_sccs: &[],
+        assigned_bindings: &[],
     };
     let interfaces = bump.alloc_slice_copy(&[interface]);
     let database = alder_solve::TraitDatabase::build(&bump, &module, interfaces);
@@ -3051,19 +3959,21 @@ fn dependency_scc_generalizes_before_earlier_source_use() {
 #[test]
 fn mutable_top_level_bindings_do_not_generalize() {
     assert_inference_error_snapshot! {r#"
-        let mut identity = (value) -> { value }
+        let identity = (value) -> { value }
         fn number() { identity(1) }
         fn text() { identity("text") }
+        fn replace() { identity = value -> value }
     "#};
 }
 
 #[test]
 fn generalization_subtracts_mutable_environment_variables() {
     assert_inference_error_snapshot! {r#"
-        let mut identity = (value) -> { value }
+        let identity = (value) -> { value }
         fn forward(value) { identity(value) }
         fn number() { forward(1) }
         fn text() { forward("text") }
+        fn replace() { identity = value -> value }
     "#};
 }
 
@@ -3495,7 +4405,7 @@ fn mutable_loop_and_assignment() {
     assert_inference_snapshot!(
         r#"
         fn sum(values: Array[Number]) Number {
-            let mut total = 0
+            let total = 0
             for value in values {
                 total += value
             }

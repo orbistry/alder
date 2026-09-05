@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ forward, writer }\npub fn main() String {\n    writer()()\n    forward(\"wrong\")\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/project/src/main.ald:4:5]
+ 3 │     writer()()
+ 4 │     forward("wrong")
+   ·     ────────┬───────
+   ·             ╰── type requirement originates here
+ 5 │ }
+   ╰────

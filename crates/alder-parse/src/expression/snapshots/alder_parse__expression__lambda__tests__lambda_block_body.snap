@@ -17,7 +17,6 @@ Located {
         Lambda {
             params: [
                 Param {
-                    mutable: None,
                     pattern: Located {
                         region: Region {
                             start: Position {
@@ -75,7 +74,6 @@ Located {
                                     },
                                     value: Let(
                                         LetDecl {
-                                            mutable: None,
                                             pattern: Located {
                                                 region: Region {
                                                     start: Position {

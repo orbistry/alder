@@ -168,6 +168,9 @@ pub struct Module<'a> {
     pub imports: &'a [ResolvedImport<'a>],
     pub items: &'a [Node<'a, Item<'a>>],
     pub value_sccs: &'a [ValueScc<'a>],
+    /// Resolved module bindings written anywhere in this module, including
+    /// nested functions. Flow-insensitive; used by the value restriction.
+    pub assigned_bindings: &'a [QualifiedName<'a>],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -262,7 +265,6 @@ pub struct FnDecl<'a> {
 #[derive(Debug)]
 pub struct TopLevelLet<'a> {
     pub bindings: &'a [QualifiedName<'a>],
-    pub mutable: bool,
     pub pattern: Node<'a, Pattern<'a>>,
     pub annotation: Option<Node<'a, Type<'a>>>,
     pub value: Node<'a, Expr<'a>>,
@@ -270,7 +272,6 @@ pub struct TopLevelLet<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Param<'a> {
-    pub mutable: bool,
     pub pattern: Node<'a, Pattern<'a>>,
     pub annotation: Option<Node<'a, Type<'a>>>,
 }
@@ -481,7 +482,6 @@ pub struct Block<'a> {
 
 #[derive(Debug)]
 pub struct LocalLet<'a> {
-    pub mutable: bool,
     pub pattern: Node<'a, Pattern<'a>>,
     pub annotation: Option<Node<'a, Type<'a>>>,
     pub value: Node<'a, Expr<'a>>,
@@ -519,7 +519,6 @@ pub enum Stmt<'a> {
 pub struct Place<'a> {
     pub root: BindingName<'a>,
     pub root_region: Region,
-    pub mutable: bool,
     pub steps: &'a [PlaceStep<'a>],
 }
 
@@ -749,7 +748,17 @@ pub struct Annotation<'a> {
     pub trait_predicates: &'a [TraitRef<'a>],
     pub projection_equalities: &'a [ProjectionEquality<'a>],
     pub error_row_inclusions: &'a [ErrorRowInclusion<'a>],
+    pub record_overlays: &'a [RecordOverlay<'a>],
     pub typ: Node<'a, Type<'a>>,
+}
+
+/// The result of copying record operands in order, with later present fields
+/// replacing earlier fields. This is not equality of the operand row tails.
+#[derive(Clone, Copy, Debug)]
+pub struct RecordOverlay<'a> {
+    pub operands: &'a [Node<'a, Type<'a>>],
+    pub result: Node<'a, Type<'a>>,
+    pub region: Region,
 }
 
 /// Every error admitted by `source` must also be admitted by `target`.
@@ -772,6 +781,9 @@ impl std::fmt::Debug for Annotation<'_> {
             .field("projection_equalities", &self.projection_equalities);
         if !self.error_row_inclusions.is_empty() {
             debug.field("error_row_inclusions", &self.error_row_inclusions);
+        }
+        if !self.record_overlays.is_empty() {
+            debug.field("record_overlays", &self.record_overlays);
         }
         debug.field("typ", &self.typ).finish()
     }
@@ -1182,9 +1194,13 @@ pub fn contains_await_block(block: &Located<Block<'_>>) -> bool {
 fn contains_await_stmt(statement: &Located<Stmt<'_>>) -> bool {
     match &statement.value {
         Stmt::Let(decl) => contains_await_expr(decl.value),
-        Stmt::Assign { value, .. } | Stmt::Assert(value) | Stmt::Expr(value) => {
-            contains_await_expr(value)
+        Stmt::Assign { place, value, .. } => {
+            place.steps.iter().any(|step| match step {
+                PlaceStep::Index(index) => contains_await_expr(index),
+                PlaceStep::Field(_) | PlaceStep::TupleIndex(_) => false,
+            }) || contains_await_expr(value)
         }
+        Stmt::Assert(value) | Stmt::Expr(value) => contains_await_expr(value),
         Stmt::Return(Some(value)) | Stmt::Break(Some(value)) => contains_await_expr(value),
         Stmt::For { iter, body, .. } => contains_await_expr(iter) || contains_await_block(body),
         Stmt::While { condition, body } => {

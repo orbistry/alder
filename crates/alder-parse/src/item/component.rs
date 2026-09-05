@@ -125,7 +125,7 @@ mod tests {
         assert_component_snapshot!(
             r#"
             component App() {
-                let mut selected = state(0)
+                let selected = state(0)
                 selected
             }
         "#
@@ -151,7 +151,7 @@ mod tests {
         assert_component_snapshot!(
             r#"
             component Counter(props: { start?: Number, label: String }) {
-                let mut count = state(props.start ?? 0)
+                let count = state(props.start ?? 0)
                 let double = count * 2                     // memoized automatically
 
                 <button onClick={() -> count += 1}>

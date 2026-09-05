@@ -101,6 +101,7 @@ pub struct OwnedScheme {
     pub trait_predicates: Vec<OwnedTraitRef>,
     pub projection_equalities: Vec<OwnedProjectionEquality>,
     pub error_row_inclusions: Vec<OwnedErrorRowInclusion>,
+    pub record_overlays: Vec<OwnedRecordOverlay>,
     pub typ: OwnedLocatedType,
 }
 
@@ -109,6 +110,13 @@ pub struct OwnedErrorRowInclusion {
     pub exact_target: bool,
     pub source: OwnedLocatedType,
     pub target: OwnedLocatedType,
+    pub region: Region,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnedRecordOverlay {
+    pub operands: Vec<OwnedLocatedType>,
+    pub result: OwnedLocatedType,
     pub region: Region,
 }
 
@@ -509,6 +517,19 @@ fn own_impl(implementation: &ast::InterfaceImpl<'_>) -> OwnedImplHeader {
 
 fn own_scheme(annotation: &ast::Annotation<'_>) -> OwnedScheme {
     OwnedScheme {
+        record_overlays: annotation
+            .record_overlays
+            .iter()
+            .map(|overlay| OwnedRecordOverlay {
+                operands: overlay
+                    .operands
+                    .iter()
+                    .map(|operand| own_type_node(operand))
+                    .collect(),
+                result: own_type_node(overlay.result),
+                region: overlay.region,
+            })
+            .collect(),
         error_row_inclusions: annotation
             .error_row_inclusions
             .iter()
@@ -1061,6 +1082,13 @@ fn hydrate_variant_payload<'a>(
 
 fn hydrate_scheme<'a>(bump: &'a Bump, scheme: &OwnedScheme) -> &'a ast::Annotation<'a> {
     bump.alloc(ast::Annotation {
+        record_overlays: bump.alloc_slice_fill_iter(scheme.record_overlays.iter().map(|overlay| {
+            ast::RecordOverlay {
+                operands: hydrate_type_nodes(bump, &overlay.operands),
+                result: hydrate_type_node(bump, &overlay.result),
+                region: overlay.region,
+            }
+        })),
         error_row_inclusions: bump.alloc_slice_fill_iter(scheme.error_row_inclusions.iter().map(
             |inclusion| ast::ErrorRowInclusion {
                 exact_target: inclusion.exact_target,

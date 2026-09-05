@@ -192,7 +192,7 @@ mod tests {
         assert_module_snapshot!(
             r#"
             pub component Counter(props: { start?: Number, label: String }) {
-                let mut count = state(props.start ?? 0)
+                let count = state(props.start ?? 0)
                 let double = count * 2                     // memoized automatically
 
                 <button onClick={() -> count += 1}>
@@ -364,7 +364,7 @@ mod tests {
         assert_module_snapshot!(
             r#"
             component App() {
-                let mut selected = state(0)
+                let selected = state(0)
                 <box direction="column" border="round">
                     <text bold>Tasks</text>
                     @for (task, i) in tasks; key task {
@@ -693,7 +693,7 @@ mod tests {
         assert_module_snapshot!(
             r#"
             // src/stores/cart.ald
-            pub let mut items = state([])
+            pub let items = state([])
             pub fn add(item: Item) { items.push(item) }
             "#
         );

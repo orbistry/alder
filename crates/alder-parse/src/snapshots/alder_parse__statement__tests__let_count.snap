@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/statement.rs
-description: let mut count = 0
+description: let count = 0
 ---
 Located {
     region: Region {
@@ -10,32 +10,20 @@ Located {
         },
         end: Position {
             line: 1,
-            column: 18,
+            column: 14,
         },
     },
     value: Let(
         LetDecl {
-            mutable: Some(
-                Region {
+            pattern: Located {
+                region: Region {
                     start: Position {
                         line: 1,
                         column: 5,
                     },
                     end: Position {
                         line: 1,
-                        column: 8,
-                    },
-                },
-            ),
-            pattern: Located {
-                region: Region {
-                    start: Position {
-                        line: 1,
-                        column: 9,
-                    },
-                    end: Position {
-                        line: 1,
-                        column: 14,
+                        column: 10,
                     },
                 },
                 value: Var(
@@ -47,11 +35,11 @@ Located {
                 region: Region {
                     start: Position {
                         line: 1,
-                        column: 17,
+                        column: 13,
                     },
                     end: Position {
                         line: 1,
-                        column: 18,
+                        column: 14,
                     },
                 },
                 value: Number(

@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::DriverError;
 
-pub const INTERFACE_FORMAT_VERSION: u32 = 3;
+pub const INTERFACE_FORMAT_VERSION: u32 = 4;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InterfaceFile {
@@ -430,6 +430,48 @@ mod tests {
         let hydrated = file.hydrate(&bump);
         let round_trip = InterfaceFile::dehydrate(&hydrated).unwrap();
         assert_eq!(file, round_trip);
+    }
+
+    #[test]
+    fn record_overlay_metadata_survives_storage_and_arena_copy() {
+        let file = {
+            let source = Bump::new();
+            let interface = compile_interface(
+                &source,
+                indoc::indoc! {r#"
+                    pub fn merge(left, right) {
+                        { ..left, ..right }
+                    }
+                "#},
+            );
+            InterfaceFile::dehydrate(&interface).unwrap()
+        };
+        let scheme = &file.values[0].scheme;
+        let OwnedType::Fn { params, ret } = &scheme.typ.typ else {
+            panic!("function")
+        };
+        assert_eq!(scheme.record_overlays.len(), 1);
+        let overlay = &scheme.record_overlays[0];
+        assert_eq!(overlay.operands.len(), params.len());
+        for (operand, parameter) in overlay.operands.iter().zip(params) {
+            assert_eq!(operand.typ, parameter.typ);
+        }
+        assert_eq!(overlay.result.typ, ret.typ);
+        let bytes = bincode::serialize(&file).unwrap();
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let destination = Bump::new();
+        let copied = {
+            let hydrated_arena = Bump::new();
+            let hydrated = stored.hydrate(&hydrated_arena);
+            alder_ast::copy_interface(&destination, &hydrated)
+        };
+        let restored = InterfaceFile::dehydrate(&copied).unwrap();
+        assert_eq!(file, restored);
+        let mut reversed = restored.clone();
+        reversed.values[0].scheme.record_overlays[0]
+            .operands
+            .reverse();
+        assert_ne!(file.fingerprint, reversed.compute_fingerprint().unwrap());
     }
 
     #[test]

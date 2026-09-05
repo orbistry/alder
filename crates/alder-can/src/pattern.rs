@@ -9,7 +9,7 @@ use crate::{Error, ErrorKind, PatternError};
 
 #[derive(Clone, Copy, Debug)]
 pub enum BindingMode {
-    Local { mutable: bool },
+    Local,
     TopLevel,
 }
 
@@ -195,8 +195,8 @@ fn bind<'a>(
     mode: BindingMode,
 ) -> Result<BindingName<'a>, Vec<Error<'a>>> {
     match mode {
-        BindingMode::Local { mutable } => env
-            .insert_local(name, region, mutable)
+        BindingMode::Local => env
+            .insert_local(name, region)
             .map(BindingName::Local)
             .map_err(|first| {
                 vec![Error::new(

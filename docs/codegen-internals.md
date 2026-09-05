@@ -250,6 +250,29 @@ and foreign module/symbol. Raw throws and rejections become foreign defects;
 typed errors cross this boundary only as fulfillment values such as
 `Task[Result[a, e]]`. Synchronous `Result` externs retain `$tryCatch`.
 
+### Template calls and evaluation order
+
+Ordinary template interpolations evaluate left to right, including each
+JavaScript `String` conversion before the next interpolation's effects. Tagged
+templates instead evaluate the tag first and pass a string-segment array followed
+by the interpolation values, without converting those values to strings. Inference
+checks this function signature and preserves its return type, including tasks;
+tag references retain any required dictionary evidence.
+
+Lowering may split an expression into setup statements and a final expression.
+For ordered operand lists, earlier expressions must be materialized before later
+setup executes. Capture references, not copies, except when the operation itself
+requires a copy: record spreads snapshot their properties at the spread's source
+position. Ordinary templates capture the converted string, not the original
+mutable reference. This also preserves effects preceding an early return in a
+later operand.
+
+Assignments similarly resolve the target before right-hand setup executes.
+Each receiver and computed index is evaluated once; compound assignments also
+read the old value before evaluating the right-hand side. Dictionary arithmetic
+and intrinsic arithmetic follow the same ordering. Simple targets with an
+unlifted RHS may use JavaScript's native assignment evaluation order directly.
+
 ## 8. Kernel, stdlib, bundling, and runtime
 
 Kernel TypeScript exports a versioned ABI: enum/option helpers, structural

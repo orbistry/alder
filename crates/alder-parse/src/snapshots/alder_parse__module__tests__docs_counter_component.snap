@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "pub component Counter(props: { start?: Number, label: String }) {\n    let mut count = state(props.start ?? 0)\n    let double = count * 2                     // memoized automatically\n\n    <button onClick={() -> count += 1}>\n        {props.label}: {count} ({double})\n    </button>\n}\n"
+description: "pub component Counter(props: { start?: Number, label: String }) {\n    let count = state(props.start ?? 0)\n    let double = count * 2                     // memoized automatically\n\n    <button onClick={() -> count += 1}>\n        {props.label}: {count} ({double})\n    </button>\n}\n"
 ---
 Module {
     items: [
@@ -46,7 +46,6 @@ Module {
                         },
                         params: [
                             Param {
-                                mutable: None,
                                 pattern: Located {
                                     region: Region {
                                         start: Position {
@@ -211,32 +210,20 @@ Module {
                                             },
                                             end: Position {
                                                 line: 2,
-                                                column: 44,
+                                                column: 40,
                                             },
                                         },
                                         value: Let(
                                             LetDecl {
-                                                mutable: Some(
-                                                    Region {
+                                                pattern: Located {
+                                                    region: Region {
                                                         start: Position {
                                                             line: 2,
                                                             column: 9,
                                                         },
                                                         end: Position {
                                                             line: 2,
-                                                            column: 12,
-                                                        },
-                                                    },
-                                                ),
-                                                pattern: Located {
-                                                    region: Region {
-                                                        start: Position {
-                                                            line: 2,
-                                                            column: 13,
-                                                        },
-                                                        end: Position {
-                                                            line: 2,
-                                                            column: 18,
+                                                            column: 14,
                                                         },
                                                     },
                                                     value: Var(
@@ -248,11 +235,11 @@ Module {
                                                     region: Region {
                                                         start: Position {
                                                             line: 2,
-                                                            column: 21,
+                                                            column: 17,
                                                         },
                                                         end: Position {
                                                             line: 2,
-                                                            column: 44,
+                                                            column: 40,
                                                         },
                                                     },
                                                     value: State(
@@ -260,11 +247,11 @@ Module {
                                                             region: Region {
                                                                 start: Position {
                                                                     line: 2,
-                                                                    column: 27,
+                                                                    column: 23,
                                                                 },
                                                                 end: Position {
                                                                     line: 2,
-                                                                    column: 43,
+                                                                    column: 39,
                                                                 },
                                                             },
                                                             value: BinOps {
@@ -274,11 +261,11 @@ Module {
                                                                             region: Region {
                                                                                 start: Position {
                                                                                     line: 2,
-                                                                                    column: 27,
+                                                                                    column: 23,
                                                                                 },
                                                                                 end: Position {
                                                                                     line: 2,
-                                                                                    column: 38,
+                                                                                    column: 34,
                                                                                 },
                                                                             },
                                                                             value: Access {
@@ -286,11 +273,11 @@ Module {
                                                                                     region: Region {
                                                                                         start: Position {
                                                                                             line: 2,
-                                                                                            column: 27,
+                                                                                            column: 23,
                                                                                         },
                                                                                         end: Position {
                                                                                             line: 2,
-                                                                                            column: 32,
+                                                                                            column: 28,
                                                                                         },
                                                                                     },
                                                                                     value: Var(
@@ -301,11 +288,11 @@ Module {
                                                                                     region: Region {
                                                                                         start: Position {
                                                                                             line: 2,
-                                                                                            column: 33,
+                                                                                            column: 29,
                                                                                         },
                                                                                         end: Position {
                                                                                             line: 2,
-                                                                                            column: 38,
+                                                                                            column: 34,
                                                                                         },
                                                                                     },
                                                                                     value: "start",
@@ -316,11 +303,11 @@ Module {
                                                                             region: Region {
                                                                                 start: Position {
                                                                                     line: 2,
-                                                                                    column: 39,
+                                                                                    column: 35,
                                                                                 },
                                                                                 end: Position {
                                                                                     line: 2,
-                                                                                    column: 41,
+                                                                                    column: 37,
                                                                                 },
                                                                             },
                                                                             value: Coalesce,
@@ -331,11 +318,11 @@ Module {
                                                                     region: Region {
                                                                         start: Position {
                                                                             line: 2,
-                                                                            column: 42,
+                                                                            column: 38,
                                                                         },
                                                                         end: Position {
                                                                             line: 2,
-                                                                            column: 43,
+                                                                            column: 39,
                                                                         },
                                                                     },
                                                                     value: Number(
@@ -365,7 +352,6 @@ Module {
                                         },
                                         value: Let(
                                             LetDecl {
-                                                mutable: None,
                                                 pattern: Located {
                                                     region: Region {
                                                         start: Position {

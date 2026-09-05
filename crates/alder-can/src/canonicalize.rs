@@ -247,6 +247,7 @@ fn canonicalize_mode<'a>(
         imports: context.imports,
         items,
         value_sccs,
+        assigned_bindings: env.assigned_bindings(bump),
     });
 
     Ok(CanResult {
@@ -823,13 +824,7 @@ fn predeclare<'a>(env: &mut Env<'a>, source: &SourceModule<'a>) -> Vec<Error<'a>
                 let mut names = Vec::new();
                 collect_pattern_names(decl.pattern, &mut names);
                 for name in names {
-                    insert_value(
-                        env,
-                        name.value,
-                        name.region,
-                        decl.mutable.is_some(),
-                        &mut errors,
-                    );
+                    insert_value(env, name.value, name.region, true, &mut errors);
                 }
             }
             SourceItemKind::TypeAlias(decl) => insert_type(
@@ -1102,6 +1097,7 @@ pub(crate) fn trait_method_annotation<'a>(
             kind: kind_from_arity(bump, arities.get(name).copied().unwrap_or(0)),
         }));
     Ok(bump.alloc(Annotation {
+        record_overlays: &[],
         error_row_inclusions: &[],
         params: type_params,
         trait_predicates: bump.alloc_slice_copy(&predicates),
@@ -1114,10 +1110,10 @@ fn insert_value<'a>(
     env: &mut Env<'a>,
     name: &'a str,
     region: Region,
-    mutable: bool,
+    assignable: bool,
     errors: &mut Vec<Error<'a>>,
 ) {
-    if let Err(first) = env.insert_top_level(name, region, mutable) {
+    if let Err(first) = env.insert_top_level(name, region, assignable) {
         errors.push(duplicate(name, region, first, alder_ast::Namespace::Value));
     }
 }
@@ -1287,6 +1283,7 @@ fn constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
+        record_overlays: &[],
         error_row_inclusions: &[],
         params: bump.alloc_slice_fill_iter(enum_.params.iter().map(|param| alder_ast::TypeParam {
             name: *param,
@@ -1338,6 +1335,7 @@ fn interface_constructor_annotation<'a>(
         ))
     };
     bump.alloc(Annotation {
+        record_overlays: &[],
         error_row_inclusions: &[],
         params: enum_.params,
         trait_predicates: &[],
@@ -1411,7 +1409,6 @@ fn canonicalize_item<'a>(
             }
             ItemKind::Let(bump.alloc(TopLevelLet {
                 bindings: bump.alloc_slice_copy(&bindings),
-                mutable: decl.mutable.is_some(),
                 pattern,
                 annotation,
                 value,
@@ -2388,16 +2385,8 @@ fn canonicalize_params<'a>(
             Some(typ) => Some(canonicalize_type(bump, env, variables, typ)?),
             None => None,
         };
-        let pattern = canonicalize_pattern(
-            bump,
-            env,
-            param.pattern,
-            BindingMode::Local {
-                mutable: param.mutable.is_some(),
-            },
-        )?;
+        let pattern = canonicalize_pattern(bump, env, param.pattern, BindingMode::Local)?;
         params.push(Param {
-            mutable: param.mutable.is_some(),
             pattern,
             annotation,
         });
@@ -3050,7 +3039,7 @@ mod tests {
         let result = can(
             &bump,
             indoc::indoc! {r#"
-                fn evidence(mut x, y, f) {
+                fn evidence(x, y, f) {
                     x = y
                     x += f(-y)
                     match x { ^y => x + y, _ => x }
@@ -3176,7 +3165,7 @@ mod tests {
         let result = can(
             &bump,
             indoc::indoc! {r#"
-                let mut operation = value -> replace(value)
+                let operation = value -> replace(value)
                 fn replace(value) {
                     operation = next -> next
                     value
@@ -3208,7 +3197,7 @@ mod tests {
             indoc::indoc! {r#"
                 fn writer() { () -> { values[index()] = 42 } }
                 fn index() { 0 }
-                let mut values = [0]
+                let values = [0]
             "#},
         );
         let groups = result.module.value_sccs;
@@ -3221,6 +3210,15 @@ mod tests {
         assert!(position("values") < position("writer"));
         assert!(position("index") < position("writer"));
         assert!(groups.iter().all(|group| !group.recursive));
+        assert_eq!(
+            result
+                .module
+                .assigned_bindings
+                .iter()
+                .map(|name| name.name)
+                .collect::<Vec<_>>(),
+            ["values"]
+        );
     }
 
     #[test]
@@ -3231,7 +3229,7 @@ mod tests {
             indoc::indoc! {r#"
                 let operation = value -> replace(value)
                 fn replace(value) {
-                    let mut operation = 0
+                    let operation = 0
                     operation = 42
                     value
                 }
@@ -3242,6 +3240,7 @@ mod tests {
         assert!(groups.iter().all(|group| !group.recursive));
         assert_eq!(groups[0].members[0].name, "replace");
         assert_eq!(groups[1].members[0].name, "operation");
+        assert!(result.module.assigned_bindings.is_empty());
     }
 
     #[test]
@@ -3311,8 +3310,17 @@ mod tests {
     }
 
     #[test]
-    fn immutable_assignment_error() {
-        insta::assert_snapshot!(can_error("fn change() { let value = 1\n value = 2 }"));
+    fn ordinary_let_assignment_is_allowed() {
+        let bump = Bump::new();
+        can(
+            &bump,
+            indoc::indoc! {r#"
+            fn change() {
+                let value = 1
+                value = 2
+            }
+        "#},
+        );
     }
 
     #[test]

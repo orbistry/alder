@@ -4,7 +4,6 @@ description: "(xs: Array[a], g: fn(a) b)"
 ---
 [
     Param {
-        mutable: None,
         pattern: Located {
             region: Region {
                 start: Position {
@@ -73,7 +72,6 @@ description: "(xs: Array[a], g: fn(a) b)"
         ),
     },
     Param {
-        mutable: None,
         pattern: Located {
             region: Region {
                 start: Position {
