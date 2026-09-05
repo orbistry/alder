@@ -1,6 +1,9 @@
 import ~/codec
 import ~/facade
 import ~/facade.{ Parcel, Wrap, Extract, extract }
+import ~/public_types
+import ~/initialize_z
+import ~/initialize_a
 
 #[derive(Show, Ord, Hash, Json)]
 enum Status {
@@ -195,6 +198,11 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    assert(Ref.same(facade.numbers, facade.same_numbers))
+    assert(Ref.same(facade.numbers, public_types.shared))
+    facade.append(2)
+    Array.push(facade.same_numbers, 3)
+    assert(public_types.shared == [1, -1, 0, 4, 5, 2, 3])
     let parcel: Wrap[Parcel[Number]] = { value: Parcel::Packet(42) }
     assert(extract(parcel.value) == 42)
     assert(Extract::value(parcel.value) == 42)

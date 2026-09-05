@@ -1,0 +1,3 @@
+import ~/public_types
+
+let initialized = public_types.append(5)

@@ -975,8 +975,8 @@ mod tests {
         let result = build_sync(
             vec![
                 (leaf, Ok("pub fn answer() Number { 42 }".to_owned())),
-                (facade_uri, Ok(facade.to_owned())),
-                (consumer, Ok(source.to_owned())),
+                (facade_uri.clone(), Ok(facade.to_owned())),
+                (consumer.clone(), Ok(source.to_owned())),
             ],
             BuildMode::Build,
             BuildDependencies::default(),
@@ -987,6 +987,16 @@ mod tests {
             result.modules
         );
         assert_eq!(result.artifacts.len(), 3);
+        assert_eq!(
+            result.artifacts[&facade_uri].dependencies,
+            ["alder://app/leaf.mjs"],
+            "a facade retains its initialization dependency without local value uses"
+        );
+        assert_eq!(
+            result.artifacts[&consumer].dependencies,
+            ["alder://app/facade.mjs", "alder://app/leaf.mjs"],
+            "direct owner references must not erase the imported facade"
+        );
         let leaf_interface = result
             .interfaces
             .iter()

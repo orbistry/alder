@@ -160,6 +160,18 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Re-export initialization: reproduced a CLI runtime failure where references
+  resolved directly to the original owner and omitted facade initialization.
+  Codegen now emits explicit imports as bare AST imports in source order and
+  retains them in dependency metadata. CLI tests verify shared array identity
+  through multiple aliases, ordered exactly-once initialization through a chain,
+  and unused sibling imports whose source order reverses filename order. Driver
+  regressions assert facade/owner dependency retention. Full workspace tests,
+  focused CLI execution, strict all-target/all-feature Clippy, formatting, and
+  diff checks pass. No snapshots changed or pending snapshots remain. Added a
+  codegen patch changeset. Wider cyclic/package initialization and other
+  re-export acceptance work remain open.
+
 - Re-export boundary coverage: extended the CLI fixture with an enum, generic
   record alias, and trait renamed by one facade and wildcard-exported by another.
   Construction and both generic/qualified trait dispatch execute correctly.

@@ -36,10 +36,21 @@ Coverage at this checkpoint:
 - Explicitly re-exporting a private value fails at the imported name, with a
   reviewed colorless diagnostic; the failed facade publishes no interface or
   executable artifact.
+- Shared array exports preserve reference identity through repeated aliases and
+  a named/wildcard chain. Mutations through each route affect the original.
+- Facade initialization is retained: codegen emits explicit imports as bare
+  AST import declarations in source order, before generated value imports, and
+  includes them in dependency metadata even without local value uses. Previously
+  owner-directed references bypassed facades entirely, dropping their top-level
+  effects. The CLI regression failed before the fix; it now checks ordered,
+  exactly-once mutations from both intermediate modules despite multiple routes
+  to their shared dependency. Two unused sibling imports deliberately reverse
+  filename order and verify source-ordered effects rather than sorted graph
+  order. Driver tests check the retained metadata too.
 
 Remaining required audit: broader alias/chain combinations and package runtime
-execution, collision/wildcard-privacy diagnostics, mutable binding identity,
-dictionary instance ownership, cyclic imports, and
+execution, collision/wildcard-privacy diagnostics, broader mutable binding and
+dictionary instance ownership, cyclic imports, and more complex
 emitted-module initialization/export behavior. The shared copying paths do not
 by themselves prove those contracts. Do not mark the whole re-export audit done.
 Source syntax currently requires public imports to have a names or wildcard

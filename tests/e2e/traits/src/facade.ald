@@ -1,2 +1,4 @@
 pub import ~/codec.*
 pub import ~/renamed.*
+
+let initialized = append(0)

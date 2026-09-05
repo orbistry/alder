@@ -255,6 +255,12 @@ impl<'src, 'js> Emitter<'src, 'js> {
             }
         }
 
+        // Explicit imports establish initialization dependencies even when all
+        // value references resolve through a re-export to another owner. Keep
+        // source order; ESM evaluates each dependency only once.
+        for import in module.imports {
+            body.push(self.js.side_effect_import(&module_specifier(import.module)));
+        }
         if !self.kernel.is_empty() {
             let names = self
                 .kernel
@@ -291,6 +297,12 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 Import::Value { module, .. } => Some(module.clone()),
                 Import::Extern { .. } => None,
             })
+            .chain(
+                module
+                    .imports
+                    .iter()
+                    .map(|import| module_specifier(import.module)),
+            )
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();

@@ -1,5 +1,8 @@
 pub enum Packet[a] { Packet(a) }
 
+pub let shared: Array[Number] = [1]
+pub fn append(value: Number) { Array.push(shared, value) }
+
 pub type Envelope[a] = { value: a }
 
 pub trait HasValue[a] { fn value(item: a) Number }
