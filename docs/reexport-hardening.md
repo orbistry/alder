@@ -27,9 +27,21 @@ Coverage at this checkpoint:
 - Named, wildcard, and repeated-source alias publication through a three-module
   driver build, including identity/scheme equality in the owned interfaces.
 - Actual CLI execution of a generic Show/Eq function through a wildcard facade.
+- Actual CLI execution across a named-renaming module and a wildcard facade for
+  an enum, generic record alias, and trait. Both a generic trait-bound function
+  and a qualified call through the renamed trait use the original instance.
+- A package-root interface containing a generic alias/function is serialized
+  with bincode, deserialized, and consumed without supplying the defining leaf
+  interface or its arena. The consumer checks successfully.
+- Explicitly re-exporting a private value fails at the imported name, with a
+  reviewed colorless diagnostic; the failed facade publishes no interface or
+  executable artifact.
 
-Remaining required audit: type/enum/trait/module aliases, chains, package-root
-consumers, private-name/collision diagnostics, interface round-trips in isolation,
-mutable binding identity, dictionary instance ownership, cyclic imports, and
+Remaining required audit: broader alias/chain combinations and package runtime
+execution, collision/wildcard-privacy diagnostics, mutable binding identity,
+dictionary instance ownership, cyclic imports, and
 emitted-module initialization/export behavior. The shared copying paths do not
 by themselves prove those contracts. Do not mark the whole re-export audit done.
+Source syntax currently requires public imports to have a names or wildcard
+tail, so direct public module-namespace imports are rejected by the parser;
+do not infer source-level support merely from the canonical Module import arm.

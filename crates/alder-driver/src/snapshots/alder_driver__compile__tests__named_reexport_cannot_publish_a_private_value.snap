@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub import ~/leaf.{ secret }"
+---
+alder::canonicalize::private_name
+
+  × `secret` is private
+   ╭─[/project/src/facade.ald:1:21]
+ 1 │ pub import ~/leaf.{ secret }
+   ·                     ───┬──
+   ·                        ╰── reported here
+   ╰────

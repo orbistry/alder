@@ -1,1 +1,2 @@
 pub import ~/codec.*
+pub import ~/renamed.*

@@ -1,0 +1,13 @@
+pub enum Packet[a] { Packet(a) }
+
+pub type Envelope[a] = { value: a }
+
+pub trait HasValue[a] { fn value(item: a) Number }
+
+impl HasValue[Packet[Number]] {
+    fn value(item: Packet[Number]) Number {
+        match item { Packet(value) => value }
+    }
+}
+
+pub fn extract(item: a) Number where a: HasValue { HasValue::value(item) }

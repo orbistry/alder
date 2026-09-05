@@ -884,6 +884,72 @@ mod tests {
     }
 
     #[test]
+    fn package_root_reexports_survive_owned_storage_without_leaf_interfaces() {
+        let leaf = dependency_interface(
+            indoc::indoc! {r#"
+            pub type Envelope[a] = { value: a }
+            pub fn wrap(value: a) Envelope[a] { { value } }
+        "#},
+            &["leaf"],
+            &[],
+        );
+        let root = dependency_interface("pub import ~/leaf.*", &[], &[leaf]);
+        let bytes = bincode::serialize(&root).expect("serialize root interface");
+        let stored: InterfaceFile =
+            bincode::deserialize(&bytes).expect("deserialize root interface");
+        assert_eq!(stored, root);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ Envelope, wrap }
+            pub fn main() Number {
+                let wrapped: Envelope[Number] = wrap(42)
+                wrapped.value
+            }
+        "#};
+        let result = build_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(
+            result.is_success(),
+            "stored re-export failed: {:#?}",
+            result.modules
+        );
+    }
+
+    #[test]
+    fn named_reexport_cannot_publish_a_private_value() {
+        let source = "pub import ~/leaf.{ secret }";
+        let facade = url("project/src/facade.ald");
+        let result = build_sync(
+            vec![
+                (
+                    url("project/src/leaf.ald"),
+                    Ok("fn secret() Number { 42 }".to_owned()),
+                ),
+                (facade.clone(), Ok(source.to_owned())),
+            ],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert!(!result.is_success());
+        assert!(!result.artifacts.contains_key(&facade));
+        assert!(
+            !result
+                .interfaces
+                .iter()
+                .any(|interface| interface.module.path == ["facade"])
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&facade] else {
+            panic!("private re-export must fail")
+        };
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
     fn wildcard_reexport_publishes_values_to_consumers() {
         assert_value_reexport("pub import ~/leaf.*");
     }

@@ -160,6 +160,22 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Re-export boundary coverage: extended the CLI fixture with an enum, generic
+  record alias, and trait renamed by one facade and wildcard-exported by another.
+  Construction and both generic/qualified trait dispatch execute correctly.
+  A driver test serializes a package-root interface and successfully checks an
+  alias/function consumer with only that stored root, no leaf interface/arena.
+  A negative test rejects explicit private value re-export and asserts that the
+  facade publishes neither interface nor artifact; reviewed its colorless
+  source-aware diagnostic. No implementation changes were necessary. Direct
+  public module-namespace imports are currently prohibited by parser syntax;
+  canonical support alone is not a source-language promise. Wider mutation,
+  collision, initialization, cycle, and runtime package boundaries remain open.
+  Validation: full workspace tests pass, including 104 driver tests and expanded
+  CLI execution. Strict all-target/all-feature Clippy, formatting, and diff checks
+  pass. Reviewed the single new private-name snapshot; no pending snapshots.
+  This checkpoint is tests/documentation only and needs no changeset.
+
 - Public re-export publication: driver tests reproduced named and wildcard
   facades publishing no values, leaving consumers with unknown-name errors.
   Interface builders now take dependency interfaces and copy selected public

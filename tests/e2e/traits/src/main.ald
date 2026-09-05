@@ -1,5 +1,6 @@
 import ~/codec
 import ~/facade
+import ~/facade.{ Parcel, Wrap, Extract, extract }
 
 #[derive(Show, Ord, Hash, Json)]
 enum Status {
@@ -194,6 +195,9 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    let parcel: Wrap[Parcel[Number]] = { value: Parcel::Packet(42) }
+    assert(extract(parcel.value) == 42)
+    assert(Extract::value(parcel.value) == 42)
     assert(facade.describe(42) == "42")
     assert(codec.describe(42) == "42")
     let module_number: Result[Number, [:invalid_json(String)]] = Json.decode("\"not a number\"")
