@@ -16,6 +16,9 @@ Workers and the same app running self-hosted on `standalone`.
   signal/lifecycle semantics. Check mode retains provisional syntax and typing.
   Replace these explicit codegen guards when the corresponding runtime and
   lowering are implemented; do not restore identity/ordinary-function stubs.
+- Standalone markup also has an executable-codegen guard. The old descriptor
+  lowering silently replaced directive children with undefined and was removed;
+  implement actual rendering rather than relying on that historical output.
 - M2b: codegen, kernel, `alder run`/`build`. M4: fibers, context,
   error rows. M5: macros (used for route discovery via `comptime` and for
   derives).

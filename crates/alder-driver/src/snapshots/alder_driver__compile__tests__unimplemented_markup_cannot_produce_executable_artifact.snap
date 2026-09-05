@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn view() {\n    <div>@if true { <span>visible</span> }</div>\n}\n"
+---
+alder::codegen
+
+  × markup is not executable yet; rendering compilation is planned for M6
+   ╭─[/project/src/main.ald:2:5]
+ 1 │ pub fn view() {
+ 2 │     <div>@if true { <span>visible</span> }</div>
+   ·     ──────────────────────┬─────────────────────
+   ·                           ╰── code generation failed here
+ 3 │ }
+   ╰────

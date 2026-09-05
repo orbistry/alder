@@ -879,6 +879,22 @@ mod tests {
     }
 
     #[test]
+    fn unimplemented_markup_cannot_produce_executable_artifact() {
+        let source = indoc::indoc! {r#"
+            pub fn view() {
+                <div>@if true { <span>visible</span> }</div>
+            }
+        "#};
+        assert_rendered_diagnostic_snapshot!(source, unavailable_codegen(source));
+    }
+
+    #[test]
+    fn unimplemented_style_cannot_produce_executable_artifact() {
+        let source = "pub fn card() { style { padding: 16px } }";
+        assert_rendered_diagnostic_snapshot!(source, unavailable_codegen(source));
+    }
+
+    #[test]
     fn unimplemented_state_cannot_produce_executable_artifact() {
         let source = indoc::indoc! {r#"
             pub fn main() {

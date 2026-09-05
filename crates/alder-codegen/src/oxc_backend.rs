@@ -1250,13 +1250,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 value,
                 body,
             } => self.provide(*provider, value, body)?,
-            Expr::Style(style) => {
-                self.kernel.insert("$style");
-                let style = self.style(style)?;
-                Value {
-                    prefix: style.prefix,
-                    expr: self.js.call(self.js.identifier("$style"), [style.expr]),
-                }
+            Expr::Style(_) => {
+                return Err(Error {
+                    region: node.region,
+                    message: "styles are not executable yet; CSS compilation is planned for M8",
+                });
             }
             Expr::Query(_) => {
                 return Err(Error {
@@ -1264,7 +1262,12 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     message: "queries are not executable yet; query compilation is planned for M7",
                 });
             }
-            Expr::Markup(markup) => self.markup(markup)?,
+            Expr::Markup(_) => {
+                return Err(Error {
+                    region: node.region,
+                    message: "markup is not executable yet; rendering compilation is planned for M6",
+                });
+            }
             Expr::MacroCall { .. } => {
                 return Err(Error {
                     region: node.region,
@@ -1881,118 +1884,6 @@ impl<'src, 'js> Emitter<'src, 'js> {
             prefix,
             expr: self.js.identifier(&result),
         })
-    }
-
-    fn style(&mut self, style: &alder_ast::Style<'src>) -> Result<Value<'js>, Error> {
-        let mut prefix = self.js.vec();
-        let mut properties = self.js.vec();
-        for entry in style.entries {
-            let key = match entry.key.value {
-                alder_ast::StyleKey::Ident(key) | alder_ast::StyleKey::Str(key) => key,
-            };
-            let value = match entry.value {
-                alder_ast::StyleValue::Dimension { text, unit, .. } => {
-                    self.js.string(&format!("{text}{unit}"))
-                }
-                alder_ast::StyleValue::Expr(expression) => {
-                    let value = self.expr(expression)?;
-                    prefix.extend(value.prefix);
-                    value.expr
-                }
-                alder_ast::StyleValue::Nested(style) => {
-                    let value = self.style(style)?;
-                    prefix.extend(value.prefix);
-                    value.expr
-                }
-            };
-            properties.push(self.js.property(key, value));
-        }
-        Ok(Value {
-            prefix,
-            expr: self.js.object(properties),
-        })
-    }
-
-    fn markup(&mut self, markup: &alder_ast::Markup<'src>) -> Result<Value<'js>, Error> {
-        self.kernel.insert("$html");
-        match markup {
-            alder_ast::Markup::Element(element) => self.element(element),
-            alder_ast::Markup::Fragment(children) => {
-                let mut prefix = self.js.vec();
-                let mut values = self.js.vec();
-                for child in *children {
-                    let value = self.child(child)?;
-                    prefix.extend(value.prefix);
-                    values.push(value.expr);
-                }
-                Ok(Value {
-                    prefix,
-                    expr: self.js.call(
-                        self.js.identifier("$html"),
-                        [
-                            self.js.builder.expression_null_literal(oxc_span::SPAN),
-                            self.js.builder.expression_null_literal(oxc_span::SPAN),
-                            self.js.array(values),
-                        ],
-                    ),
-                })
-            }
-        }
-    }
-
-    fn element(&mut self, element: &alder_ast::Element<'src>) -> Result<Value<'js>, Error> {
-        let name = match element.name.value {
-            alder_ast::ElementName::Tag(name) => self.js.string(name),
-            alder_ast::ElementName::Component(name) => self.reference(ValueRef::TopLevel(name)),
-        };
-        let mut prefix = self.js.vec();
-        let mut attributes = self.js.vec();
-        for attribute in element.attrs {
-            let value = match attribute.value {
-                None => self.pure(self.js.boolean(true)),
-                Some(alder_ast::AttrValue::Str(value)) => self.pure(self.js.string(value.value)),
-                Some(alder_ast::AttrValue::Expr(expression)) => self.expr(expression)?,
-            };
-            prefix.extend(value.prefix);
-            attributes.push(self.js.property(attribute.name.value, value.expr));
-        }
-        let mut children = self.js.vec();
-        for child in element.children {
-            let value = self.child(child)?;
-            prefix.extend(value.prefix);
-            children.push(value.expr);
-        }
-        Ok(Value {
-            prefix,
-            expr: self.js.call(
-                self.js.identifier("$html"),
-                [name, self.js.object(attributes), self.js.array(children)],
-            ),
-        })
-    }
-
-    fn child(&mut self, child: &Located<alder_ast::Child<'src>>) -> Result<Value<'js>, Error> {
-        match &child.value {
-            alder_ast::Child::Element(element) => self.element(element),
-            alder_ast::Child::Fragment(children) => {
-                let mut prefix = self.js.vec();
-                let mut values = self.js.vec();
-                for child in *children {
-                    let value = self.child(child)?;
-                    prefix.extend(value.prefix);
-                    values.push(value.expr);
-                }
-                Ok(Value {
-                    prefix,
-                    expr: self.js.array(values),
-                })
-            }
-            alder_ast::Child::Text(text) => Ok(self.pure(self.js.string(text))),
-            alder_ast::Child::Hole(expression) => self.expr(expression),
-            alder_ast::Child::If { .. }
-            | alder_ast::Child::For { .. }
-            | alder_ast::Child::Match { .. } => Ok(self.pure(self.js.undefined())),
-        }
     }
 
     fn block_return(

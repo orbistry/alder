@@ -15,6 +15,9 @@ builder for API-only packages.
 
 ## Exit criteria
 
+- Replace the hardening guard rejecting executable style expressions with the
+  actual CSS backend. Check-only provisional style typing remains available;
+  the former JavaScript-object placeholder was removed, not a supported CSS ABI.
 - `let card = style { padding: 16px, color: theme.text, ":hover": {...},
 "@media (...)": {...} }` type-checks property names and value types,
   compiles to atomic classes with deterministic merging, and ships a

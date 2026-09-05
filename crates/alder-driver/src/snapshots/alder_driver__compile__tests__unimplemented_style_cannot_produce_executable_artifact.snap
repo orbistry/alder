@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn card() { style { padding: 16px } }"
+---
+alder::codegen
+
+  × styles are not executable yet; CSS compilation is planned for M8
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ pub fn card() { style { padding: 16px } }
+   ·                 ───────────┬───────────
+   ·                            ╰── code generation failed here
+   ╰────

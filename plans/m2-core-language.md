@@ -123,6 +123,9 @@ query representation; actual schema checking and query execution belong to M7.
 The same executable boundary applies to `state` and `component`: provisional
 checking remains available, but Build/Test reject them until M6 rather than
 treating signal creation as identity and components as ordinary functions.
+Standalone markup and style expressions are likewise check-only until their
+M6 rendering and M8 CSS backends exist. Their old object-only output was not a
+supported rendering API and discarded markup control-flow children.
 
 | Construct                      | M2 treatment                                                         | Owner |
 | ------------------------------ | -------------------------------------------------------------------- | ----- |

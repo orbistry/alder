@@ -159,6 +159,20 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Deferred markup/style boundary: driver regressions reproduced successful
+  executable builds of markup containing `@if` and a dimension-valued style.
+  Markup emitted object descriptors, dropping If/For/Match children as undefined;
+  style emitted ordinary objects rather than the planned CSS assets/classes.
+  Build/Test now reject these expressions with source-aware diagnostics while
+  preserving provisional Check support. Removed the misleading style/markup/
+  element/child lowering helpers (recoverable from Git). Reviewed both colorless
+  snapshots and checked no executable artifacts. M2/M6/M8 plans record the real
+  implementation boundary. Declaration-only deferred forms and a final sweep of
+  all placeholder paths remain open; no web/CSS milestone was implemented here.
+  Validation: full workspace tests pass, including 99 driver tests and CLI
+  fixtures. Strict all-target/all-feature Clippy, formatting, and diff checks
+  pass. Both new snapshots were reviewed; no pending snapshots remain.
+
 - Deferred reactivity execution boundary: separate driver regressions reproduced
   successful executable builds of `state(0)` and `component Counter() { <div /> }`.
   Codegen erased state to its initializer and compiled components as ordinary
