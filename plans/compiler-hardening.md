@@ -160,6 +160,21 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Optional spread fallbacks: reproduced accepting a numeric fallback as
+  `Option[String]` while rejecting the safe required Number result. Inference
+  copied the optional spread type and discarded the value retained at runtime
+  when that property is absent. It now joins surviving payload alternatives
+  and preserves required fallback presence. Adversarial testing caught the
+  initial fix rejecting a final required overwrite; joins now happen only
+  after all fields are processed, discarding overwritten alternatives. Five
+  new solver regressions and expanded CLI cases cover these paths, including
+  optional/optional absence and required replacement with a different type.
+  Full workspace tests (201 solver integration tests), strict all-target/all-
+  feature Clippy, formatting, and diff checks pass; no snapshot changes or
+  pending snapshots. Updated record/language docs and added a solve patch
+  changeset. Independent open tails and the broader row acceptance work remain
+  unresolved, and final package verification must include this later fix.
+
 - Package verification checkpoint: all 17 publishable workspace crates package
   and build from extracted archives using a fresh temporary target directory
   and Cargo's staged registry. The old target directory produced stale API

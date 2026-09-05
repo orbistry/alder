@@ -79,6 +79,17 @@ which may overconstrain valid combinations), shadowed labels/lacks constraints,
 cross-kind annotation use, trait matching of record shapes, and cross-module
 execution/serialization tests. These are acceptance work, not waived limitations.
 
+Optional spread checkpoint: a spread property that is absent does not overwrite
+an earlier property. Inference now retains all payload alternatives that can
+survive in the completed record, joins their types, and retains required
+presence when an earlier fallback is required. Previously copying the final
+optional field's type discarded the fallback and accepted a possible Number as
+an optional String. A later required property replaces every earlier alternative;
+the join is deferred until all fields are processed so overwritten intermediate
+types need not agree. Solver regressions and CLI execution cover absence,
+presence, two optional spreads, incompatible surviving payloads, and final
+required overrides. This does not resolve the independent-open-tail limitation.
+
 Cross-module checkpoint: executable `records` tests now cover imported row
 updates, independent instantiations, two distinct tails, inferred field
 requirements, and optional results. Driver tests exercise owned-interface

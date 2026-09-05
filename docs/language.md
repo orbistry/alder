@@ -287,6 +287,9 @@ match u.nickname {
   Destructuring reads fields by the same rule: `let { field } = record`
   binds `Option[T]` for `field?: T`, including record-shaped enum payloads.
 - `{ ..r, x: 1 }` is record update. `r.x` is access, `t.0` tuple index.
+  Spreads copy present properties: an absent optional property leaves an earlier
+  value intact. Surviving alternatives must have compatible payload types; a
+  later required property replaces all earlier values for that field.
 - `type Name[a] = ...` declares an alias.
 
 ### Traits

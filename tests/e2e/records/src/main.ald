@@ -71,6 +71,21 @@ pub fn main() {
     assert(pair.1.y == 3)
     assert(pair.1.right)
     let optional: OptionalName = {}
+    let absent_spread: { value?: Number } = {}
+    let present_spread: { value?: Number } = { value: 7 }
+    let fallback = { value: 42, ..absent_spread }
+    let overridden = { value: 42, ..present_spread }
+    assert(fallback.value == 42)
+    assert(overridden.value == 7)
+    let still_absent = { ..absent_spread, ..absent_spread }
+    let retained = { ..present_spread, ..absent_spread }
+    assert(still_absent.value == Option.none())
+    assert(retained.value == Option.some(7))
+    let replaced = { value: 42, ..{ value: "text" } }
+    assert(replaced.value == "text")
+    let maybe_text: { value?: String } = {}
+    let final_override = { ..{ value: 42 }, ..maybe_text, value: true }
+    assert(final_override.value)
     let number: Boxed[Number] = rows.boxed(42)
     let label: Boxed[String] = rows.boxed("hello")
     assert(number.value == 42)

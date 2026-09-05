@@ -863,6 +863,64 @@ fn record_rows_accumulate_fields_independently_of_access_order() {
 }
 
 #[test]
+fn optional_spread_preserves_a_required_fallback() {
+    let source = indoc! {r#"
+        fn fallback(record: { value?: Number }) Number {
+            let result = { value: 42, ..record }
+            result.value
+        }
+        fn run() Number { fallback({}) }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn optional_spreads_keep_optional_presence_without_a_required_fallback() {
+    let source = indoc! {r#"
+        fn merge(left: { value?: Number }, right: { value?: Number }) Option[Number] {
+            let result = { ..left, ..right }
+            result.value
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn final_required_field_replaces_all_optional_spread_alternatives() {
+    let source = indoc! {r#"
+        fn replace(record: { value?: String }) Bool {
+            let result = { ..{ value: 42 }, ..record, value: true }
+            result.value
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn required_spread_can_replace_an_incompatible_earlier_payload() {
+    let source = indoc! {r#"
+        fn replace(record: { value: String }) String {
+            let result = { value: 42, ..record }
+            result.value
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn optional_spread_cannot_hide_an_incompatible_fallback() {
+    let source = indoc! {r#"
+        fn fallback(record: { value?: String }) Option[String] {
+            let result = { value: 42, ..record }
+            result.value
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
 fn record_rows_preserve_input_output_relationships_through_spread() {
     let source = indoc! {r#"
         fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {

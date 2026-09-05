@@ -2526,14 +2526,28 @@ impl<'a, 'db> Infer<'a, 'db> {
             match field {
                 RecordField::Field { name, value } => {
                     let typ = self.infer_expr(env, value, return_type.clone())?;
-                    result.insert(name.value, (FieldPresence::Required, typ));
+                    result.insert(
+                        name.value,
+                        (FieldPresence::Required, vec![(typ, value.region)]),
+                    );
                 }
                 RecordField::Spread(expr) => {
                     let spread = self.infer_expr(env, expr, return_type.clone())?;
                     let expected = self.open_record(BTreeMap::new());
                     self.unify(spread.clone(), expected, expr.region)?;
                     if let Ty::Record(fields, inherited) = self.prune(spread) {
-                        result.extend(fields);
+                        for (name, (presence, typ)) in fields {
+                            if presence == FieldPresence::Optional
+                                && let Some((_, alternatives)) = result.get_mut(name)
+                            {
+                                // An absent spread property leaves the earlier
+                                // value intact. Both payloads are possible, and
+                                // an existing required property stays present.
+                                alternatives.push((typ, expr.region));
+                            } else {
+                                result.insert(name, (presence, vec![(typ, expr.region)]));
+                            }
+                        }
                         if let (Some(previous), Some(next)) = (&tail, &inherited) {
                             self.unify((**previous).clone(), (**next).clone(), expr.region)?;
                         }
@@ -2544,7 +2558,18 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
             }
         }
-        Ok(Ty::Record(result, tail))
+        // A later required property discards every earlier alternative. Join
+        // only the payloads that can survive in the completed record.
+        let mut joined = BTreeMap::new();
+        for (name, (presence, alternatives)) in result {
+            let mut alternatives = alternatives.into_iter();
+            let (mut typ, _) = alternatives.next().expect("each field has a payload");
+            for (other, region) in alternatives {
+                typ = self.join_values(typ, other, region)?;
+            }
+            joined.insert(name, (presence, typ));
+        }
+        Ok(Ty::Record(joined, tail))
     }
 
     fn infer_pattern(
