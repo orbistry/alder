@@ -193,6 +193,7 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    assert(codec.describe(42) == "42")
     let module_number: Result[Number, [:invalid_json(String)]] = Json.decode("\"not a number\"")
     assert(match module_number { Ok(_) => false, Err(:invalid_json(_)) => true })
     let decode_number = Json.decode

@@ -1,7 +1,7 @@
 import ~/nested/operations
 
 #[extern("./client.js", "boundedIdentity")]
-fn bounded_identity(value: a) a where a: Show + Eq
+fn bounded_identity(value: a) a where a: Show, a: Eq, a: Show
 
 #[extern("./client.js", "boundedAsync", "abort")]
 fn bounded_async(value: a) Task[a] where a: Show

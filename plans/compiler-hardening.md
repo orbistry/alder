@@ -159,6 +159,23 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Repeated bound clause fix: a permanent canonicalization test reproduced the
+  bounds-length assertion panic. The first pass merged bounds by variable and
+  the second pass incorrectly reused that aggregate for each clause. Keep
+  clause-local resolved traits separately from a distinct per-variable set used
+  for projection lookup. This preserves source order and prevents duplicate
+  mentions of one trait from becoming false associated-name ambiguity.
+  Tests cover interleaved variables, repeated traits, projection equalities
+  before later bounds, and a genuine two-trait ambiguity. Reviewed the structured
+  error snapshot: it identifies Item and both distinct candidates at the correct
+  source region. CLI fixtures now use split/duplicate clauses in local/imported
+  externs and in a generic function executing both Show and Eq dictionaries.
+  Non-row Result inference remains the next recorded follow-up.
+  Validation: full workspace tests pass, including 65 canonicalization tests
+  and the expanded CLI fixtures; strict all-target/all-feature Clippy,
+  formatting, and diff checks pass. Only the reviewed new ambiguity snapshot
+  was added, with no pending snapshots. Release and broader audit gates remain open.
+
 - Constrained extern ABI fix: the emitted wrapper declared only source
   parameters although callers supplied leading dictionaries. A bounded identity
   therefore returned its Show dictionary instead of Number, reproduced in the
@@ -171,8 +188,9 @@ Root cause: virtual module imports lack a physical importer location.
   `where a: Show, a: Eq` panics at `canonicalize_constraints`' bounds-length
   assertion. The first pass accumulates bounds by variable, but the second pass
   assumes that aggregate belongs to each individual bound clause. Reproduce in
-  a permanent canonicalization test and fix clause handling next; the current
-  extern fixture uses the equivalent `where a: Show + Eq` to isolate the ABI.
+  a permanent canonicalization test and fix clause handling (now completed in
+  the follow-up above); the extern fixture initially used `a: Show + Eq` to
+  isolate the ABI and now exercises split clauses too.
   Another follow-up: comparing `bounded_result(45): Result[Number, String]`
   directly with `Ok(45)` reports expected String/found a; matching it fails too.
   The adapter test uses a declared error row to isolate its calling convention.

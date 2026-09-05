@@ -1315,6 +1315,13 @@ forward only source arguments; an opted-in AbortSignal remains the final foreign
 argument. Built-in module exports such as Json use separate internal kernel
 entry points with a dictionary-aware ABI, not this ordinary foreign adapter.
 
+Repeated bound clauses such as `where a: Show, a: Eq, a: Show` retain their
+individual bounds during canonicalization; solver evidence uses the stable
+deduplicated order. Associated-type lookup considers distinct traits from all
+clauses for the variable, including bounds written after the equality. Repeating
+the same trait is not an ambiguous associated-type candidate; two different
+traits defining the same associated name remain ambiguous.
+
 A constrained direct call prepends evidence arguments. Passing a constrained
 function as a value emits a closure that captures those dictionaries, including
 through `if`, records, arrays, and nested lambdas. A trait method call uses this

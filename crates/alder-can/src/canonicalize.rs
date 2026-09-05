@@ -2092,7 +2092,9 @@ fn canonicalize_constraints<'a>(
 ) -> Result<&'a [TypeConstraint<'a>], Vec<Error<'a>>> {
     let mut constraints = Vec::with_capacity(source.len());
     let mut resolved_bounds: BTreeMap<&'a str, Vec<alder_ast::QualifiedName<'a>>> = BTreeMap::new();
+    let mut clause_bounds = Vec::with_capacity(source.len());
     for constraint in source {
+        let mut resolved_clause = Vec::new();
         if let alder_source::Constraint::Bound { var, bounds } = constraint {
             if !variables.contains(var.value) {
                 return Err(vec![Error::new(
@@ -2120,20 +2122,20 @@ fn canonicalize_constraints<'a>(
                         }),
                     )]);
                 }
-                resolved_bounds
-                    .entry(var.value)
-                    .or_default()
-                    .push(binding.reference);
+                resolved_clause.push(binding.reference);
+                // Projection lookup needs all distinct bounds on the variable,
+                // but each emitted clause must retain only its own bounds.
+                let all_bounds = resolved_bounds.entry(var.value).or_default();
+                if !all_bounds.contains(&binding.reference) {
+                    all_bounds.push(binding.reference);
+                }
             }
         }
+        clause_bounds.push(resolved_clause);
     }
-    for constraint in source {
+    for (constraint, traits) in source.iter().zip(&clause_bounds) {
         constraints.push(match constraint {
-            alder_source::Constraint::Bound { var, bounds } => {
-                let traits = resolved_bounds
-                    .get(var.value)
-                    .expect("bounds were resolved in the first pass");
-                debug_assert_eq!(traits.len(), bounds.len());
+            alder_source::Constraint::Bound { var, .. } => {
                 TypeConstraint::Bound {
                     var: *var,
                     traits: bump.alloc_slice_copy(traits),
@@ -3442,6 +3444,49 @@ mod tests {
     }
 
     #[test]
+    fn repeated_bound_clauses_preserve_their_own_traits() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            indoc::indoc! {r#"
+            trait First[a] { type Item }
+            trait Second[a] {}
+            fn keep(value: a, other: b) a
+                where a: First, b: Second, a.Item == Number, a: Second + First { value }
+        "#},
+        );
+        let ItemKind::Fn(function) = &result.module.items[2].value.kind else {
+            panic!("expected function")
+        };
+        let bounds = function
+            .constraints
+            .iter()
+            .filter_map(|constraint| {
+                if let TypeConstraint::Bound { var, traits } = constraint {
+                    Some((
+                        var.value,
+                        traits.iter().map(|trait_| trait_.name).collect::<Vec<_>>(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            bounds,
+            vec![
+                ("a", vec!["First"]),
+                ("b", vec!["Second"]),
+                ("a", vec!["Second", "First"])
+            ]
+        );
+        let TypeConstraint::AssocEq { projection, .. } = function.constraints[2] else {
+            panic!("expected associated equality")
+        };
+        assert_eq!(projection.trait_ref.trait_.0.name, "First");
+    }
+
+    #[test]
     fn function_where_bounds_are_preserved() {
         let bump = Bump::new();
         let result = can(
@@ -3506,6 +3551,15 @@ mod tests {
             trait First[a] { type Item }
             trait Second[a] { type Item }
             fn bad(value: a) where a: First + Second, a.Item == Number { value }
+        "#};
+    }
+
+    #[test]
+    fn repeated_bound_clauses_still_reject_distinct_associated_candidates() {
+        assert_can_error_snapshot! {r#"
+            trait First[a] { type Item }
+            trait Second[a] { type Item }
+            fn bad(value: a) where a: First, a.Item == Number, a: Second { value }
         "#};
     }
 
