@@ -1235,6 +1235,9 @@ struct Infer<'a, 'db> {
     field_accesses: Vec<(Ty<'a>, &'a str, Region)>,
 }
 
+/// Infer core annotations only, without validating coherence or resolving trait
+/// obligations. This lower-level helper is not a complete compilation check;
+/// use [`solve`] for the checked contract and dictionary evidence.
 pub fn run<'a>(
     bump: &'a Bump,
     constraints: &Constraints<'a>,
@@ -1246,6 +1249,8 @@ pub fn run<'a>(
         .map_err(|error| vec![error])
 }
 
+/// Validate coherence, infer the module, and resolve its trait obligations into
+/// the checked schemes and dictionary evidence consumed by code generation.
 pub fn solve<'a>(
     bump: &'a Bump,
     constraints: &Constraints<'a>,

@@ -1048,15 +1048,19 @@ Elm-quality primary and secondary labels.
 ```text
 driver resolve paths/imports
   -> can canonicalize(module arena, ModuleId, resolved imports, source Module)
-  -> constrain(module arena, canonical Module, inference context)
-  -> solve(module arena, union-find, constraints)
+  -> constrain(module arena, canonical Module): module + requirement seeds
+  -> solve(module arena, constraints, package-aware TraitDatabase)
   -> build solved Interface + InterfaceFile
   -> codegen while module arena is alive
 ```
 
 Active type inference lives in `alder-solve/src/inference.rs`; the constrain
-crate packages the canonical module and trait requirement seeds. Structural
-control flow is summarized by `alder-ast::flow`, distinguishing normal
+crate packages the canonical module and trait requirement seeds.
+The complete active/legacy entry-point distinction is documented in
+`docs/compiler-implementation-map.md`; files present on disk are not necessarily
+part of Rust's compiled module graph.
+
+Structural control flow is summarized by `alder-ast::flow`, distinguishing normal
 continuation from returns, breaks, and continues. A block with no normal
 continuation contributes no value constraint to its surrounding expression.
 Loops consume their own break/continue exits, while a lambda's body does not

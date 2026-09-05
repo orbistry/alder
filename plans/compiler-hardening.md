@@ -155,9 +155,23 @@ Root cause: virtual module imports lack a physical importer location.
   but its values are absent from the publishing module's interface. Reproduced
   through a package-root consumer calling the re-exported `answer`; investigate
   named re-exports, origin identity, codegen bindings, and cyclic re-export cases.
-- [ ] Identify inactive Elm-era Rust modules and correct obsolete claims.
+- [x] Identify unlinked Elm-era files in can/constrain/solve and correct the
+  stale union-find pipeline claim; see `docs/compiler-implementation-map.md`.
 
 ## Evidence log
+
+- Active/legacy implementation audit: traced crate-root module declarations and
+  driver call sites. Listed the unlinked can/constrain/solve remnants and their
+  inactive tests in `docs/compiler-implementation-map.md`. Documented that the
+  compiled `run` helper skips coherence/trait-obligation resolution, while the
+  driver and solved-codegen tests use `solve`. Added API warnings and corrected
+  the canonical-internals pipeline's obsolete union-find argument. Source macro
+  invocations/comptime are rejected before dormant later-phase arms; table/schema
+  and macro declarations emit no runtime implementation. Publication semantics
+  for deferred declarations remain open. No compiler behavior was changed.
+  Validation: full workspace tests, strict all-target/all-feature Clippy,
+  formatting, and diff checks pass. Documentation/API comments only; no snapshot
+  changes or publishable behavior change requiring a changeset.
 
 - Deferred markup/style boundary: driver regressions reproduced successful
   executable builds of markup containing `@if` and a dimension-valued style.
