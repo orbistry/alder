@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/leaf.{ obtain as read }\npub fn main() Number { obtain(42) }\n"
+---
+alder::canonicalize::unknown_name
+
+  × unknown name `obtain`
+   ╭─[/project/src/main.ald:2:24]
+ 1 │ import ~/leaf.{ obtain as read }
+ 2 │ pub fn main() Number { obtain(42) }
+   ·                        ───┬──
+   ·                           ╰── reported here
+   ╰────

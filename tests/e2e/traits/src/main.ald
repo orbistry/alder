@@ -1,6 +1,7 @@
 import ~/codec
 import ~/facade
 import ~/facade.{ Parcel, Wrap, Extract, extract }
+import ~/facade.{ read_value as read }
 import ~/public_types
 import ~/initialize_z
 import ~/initialize_a
@@ -206,6 +207,9 @@ pub fn main() {
     let parcel: Wrap[Parcel[Number]] = { value: Parcel::Packet(42) }
     assert(extract(parcel.value) == 42)
     assert(Extract::value(parcel.value) == 42)
+    assert(facade.read_value(parcel.value) == 42)
+    assert(facade.read_again(parcel.value) == 42)
+    assert(read(parcel.value) == 42)
     assert(facade.describe(42) == "42")
     assert(codec.describe(42) == "42")
     let module_number: Result[Number, [:invalid_json(String)]] = Json.decode("\"not a number\"")

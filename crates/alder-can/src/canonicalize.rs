@@ -738,14 +738,15 @@ fn import_value<'a>(
         alder_ast::InterfaceValueIdentity::Binding(reference) => {
             env.insert_foreign_value(name, region, reference, value.annotation)
         }
-        alder_ast::InterfaceValueIdentity::TraitMethod(method) => {
-            env.insert_trait_method(MethodBinding {
+        alder_ast::InterfaceValueIdentity::TraitMethod(method) => env.insert_trait_method_as(
+            name,
+            MethodBinding {
                 id: method,
                 annotation: value.annotation,
                 region,
                 has_default: false,
-            })
-        }
+            },
+        ),
     }
 }
 

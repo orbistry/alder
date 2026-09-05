@@ -950,6 +950,53 @@ mod tests {
     }
 
     #[test]
+    fn renamed_trait_method_does_not_bind_its_original_name() {
+        let source = indoc::indoc! {r#"
+            import ~/leaf.{ obtain as read }
+            pub fn main() Number { obtain(42) }
+        "#};
+        let diagnostic = trait_import_failure(source);
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
+    }
+
+    #[test]
+    fn renamed_trait_method_collides_at_its_local_binding() {
+        let source = "pub import ~/leaf.{ plain as read, obtain as read }";
+        let diagnostic = trait_import_failure(source);
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
+    }
+
+    fn trait_import_failure(source: &str) -> Diagnostic {
+        let consumer = url("project/src/main.ald");
+        let leaf = indoc::indoc! {r#"
+            pub trait Probe[a] { fn obtain(value: a) Number }
+            impl Probe[Number] { fn obtain(value: Number) Number { value } }
+            pub fn plain(value: Number) Number { value }
+        "#};
+        let result = build_sync(
+            vec![
+                (url("project/src/leaf.ald"), Ok(leaf.to_owned())),
+                (consumer.clone(), Ok(source.to_owned())),
+            ],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert!(!result.is_success());
+        assert!(!result.artifacts.contains_key(&consumer));
+        assert!(
+            !result
+                .interfaces
+                .iter()
+                .any(|interface| interface.module.path == ["main"])
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&consumer] else {
+            panic!("invalid method import must fail")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        diagnostics[0].clone()
+    }
+
+    #[test]
     fn wildcard_reexport_publishes_values_to_consumers() {
         assert_value_reexport("pub import ~/leaf.*");
     }

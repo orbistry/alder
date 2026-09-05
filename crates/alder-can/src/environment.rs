@@ -1156,7 +1156,15 @@ impl<'a> Env<'a> {
     }
 
     pub fn insert_trait_method(&mut self, binding: MethodBinding<'a>) -> Result<(), Region> {
-        if let Some(existing) = self.scopes[0].values.get(binding.id.name) {
+        self.insert_trait_method_as(binding.id.name, binding)
+    }
+
+    pub fn insert_trait_method_as(
+        &mut self,
+        name: &'a str,
+        binding: MethodBinding<'a>,
+    ) -> Result<(), Region> {
+        if let Some(existing) = self.scopes[0].values.get(name) {
             let shadows_builtin = matches!(
                 existing.reference,
                 ValueRef::TraitMethod { method, .. }
@@ -1167,7 +1175,7 @@ impl<'a> Env<'a> {
             }
         }
         self.scopes[0].values.insert(
-            binding.id.name,
+            name,
             ValueBinding {
                 reference: ValueRef::TraitMethod {
                     method: binding.id,

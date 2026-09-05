@@ -38,6 +38,13 @@ Coverage at this checkpoint:
   executable artifact.
 - Shared array exports preserve reference identity through repeated aliases and
   a named/wildcard chain. Mutations through each route affect the original.
+- Renamed trait methods retain their method identity but bind under the selected
+  local name. Previously import binding ignored `as`, making distinct aliases
+  collide under the original name and missing actual local-name collisions.
+  CLI execution covers two aliases through a named/wildcard chain and another
+  consumer-side rename. Negative driver tests verify that the original name is
+  not introduced and that a real alias collision rejects interface/artifact
+  publication; colorless snapshots label the relevant source names.
 - Facade initialization is retained: codegen emits explicit imports as bare
   AST import declarations in source order, before generated value imports, and
   includes them in dependency metadata even without local value uses. Previously

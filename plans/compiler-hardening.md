@@ -160,6 +160,19 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Trait-method import aliases: the CLI reproduced a false collision when one
+  method was re-exported under two distinct aliases. Environment insertion used
+  the method identity's original name instead of the selected local binding.
+  Imported methods now use that binding for insertion/collision checks while
+  retaining their original dispatch identity. CLI coverage executes both
+  aliases through named/wildcard facades and a further consumer rename. Two
+  driver negatives reject leaked original names and actual local alias
+  collisions, asserting no consumer interface/artifact publication; reviewed
+  their colorless source-aware snapshots. Full workspace tests (106 driver
+  tests), focused CLI execution, strict all-target/all-feature Clippy,
+  formatting, and diff checks pass. No pending snapshots. Added a can patch
+  changeset; broader privacy/collision and package boundary audits remain open.
+
 - Re-export initialization: reproduced a CLI runtime failure where references
   resolved directly to the original owner and omitted facade initialization.
   Codegen now emits explicit imports as bare AST imports in source order and

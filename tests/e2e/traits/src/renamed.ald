@@ -1,4 +1,5 @@
 pub import ~/public_types.{ Packet as Parcel, Envelope as Wrap, HasValue as Extract, extract }
 pub import ~/public_types.{ shared as numbers, shared as same_numbers, append }
+pub import ~/public_types.{ value as read_value, value as read_again }
 
 let initialized = append(-1)

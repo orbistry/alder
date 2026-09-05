@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub import ~/leaf.{ plain as read, obtain as read }"
+---
+alder::canonicalize::import_alias_collision
+
+  × import name `read` is already bound
+   ╭─[/project/src/main.ald:1:46]
+ 1 │ pub import ~/leaf.{ plain as read, obtain as read }
+   ·                              ──┬─            ──┬─
+   ·                                │               ╰── reported here
+   ·                                ╰── first binding is here
+   ╰────
