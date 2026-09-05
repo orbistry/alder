@@ -152,13 +152,27 @@ Root cause: virtual module imports lack a physical importer location.
   finalizer registration while/after closing, and masked interruption.
 - [ ] Deterministic cache identities, source fidelity, and deferred constructs.
 - [ ] Public wildcard/name re-exports: `pub import ~/src/util.*` is accepted
-  but its values are absent from the publishing module's interface. Reproduced
-  through a package-root consumer calling the re-exported `answer`; investigate
-  named re-exports, origin identity, codegen bindings, and cyclic re-export cases.
+  and basic value publication is now fixed. Continue the alias/type/package/
+  initialization audit in `docs/reexport-hardening.md`; do not treat the initial
+  consumer regressions as full re-export coverage.
 - [x] Identify unlinked Elm-era files in can/constrain/solve and correct the
   stale union-find pipeline claim; see `docs/compiler-implementation-map.md`.
 
 ## Evidence log
+
+- Public re-export publication: driver tests reproduced named and wildcard
+  facades publishing no values, leaving consumers with unknown-name errors.
+  Interface builders now take dependency interfaces and copy selected public
+  entries while retaining their original identities and schemes. A second
+  regression caught selecting only the first of repeated-source aliases; each
+  alias is now processed independently. Tests compare owned value identities
+  and schemes, and the real CLI traits fixture calls a generic function through
+  a wildcard facade. No forwarding JS source is generated. The API signature
+  change and wider remaining audit are documented in `docs/reexport-hardening.md`.
+  Validation: full workspace tests pass, including 102 driver tests and the
+  expanded real CLI fixture. Strict all-target/all-feature Clippy, formatting,
+  and diff checks pass. No snapshots changed. Package/release and the wider
+  re-export acceptance gates remain open.
 
 - Active/legacy implementation audit: traced crate-root module declarations and
   driver call sites. Listed the unlinked can/constrain/solve remnants and their

@@ -371,7 +371,7 @@ mod tests {
         let constraints = alder_constrain::constrain(bump, canonical.module);
         let database = alder_solve::TraitDatabase::build(bump, canonical.module, &[]);
         let solved = alder_solve::solve(bump, &constraints, &database).expect("source solves");
-        alder_can::from_module(bump, canonical.module, &solved.annotations)
+        alder_can::from_module(bump, canonical.module, &solved.annotations, &[])
     }
 
     fn empty_interface<'a>() -> alder_ast::Interface<'a> {

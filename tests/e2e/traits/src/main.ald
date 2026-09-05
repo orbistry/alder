@@ -1,4 +1,5 @@
 import ~/codec
+import ~/facade
 
 #[derive(Show, Ord, Hash, Json)]
 enum Status {
@@ -193,6 +194,7 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    assert(facade.describe(42) == "42")
     assert(codec.describe(42) == "42")
     let module_number: Result[Number, [:invalid_json(String)]] = Json.decode("\"not a number\"")
     assert(match module_number { Ok(_) => false, Err(:invalid_json(_)) => true })

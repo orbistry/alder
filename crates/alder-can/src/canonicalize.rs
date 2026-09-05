@@ -2989,7 +2989,7 @@ mod tests {
         )
         .expect("producer canonicalizes");
         let annotations = crate::Annotations::new();
-        let interface = crate::from_module(&bump, producer.module, &annotations);
+        let interface = crate::from_module(&bump, producer.module, &annotations, &[]);
         assert_eq!(interface.traits[0].methods.len(), 1);
         assert!(matches!(
             interface.values[0].identity,
@@ -3621,7 +3621,7 @@ mod tests {
             panic!("expected method")
         };
         assert_eq!(method.method.name, "next");
-        let interface = crate::headers_from_module(&bump, result.module);
+        let interface = crate::headers_from_module(&bump, result.module, &[]);
         assert_eq!(interface.instances.len(), 1);
         assert_eq!(interface.instances[0].id, implementation.id);
         assert_eq!(
@@ -3653,8 +3653,8 @@ mod tests {
                 impl PublicTrait[Number] {}
             "#},
         );
-        let headers = crate::headers_from_module(&bump, result.module);
-        let published = crate::from_module(&bump, result.module, &crate::Annotations::new());
+        let headers = crate::headers_from_module(&bump, result.module, &[]);
+        let published = crate::from_module(&bump, result.module, &crate::Annotations::new(), &[]);
 
         assert!(headers.instances.len() > published.instances.len());
         assert!(published.instances.iter().all(|implementation| {

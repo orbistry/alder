@@ -81,7 +81,7 @@ pub fn builtin_trait_interface<'a>(bump: &'a Bump) -> Interface<'a> {
         &source,
     )
     .expect("the embedded first-party trait module must canonicalize");
-    headers_from_module(bump, result.module)
+    headers_from_module(bump, result.module, &[])
 }
 
 /// Build the public, solved contract consumed by dependent modules.
@@ -89,21 +89,29 @@ pub fn from_module<'a>(
     bump: &'a Bump,
     module: &'a Module<'a>,
     annotations: &Annotations<'a>,
+    imports: &[Interface<'a>],
 ) -> Interface<'a> {
-    interface_from_module(bump, module, Some(annotations))
+    interface_from_module(bump, module, Some(annotations), imports)
 }
 
 /// Build the canonical declaration header used while collecting a package's
 /// complete trait database. Value bindings are omitted until their inferred
 /// schemes are available, while types, traits, and impl heads are complete.
-pub fn headers_from_module<'a>(bump: &'a Bump, module: &'a Module<'a>) -> Interface<'a> {
-    interface_from_module(bump, module, None)
+/// `imports` must contain the dependency interfaces used for canonicalization,
+/// so public named and wildcard imports can publish their original identities.
+pub fn headers_from_module<'a>(
+    bump: &'a Bump,
+    module: &'a Module<'a>,
+    imports: &[Interface<'a>],
+) -> Interface<'a> {
+    interface_from_module(bump, module, None, imports)
 }
 
 fn interface_from_module<'a>(
     bump: &'a Bump,
     module: &'a Module<'a>,
     annotations: Option<&Annotations<'a>>,
+    imports: &[Interface<'a>],
 ) -> Interface<'a> {
     let mut values = Vec::new();
     let mut types = Vec::new();
@@ -339,6 +347,59 @@ fn interface_from_module<'a>(
                 exported_as: binding.value,
                 module: import.module,
             });
+            continue;
+        }
+        let Some(interface) = imports
+            .iter()
+            .find(|interface| interface.home == import.module)
+        else {
+            continue;
+        };
+        // Keep checked schemes and defining identities; a re-export is an alias,
+        // not a fresh binding or another definition of a trait/instance.
+        let selections = match import.kind {
+            ResolvedImportKind::All => vec![None],
+            ResolvedImportKind::Names(names) => names.iter().map(Some).collect(),
+            ResolvedImportKind::Module { .. } => unreachable!("handled above"),
+        };
+        for selection in selections {
+            let exported_name = |name: &'a str| match selection {
+                None => Some(name),
+                Some(entry) if entry.source.value == name => Some(entry.binding.value),
+                Some(_) => None,
+            };
+            if annotations.is_some() {
+                values.extend(interface.values.iter().filter_map(|value| {
+                    Some(InterfaceValue {
+                        exported_as: exported_name(value.exported_as)?,
+                        ..*value
+                    })
+                }));
+            }
+            types.extend(interface.types.iter().filter_map(|typ| {
+                Some(InterfaceType {
+                    exported_as: exported_name(typ.exported_as)?,
+                    ..*typ
+                })
+            }));
+            enums.extend(interface.enums.iter().filter_map(|enum_| {
+                Some(alder_ast::InterfaceEnum {
+                    exported_as: exported_name(enum_.exported_as)?,
+                    ..*enum_
+                })
+            }));
+            traits.extend(interface.traits.iter().filter_map(|trait_| {
+                Some(alder_ast::InterfaceTrait {
+                    exported_as: exported_name(trait_.exported_as)?,
+                    ..*trait_
+                })
+            }));
+            modules.extend(interface.modules.iter().filter_map(|module| {
+                Some(InterfaceModule {
+                    exported_as: exported_name(module.exported_as)?,
+                    ..*module
+                })
+            }));
         }
     }
 

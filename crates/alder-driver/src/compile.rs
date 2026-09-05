@@ -465,7 +465,7 @@ fn compile_module<'s>(
     let header_result = alder_can::canonicalize_headers(&module_arena, context, &module).ok();
     let header_interface = header_result
         .as_ref()
-        .map(|result| alder_can::headers_from_module(&module_arena, result.module))
+        .map(|result| alder_can::headers_from_module(&module_arena, result.module, interfaces))
         .map(|interface| alder_ast::copy_interface(store, &interface));
     if let Some(header) = &header_result {
         let database = alder_solve::TraitDatabase::build_with_package_instances(
@@ -525,7 +525,8 @@ fn compile_module<'s>(
         .collect();
 
     let header_interface = header_interface.unwrap_or_else(|| {
-        let interface = alder_can::headers_from_module(&module_arena, can_result.module);
+        let interface =
+            alder_can::headers_from_module(&module_arena, can_result.module, interfaces);
         alder_ast::copy_interface(store, &interface)
     });
 
@@ -557,8 +558,12 @@ fn compile_module<'s>(
         }
     };
 
-    let module_interface =
-        alder_can::from_module(&module_arena, can_result.module, &solved.annotations);
+    let module_interface = alder_can::from_module(
+        &module_arena,
+        can_result.module,
+        &solved.annotations,
+        interfaces,
+    );
     let artifact = match mode {
         BuildMode::Check => None,
         BuildMode::Build | BuildMode::Test => {
@@ -879,6 +884,64 @@ mod tests {
     }
 
     #[test]
+    fn wildcard_reexport_publishes_values_to_consumers() {
+        assert_value_reexport("pub import ~/leaf.*");
+    }
+
+    #[test]
+    fn aliased_reexport_publishes_values_to_consumers() {
+        assert_value_reexport("pub import ~/leaf.{ answer as renamed, answer }");
+    }
+
+    #[test]
+    fn named_reexport_publishes_values_to_consumers() {
+        assert_value_reexport("pub import ~/leaf.{ answer }");
+    }
+
+    fn assert_value_reexport(facade: &str) {
+        let leaf = url("project/src/leaf.ald");
+        let facade_uri = url("project/src/facade.ald");
+        let consumer = url("project/src/main.ald");
+        let source = indoc::indoc! {r#"
+            import ~/facade
+            pub fn main() Number { facade.answer() }
+        "#};
+        let result = build_sync(
+            vec![
+                (leaf, Ok("pub fn answer() Number { 42 }".to_owned())),
+                (facade_uri, Ok(facade.to_owned())),
+                (consumer, Ok(source.to_owned())),
+            ],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert!(
+            result.is_success(),
+            "public re-export failed: {:#?}",
+            result.modules
+        );
+        assert_eq!(result.artifacts.len(), 3);
+        let leaf_interface = result
+            .interfaces
+            .iter()
+            .find(|interface| interface.module.path == ["leaf"])
+            .expect("leaf interface");
+        let facade_interface = result
+            .interfaces
+            .iter()
+            .find(|interface| interface.module.path == ["facade"])
+            .expect("facade interface");
+        assert_eq!(
+            facade_interface.values.len(),
+            if facade.contains("renamed") { 2 } else { 1 }
+        );
+        for forwarded in &facade_interface.values {
+            assert_eq!(forwarded.identity, leaf_interface.values[0].identity);
+            assert_eq!(forwarded.scheme, leaf_interface.values[0].scheme);
+        }
+    }
+
+    #[test]
     fn unimplemented_markup_cannot_produce_executable_artifact() {
         let source = indoc::indoc! {r#"
             pub fn view() {
@@ -1139,7 +1202,8 @@ mod tests {
         let database = alder_solve::TraitDatabase::build(&bump, canonical.module, interfaces);
         let solved =
             alder_solve::solve(&bump, &constraints, &database).expect("dependency source solves");
-        let interface = alder_can::from_module(&bump, canonical.module, &solved.annotations);
+        let interface =
+            alder_can::from_module(&bump, canonical.module, &solved.annotations, interfaces);
         InterfaceFile::dehydrate_with_source(
             &interface,
             &format!("file:///dependency/src/{}.ald", path.join("/")),
