@@ -1675,6 +1675,46 @@ mod tests {
     }
 
     #[test]
+    fn imported_error_row_failure_labels_the_consumer_reference() {
+        let consumer = url("project/src/main.ald");
+        let source = indoc::indoc! {r#"
+            import ~/utils
+            fn left() Result[Number, [:known | :left]] { Err(:left) }
+            fn right() Result[Number, [:known | :right]] { Err(:right) }
+            pub fn run() Result[Number, [:known | :left]] {
+                let result: Result[Number, [:known | :left]] = utils.combine(left(), right())
+                result
+            }
+        "#};
+        let result = build_sync(
+            vec![
+                (url("project/src/utils.ald"), Ok(indoc::indoc! {r#"
+                    pub fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
+                        let x = left?
+                        let y = right?
+                        Ok(x + y)
+                    }
+                "#}.to_owned())),
+                (consumer.clone(), Ok(source.to_owned())),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&consumer] else {
+            panic!("the omitted error tag must fail in the consumer");
+        };
+        assert_eq!(diagnostics.len(), 1);
+        let diagnostic = &diagnostics[0];
+        let label = miette::Diagnostic::labels(diagnostic)
+            .unwrap()
+            .next()
+            .unwrap();
+        assert_eq!(label.offset(), source.find("utils.combine").unwrap());
+        assert_eq!(label.len(), "utils.combine".len());
+        assert_rendered_diagnostic_snapshot!(source, diagnostic.clone());
+    }
+
+    #[test]
     fn imported_exact_error_union_supports_exhaustive_matching() {
         let result = build_sync(
             vec![

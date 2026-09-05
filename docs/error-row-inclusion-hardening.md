@@ -57,8 +57,11 @@ in addition to the universal/target/payload protections above.
 This is not a claim of complete row soundness. More general cyclic unions,
 existential elimination, recursive groups, higher-order interactions, aliases,
 and contract entailment across all supported boundaries still require the wider
-audit. Imported constraint diagnostic regions currently originate in the
-definition; accurate consumer-site attribution needs follow-up.
+audit. Instantiation attaches deferred inclusions to the current reference's
+region. Definition-relative coordinates are never reused to label a consumer's
+source. The same rule applies to fresh local scheme instances. A driver
+regression checks the exact consumer byte span and snapshots the no-color
+rendering; a solver regression checks the local reference's line and columns.
 
 Empty inclusion lists are omitted from Annotation's Debug output so unrelated
 existing AST snapshots remain stable; nonempty lists are visible for review.

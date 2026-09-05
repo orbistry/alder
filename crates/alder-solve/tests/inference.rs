@@ -8,6 +8,28 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn instantiated_error_row_failure_points_to_the_local_reference() {
+    let source = indoc! {r#"
+        fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
+            let x = left?
+            let y = right?
+            Ok(x + y)
+        }
+        fn left() Result[Number, [:known | :left]] { Err(:left) }
+        fn right() Result[Number, [:known | :right]] { Err(:right) }
+        fn run() Result[Number, [:known | :left]] {
+            let result: Result[Number, [:known | :left]] = combine(left(), right())
+            result
+        }
+    "#};
+    let errors = infer(&Bump::new(), source).unwrap_err();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].region.start.line, 9);
+    assert_eq!(errors[0].region.start.column, 52);
+    assert_eq!(errors[0].region.end.column, 59);
+}
+
+#[test]
 fn error_row_inclusion_metadata_tracks_instantiated_function_rows() {
     let source = indoc! {r#"
         fn forward(value: Result[Number, [:known | e]]) {

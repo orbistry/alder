@@ -158,6 +158,18 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Deferred error-row diagnostic origins: a narrowed annotated binding after an
+  imported call reproduced a label at consumer byte 85 instead of the reference
+  at byte 233. The deferred inclusion carried its definition's line/column pair
+  into the consumer source. All scheme/annotation instantiation paths now require
+  a local region and use it for the instantiated constraints. Local-function
+  and imported-function regressions check exact locations; the new reviewed
+  no-color driver snapshot contains the actual Alder source and highlights only
+  `utils.combine`. Direct definition checks retain their original local regions.
+  Validation: full workspace tests pass (187 solver integration tests and 93
+  driver tests), strict all-target/all-feature Clippy passes, and formatting/
+  diff checks pass. One new reviewed snapshot; no pending snapshot files.
+
 - Exact error-union checkpoint: inferred `?` result rows now retain exact-target
   metadata through schemes and owned interfaces. Stable lower bounds determine
   concrete union closure without closing declared open rows. Annotation-free

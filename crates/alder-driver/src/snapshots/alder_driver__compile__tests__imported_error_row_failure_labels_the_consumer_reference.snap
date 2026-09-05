@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/utils\nfn left() Result[Number, [:known | :left]] { Err(:left) }\nfn right() Result[Number, [:known | :right]] { Err(:right) }\npub fn run() Result[Number, [:known | :left]] {\n    let result: Result[Number, [:known | :left]] = utils.combine(left(), right())\n    result\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `[:known | :left]`, found `[:known | :right]`
+   ╭─[/project/src/main.ald:5:52]
+ 4 │ pub fn run() Result[Number, [:known | :left]] {
+ 5 │     let result: Result[Number, [:known | :left]] = utils.combine(left(), right())
+   ·                                                    ──────┬──────
+   ·                                                          ╰── type requirement originates here
+ 6 │     result
+   ╰────

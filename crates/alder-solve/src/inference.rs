@@ -2111,7 +2111,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.infer_reference(env, *use_id, *reference, region)
             }
             Expr::Constructor(constructor) => {
-                Ok(self.instantiate_annotation(constructor.annotation))
+                Ok(self.instantiate_annotation(constructor.annotation, region))
             }
             Expr::Tag { name, args, .. } => {
                 self.tag_sites.push(region);
@@ -2149,7 +2149,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let Ty::Record(actual_fields, _) = actual else {
                     unreachable!("record inference always returns a record")
                 };
-                let constructor_type = self.instantiate_annotation(constructor.annotation);
+                let constructor_type = self.instantiate_annotation(constructor.annotation, region);
                 let alder_ast::VariantPayload::Record(expected_fields) = constructor.payload else {
                     unreachable!("record constructor carries a record payload")
                 };
@@ -2422,9 +2422,9 @@ impl<'a, 'db> Infer<'a, 'db> {
         region: Region,
     ) -> Result<Ty<'a>, Error> {
         match reference {
-            ValueRef::Local(local) => Ok(self.instantiate(&env.locals[&local.id.0])),
+            ValueRef::Local(local) => Ok(self.instantiate(&env.locals[&local.id.0], region)),
             ValueRef::TopLevel(name) => {
-                let (typ, predicates) = self.instantiate_scheme(&env.globals[&name]);
+                let (typ, predicates) = self.instantiate_scheme(&env.globals[&name], region);
                 self.record_predicates(
                     use_id,
                     predicates,
@@ -2434,7 +2434,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 Ok(typ)
             }
             ValueRef::Foreign { annotation, .. } => {
-                let (typ, vars) = self.instantiate_annotation_with_vars(annotation);
+                let (typ, vars) = self.instantiate_annotation_with_vars(annotation, region);
                 self.record_annotation_predicates(
                     use_id,
                     annotation,
@@ -2456,7 +2456,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 } else {
                     seed.region
                 };
-                let (typ, vars) = self.instantiate_annotation_with_vars(annotation);
+                let (typ, vars) = self.instantiate_annotation_with_vars(annotation, origin);
                 if let Some(header) = self.database.trait_(method.trait_) {
                     let args = header
                         .params
@@ -2582,7 +2582,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             Pattern::Unit => self.unify(expected, Ty::Unit, pattern.region)?,
             Pattern::Constructor { constructor, args } => {
-                let constructor_type = self.instantiate_annotation(constructor.annotation);
+                let constructor_type =
+                    self.instantiate_annotation(constructor.annotation, pattern.region);
                 if args.is_empty() {
                     self.unify(constructor_type, expected, pattern.region)?;
                 } else {
@@ -2605,7 +2606,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 fields,
                 ..
             } => {
-                let constructor_type = self.instantiate_annotation(constructor.annotation);
+                let constructor_type =
+                    self.instantiate_annotation(constructor.annotation, pattern.region);
                 let declared = match constructor.payload {
                     alder_ast::VariantPayload::Record(fields) => fields,
                     _ => &[],
@@ -3005,8 +3007,8 @@ impl<'a, 'db> Infer<'a, 'db> {
         read_before_write: bool,
     ) -> Result<Ty<'a>, Error> {
         let mut typ = match place.root {
-            BindingName::Local(local) => self.instantiate(&env.locals[&local.id.0]),
-            BindingName::TopLevel(name) => self.instantiate(&env.globals[&name]),
+            BindingName::Local(local) => self.instantiate(&env.locals[&local.id.0], region),
+            BindingName::TopLevel(name) => self.instantiate(&env.globals[&name], region),
         };
         for (index, step) in place.steps.iter().enumerate() {
             typ = match step {
@@ -3460,11 +3462,15 @@ impl<'a, 'db> Infer<'a, 'db> {
         free
     }
 
-    fn instantiate(&mut self, scheme: &Scheme<'a>) -> Ty<'a> {
-        self.instantiate_scheme(scheme).0
+    fn instantiate(&mut self, scheme: &Scheme<'a>, region: Region) -> Ty<'a> {
+        self.instantiate_scheme(scheme, region).0
     }
 
-    fn instantiate_scheme(&mut self, scheme: &Scheme<'a>) -> (Ty<'a>, Vec<Predicate<'a>>) {
+    fn instantiate_scheme(
+        &mut self,
+        scheme: &Scheme<'a>,
+        region: Region,
+    ) -> (Ty<'a>, Vec<Predicate<'a>>) {
         let replacements: BTreeMap<_, _> = scheme
             .quantified
             .iter()
@@ -3492,6 +3498,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             })
             .collect::<Vec<_>>();
         self.projection_equations.extend(projection_eqs);
+        // A deferred failure belongs to this instance's reference site. The
+        // scheme's stored region may refer to a different source module.
         let inclusions = scheme
             .error_row_inclusions
             .iter()
@@ -3499,20 +3507,21 @@ impl<'a, 'db> Infer<'a, 'db> {
                 exact_target: inclusion.exact_target,
                 source: self.replace_vars(&inclusion.source, &replacements),
                 target: self.replace_vars(&inclusion.target, &replacements),
-                region: inclusion.region,
+                region,
             })
             .collect::<Vec<_>>();
         self.error_row_inclusions.extend(inclusions);
         (typ, predicates)
     }
 
-    fn instantiate_annotation(&mut self, annotation: &'a Annotation<'a>) -> Ty<'a> {
-        self.instantiate_annotation_with_vars(annotation).0
+    fn instantiate_annotation(&mut self, annotation: &'a Annotation<'a>, region: Region) -> Ty<'a> {
+        self.instantiate_annotation_with_vars(annotation, region).0
     }
 
     fn instantiate_annotation_with_vars(
         &mut self,
         annotation: &'a Annotation<'a>,
+        region: Region,
     ) -> (Ty<'a>, BTreeMap<&'a str, Ty<'a>>) {
         let mut vars = BTreeMap::new();
         let typ = self.from_ast(annotation.typ, &mut vars);
@@ -3523,7 +3532,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 exact_target: inclusion.exact_target,
                 source,
                 target,
-                region: inclusion.region,
+                region,
             });
         }
         for equality in annotation.projection_equalities {
