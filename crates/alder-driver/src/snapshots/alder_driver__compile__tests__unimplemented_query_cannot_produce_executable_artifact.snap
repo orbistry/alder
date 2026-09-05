@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "table users {}\npub fn load() { query { select * from users } }\n"
+---
+alder::codegen
+
+  × queries are not executable yet; query compilation is planned for M7
+   ╭─[/project/src/main.ald:2:17]
+ 1 │ table users {}
+ 2 │ pub fn load() { query { select * from users } }
+   ·                 ──────────────┬──────────────
+   ·                               ╰── code generation failed here
+   ╰────

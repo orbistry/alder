@@ -115,6 +115,12 @@ These are already in the docs; do not reopen them.
 Canonicalization resolves names inside these but the type checker treats
 them as opaque so programs using them do not fail in M2:
 
+This table describes the historical M2 checking boundary, not a promise that
+all deferred constructs can execute. Hardening now rejects query expressions
+during Build/Test code generation with a source-aware diagnostic, instead of
+emitting a call that throws at runtime. Check mode retains the provisional
+query representation; actual schema checking and query execution belong to M7.
+
 | Construct                      | M2 treatment                                                         | Owner |
 | ------------------------------ | -------------------------------------------------------------------- | ----- |
 | `trait` / `impl` / bounds      | canonicalized, recorded in the env, constraints ignored              | M3    |

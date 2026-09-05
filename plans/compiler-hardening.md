@@ -159,6 +159,33 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Deferred query execution boundary: a driver regression reproduced a successful
+  build of a module declaring `table users {}` and a public function returning
+  `query { select * from users }`. Codegen discarded the
+  query and emitted `$query()`, whose kernel stub only throws until M7. Build
+  and Test emission now fail at the query's source region instead. Check mode
+  preserves the provisional M2 syntax/type representation and emits no artifact.
+  Reviewed the colorless driver snapshot with the actual source; both executable
+  modes assert no artifact. This does not implement M7. Macro calls were also
+  inspected: canonicalization already rejects them before the solver's dormant
+  Any arm, and codegen has a defensive rejection. Markup/style/component/state
+  placeholder semantics and declaration-only deferred forms still need audit.
+  Validation: full workspace tests pass, including 95 driver tests and real CLI
+  fixtures. Strict all-target/all-feature Clippy, formatting, and diff checks
+  pass. The new diagnostic snapshot was reviewed; no pending snapshots remain.
+
+- Result error-kind audit: full solver probes confirm that an identity over
+  `Result[Number, String]` is accepted while constructing either variant or
+  matching it is rejected. Bare variables in the error position are forced to
+  ErrorRow kind, but concrete non-group types pass through normal conversion;
+  Result return checking also assumes row inclusion. Existing HKT fixtures and
+  row-focused language docs leave the intended ordinary-error policy unclear.
+  Requested the user's choice between rows/groups only and support for ordinary
+  error types as well. `docs/result-error-kind-audit.md` preserves the exact
+  reproductions, code paths, and required downstream checks. Do not silently
+  select a policy or mark this issue resolved. Temporary diagnostic probes were
+  removed; no compiler behavior or regression expectations were changed.
+
 - Repeated bound clause fix: a permanent canonicalization test reproduced the
   bounds-length assertion panic. The first pass merged bounds by variable and
   the second pass incorrectly reused that aggregate for each clause. Keep

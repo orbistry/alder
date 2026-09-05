@@ -879,6 +879,46 @@ mod tests {
     }
 
     #[test]
+    fn unimplemented_query_cannot_produce_executable_artifact() {
+        let source = indoc::indoc! {r#"
+            table users {}
+            pub fn load() { query { select * from users } }
+        "#};
+        let uri = url("project/src/main.ald");
+        let checked = build_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            checked.is_success(),
+            "query syntax remains available for checking"
+        );
+        assert!(checked.artifacts.is_empty());
+        let tested = build_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Test,
+            BuildDependencies::default(),
+        );
+        assert!(!tested.is_success());
+        assert!(tested.artifacts.is_empty());
+        let result = build_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert!(
+            !result.is_success(),
+            "an unavailable query must not emit a runtime stub"
+        );
+        assert!(result.artifacts.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("expected an unavailable-query diagnostic")
+        };
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
     fn duplicate_module_identity_cannot_publish_interfaces_or_code() {
         let source = "pub fn answer() Number { 42 }";
         for paths in [

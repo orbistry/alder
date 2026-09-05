@@ -1257,8 +1257,10 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 }
             }
             Expr::Query(_) => {
-                self.kernel.insert("$query");
-                self.pure(self.js.call(self.js.identifier("$query"), []))
+                return Err(Error {
+                    region: node.region,
+                    message: "queries are not executable yet; query compilation is planned for M7",
+                });
             }
             Expr::Markup(markup) => self.markup(markup)?,
             Expr::MacroCall { .. } => {
