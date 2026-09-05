@@ -35,11 +35,20 @@ predicate/projection variables, outer shared state, universals, payload variable
 and intermediate target tails. This removes the extra parameter in the existing
 pipe/await snapshot without changing that snapshot or global substitutions.
 
-The result row first created for `?` in an unannotated return is an exact union
-target. Existing declared rows, including `Result[a]` shorthand, are not marked
-exact. After lower-bound propagation stabilizes, an exact flexible tail closes
-only when all its contributing sources are closed (or refer to the same target).
-Independent open sources and universal tails prevent that closure. The exact
+The result row first created for `?` or an early row-valued Result return in an
+unannotated function is an exact union target. The first early return must not
+freeze the result to its own error tags. This includes an early `Ok`, whose error
+argument is still a variable of error-row kind. Non-row Result parameters retain
+their existing equality behavior. Existing declared rows, including `Result[a]`
+shorthand, are not marked exact.
+
+After lower-bound propagation stabilizes, candidate exact targets are filtered
+by dependency: remove universal targets, targets with non-row open sources, and
+targets depending on a row outside the candidate set. Repeat until stable, then
+close the remaining tails together. This computes the least known-tag solution
+for mutually dependent exact targets without mistaking a recursive dependency
+for an external unknown error source. Independent open sources and universal
+tails prevent closure throughout the dependent component. The exact
 marker survives scheme instantiation, publication, binary storage, hydration,
 and arena copying. Imported and local concrete unions now support exhaustive
 matching without an added result annotation.
@@ -54,8 +63,8 @@ lambdas, which do not undergo global generalization. It protects variables in
 module binding types, predicates, projection equations, and trait obligations,
 in addition to the universal/target/payload protections above.
 
-This is not a claim of complete row soundness. More general cyclic unions,
-existential elimination, recursive groups, higher-order interactions, aliases,
+This is not a claim of complete row soundness. More general cyclic payloads,
+existential elimination, recursive-group interactions, higher-order uses, aliases,
 and contract entailment across all supported boundaries still require the wider
 audit. Instantiation attaches deferred inclusions to the current reference's
 region. Definition-relative coordinates are never reused to label a consumer's

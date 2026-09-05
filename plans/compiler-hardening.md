@@ -158,6 +158,23 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Recursive error-union follow-up: two mutually recursive functions first
+  reproduced a closed-row mismatch because an early `return Err` fixed the
+  unannotated output to its first tag. Early row-valued Result returns now create
+  an exact accumulating output, including the variable row of `Ok`. A wider
+  attempted final-return change regressed non-row higher-kinded Result uses and
+  was replaced with this early-return-specific handling; those tests pass.
+  The recursive reproduction then exposed the independent cycle issue: exact
+  tails were treated as externally open merely because they depended on each
+  other. Candidate elimination now closes only exact components with no external
+  open/universal dependency, after known tags reach a fixed point. Positive tests
+  cover a closed cycle and concrete instantiation of an external source; the
+  negative checks an actual open-row exhaustiveness error, not generic failure.
+  CLI coverage executes both error tags through an imported recursive function.
+  Validation: full workspace tests pass (192 solver integration tests, 93 driver
+  tests, and runtime/CLI fixtures), strict all-target/all-feature Clippy passes,
+  and formatting/diff checks pass. No snapshot changes or pending snapshots.
+
 - Deferred error-row diagnostic origins: a narrowed annotated binding after an
   imported call reproduced a label at consumer byte 85 instead of the reference
   at byte 233. The deferred inclusion carried its definition's line/column pair

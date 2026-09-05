@@ -3,3 +3,15 @@ pub fn combine(left: Result[Number, [:storage(String) | e]], right: Result[Numbe
     let y = right?
     Ok(x + y)
 }
+
+pub fn recursive(n: Number) {
+    if n == 0 { return Err(:first) }
+    let value = second(n - 1)?
+    Ok(value)
+}
+
+fn second(n: Number) {
+    if n == 0 { return Err(:second) }
+    let value = recursive(n - 1)?
+    Ok(value)
+}

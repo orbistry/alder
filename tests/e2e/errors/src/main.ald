@@ -68,6 +68,8 @@ pub fn main() Result[()] {
     assert(exact_union(0) == 1)
     assert(exact_union(1) == 2)
     assert(exact_union(2) == 42)
+    assert(recursive_union(4) == 1)
+    assert(recursive_union(3) == 2)
     Ok(())
 }
 
@@ -82,5 +84,13 @@ fn exact_union(which: Number) Number {
         Ok(value) => value,
         Err(:storage(message)) => 1,
         Err(:invalid(message)) => 2,
+    }
+}
+
+fn recursive_union(n: Number) Number {
+    match rows.recursive(n) {
+        Ok(value) => value,
+        Err(:first) => 1,
+        Err(:second) => 2,
     }
 }

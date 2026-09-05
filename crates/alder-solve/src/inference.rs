@@ -2052,6 +2052,18 @@ impl<'a, 'db> Infer<'a, 'db> {
                     Some(value) => self.infer_expr(env, value, Some(expected.clone()))?,
                     None => Ty::Unit,
                 };
+                if matches!(self.prune(expected.clone()), Ty::Var(_))
+                    && let Some((_, errors)) = self.result_parts(actual.clone())
+                    && match self.prune(errors) {
+                        Ty::ErrorRow { .. } => true,
+                        Ty::Var(id) => self.variable_kinds[id] == VariableKind::ErrorRow,
+                        _ => false,
+                    }
+                {
+                    // An early return contributes a lower bound; later returns
+                    // and `?` may contribute other errors to the same result.
+                    self.require_result_parts(expected.clone(), statement.region)?;
+                }
                 self.unify_return(actual, expected, statement.region)?;
             }
             Stmt::Break(value) => {
@@ -4229,6 +4241,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             let mut closed = false;
             let mut exact_targets = BTreeMap::new();
             let mut open_sources = BTreeSet::new();
+            let mut dependencies = BTreeMap::<usize, BTreeSet<usize>>::new();
             for inclusion in self.error_row_inclusions.clone() {
                 let source = self.prune(inclusion.source.clone());
                 let target = self.prune(inclusion.target.clone());
@@ -4244,25 +4257,53 @@ impl<'a, 'db> Infer<'a, 'db> {
                         Ty::ErrorRow { tail: None, .. } => {}
                         Ty::ErrorRow {
                             tail: Some(source), ..
-                        } if *source == Ty::Var(target) => {}
+                        } if matches!(*source, Ty::Var(_)) => {
+                            let Ty::Var(source) = *source else {
+                                unreachable!()
+                            };
+                            dependencies.entry(target).or_default().insert(source);
+                        }
                         _ => {
                             open_sources.insert(target);
                         }
                     }
                 }
             }
-            for (target, region) in exact_targets {
-                if !universals.contains(&target) && !open_sources.contains(&target) {
-                    self.bind(
-                        target,
-                        Ty::ErrorRow {
-                            tags: BTreeMap::new(),
-                            tail: None,
-                        },
-                        region,
-                    )?;
-                    closed = true;
+            // An exact cycle has no unknown errors of its own. Starting with
+            // every exact target, remove those depending on an external open
+            // source (and their dependents). The remaining closed components
+            // can take the least fixed point of the known tags propagated above.
+            exact_targets
+                .retain(|target, _| !universals.contains(target) && !open_sources.contains(target));
+            loop {
+                let excluded = exact_targets
+                    .keys()
+                    .copied()
+                    .filter(|target| {
+                        dependencies.get(target).is_some_and(|sources| {
+                            sources
+                                .iter()
+                                .any(|source| !exact_targets.contains_key(source))
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                if excluded.is_empty() {
+                    break;
                 }
+                for target in excluded {
+                    exact_targets.remove(&target);
+                }
+            }
+            for (target, region) in exact_targets {
+                self.bind(
+                    target,
+                    Ty::ErrorRow {
+                        tags: BTreeMap::new(),
+                        tail: None,
+                    },
+                    region,
+                )?;
+                closed = true;
             }
             for inclusion in self.error_row_inclusions.clone() {
                 let source = self.prune(inclusion.source.clone());

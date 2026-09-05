@@ -8,6 +8,125 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn inferred_error_union_includes_an_early_success_and_final_error() {
+    let source = indoc! {r#"
+        fn choose(flag: Bool) {
+            if flag { return Ok(42) }
+            Err(:failed)
+        }
+        fn run() Number {
+            match choose(false) {
+                Ok(value) => value,
+                Err(:failed) => 0,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn inferred_error_union_includes_early_and_final_returns() {
+    let source = indoc! {r#"
+        fn choose(flag: Bool) {
+            if flag { return Err(:first) }
+            Err(:second)
+        }
+        fn run() Number {
+            match choose(false) {
+                Ok(value) => value,
+                Err(:first) => 1,
+                Err(:second) => 2,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn recursive_error_union_supports_exhaustive_matching() {
+    let source = indoc! {r#"
+        fn first(n: Number) {
+            if n == 0 { return Err(:first) }
+            let value = second(n - 1)?
+            Ok(value)
+        }
+        fn second(n: Number) {
+            if n == 0 { return Err(:second) }
+            let value = first(n - 1)?
+            Ok(value)
+        }
+        fn run() Number {
+            match first(4) {
+                Ok(value) => value,
+                Err(:first) => 1,
+                Err(:second) => 2,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn recursive_error_union_preserves_an_external_open_source() {
+    let source = indoc! {r#"
+        fn first(n: Number, value: Result[Number, [:known | e]]) {
+            if n == 0 { return value }
+            let number = second(n - 1, value)?
+            Ok(number)
+        }
+        fn second(n: Number, value: Result[Number, [:known | e]]) {
+            if n == 0 { return value }
+            let number = first(n - 1, value)?
+            Ok(number)
+        }
+        fn run(value: Result[Number, [:known | e]]) Number {
+            match first(4, value) {
+                Ok(number) => number,
+                Err(:known) => 0,
+            }
+        }
+    "#};
+    let errors = infer(&Bump::new(), source).unwrap_err();
+    assert!(matches!(
+        &errors[0].kind,
+        ErrorKind::NonExhaustiveErrorMatch { open: true, .. }
+    ));
+}
+
+#[test]
+fn recursive_error_union_closes_after_external_source_instantiation() {
+    let source = indoc! {r#"
+        fn first(n: Number, value: Result[Number, [:known | e]]) {
+            if n == 0 { return value }
+            let number = second(n - 1, value)?
+            Ok(number)
+        }
+        fn second(n: Number, value: Result[Number, [:known | e]]) {
+            if n == 0 { return value }
+            let number = first(n - 1, value)?
+            Ok(number)
+        }
+        fn source() Result[Number, [:known | :extra]] { Err(:extra) }
+        fn run() Number {
+            match first(4, source()) {
+                Ok(number) => number,
+                Err(:known) => 0,
+                Err(:extra) => 1,
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
 fn instantiated_error_row_failure_points_to_the_local_reference() {
     let source = indoc! {r#"
         fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
