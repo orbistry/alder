@@ -1513,6 +1513,16 @@ Derived behavior is fixed:
   `{ "tag": "Variant", "fields": [...] }`; record-payload variants use an
   additional `"value"` object instead of `"fields"`. Decoding requires that
   exact shape and returns a path-qualified string error.
+  Primitive Json dictionaries retain the requested type: Number, String, Bool,
+  BigInt, and unit have distinct solver intrinsics and call typed kernel codecs.
+  Number/String/Bool decode only matching JSON primitives; Number rejects
+  non-finite parse results. Unit encodes as `null` and decodes it to runtime
+  `undefined`. BigInt encodes as a decimal JSON string and accepts only integral
+  decimal strings, never JSON numbers that may already have lost precision.
+  Non-finite Number encoding throws a TypeError instead of silently producing
+  `null`. Containers and derives pass child decoding failures through with their
+  field/index path. The separate `std/Json.ald` extern API is still an unchecked
+  path pending the JSON hardening follow-up; do not confuse it with trait dispatch.
 
 Static primitive operations are:
 

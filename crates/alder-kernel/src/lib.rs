@@ -30,6 +30,8 @@ mod tests {
             "$jsonDecodeDerived",
             "$jsonEncodeContainer",
             "$jsonDecodeContainer",
+            "$jsonEncodePrimitive",
+            "$jsonDecodePrimitive",
             "$hash",
             "$hashDerived",
             "$hashContainer",
@@ -55,6 +57,30 @@ mod tests {
         ] {
             assert!(KERNEL_JS.contains(&format!("export function {symbol}")));
         }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn primitive_json_codecs_validate_types_and_round_trip() {
+        let harness = indoc::indoc! {r#"
+            for (const [value, kind] of [[42, "number"], ["text", "string"], [true, "boolean"],
+                [undefined, "unit"], [123456789012345678901234567890n, "bigint"]]) {
+                const result = $jsonDecodePrimitive($jsonEncodePrimitive(value, kind), kind);
+                $assert(result.$ === "Ok" && result._0 === value);
+            }
+            for (const [text, kind] of [['"bad"', "number"], ["1e400", "number"], ["null", "number"],
+                ["42", "string"], ["[]", "boolean"], ["false", "unit"], ["42", "bigint"],
+                ['"01"', "bigint"], ['"1.5"', "bigint"], ['"1e3"', "bigint"], ["{", "number"]]) {
+                const result = $jsonDecodePrimitive(text, kind);
+                $assert(result.$ === "Err" && result._0.$ === ":invalid_json");
+            }
+            for (const value of [NaN, Infinity, -Infinity]) {
+                let rejected = false;
+                try { $jsonEncodePrimitive(value, "number"); } catch { rejected = true; }
+                $assert(rejected);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
     }
 
     #[tokio::test(flavor = "current_thread")]

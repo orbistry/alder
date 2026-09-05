@@ -191,6 +191,27 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    let wrong_number: Result[Number, [:invalid_json(String)]] = decode("\"not a number\"")
+    assert(match wrong_number { Ok(_) => false, Err(:invalid_json(_)) => true })
+    let wrong_string: Result[String, [:invalid_json(String)]] = decode("42")
+    assert(match wrong_string { Ok(_) => false, Err(:invalid_json(_)) => true })
+    let wrong_bool: Result[Bool, [:invalid_json(String)]] = decode("[]")
+    assert(match wrong_bool { Ok(_) => false, Err(:invalid_json(_)) => true })
+    let wrong_array: Result[Array[Number], [:invalid_json(String)]] = decode("[1,\"bad\"]")
+    assert(wrong_array == Err(:invalid_json("$[1]: expected a JSON number")))
+    let wrong_field: Result[Status, [:invalid_json(String)]] = decode("{\"tag\":\"Meta\",\"value\":{\"code\":\"bad\",\"note\":\"ok\"}}")
+    assert(wrong_field == Err(:invalid_json("$.value.code: expected a JSON number")))
+    let number: Result[Number, [:invalid_json(String)]] = decode("42")
+    assert(number == Ok(42))
+    let boolean: Result[Bool, [:invalid_json(String)]] = decode("true")
+    assert(boolean == Ok(true))
+    let big = 123456789012345678901234567890n
+    assert(encode(big) == "\"123456789012345678901234567890\"")
+    let decoded_big: Result[BigInt, [:invalid_json(String)]] = decode(encode(big))
+    assert(decoded_big == Ok(big))
+    assert(encode(()) == "null")
+    let unit: Result[(), [:invalid_json(String)]] = decode("null")
+    assert(unit == Ok(()))
     verify_option_representation()
     let identity = { value: 1 }
     let equal_but_distinct = { value: 1 }

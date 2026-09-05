@@ -2881,17 +2881,38 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 properties.push(self.js.property("$super0", equality));
                 properties.push(self.js.property("hash", self.js.identifier("$hash")));
             }
+            Intrinsic::JsonNumber
+            | Intrinsic::JsonString
+            | Intrinsic::JsonBool
+            | Intrinsic::JsonBigInt
+            | Intrinsic::JsonUnit => {
+                let kind = match intrinsic {
+                    Intrinsic::JsonNumber => "number",
+                    Intrinsic::JsonString => "string",
+                    Intrinsic::JsonBool => "boolean",
+                    Intrinsic::JsonBigInt => "bigint",
+                    Intrinsic::JsonUnit => "unit",
+                    _ => unreachable!(),
+                };
+                for (method, kernel) in [
+                    ("encode", "$jsonEncodePrimitive"),
+                    ("decode", "$jsonDecodePrimitive"),
+                ] {
+                    self.kernel.insert(kernel);
+                    let call = self.js.call(
+                        self.js.identifier(kernel),
+                        [self.js.identifier("$value"), self.js.string(kind)],
+                    );
+                    let mut body = self.js.vec();
+                    body.push(self.js.return_statement(call));
+                    properties.push(
+                        self.js
+                            .property(method, self.js.arrow(&["$value".to_owned()], body, false)),
+                    );
+                }
+            }
             Intrinsic::JsonKernel => {
-                self.kernel.insert("$jsonEncode");
-                self.kernel.insert("$jsonDecode");
-                properties.push(
-                    self.js
-                        .property("encode", self.js.identifier("$jsonEncode")),
-                );
-                properties.push(
-                    self.js
-                        .property("decode", self.js.identifier("$jsonDecode")),
-                );
+                unreachable!("JSON containers require their child dictionaries")
             }
             Intrinsic::TraversableArray
             | Intrinsic::TraversableOption

@@ -744,7 +744,10 @@ fn builtin_instance_evidence<'a>(
     let intrinsic = match (trait_name, nominal) {
         ("Show", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::ShowKernel,
         ("Hash", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::HashKernel,
-        ("Json", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::JsonKernel,
+        ("Json", Some("Number")) => Intrinsic::JsonNumber,
+        ("Json", Some("String")) => Intrinsic::JsonString,
+        ("Json", Some("Bool")) => Intrinsic::JsonBool,
+        ("Json", Some("BigInt")) => Intrinsic::JsonBigInt,
         ("Eq", Some("Number")) => Intrinsic::EqNumber,
         ("Eq", Some("String")) => Intrinsic::EqString,
         ("Eq", Some("Bool")) => Intrinsic::EqBool,
@@ -770,7 +773,7 @@ fn builtin_instance_evidence<'a>(
         ("Iterator", Some("Array")) => Intrinsic::IteratorArray,
         ("Show", None) if matches!(subject, Ty::Unit) => Intrinsic::ShowKernel,
         ("Hash", None) if matches!(subject, Ty::Unit) => Intrinsic::HashKernel,
-        ("Json", None) if matches!(subject, Ty::Unit) => Intrinsic::JsonKernel,
+        ("Json", None) if matches!(subject, Ty::Unit) => Intrinsic::JsonUnit,
         ("Eq", None) if matches!(subject, Ty::Unit) => Intrinsic::EqUnit,
         _ => return None,
     };

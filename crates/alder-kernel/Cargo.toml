@@ -11,5 +11,6 @@ build = "build.rs"
 [dependencies]
 
 [dev-dependencies]
+indoc.workspace = true
 alder-runtime = { path = "../alder-runtime" }
 tokio.workspace = true

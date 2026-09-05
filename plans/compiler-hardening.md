@@ -158,6 +158,20 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Primitive Json contract fix: reproduced a compiled Number decode returning
+  Ok with a string payload. Primitive instance evidence previously collapsed
+  all types to `JsonKernel`; codegen supplied the unchecked JSON.parse wrapper.
+  Dedicated Number/String/Bool/BigInt/unit intrinsics now retain the requested
+  codec kind. Runtime and CLI regressions cover mismatches, overflow, unit and
+  BigInt round trips, and path-qualified nested/derived failures. BigInt uses
+  decimal JSON strings; non-finite Number encoding rejects rather than silently
+  returning null. `docs/json-hardening.md` records the design and open work.
+  The separate unbounded `std/Json.ald` module externs remain an unsound bypass
+  and are the next required fix; the Json audit is not complete.
+  Validation: full workspace tests pass, including 15 kernel runtime tests and
+  the expanded CLI traits fixture. Strict all-target/all-feature Clippy,
+  formatting, and diff checks pass. No snapshot changes or pending snapshots.
+
 - Higher-order error-row boundary check: added positive exhaustive-matching and
   negative narrowed-result tests where a factory returns a row-polymorphic
   function and a separate function invokes it. Both pass without solver changes.

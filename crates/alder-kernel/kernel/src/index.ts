@@ -447,6 +447,36 @@ export function $jsonDecode(value) {
     try { return $resultOk(JSON.parse(value)); }
     catch (error) { return $jsonErr(String(error)); }
 }
+export function $jsonEncodePrimitive(value, kind) {
+    if (kind === "unit") return "null";
+    if (kind === "bigint") return JSON.stringify(value.toString());
+    if (kind === "number" && !Number.isFinite(value)) {
+        throw new TypeError("$: non-finite numbers cannot be encoded as JSON numbers");
+    }
+    return JSON.stringify(value);
+}
+export function $jsonDecodePrimitive(value, kind) {
+    try {
+        const parsed = JSON.parse(value);
+        if (kind === "unit") {
+            return parsed === null ? $resultOk(undefined) : $jsonErr("$: expected null for unit");
+        }
+        if (kind === "bigint") {
+            return typeof parsed === "string" && /^-?(0|[1-9][0-9]*)$/.test(parsed)
+                ? $resultOk(BigInt(parsed))
+                : $jsonErr("$: expected a decimal string for BigInt");
+        }
+        if (!["number", "string", "boolean"].includes(kind)) {
+            return $jsonErr("$: unknown primitive JSON type");
+        }
+        if (typeof parsed !== kind || (kind === "number" && !Number.isFinite(parsed))) {
+            return $jsonErr(`$: expected a JSON ${kind}`);
+        }
+        return $resultOk(parsed);
+    } catch (error) {
+        return $jsonErr(`$: ${String(error)}`);
+    }
+}
 function isOptionJsonBox(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value)
         && Object.keys(value).length === 1 && Object.hasOwn(value, "$alderSome");

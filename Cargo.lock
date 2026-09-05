@@ -239,6 +239,7 @@ name = "alder-kernel"
 version = "0.3.0"
 dependencies = [
  "alder-runtime",
+ "indoc",
  "tokio",
 ]
 
