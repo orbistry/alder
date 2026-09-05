@@ -1,3 +1,5 @@
+import ~/codec
+
 #[derive(Show, Ord, Hash, Json)]
 enum Status {
     Ready,
@@ -191,6 +193,20 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    let module_number: Result[Number, [:invalid_json(String)]] = Json.decode("\"not a number\"")
+    assert(match module_number { Ok(_) => false, Err(:invalid_json(_)) => true })
+    let decode_number = Json.decode
+    let indirect_number: Result[Number, [:invalid_json(String)]] = decode_number("\"bad\"")
+    assert(match indirect_number { Ok(_) => false, Err(:invalid_json(_)) => true })
+    let imported_number: Result[Number, [:invalid_json(String)]] = codec.decode_value("\"bad\"")
+    assert(match imported_number { Ok(_) => false, Err(:invalid_json(_)) => true })
+    let imported_valid: Result[Number, [:invalid_json(String)]] = codec.decode_value(codec.encode_value(42))
+    assert(imported_valid == Ok(42))
+    assert(Json.encode(JsonSecret::JsonSecret) == "\"secret\"")
+    let custom_json: Result[JsonSecret, [:invalid_json(String)]] = codec.decode_value(codec.encode_value(JsonSecret::JsonSecret))
+    assert(custom_json == Ok(JsonSecret::JsonSecret))
+    let module_nested: Result[Array[Number], [:invalid_json(String)]] = Json.decode("[1,\"bad\"]")
+    assert(module_nested == Err(:invalid_json("$[1]: expected a JSON number")))
     let wrong_number: Result[Number, [:invalid_json(String)]] = decode("\"not a number\"")
     assert(match wrong_number { Ok(_) => false, Err(:invalid_json(_)) => true })
     let wrong_string: Result[String, [:invalid_json(String)]] = decode("42")

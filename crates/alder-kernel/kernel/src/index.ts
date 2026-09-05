@@ -442,11 +442,8 @@ export function $mapSet(values, key, value) { values.set(key, value); }
 export function $setNew() { return new Set(); }
 export function $setHas(values, value) { return values.has(value); }
 export function $setAdd(values, value) { values.add(value); }
-export function $jsonEncode(value) { return JSON.stringify(value); }
-export function $jsonDecode(value) {
-    try { return $resultOk(JSON.parse(value)); }
-    catch (error) { return $jsonErr(String(error)); }
-}
+export function $jsonEncodeWith(dictionary, value) { return dictionary.encode(value); }
+export function $jsonDecodeWith(dictionary, value) { return dictionary.decode(value); }
 export function $jsonEncodePrimitive(value, kind) {
     if (kind === "unit") return "null";
     if (kind === "bigint") return JSON.stringify(value.toString());

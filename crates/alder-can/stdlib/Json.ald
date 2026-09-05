@@ -1,5 +1,5 @@
-#[extern("alder:kernel", "$jsonEncode")]
-pub fn encode(value: a) String
+#[extern("alder:kernel", "$jsonEncodeWith")]
+pub fn encode(value: a) String where a: Json
 
-#[extern("alder:kernel", "$jsonDecode")]
-pub fn decode(value: String) Result[a, [:invalid_json(String)]]
+#[extern("alder:kernel", "$jsonDecodeWith")]
+pub fn decode(value: String) Result[a, [:invalid_json(String)]] where a: Json

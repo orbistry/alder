@@ -1365,6 +1365,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_json_decode_without_an_instance() {
+        assert_diagnostic_snapshot! {r#"
+            fn invalid() Result[fn(Number) Number, [:invalid_json(String)]] {
+                Json.decode("42")
+            }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_missing_instance_with_source() {
         assert_diagnostic_snapshot! {r#"
             trait Display[a] {

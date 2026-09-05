@@ -138,8 +138,9 @@ Root cause: virtual module imports lack a physical importer location.
 
 - [x] Prelude module members carry actual stdlib signatures, rejecting unknown
   members and invalid calls. Removed the untyped `ValueRef::Builtin` path.
-- [ ] Audit stdlib declarations against their runtime implementations:
-  `Json.decode` currently promises arbitrary `a` but only runs `JSON.parse`.
+- [ ] Audit stdlib declarations against their runtime implementations.
+  The unchecked `Json.decode` bypass is fixed with bounded dictionary dispatch;
+  the wider codec and stdlib audit remains open.
 - [x] `Map.get` wraps present values so a present `None` differs from absence.
 - [x] Nested lambda annotations share same-named enclosing type variables as
   promised in `docs/language.md`, including nested lambda scopes and HKT.
@@ -158,6 +159,24 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Json module boundary fix: module encode/decode now require Json evidence and
+  execute the selected dictionary via kernel forwarding helpers. Removed the
+  unchecked parser/stringifier entry points. The original CLI wrong-payload
+  assertion failed before the fix. Imported direct dictionary calls additionally
+  exposed a private `$v_` import bug; foreign references now use public names.
+  CLI tests cover direct, first-class, imported generic, custom-codec, and nested
+  failure cases. Full-solver tests cover absent instances and missing bounds;
+  a reviewed colorless diagnostic snapshot labels the offending decode reference.
+  Follow-up inspection risk: ordinary extern wrappers appear to omit hidden
+  dictionary parameters. `docs/traits-internals.md` already specifies that these
+  adapters accept dictionaries but forward source arguments only to foreign JS.
+  Reproduce that apparent contract violation next; built-in Json exports bypass
+  those wrappers and deliberately target internal dictionary-aware helpers.
+  Validation: full workspace tests pass (196 solver tests, 94 driver tests,
+  15 kernel tests, and real CLI fixtures), as do strict all-target/all-feature
+  Clippy, formatting, and diff checks. The new diagnostic snapshot was reviewed;
+  no pending snapshots remain. Wider audit and release-packaging gates stay open.
+
 - Primitive Json contract fix: reproduced a compiled Number decode returning
   Ok with a string payload. Primitive instance evidence previously collapsed
   all types to `JsonKernel`; codegen supplied the unchecked JSON.parse wrapper.
@@ -166,8 +185,8 @@ Root cause: virtual module imports lack a physical importer location.
   BigInt round trips, and path-qualified nested/derived failures. BigInt uses
   decimal JSON strings; non-finite Number encoding rejects rather than silently
   returning null. `docs/json-hardening.md` records the design and open work.
-  The separate unbounded `std/Json.ald` module externs remain an unsound bypass
-  and are the next required fix; the Json audit is not complete.
+  The separate module bypass was still open at this checkpoint and is fixed in
+  the follow-up above; the wider Json audit is not complete.
   Validation: full workspace tests pass, including 15 kernel runtime tests and
   the expanded CLI traits fixture. Strict all-target/all-feature Clippy,
   formatting, and diff checks pass. No snapshot changes or pending snapshots.

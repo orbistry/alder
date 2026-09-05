@@ -2576,7 +2576,9 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.js.identifier(&top_name(name))
             }
             ValueRef::TopLevel(name) => {
-                let local = self.value_import(name, top_name(name));
+                // Other modules export the public Alder name, not their local
+                // `$v_` binding. Direct dictionary calls also take this path.
+                let local = self.value_import(name, name.name.to_owned());
                 self.js.identifier(&local)
             }
             ValueRef::Foreign { reference, .. } => {

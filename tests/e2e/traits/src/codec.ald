@@ -1,0 +1,5 @@
+pub fn encode_value(value: a) String where a: Json { Json.encode(value) }
+
+pub fn decode_value(text: String) Result[a, [:invalid_json(String)]] where a: Json {
+    Json.decode(text)
+}

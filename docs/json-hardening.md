@@ -1,6 +1,6 @@
 # Typed JSON hardening
 
-Status: primitive trait codecs fixed; module API and wider audit remain open.
+Status: primitive trait codecs and module dictionary dispatch fixed; wider audit remains open.
 
 ## Confirmed failure and fix
 
@@ -32,17 +32,28 @@ exercise actual trait dispatch, nested array errors, derived record-payload
 errors with source paths, and BigInt/unit round trips. The initial CLI mismatch
 assertion failed before the fix.
 
+## Module API and imported dictionaries
+
+`Json.encode` and `Json.decode` now require `a: Json`. Their built-in module
+exports call `$jsonEncodeWith` and `$jsonDecodeWith`, forwarding the selected
+dictionary to its encode/decode method. The old unchecked kernel wrappers were
+removed. These APIs therefore share the primitive encoding limitations above
+and honor user-defined codecs instead of bypassing them.
+
+The initial module-level wrong-payload CLI assertion failed before this fix.
+Adding the bound also exposed imported direct dictionary calls requesting a
+private `$v_` binding; foreign top-level references now import the public name.
+CLI regressions exercise direct, first-class, and imported generic calls,
+custom codecs, valid round trips, and nested invalid payloads. Full-solver tests
+reject unsupported types and missing generic bounds. A reviewed, colorless
+diagnostic snapshot labels the module decode reference and names its missing
+instance. These tests do not establish correctness of arbitrary constrained
+extern wrappers, whose hidden dictionary argument handling needs a separate audit.
+
 ## Remaining work
 
-- `std/Json.ald` exports unconstrained extern encode/decode functions pointing
-  directly to `$jsonEncode` and `$jsonDecode`. They bypass trait dictionaries and
-  remain unsound. Require and forward the corresponding Json evidence; verify
-  direct, indirect, generic, and imported module calls. A type bound without
-  dictionary-based execution is insufficient.
-- Validate missing-instance diagnostics and honor user-defined Json instances.
 - Audit container envelopes, optional/unit/nested Option representation, derived
   payloads, aliases, generic dictionaries, error groups, and round-trip behavior
   at the module API as well as trait calls.
-- Document public encoding limitations consistently when the module API is fixed.
 - Review packaging and the final hardening acceptance matrix; this checkpoint
   does not establish full JSON or compiler soundness.

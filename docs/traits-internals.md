@@ -1521,8 +1521,9 @@ Derived behavior is fixed:
   decimal strings, never JSON numbers that may already have lost precision.
   Non-finite Number encoding throws a TypeError instead of silently producing
   `null`. Containers and derives pass child decoding failures through with their
-  field/index path. The separate `std/Json.ald` extern API is still an unchecked
-  path pending the JSON hardening follow-up; do not confuse it with trait dispatch.
+  field/index path. The `std/Json.ald` module API requires `a: Json` and forwards
+  the selected dictionary through kernel helpers, so it shares these codec
+  semantics and honors custom instances. Unsupported types require an instance.
 
 Static primitive operations are:
 

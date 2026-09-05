@@ -8,6 +8,30 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn json_module_decode_requires_a_json_instance() {
+    let source = indoc! {r#"
+        fn invalid() Result[fn(Number) Number, [:invalid_json(String)]] {
+            Json.decode("42")
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn json_module_generic_calls_require_the_declared_bound() {
+    let source = indoc! {r#"
+        fn invalid(value: a) String { Json.encode(value) }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+    let source = indoc! {r#"
+        fn valid(value: a) String where a: Json { Json.encode(value) }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
 fn higher_order_error_rows_preserve_forwarding_constraints() {
     let source = indoc! {r#"
         fn forward(value: Result[Number, [:known | e]]) {

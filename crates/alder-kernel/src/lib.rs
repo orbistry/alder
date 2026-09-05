@@ -32,6 +32,8 @@ mod tests {
             "$jsonDecodeContainer",
             "$jsonEncodePrimitive",
             "$jsonDecodePrimitive",
+            "$jsonEncodeWith",
+            "$jsonDecodeWith",
             "$hash",
             "$hashDerived",
             "$hashContainer",
