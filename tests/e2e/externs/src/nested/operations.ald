@@ -1,2 +1,5 @@
 #[extern("./client.js", "answer")]
 pub fn answer() Task[Number]
+
+#[extern("../client.js", "boundedIdentity")]
+pub fn bounded_identity(value: a) a where a: Show + Eq

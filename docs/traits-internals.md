@@ -1309,6 +1309,11 @@ top-level binding becomes an evidence factory and is invoked with evidence at
 each use. Extern declarations may declare bounds; their emitted adapter takes
 the dictionaries but calls the foreign ABI with source arguments only unless
 the extern attribute explicitly names an Alder-aware ABI in a later milestone.
+The adapter consumes every leading dictionary slot even when its body does not
+use the evidence. Its synchronous, Result-guarded, and Promise-wrapped calls all
+forward only source arguments; an opted-in AbortSignal remains the final foreign
+argument. Built-in module exports such as Json use separate internal kernel
+entry points with a dictionary-aware ABI, not this ordinary foreign adapter.
 
 A constrained direct call prepends evidence arguments. Passing a constrained
 function as a value emits a closure that captures those dictionaries, including

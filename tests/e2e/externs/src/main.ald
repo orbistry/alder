@@ -1,5 +1,18 @@
 import ~/nested/operations
 
+#[extern("./client.js", "boundedIdentity")]
+fn bounded_identity(value: a) a where a: Show + Eq
+
+#[extern("./client.js", "boundedAsync", "abort")]
+fn bounded_async(value: a) Task[a] where a: Show
+
+#[extern("./client.js", "boundedIdentity")]
+fn bounded_result(value: a) Result[a, [:rejected(String)]] where a: Show
+
+fn generic_identity(value: a) a where a: Show + Eq {
+    operations.bounded_identity(value)
+}
+
 #[extern("./client.js", "answer")]
 fn answer() Task[Number]
 
@@ -19,6 +32,13 @@ fn throws() Task[Number]
 fn rejects() Task[Number]
 
 pub fn main() {
+    assert(bounded_identity(42) == 42)
+    let indirect = bounded_identity
+    assert(indirect("hello") == "hello")
+    assert(operations.bounded_identity(43) == 43)
+    assert(generic_identity("generic") == "generic")
+    assert(bounded_async(44).await == 44)
+    assert(match bounded_result(45) { Ok(value) => value == 45, Err(_) => false })
     let args = Cli.args()
     if Array.length(args) > 0 {
         if args[0] == "throw" {

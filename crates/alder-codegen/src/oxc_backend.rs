@@ -422,6 +422,17 @@ impl<'src, 'js> Emitter<'src, 'js> {
         };
         let mut body = self.js.vec();
         body.push(self.js.return_statement(value));
+        // Alder callers supply evidence before source arguments. The adapter
+        // accepts it, but ordinary foreign JavaScript receives only source args
+        // (and the optional trailing AbortSignal), not Alder dictionaries.
+        let dictionary_count = self
+            .solved
+            .and_then(|solved| solved.bindings.get(&name))
+            .map_or(0, |binding| binding.dictionary_params.len());
+        let args = (0..dictionary_count)
+            .map(|index| format!("$dict{index}"))
+            .chain(args)
+            .collect::<Vec<_>>();
         self.js.function(&top_name(name), &args, body, false)
     }
 

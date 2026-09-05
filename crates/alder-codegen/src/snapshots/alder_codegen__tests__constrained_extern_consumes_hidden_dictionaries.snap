@@ -1,0 +1,18 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "#[extern(\"library\", \"identity\")]\npub fn identity(value: a) a where a: Show + Eq\n\n#[extern(\"library\", \"pending\", \"abort\")]\npub fn pending(value: a) Task[a] where a: Show\n"
+---
+import { $task, $tryPromise } from "alder:kernel";
+import { identity as $x_library_identity } from "library";
+import { pending as $x_library_pending } from "library";
+function $v_identity($dict0, $dict1, $a0) {
+	return $x_library_identity($a0);
+}
+function $v_pending($dict0, $a0) {
+	return $task(function* () {
+		return yield* $tryPromise(($signal) => {
+			return $x_library_pending($a0, $signal);
+		}, true, "alder://app/main.mjs:5:26 extern library:pending");
+	});
+}
+export { $v_identity as identity, $v_pending as pending };

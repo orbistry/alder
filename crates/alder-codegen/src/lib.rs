@@ -349,6 +349,17 @@ mod tests {
     }
 
     #[test]
+    fn constrained_extern_consumes_hidden_dictionaries() {
+        assert_solved_emit_snapshot! {r#"
+            #[extern("library", "identity")]
+            pub fn identity(value: a) a where a: Show + Eq
+
+            #[extern("library", "pending", "abort")]
+            pub fn pending(value: a) Task[a] where a: Show
+        "#};
+    }
+
+    #[test]
     fn tags_and_try_lower_directly_and_preserve_the_err_object() {
         assert_solved_emit_snapshot! {r#"
             fn source() Result[Number, [:invalid(String)]] {

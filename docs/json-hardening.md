@@ -47,8 +47,11 @@ CLI regressions exercise direct, first-class, and imported generic calls,
 custom codecs, valid round trips, and nested invalid payloads. Full-solver tests
 reject unsupported types and missing generic bounds. A reviewed, colorless
 diagnostic snapshot labels the module decode reference and names its missing
-instance. These tests do not establish correctness of arbitrary constrained
-extern wrappers, whose hidden dictionary argument handling needs a separate audit.
+instance. A follow-up CLI regression also exposed ordinary constrained extern
+wrappers omitting their leading dictionary slots. Those adapters now consume
+the slots and forward only source arguments to foreign JS, with an optional
+trailing AbortSignal. Built-in Json exports instead use internal dictionary-aware
+helpers. Wider foreign-boundary and codec audits remain open.
 
 ## Remaining work
 

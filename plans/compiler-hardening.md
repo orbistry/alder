@@ -159,6 +159,29 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Constrained extern ABI fix: the emitted wrapper declared only source
+  parameters although callers supplied leading dictionaries. A bounded identity
+  therefore returned its Show dictionary instead of Number, reproduced in the
+  actual CLI fixture. Wrappers now declare the solved dictionary slots before
+  source parameters, without forwarding those slots to foreign JavaScript.
+  Regressions exercise multiple bounds, direct/first-class/imported/generic calls,
+  synchronous Result wrapping, and Promise wrapping with the final AbortSignal. Foreign
+  helpers assert argument counts; a codegen snapshot covers the adapter shape.
+  A separate confirmed canonicalization defect surfaced while writing the test:
+  `where a: Show, a: Eq` panics at `canonicalize_constraints`' bounds-length
+  assertion. The first pass accumulates bounds by variable, but the second pass
+  assumes that aggregate belongs to each individual bound clause. Reproduce in
+  a permanent canonicalization test and fix clause handling next; the current
+  extern fixture uses the equivalent `where a: Show + Eq` to isolate the ABI.
+  Another follow-up: comparing `bounded_result(45): Result[Number, String]`
+  directly with `Ok(45)` reports expected String/found a; matching it fails too.
+  The adapter test uses a declared error row to isolate its calling convention.
+  Audit non-row Result constructor/pattern inference separately; do not assume
+  the row-specific paths cover it.
+  Validation: full workspace tests, strict all-target/all-feature Clippy,
+  formatting, and diff checks pass. Reviewed the new source-aware codegen
+  snapshot; no pending snapshots remain. No runtime scheduler changes were made.
+
 - Json module boundary fix: module encode/decode now require Json evidence and
   execute the selected dictionary via kernel forwarding helpers. Removed the
   unchecked parser/stringifier entry points. The original CLI wrong-payload
@@ -167,11 +190,11 @@ Root cause: virtual module imports lack a physical importer location.
   CLI tests cover direct, first-class, imported generic, custom-codec, and nested
   failure cases. Full-solver tests cover absent instances and missing bounds;
   a reviewed colorless diagnostic snapshot labels the offending decode reference.
-  Follow-up inspection risk: ordinary extern wrappers appear to omit hidden
+  Follow-up inspection risk at that checkpoint: ordinary extern wrappers omit hidden
   dictionary parameters. `docs/traits-internals.md` already specifies that these
   adapters accept dictionaries but forward source arguments only to foreign JS.
-  Reproduce that apparent contract violation next; built-in Json exports bypass
-  those wrappers and deliberately target internal dictionary-aware helpers.
+  The follow-up above reproduces and fixes that contract violation; built-in Json
+  exports bypass those wrappers and target internal dictionary-aware helpers.
   Validation: full workspace tests pass (196 solver tests, 94 driver tests,
   15 kernel tests, and real CLI fixtures), as do strict all-target/all-feature
   Clippy, formatting, and diff checks. The new diagnostic snapshot was reviewed;
