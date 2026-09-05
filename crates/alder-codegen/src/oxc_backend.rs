@@ -165,15 +165,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
                         exports.push((top_name(function.name), function.name.name.to_owned()));
                     }
                 }
-                ItemKind::Component(component) => {
-                    declarations.push(self.named_function(
-                        component.name,
-                        component.params,
-                        component.body,
-                    )?);
-                    if public {
-                        exports.push((top_name(component.name), component.name.name.to_owned()));
-                    }
+                ItemKind::Component(_) => {
+                    return Err(Error {
+                        region: item.region,
+                        message: "components are not executable yet; component compilation is planned for M6",
+                    });
                 }
                 ItemKind::Let(decl) => {
                     declarations.extend(self.top_let(decl)?);
@@ -1223,7 +1219,13 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 let value = self.expr(expression)?;
                 self.try_value(value)
             }
-            Expr::Pin(expression) | Expr::State(expression) => self.expr(expression)?,
+            Expr::Pin(expression) => self.expr(expression)?,
+            Expr::State(_) => {
+                return Err(Error {
+                    region: node.region,
+                    message: "reactive state is not executable yet; signal compilation is planned for M6",
+                });
+            }
             Expr::Negate {
                 use_id,
                 expr: expression,

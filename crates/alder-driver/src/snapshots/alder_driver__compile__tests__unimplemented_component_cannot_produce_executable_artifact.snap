@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub component Counter() { <div /> }"
+---
+alder::codegen
+
+  × components are not executable yet; component compilation is planned for M6
+   ╭─[/project/src/main.ald:1:1]
+ 1 │ pub component Counter() { <div /> }
+   · ─────────────────┬─────────────────
+   ·                  ╰── code generation failed here
+   ╰────

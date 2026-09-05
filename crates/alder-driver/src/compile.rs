@@ -879,6 +879,55 @@ mod tests {
     }
 
     #[test]
+    fn unimplemented_state_cannot_produce_executable_artifact() {
+        let source = indoc::indoc! {r#"
+            pub fn main() {
+                let mut count = state(0)
+                count += 1
+                count
+            }
+        "#};
+        assert_rendered_diagnostic_snapshot!(source, unavailable_codegen(source));
+    }
+
+    #[test]
+    fn unimplemented_component_cannot_produce_executable_artifact() {
+        let source = "pub component Counter() { <div /> }";
+        assert_rendered_diagnostic_snapshot!(source, unavailable_codegen(source));
+    }
+
+    fn unavailable_codegen(source: &str) -> Diagnostic {
+        let uri = url("project/src/main.ald");
+        let checked = build_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            checked.is_success(),
+            "provisional checking must still work: {checked:?}"
+        );
+        let mut diagnostic = None;
+        for mode in [BuildMode::Build, BuildMode::Test] {
+            let result = build_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                mode,
+                BuildDependencies::default(),
+            );
+            assert!(
+                !result.is_success(),
+                "unavailable runtime form emitted executable code"
+            );
+            assert!(result.artifacts.is_empty());
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("expected a diagnostic")
+            };
+            diagnostic = Some(diagnostics[0].clone());
+        }
+        diagnostic.unwrap()
+    }
+
+    #[test]
     fn unimplemented_query_cannot_produce_executable_artifact() {
         let source = indoc::indoc! {r#"
             table users {}

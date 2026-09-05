@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn main() {\n    let mut count = state(0)\n    count += 1\n    count\n}\n"
+---
+alder::codegen
+
+  × reactive state is not executable yet; signal compilation is planned for M6
+   ╭─[/project/src/main.ald:2:21]
+ 1 │ pub fn main() {
+ 2 │     let mut count = state(0)
+   ·                     ────┬───
+   ·                         ╰── code generation failed here
+ 3 │     count += 1
+   ╰────

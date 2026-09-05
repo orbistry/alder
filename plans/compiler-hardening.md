@@ -159,6 +159,19 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Deferred reactivity execution boundary: separate driver regressions reproduced
+  successful executable builds of `state(0)` and `component Counter() { <div /> }`.
+  Codegen erased state to its initializer and compiled components as ordinary
+  functions, with no documented signal tracking, memoization, or lifecycle.
+  Build/Test now reject these forms at their source regions until M6. Check-only
+  support stays provisional. Reviewed both colorless diagnostics and asserted
+  no artifacts in both executable modes. M2/M6 plans record the guards and their
+  eventual replacement. This does not implement web reactivity. Standalone
+  markup/style and declaration-only deferred forms remain separate audit work.
+  Validation: full workspace tests pass, including 97 driver tests and the CLI
+  fixtures. Strict all-target/all-feature Clippy, formatting, and diff checks
+  pass. Both new snapshots were reviewed; no pending snapshots remain.
+
 - Deferred query execution boundary: a driver regression reproduced a successful
   build of a module declaring `table users {}` and a public function returning
   `query { select * from users }`. Codegen discarded the

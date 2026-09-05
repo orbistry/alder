@@ -11,6 +11,11 @@ Workers and the same app running self-hosted on `standalone`.
 
 ## Starting state
 
+- Hardening rejects executable `state` expressions and `component` declarations
+  with source-aware diagnostics until this milestone implements their actual
+  signal/lifecycle semantics. Check mode retains provisional syntax and typing.
+  Replace these explicit codegen guards when the corresponding runtime and
+  lowering are implemented; do not restore identity/ordinary-function stubs.
 - M2b: codegen, kernel, `alder run`/`build`. M4: fibers, context,
   error rows. M5: macros (used for route discovery via `comptime` and for
   derives).

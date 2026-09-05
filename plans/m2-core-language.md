@@ -120,6 +120,9 @@ all deferred constructs can execute. Hardening now rejects query expressions
 during Build/Test code generation with a source-aware diagnostic, instead of
 emitting a call that throws at runtime. Check mode retains the provisional
 query representation; actual schema checking and query execution belong to M7.
+The same executable boundary applies to `state` and `component`: provisional
+checking remains available, but Build/Test reject them until M6 rather than
+treating signal creation as identity and components as ordinary functions.
 
 | Construct                      | M2 treatment                                                         | Owner |
 | ------------------------------ | -------------------------------------------------------------------- | ----- |
