@@ -220,7 +220,7 @@ fn expr<'a>(value: Node<'a, Expr<'a>>, out: &mut Vec<RequirementSeed<'a>>) {
             expr(left, out);
             expr(right, out);
         }
-        Expr::Block(value) | Expr::Loop(value) => block(value, out),
+        Expr::Block(value) | Expr::Async(value) | Expr::Loop(value) => block(value, out),
         Expr::Lambda { params, body, .. } => {
             for param in *params {
                 pattern(param.pattern, out);

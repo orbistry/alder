@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "async fn make() {\n    () -> Task.sleep(1).await\n}\n"
+---
+alder::canonicalize::await_outside_async
+
+  × `.await` needs an enclosing async body
+   ╭─[/project/src/main.ald:2:11]
+ 1 │ async fn make() {
+ 2 │     () -> Task.sleep(1).await
+   ·           ─────────┬─────────
+   ·                    ╰── reported here
+ 3 │ }
+   ╰────
+  help: use `async fn` or an `async { ... }` block

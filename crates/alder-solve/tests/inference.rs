@@ -267,7 +267,7 @@ fn nested_async_lambda_in_assignment_index_does_not_suspend_the_function() {
         fn valid() Number {
             let values = [10]
             values[{
-                let deferred = () -> { Task.sleep(1).await }
+                let deferred = () -> async { Task.sleep(1).await }
                 0
             }] = 42
             values[0]
@@ -2001,7 +2001,7 @@ fn loop_break_values_determine_the_result_type() {
                 break 42
             }
         }
-        fn suspended() Number {
+        async fn suspended() Number {
             loop {
                 Task.sleep(1).await
                 break 42
@@ -2070,7 +2070,7 @@ fn zero_iteration_loops_do_not_satisfy_a_return_contract() {
             }
         "#},
         indoc! {r#"
-            fn missing(flag: Bool) Number {
+            async fn missing(flag: Bool) Number {
                 Task.sleep(1).await
                 while flag { return 42 }
             }
@@ -2433,12 +2433,12 @@ fn shared_task_cannot_regeneralize_captured_state() {
             &bump,
             indoc! {r#"
         let shared = []
-        fn operation() {
+        async fn operation() {
             Task.sleep(0).await
             shared
         }
         let task = operation()
-        fn bad() {
+        async fn bad() {
             let numbers: Array[Number] = task.await
             let strings: Array[String] = task.await
         }
@@ -4661,7 +4661,7 @@ fn error_tag_cannot_be_bound_as_an_ordinary_value() {
 fn await_unwraps_task_inside_task_function() {
     assert_inference_snapshot!(
         r#"
-        fn wait() Task[()] {
+        async fn wait() () {
             Task.sleep(1).await
         }
     "#
@@ -4669,21 +4669,69 @@ fn await_unwraps_task_inside_task_function() {
 }
 
 #[test]
-fn await_infers_a_task_return_without_an_explicit_wrapper() {
+fn explicit_async_infers_completed_value() {
     assert_inference_snapshot! {r#"
         #[extern("alder:kernel", "$taskSleep")]
         fn sleep(milliseconds: Number) Task[()]
 
-        fn wait() {
+        async fn wait() {
             sleep(1).await
         }
     "#};
 }
 
 #[test]
+fn explicit_async_without_await_adds_task() {
+    assert_inference_snapshot!("async fn answer() Number { 42 }");
+}
+
+#[test]
+fn explicit_async_extern_has_task_result() {
+    assert_inference_snapshot! {r#"
+        #[extern("./client.js", "answer")]
+        async fn answer() Number
+        fn start() Task[Number] { answer() }
+    "#};
+}
+
+#[test]
+fn explicit_async_trait_contract_adds_task() {
+    assert_inference_snapshot! {r#"
+        trait Load[a] { async fn load(value: a) Number }
+        impl Load[Number] { async fn load(value: Number) Number { value } }
+        fn start() Task[Number] { load(42) }
+    "#};
+}
+
+#[test]
+fn explicit_async_does_not_flatten_task_annotation() {
+    assert_inference_snapshot!("async fn nested() Task[Number] { async { 42 } }");
+}
+
+#[test]
+fn explicit_async_block_return_does_not_constrain_outer_function() {
+    assert_inference_snapshot! {r#"
+        fn answer() String {
+            let task = async { return 42 }
+            "outer"
+        }
+    "#};
+}
+
+#[test]
+fn explicit_async_lambda_annotation_is_actual_task_type() {
+    assert_inference_snapshot!("let worker = (x: Number) Task[Number] -> async { x }");
+}
+
+#[test]
+fn explicit_async_nested_blocks_preserve_both_layers() {
+    assert_inference_snapshot!("fn nested() { async { async { 42 } } }");
+}
+
+#[test]
 fn await_wraps_an_explicit_body_result_in_task() {
     assert_inference_snapshot! {r#"
-        fn load(value: Number) Result[Number] {
+        async fn load(value: Number) Result[Number] {
             Task.sleep(1).await
             Ok(value)
         }
@@ -4694,14 +4742,14 @@ fn await_wraps_an_explicit_body_result_in_task() {
 fn await_inside_a_lambda_belongs_to_the_lambda() {
     assert_inference_snapshot! {r#"
         fn makeWorker() fn(Number) Task[Number] {
-            value -> {
+            value -> async {
                 Task.sleep(1).await
                 value
             }
         }
 
         fn staysSynchronous() Number {
-            let worker = value -> {
+            let worker = value -> async {
                 Task.sleep(1).await
                 value
             }
@@ -4713,12 +4761,12 @@ fn await_inside_a_lambda_belongs_to_the_lambda() {
 #[test]
 fn pipe_forwarding_precedes_await_and_try() {
     assert_inference_snapshot! {r#"
-        fn load(value: Number) Result[Number] {
+        async fn load(value: Number) Result[Number] {
             Task.sleep(1).await
             Ok(value)
         }
 
-        fn run() Result[Number] {
+        async fn run() Result[Number] {
             let value = 42 |> load().await?
             Ok(value)
         }

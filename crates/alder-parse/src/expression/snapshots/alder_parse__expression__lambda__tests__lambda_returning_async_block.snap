@@ -1,0 +1,146 @@
+---
+source: crates/alder-parse/src/expression/lambda.rs
+description: "url -> async { fetch(url).await? }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 35,
+        },
+    },
+    value: Lambda(
+        Lambda {
+            params: [
+                Param {
+                    pattern: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 1,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                        },
+                        value: Var(
+                            "url",
+                        ),
+                    },
+                    annotation: None,
+                },
+            ],
+            ret: None,
+            body: Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 35,
+                    },
+                },
+                value: Async(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 14,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 35,
+                            },
+                        },
+                        value: Block {
+                            stmts: [],
+                            tail: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 16,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 33,
+                                        },
+                                    },
+                                    value: Try(
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 16,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 32,
+                                                },
+                                            },
+                                            value: Await(
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 16,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 26,
+                                                        },
+                                                    },
+                                                    value: Call {
+                                                        function: Located {
+                                                            region: Region {
+                                                                start: Position {
+                                                                    line: 1,
+                                                                    column: 16,
+                                                                },
+                                                                end: Position {
+                                                                    line: 1,
+                                                                    column: 21,
+                                                                },
+                                                            },
+                                                            value: Var(
+                                                                "fetch",
+                                                            ),
+                                                        },
+                                                        arguments: [
+                                                            Located {
+                                                                region: Region {
+                                                                    start: Position {
+                                                                        line: 1,
+                                                                        column: 22,
+                                                                    },
+                                                                    end: Position {
+                                                                        line: 1,
+                                                                        column: 25,
+                                                                    },
+                                                                },
+                                                                value: Var(
+                                                                    "url",
+                                                                ),
+                                                            },
+                                                        ],
+                                                    },
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ),
+                        },
+                    },
+                ),
+            },
+        },
+    ),
+}

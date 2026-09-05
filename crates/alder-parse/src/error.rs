@@ -106,6 +106,8 @@ pub enum ModulePath {
 
 #[derive(Debug)]
 pub enum Fn<'a> {
+    /// Expected `fn` after `async`.
+    Keyword(Row, Col),
     Name(Row, Col),
     Params(&'a Params<'a>, Row, Col),
     Ret(&'a Type<'a>, Row, Col),

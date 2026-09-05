@@ -35,6 +35,7 @@ TraitDecl {
     items: [
         Fn(
             FnDecl {
+                is_async: false,
                 name: Located {
                     region: Region {
                         start: Position {
@@ -73,6 +74,7 @@ TraitDecl {
         ),
         Fn(
             FnDecl {
+                is_async: false,
                 name: Located {
                     region: Region {
                         start: Position {
@@ -182,6 +184,7 @@ TraitDecl {
         ),
         Fn(
             FnDecl {
+                is_async: false,
                 name: Located {
                     region: Region {
                         start: Position {

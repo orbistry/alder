@@ -1,0 +1,16 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn make() Task[Number] {\n    let value = 1\n    let task = async { value }\n    value = 42\n    task\n}\n"
+---
+import { $task } from "alder:kernel";
+function $v_make() {
+	const $t0 = 1;
+	let $l0_value = $t0;
+	const $t1 = $task(function* () {
+		return $l0_value;
+	});
+	let $l1_task = $t1;
+	$l0_value = 42;
+	return $l1_task;
+}
+export { $v_make as make };

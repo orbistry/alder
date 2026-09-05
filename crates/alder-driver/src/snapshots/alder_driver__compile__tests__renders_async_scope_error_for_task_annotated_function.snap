@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn wait() Task[()] {\n    Task.sleep(1).await\n}\n"
+---
+alder::canonicalize::await_outside_async
+
+  × `.await` needs an enclosing async body
+   ╭─[/project/src/main.ald:2:5]
+ 1 │ fn wait() Task[()] {
+ 2 │     Task.sleep(1).await
+   ·     ─────────┬─────────
+   ·              ╰── reported here
+ 3 │ }
+   ╰────
+  help: use `async fn` or an `async { ... }` block

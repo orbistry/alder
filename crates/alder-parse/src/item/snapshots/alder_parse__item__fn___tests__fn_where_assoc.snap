@@ -3,6 +3,7 @@ source: crates/alder-parse/src/item/fn_.rs
 description: "fn sum(it: i) Number where i: Iterator, i.Item == Number {\n    0\n}\n"
 ---
 FnDecl {
+    is_async: false,
     name: Located {
         region: Region {
             start: Position {

@@ -73,6 +73,8 @@ pub struct Scope<'a> {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ControlContext {
+    /// Permission belongs to the nearest function/task body, not its callers.
+    pub async_body: bool,
     pub function_depth: u16,
     pub loop_depth: u16,
     pub match_depth: u16,

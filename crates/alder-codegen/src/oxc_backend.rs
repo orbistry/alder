@@ -160,6 +160,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                         function.name,
                         function.params,
                         function.body,
+                        function.is_async,
                     )?);
                     if public {
                         exports.push((top_name(function.name), function.name.name.to_owned()));
@@ -219,6 +220,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                                 leading,
                                 method.params,
                                 default,
+                                method.is_async,
                             )?);
                             exports.push((symbol.clone(), symbol));
                         }
@@ -451,11 +453,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
     ) -> Result<Statement<'js>, Error> {
         self.kernel.insert("$registerTest");
         let body = self.block_return(test.body)?;
-        let callback = if alder_ast::contains_await_block(test.body) {
-            self.task_function_expression(&[], body)
-        } else {
-            self.js.arrow(&[], body, false)
-        };
+        let callback = self.js.arrow(&[], body, false);
         let call = self.js.call(
             self.js.identifier("$registerTest"),
             [
@@ -472,6 +470,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         name: alder_ast::QualifiedName<'src>,
         params: &[alder_ast::Param<'src>],
         body: &Located<alder_ast::Block<'src>>,
+        is_async: bool,
     ) -> Result<Statement<'js>, Error> {
         let dictionary_count = self
             .solved
@@ -480,7 +479,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let leading = (0..dictionary_count)
             .map(|index| format!("$dict{index}"))
             .collect::<Vec<_>>();
-        self.lowered_function(&top_name(name), leading, params, body)
+        self.lowered_function(&top_name(name), leading, params, body, is_async)
     }
 
     fn lowered_function(
@@ -489,6 +488,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         leading: Vec<String>,
         params: &[alder_ast::Param<'src>],
         body: &Located<alder_ast::Block<'src>>,
+        is_async: bool,
     ) -> Result<Statement<'js>, Error> {
         let source_args = (0..params.len())
             .map(|index| format!("$a{index}"))
@@ -501,8 +501,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
         for (param, arg) in params.iter().zip(&source_args) {
             self.bind_pattern(param.pattern, arg, &[], &mut statements);
         }
-        statements.extend(self.block_return(body)?);
-        if alder_ast::contains_await_block(body) {
+        let outer_loops = std::mem::take(&mut self.loop_results);
+        let lowered = self.block_return(body);
+        self.loop_results = outer_loops;
+        statements.extend(lowered?);
+        if is_async {
             let task = self.task_expression(statements);
             let mut outer = self.js.vec();
             outer.push(self.js.return_statement(task));
@@ -560,6 +563,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                         leading,
                         method.params,
                         method.body,
+                        method.is_async,
                     )?);
                     methods.push((
                         method.method,
@@ -599,6 +603,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     leading,
                     method.params,
                     method.body,
+                    method.is_async,
                 )?);
                 methods.push((
                     method.method,
@@ -1258,6 +1263,13 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 right,
             } => self.binop(*use_id, op.value, left, right)?,
             Expr::Block(block) => self.block_value(block)?,
+            Expr::Async(block) => {
+                let outer_loops = std::mem::take(&mut self.loop_results);
+                let body = self.block_return(block);
+                self.loop_results = outer_loops;
+                let task = self.task_expression(body?);
+                self.pure(task)
+            }
             Expr::Lambda { params, body, .. } => self.lambda(params, body)?,
             Expr::If {
                 branches,
@@ -1728,14 +1740,13 @@ impl<'src, 'js> Emitter<'src, 'js> {
         for (param, arg) in params.iter().zip(&args) {
             self.bind_pattern(param.pattern, arg, &[], &mut statements);
         }
-        let value = self.expr(body)?;
+        let outer_loops = std::mem::take(&mut self.loop_results);
+        let value = self.expr(body);
+        self.loop_results = outer_loops;
+        let value = value?;
         statements.extend(value.prefix);
         statements.push(self.js.return_statement(value.expr));
-        let function = if alder_ast::contains_await_expr(body) {
-            self.task_function_expression(&args, statements)
-        } else {
-            self.js.arrow(&args, statements, false)
-        };
+        let function = self.js.arrow(&args, statements, false);
         Ok(self.pure(function))
     }
 
@@ -3155,17 +3166,6 @@ impl<'src, 'js> Emitter<'src, 'js> {
         self.kernel.insert("$task");
         let factory = self.js.function_expression(&[], body, true);
         self.js.call(self.js.identifier("$task"), [factory])
-    }
-
-    fn task_function_expression(
-        &mut self,
-        args: &[String],
-        body: ArenaVec<'js, Statement<'js>>,
-    ) -> Expression<'js> {
-        let task = self.task_expression(body);
-        let mut outer = self.js.vec();
-        outer.push(self.js.return_statement(task));
-        self.js.arrow(args, outer, false)
     }
 
     fn pure(&self, expr: Expression<'js>) -> Value<'js> {

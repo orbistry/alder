@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "let worker = (x: Number) Task[Number] -> async { x }"
+---
+worker: fn(Number) Task[Number]

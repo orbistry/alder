@@ -98,13 +98,9 @@ impl<'a> Parser<'a> {
                         .map(ItemKind::Import)
                 },
             )?,
-            "fn" => self.specialize(
+            "fn" | "async" => self.specialize(
                 |bump, e, row, col| error::Item::Fn(bump.alloc(e), row, col),
-                |p| {
-                    p.advance_by(word.len());
-                    p.chomp();
-                    p.fn_decl().map(ItemKind::Fn)
-                },
+                |p| p.named_function().map(|(decl, _)| ItemKind::Fn(decl)),
             )?,
             "let" => self.specialize(
                 |bump, e, row, col| error::Item::Let(bump.alloc(e), row, col),
@@ -492,6 +488,31 @@ pub(crate) use assert_item_snapshot;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn async_function_without_await() {
+        assert_item_snapshot!("async fn answer() Number { 42 }");
+    }
+
+    #[test]
+    fn public_async_main() {
+        assert_item_snapshot!("pub async fn main() { Task.sleep(1).await }");
+    }
+
+    #[test]
+    fn async_trait_method() {
+        assert_item_snapshot!("trait Load[a] { async fn load() a }");
+    }
+
+    #[test]
+    fn async_impl_method() {
+        assert_item_snapshot!("impl Load[Number] { async fn load() Number { 42 } }");
+    }
+
+    #[test]
+    fn async_declaration_requires_fn() {
+        assert_item_error_snapshot!("async answer() Number { 42 }");
+    }
+
     #[test]
     fn pub_fn() {
         assert_item_snapshot!("pub fn add(a, b) { a + b }");

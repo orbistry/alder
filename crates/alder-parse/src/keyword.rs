@@ -4,10 +4,11 @@
 
 use crate::{Col, Parser, Row};
 
-/// Reserved words: SPEC list plus `assert` and `await`.
+/// Reserved words from the SPEC grammar.
 pub const RESERVED: &[&str] = &[
     "as",
     "assert",
+    "async",
     "await",
     "break",
     "comptime",
@@ -55,6 +56,7 @@ pub const SQL_WORDS: &[&str] = &[
 pub enum Keyword {
     As,
     Assert,
+    Async,
     Await,
     Break,
     Comptime,
@@ -121,6 +123,7 @@ impl Keyword {
         Some(match s {
             "as" => Keyword::As,
             "assert" => Keyword::Assert,
+            "async" => Keyword::Async,
             "await" => Keyword::Await,
             "break" => Keyword::Break,
             "comptime" => Keyword::Comptime,
@@ -164,6 +167,7 @@ impl Keyword {
         match self {
             Keyword::As => "as",
             Keyword::Assert => "assert",
+            Keyword::Async => "async",
             Keyword::Await => "await",
             Keyword::Break => "break",
             Keyword::Comptime => "comptime",

@@ -3,6 +3,7 @@ source: crates/alder-parse/src/item/fn_.rs
 description: "fn show2(a: a, b: b) String where a: Show, b: Show {\n    show(a)\n}\n"
 ---
 FnDecl {
+    is_async: false,
     name: Located {
         region: Region {
             start: Position {

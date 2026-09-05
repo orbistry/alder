@@ -225,10 +225,10 @@ pub fn canonicalize_expr<'a>(
             index: canonicalize_expr(bump, env, index)?,
         },
         SourceExpr::Await(expr) => {
-            if env.control.function_depth == 0 && env.control.test_depth == 0 {
+            if !env.control.async_body {
                 return Err(vec![Error::new(
                     source.region,
-                    ErrorKind::Expr(ExprError::AwaitOutsideFunction),
+                    ErrorKind::Expr(ExprError::AwaitOutsideAsync),
                 )]);
             }
             CanExpr::Await(canonicalize_expr(bump, env, expr)?)
@@ -256,6 +256,15 @@ pub fn canonicalize_expr<'a>(
             return canonicalize_binops(bump, env, source.region, operands, last);
         }
         SourceExpr::Block(block) => CanExpr::Block(canonicalize_block(bump, env, block)?),
+        SourceExpr::Async(block) => {
+            let saved_control = env.control;
+            env.control.async_body = true;
+            env.control.function_depth += 1;
+            env.control.loop_depth = 0;
+            let result = canonicalize_block(bump, env, block);
+            env.control = saved_control;
+            CanExpr::Async(result?)
+        }
         SourceExpr::Lambda(lambda) => return canonicalize_lambda(bump, env, source.region, lambda),
         SourceExpr::If {
             branches,
@@ -650,6 +659,7 @@ fn canonicalize_lambda<'a>(
     env.push_scope();
     let saved_control = env.control;
     env.control.function_depth += 1;
+    env.control.async_body = false;
     env.control.loop_depth = 0;
     let mut params = Vec::with_capacity(lambda.params.len());
     for param in lambda.params {

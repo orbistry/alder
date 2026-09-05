@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "async fn answer() Number { 42 }"
+---
+answer: fn() Task[Number]

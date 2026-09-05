@@ -213,7 +213,7 @@ fn expr<'a>(home: ModuleId<'a>, value: Node<'a, Expr<'a>>, out: &mut BTreeSet<&'
             expr(home, left, out);
             expr(home, right, out);
         }
-        Expr::Block(value) | Expr::Loop(value) => block(home, value, out),
+        Expr::Block(value) | Expr::Async(value) | Expr::Loop(value) => block(home, value, out),
         Expr::Lambda { params, body, .. } => {
             for param in *params {
                 pattern(home, param.pattern, out);

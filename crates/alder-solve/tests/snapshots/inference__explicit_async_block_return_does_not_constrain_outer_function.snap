@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn answer() String {\n    let task = async { return 42 }\n    \"outer\"\n}\n"
+---
+answer: fn() String

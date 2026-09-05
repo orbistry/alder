@@ -2,7 +2,7 @@ pub fn identity(parts: Array[String], value: a) a { value }
 
 pub fn shown(parts: Array[String], value: a) String where a: Show { show(value) }
 
-pub fn later(parts: Array[String], value: Number) Number {
+pub async fn later(parts: Array[String], value: Number) Number {
     Task.sleep(1).await
     value
 }

@@ -1,0 +1,111 @@
+---
+source: crates/alder-parse/src/item/mod.rs
+description: "async fn answer() Number { 42 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 32,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Fn(
+            FnDecl {
+                is_async: true,
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                    },
+                    value: "answer",
+                },
+                params: [],
+                ret: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 19,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 25,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 19,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 25,
+                                            },
+                                        },
+                                        value: "Number",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ),
+                where_clause: [],
+                body: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 26,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 32,
+                            },
+                        },
+                        value: Block {
+                            stmts: [],
+                            tail: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 28,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 30,
+                                        },
+                                    },
+                                    value: Number(
+                                        NumberLit {
+                                            value: 42.0,
+                                            text: "42",
+                                        },
+                                    ),
+                                },
+                            ),
+                        },
+                    },
+                ),
+            },
+        ),
+    },
+}

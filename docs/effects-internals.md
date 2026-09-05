@@ -334,14 +334,26 @@ value
 Omitting `.await` deliberately leaves a `Task` value to return or pass onward.
 `await` is never interpreted as a function or standalone pipe target.
 
-An await outside nested lambdas marks its enclosing function or lambda as
-task-producing. The inferred callable result is `Task[a]`, while its body and
-ordinary return annotation describe `a`. A signature may explicitly write
-`Task[a]` to expose the task boundary. An explicitly `Task`-returning function
-with no await is an ordinary function whose body must itself return a task.
-Await sites inside a nested lambda belong to that lambda, not the outer
-function. Tests are also valid scheduler entry points; module-level expressions
-are not.
+Execution mode is explicit: `async fn` adds exactly one `Task` layer around
+the annotated or inferred completed value, even without awaits. There is no
+flattening: `async fn nested() Task[Number]` returns `Task[Task[Number]]`.
+A plain function annotated `Task[a]` returns an existing task and cannot await.
+
+`async { ... }` constructs a lazy task with its own await, return, and `?`
+boundary. Break and continue cannot cross that boundary. Ordinary lambdas may
+return async blocks (`x -> async { x }`); there is no async-lambda prefix and
+lambda annotations describe the actual `Task[...]` return type. Nested lambdas
+do not inherit permission to await. Standalone main may be explicitly async;
+the root fiber does not make plain functions implicitly async.
+
+Async blocks capture lexical bindings, not snapshots. Rebinding before a task
+runs is visible, shared objects remain shared, and repeated execution may
+observe changed state. Async function arguments evaluate at call time while
+the body runs only when the task executes. A test can return an async block as
+its tail expression: `test "wait" { async { Task.sleep(1).await } }`. The test
+runner executes returned tasks through the same root runner; the test itself
+does not implicitly authorize await. Broader explicit-async validation remains
+tracked in `plans/async-concurrency-hardening.md`.
 
 Task-producing functions lower to plain JavaScript functions which return a
 fresh lazy `$task(function* () { ... })`. `.await` lowers to `yield* task`.
@@ -376,6 +388,11 @@ runs, then delegates to `$tryPromise`. No ordinary extern value is probed and
 no arbitrary value becomes a task because it has a `then` property. Promise
 assimilation happens only after entering this explicitly declared boundary.
 Kernel externs declared `Task[a]` already return Alder tasks and pass through.
+
+A bodiless `async fn answer() a` declaration exposes that same `Task[a]`
+callable contract. Its annotation is the completed value, just as for an async
+function with a body. The added layer is applied before checking the `abort`
+convention and selecting the Promise adapter; it is never silently discarded.
 
 Fulfillment supplies `a`. A synchronous throw, malformed non-Promise return, or
 raw rejection is an `AlderForeignDefect`, retaining the extern module/symbol

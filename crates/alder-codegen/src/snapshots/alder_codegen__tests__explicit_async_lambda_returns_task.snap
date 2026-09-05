@@ -1,0 +1,13 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub let worker = (x: Number) Task[Number] -> async { x }"
+---
+import { $task } from "alder:kernel";
+const $t0 = ($a0) => {
+	let $l0_x = $a0;
+	return $task(function* () {
+		return $l0_x;
+	});
+};
+let $v_worker = $t0;
+export { $v_worker as worker };

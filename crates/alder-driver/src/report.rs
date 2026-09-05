@@ -503,6 +503,13 @@ fn module_path_problem(error: &alder_parse::error::ModulePath) -> SyntaxProblem 
 fn function_problem(error: &alder_parse::error::Fn<'_>, owner: &str) -> SyntaxProblem {
     use alder_parse::error::Fn;
     match error {
+        Fn::Keyword(row, column) => expected_problem(
+            "I was expecting `fn` after `async` in this declaration",
+            *row,
+            *column,
+            "expected `fn`",
+            None,
+        ),
         Fn::Name(row, column) => expected_problem(
             format!("I was expecting a name for this {owner}"),
             *row,
@@ -1885,12 +1892,10 @@ fn expression_error(error: &ExprError<'_>) -> CanDetails {
             None,
             None,
         ),
-        ExprError::AwaitOutsideFunction => (
-            "await_outside_function",
-            "`.await` can only be used inside a function or test".to_owned(),
-            Some(
-                "move this expression into a function; Alder will infer its Task return".to_owned(),
-            ),
+        ExprError::AwaitOutsideAsync => (
+            "await_outside_async",
+            "`.await` needs an enclosing async body".to_owned(),
+            Some("use `async fn` or an `async { ... }` block".to_owned()),
             None,
         ),
         ExprError::MacroUnavailable { name } => (

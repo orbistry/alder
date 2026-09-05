@@ -233,6 +233,16 @@ mod tests {
     }
 
     #[test]
+    fn lambda_returning_async_block() {
+        assert_expression_snapshot!("url -> async { fetch(url).await? }");
+    }
+
+    #[test]
+    fn annotated_lambda_returning_async_block() {
+        assert_expression_snapshot!("(x: Number) Task[Number] -> async { x + 1 }");
+    }
+
+    #[test]
     fn lambda_parenthesized_parameter() {
         assert_expression_snapshot!("(x) -> x");
     }

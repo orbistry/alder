@@ -235,6 +235,35 @@ macro_rules! assert_solved_emit_snapshot {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn explicit_async_without_await_is_lazy() {
+        assert_solved_emit_snapshot!("pub async fn answer() Number { 42 }");
+    }
+
+    #[test]
+    fn explicit_async_nested_tasks_are_not_flattened() {
+        assert_solved_emit_snapshot!("pub async fn nested() Task[Number] { async { 42 } }");
+    }
+
+    #[test]
+    fn explicit_async_block_captures_reassigned_binding() {
+        assert_solved_emit_snapshot!(
+            r#"
+            pub fn make() Task[Number] {
+                let value = 1
+                let task = async { value }
+                value = 42
+                task
+            }
+        "#
+        );
+    }
+
+    #[test]
+    fn explicit_async_lambda_returns_task() {
+        assert_solved_emit_snapshot!("pub let worker = (x: Number) Task[Number] -> async { x }");
+    }
+
     use super::*;
     use alder_ast::{PackageId, ResolvedImport};
     use bumpalo::Bump;
@@ -425,12 +454,12 @@ mod tests {
             #[extern("globalThis", "Promise.resolve")]
             fn resolved(value: a) Task[a]
 
-            fn load(value: Number) Result[Number] {
+            async fn load(value: Number) Result[Number] {
                 Task.sleep(1).await
                 Ok(value)
             }
 
-            pub fn main() Result[Number] {
+            pub async fn main() Result[Number] {
                 let value = 42 |> resolved().await |> load().await?
                 Ok(value)
             }
@@ -443,7 +472,7 @@ mod tests {
             #[extern("globalThis", "fetch", "abort")]
             fn fetch(url: String) Task[String]
 
-            pub fn request(url: String) String {
+            pub async fn request(url: String) String {
                 fetch(url).await
             }
         "#};

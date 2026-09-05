@@ -222,6 +222,7 @@ pub fn expression(expr: &Located<Expr<'_>>) -> Flow {
         | Expr::Var { .. }
         | Expr::Constructor(_)
         | Expr::Lambda { .. }
+        | Expr::Async(_)
         | Expr::Style(_)
         | Expr::Query(_)
         | Expr::Markup(_)

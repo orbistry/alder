@@ -10,7 +10,8 @@ Approved scope amendments: removal of `mut` (section 2) and the explicit async,
 capture, synchronization, and bounded traversal decisions in
 `plans/async-concurrency-hardening.md`. These supersede conflicting inferred-
 async or mutation-permission assumptions; they do not waive original acceptance
-requirements. All amendment implementation remains tracked as pending.
+requirements. Amendment implementation and remaining acceptance work are
+tracked below and in the detailed plans.
 
 ## Working rules
 
@@ -20,7 +21,7 @@ requirements. All amendment implementation remains tracked as pending.
   legacy readers, deprecation paths, or migration-specific diagnostics.
   Treat removed syntax as though it never existed: ordinary parsing rules and
   errors apply. This supersedes earlier requests for helpful obsolete-syntax
-  errors, including the dedicated `mut` diagnostics currently in the worktree.
+  errors, including the former dedicated `mut` diagnostics.
 - Reproduce before fixing; retain permanent regressions with actual Alder source.
 - Preserve JS aliasing, accepted syntax, arena ownership, direct Oxc emission,
   owned interfaces, and shared miette diagnostics.

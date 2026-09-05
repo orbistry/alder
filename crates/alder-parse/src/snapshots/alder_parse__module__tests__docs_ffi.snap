@@ -80,6 +80,7 @@ Module {
                 visibility: Private,
                 kind: Fn(
                     FnDecl {
+                        is_async: false,
                         name: Located {
                             region: Region {
                                 start: Position {
@@ -210,6 +211,7 @@ Module {
                 visibility: Private,
                 kind: Fn(
                     FnDecl {
+                        is_async: false,
                         name: Located {
                             region: Region {
                                 start: Position {
@@ -575,6 +577,7 @@ Module {
                 visibility: Private,
                 kind: Fn(
                     FnDecl {
+                        is_async: false,
                         name: Located {
                             region: Region {
                                 start: Position {

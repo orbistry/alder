@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "async fn nested() Task[Number] { async { 42 } }"
+---
+nested: fn() Task[Task[Number]]

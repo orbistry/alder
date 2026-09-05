@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/item/mod.rs
+description: "async answer() Number { 42 }"
+---
+Fn(
+    Keyword(
+        1,
+        7,
+    ),
+    1,
+    1,
+)

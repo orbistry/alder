@@ -18,8 +18,8 @@ syntax, JavaScript runtime semantics.
   mutation permission or borrow checker; aliasing has JS semantics.
 - **Errors are values.** `Result` everywhere, no exceptions, open error
   tags so nobody writes wrapper types.
-- **Async without ceremony.** Postfix `.await`, asyncness is inferred,
-  everything runs on a fiber scheduler.
+- **Explicit lazy async.** `async fn` and `async { ... }` construct reusable
+  tasks; postfix `.await` runs them on a fiber scheduler.
 - **Effects are untracked.** Any function may perform I/O. Purity is not
   enforced by the type system; the compiler tracks only what it needs for
   reactivity and the server/client split.
@@ -427,26 +427,40 @@ fn check(token: String) Result[Session, AuthError]
 
 ## Async and fibers
 
-There is no `async` keyword. A function that uses `.await` is inferred to
-return `Task[a]`; callers `.await` it in turn. Everything compiles to
-generator-based fibers (`yield*`) on a scheduler in the JS kernel, giving
+An `async fn` returns a lazy, reusable `Task[a]`; its annotation describes the
+completed value `a`. Constructing the task does not execute its body, even when
+there are no awaits. Tasks compile to generator-based fibers (`yield*`) on a
+scheduler in the JS kernel, giving
 structured concurrency, interruption, and scopes without an `Effect` type
 in user code.
 
 ```alder
-fn profile(id: Id) Result[Profile] {
+async fn profile(id: Id) Result[Profile] {
     let user = Http.get(`/users/${id}`).await?
     let posts = Http.get(`/users/${id}/posts`).await?
     Ok({ user, posts })
 }
 
-let profiles = Fiber.all([profile(1), profile(2)]).await
+async fn profiles() {
+    Fiber.all([profile(1), profile(2)]).await
+}
 ```
 
-- `Task` is a visible type. Signatures may write it
-  (`fn load(id: Id) Task[Result[User]]`), hover shows
-  it when inferred, and an un-awaited call is a `Task` value you can pass
+- `Task` is a visible type. A plain function may return an existing task
+  (`fn load(id: Id) Task[Result[User]]`); that annotation does not authorize
+  await inside its body. An un-awaited async call is a `Task` value you can pass
   to `Fiber.fork`, `Fiber.all`, or `Fiber.race`.
+- `async` adds exactly one Task layer, without flattening. For example,
+  `async fn nested() Task[Number] { async { 42 } }` returns
+  `Task[Task[Number]]`, requiring two awaits to obtain the number.
+- `async { ... }` constructs a task with its own await, return, and `?`
+  boundary. Break and continue cannot escape that boundary. Lambdas use ordinary
+  syntax: `x -> async { x + 1 }`, or
+  `(x: Number) Task[Number] -> async { x + 1 }`. There is no async-lambda prefix.
+- Async blocks capture lexical bindings, not value snapshots. Rebinding and
+  writes through shared aliases remain visible; repeated task runs may observe
+  different state. Function call arguments evaluate at call time, before the
+  async body runs. Capture does not provide synchronization.
 - `.await?` means “await, then propagate the resolved `Result` error.” It is
   ordinary postfix composition, not a special fused operation.
 - Pipe forwarding happens before postfix operations on a destination. Thus
@@ -473,6 +487,9 @@ let profiles = Fiber.all([profile(1), profile(2)]).await
   minimal structured-cleanup surface.
 - `main` and test declarations may produce tasks. Generated entries recognize
   and run them on the kernel scheduler automatically.
+  Use `pub async fn main() { ... }`, or return a task from a plain main.
+  Tests may return an async block: `test "wait" { async { ... } }`.
+  The root scheduler does not authorize await in a plain function or test body.
 
 ## Context (dependency injection)
 
@@ -480,12 +497,12 @@ Services are requested by type with `use` and supplied by `provide` in an
 enclosing scope. Missing providers are compile errors at entry points.
 
 ```alder
-fn saveUser(user: User) Result[()] {
+async fn saveUser(user: User) Result[()] {
     use Db
     Db.insert(users, user).await
 }
 
-fn main() {
+async fn main() {
     provide Db = Sqlite.open("app.db") {
         saveUser(u).await
     }

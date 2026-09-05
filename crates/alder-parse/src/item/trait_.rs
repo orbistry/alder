@@ -71,7 +71,7 @@ impl<'a> Parser<'a> {
                 _ => {}
             }
             let word = self.peek_word();
-            if word != "type" && word != "fn" {
+            if word != "type" && word != "fn" && word != "async" {
                 return Err(error::Trait::Item(row, col));
             }
             if last_end.is_some_and(|end| !self.newline_since(end)) {
@@ -90,10 +90,7 @@ impl<'a> Parser<'a> {
             } else {
                 let (decl, end) = self.specialize(
                     |bump, e, row, col| error::Trait::Fn(bump.alloc(e), row, col),
-                    |p| {
-                        p.advance_by(2); // `fn`
-                        p.fn_decl_with_end()
-                    },
+                    |p| p.named_function(),
                 )?;
                 self.chomp();
                 (TraitItem::Fn(decl), end)

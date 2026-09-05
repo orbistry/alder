@@ -3,6 +3,7 @@ source: crates/alder-parse/src/item/fn_.rs
 description: "fn next(it: i)"
 ---
 FnDecl {
+    is_async: false,
     name: Located {
         region: Region {
             start: Position {

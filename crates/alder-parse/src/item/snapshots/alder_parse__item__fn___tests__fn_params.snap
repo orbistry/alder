@@ -3,6 +3,7 @@ source: crates/alder-parse/src/item/fn_.rs
 description: "fn add(a, b) { a + b }"
 ---
 FnDecl {
+    is_async: false,
     name: Located {
         region: Region {
             start: Position {

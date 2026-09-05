@@ -6,27 +6,27 @@ fn resolvedResult(
     value: Result[String, [:load(String)]],
 ) Task[Result[String, [:load(String)]]]
 
-fn load(message: String) Result[String] {
+async fn load(message: String) Result[String] {
     let value = resolvedResult(Ok(message)).await?
     Ok(value)
 }
 
-fn delayed(value: Number, milliseconds: Number) Number {
+async fn delayed(value: Number, milliseconds: Number) Number {
     Task.sleep(milliseconds).await
     value
 }
 
-fn recordCleanup(events: Array[String]) {
+async fn recordCleanup(events: Array[String]) {
     Task.sleep(1).await
     Array.push(events, "race loser cleaned up")
 }
 
-fn slow(events: Array[String]) Number {
+async fn slow(events: Array[String]) Number {
     Fiber.addFinalizer(recordCleanup(events)).await
     delayed(99, 50).await
 }
 
-pub fn main() Result[()] {
+pub async fn main() Result[()] {
     let greeting = "Promise extern is alive"
         |> resolved().await
         |> load().await?

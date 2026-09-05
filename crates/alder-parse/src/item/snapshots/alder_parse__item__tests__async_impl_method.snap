@@ -1,0 +1,169 @@
+---
+source: crates/alder-parse/src/item/mod.rs
+description: "impl Load[Number] { async fn load() Number { 42 } }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 52,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Impl(
+            ImplDecl {
+                trait_: Path {
+                    segments: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 6,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 10,
+                                },
+                            },
+                            value: "Load",
+                        },
+                    ],
+                },
+                args: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 11,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 17,
+                            },
+                        },
+                        value: Named {
+                            path: Path {
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 11,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 17,
+                                            },
+                                        },
+                                        value: "Number",
+                                    },
+                                ],
+                            },
+                            args: [],
+                        },
+                    },
+                ],
+                where_clause: [],
+                items: [
+                    Fn(
+                        FnDecl {
+                            is_async: true,
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 30,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 34,
+                                    },
+                                },
+                                value: "load",
+                            },
+                            params: [],
+                            ret: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 37,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 43,
+                                        },
+                                    },
+                                    value: Named {
+                                        path: Path {
+                                            segments: [
+                                                Located {
+                                                    region: Region {
+                                                        start: Position {
+                                                            line: 1,
+                                                            column: 37,
+                                                        },
+                                                        end: Position {
+                                                            line: 1,
+                                                            column: 43,
+                                                        },
+                                                    },
+                                                    value: "Number",
+                                                },
+                                            ],
+                                        },
+                                        args: [],
+                                    },
+                                },
+                            ),
+                            where_clause: [],
+                            body: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 44,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 50,
+                                        },
+                                    },
+                                    value: Block {
+                                        stmts: [],
+                                        tail: Some(
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 46,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 48,
+                                                    },
+                                                },
+                                                value: Number(
+                                                    NumberLit {
+                                                        value: 42.0,
+                                                        text: "42",
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                },
+                            ),
+                        },
+                    ),
+                ],
+            },
+        ),
+    },
+}

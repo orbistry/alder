@@ -31,7 +31,7 @@ fn throws() Task[Number]
 #[extern("./client.js", "rejects")]
 fn rejects() Task[Number]
 
-pub fn main() {
+pub async fn main() {
     assert(bounded_identity(42) == 42)
     let indirect = bounded_identity
     assert(indirect("hello") == "hello")

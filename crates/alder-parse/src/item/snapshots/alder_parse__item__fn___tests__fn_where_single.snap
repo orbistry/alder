@@ -3,6 +3,7 @@ source: crates/alder-parse/src/item/fn_.rs
 description: "fn describe(xs: Array[a]) String where a: Show {\n    xs |> Array.map(show) |> String.join(\", \")\n}\n"
 ---
 FnDecl {
+    is_async: false,
     name: Located {
         region: Region {
             start: Position {

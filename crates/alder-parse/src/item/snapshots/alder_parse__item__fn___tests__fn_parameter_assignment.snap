@@ -3,6 +3,7 @@ source: crates/alder-parse/src/item/fn_.rs
 description: "fn bump(n: Number) { n += 1 }"
 ---
 FnDecl {
+    is_async: false,
     name: Located {
         region: Region {
             start: Position {

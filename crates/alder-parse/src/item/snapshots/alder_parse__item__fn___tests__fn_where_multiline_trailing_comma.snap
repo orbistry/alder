@@ -3,6 +3,7 @@ source: crates/alder-parse/src/item/fn_.rs
 description: "fn traverse(xs: t[f[a]], g: fn(a) f[b]) f[t[b]]\n    where\n        t: Traversable,\n        f: Applicative,\n"
 ---
 FnDecl {
+    is_async: false,
     name: Located {
         region: Region {
             start: Position {

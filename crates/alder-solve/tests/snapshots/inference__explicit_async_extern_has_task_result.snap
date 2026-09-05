@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "#[extern(\"./client.js\", \"answer\")]\nasync fn answer() Number\nfn start() Task[Number] { answer() }\n"
+---
+answer: fn() Task[Number]
+start: fn() Task[Number]

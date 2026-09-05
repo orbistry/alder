@@ -132,6 +132,8 @@ pub struct ImportName<'a> {
 
 #[derive(Debug)]
 pub struct FnDecl<'a> {
+    /// The body constructs a lazy task; `ret` describes its completed value.
+    pub is_async: bool,
     pub name: Name<'a>,
     pub params: &'a [Param<'a>],
     pub ret: Option<&'a Located<Type<'a>>>,
@@ -477,6 +479,8 @@ pub enum Expr<'a> {
     },
     // ---- control
     Block(&'a Located<Block<'a>>),
+    /// A lazy task with its own await, return, and error-propagation boundary.
+    Async(&'a Located<Block<'a>>),
     Lambda(&'a Lambda<'a>),
     If {
         branches: &'a [IfBranch<'a>],

@@ -1,0 +1,108 @@
+let calls = 0
+
+#[extern("./client.js", "answer", "abort")]
+async fn foreign_answer(value: Number) Number
+
+fn argument() Number {
+    calls += 1
+    calls
+}
+
+async fn delayed(value: Number) Number {
+    calls += 10
+    value
+}
+
+async fn nested() Task[Number] {
+    async { 42 }
+}
+
+fn independent_return() Number {
+    let task = async { return "inner" }
+    42
+}
+
+fn failure() Result[Number, [:inner]] { Err(:inner) }
+
+fn independent_error(events: Array[Number]) Task[Result[Number, [:inner]]] {
+    let task = async {
+        let value = failure()?
+        Array.push(events, 99)
+        Ok(value)
+    }
+    Array.push(events, 1)
+    task
+}
+
+async fn fresh_local(value: Number) Array[Number] {
+    let items = [value]
+    items
+}
+
+trait AsyncValue[a] {
+    async fn completed(value: a) a { value }
+}
+
+impl AsyncValue[Number] {}
+
+pub async fn main() {
+    let task = delayed(argument())
+    assert calls == 1
+    assert task.await == 1
+    assert calls == 11
+    assert task.await == 1
+    assert calls == 21
+
+    let value = 1
+    let captured = async { value }
+    value = 42
+    assert captured.await == 42
+    value = 43
+    assert captured.await == 43
+
+    let worker = (x: Number) Task[Number] -> async { x + 1 }
+    assert worker(41).await == 42
+    let inner = nested().await
+    assert inner.await == 42
+    assert independent_return() == 42
+    assert foreign_answer(42).await == 42
+
+    let iterations: Array[Task[Number]] = []
+    for index in [1, 2] {
+        Array.push(iterations, async { index })
+        index += 10
+    }
+    assert iterations[0].await == 11
+    assert iterations[1].await == 12
+
+    let shared_iterations: Array[Task[Number]] = []
+    let counter = 0
+    while counter < 2 {
+        Array.push(shared_iterations, async { counter })
+        counter += 1
+    }
+    assert shared_iterations[0].await == 2
+    assert shared_iterations[1].await == 2
+
+    let record = { value: 1 }
+    let alias = record
+    let read = async { record.value }
+    alias.value = 42
+    assert read.await == 42
+
+    let events: Array[Number] = []
+    let failed = independent_error(events)
+    assert events == [1]
+    assert match failed.await { Ok(_) => false, Err(:inner) => true }
+    assert events == [1]
+    assert match failed.await { Ok(_) => false, Err(:inner) => true }
+    assert events == [1]
+
+    let fresh = fresh_local(1)
+    let first = fresh.await
+    Array.push(first, 2)
+    let second = fresh.await
+    assert first == [1, 2]
+    assert second == [1]
+    assert completed(42).await == 42
+}

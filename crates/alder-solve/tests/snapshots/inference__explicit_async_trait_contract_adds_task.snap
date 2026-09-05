@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "trait Load[a] { async fn load(value: a) Number }\nimpl Load[Number] { async fn load(value: Number) Number { value } }\nfn start() Task[Number] { load(42) }\n"
+---
+start: fn() Task[Number]

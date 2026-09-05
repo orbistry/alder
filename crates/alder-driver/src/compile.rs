@@ -884,6 +884,67 @@ mod tests {
     }
 
     #[test]
+    fn stored_async_contracts_preserve_layers_and_captured_state() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub async fn identity(value: a) a { value }
+                pub async fn nested() Task[Number] { async { 42 } }
+                let operation = value -> value
+                pub fn deferred(value) { async { operation(value) } }
+                pub fn specialize() { async { operation = (value: Number) -> value + 1 } }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ identity, nested, deferred, specialize }
+            pub async fn main() Number {
+                let number = identity(42).await
+                let text = identity("hello").await
+                let inner: Task[Number] = nested().await
+                specialize().await
+                deferred(number).await + inner.await + String.length(text)
+            }
+        "#};
+        let result = build_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ deferred, specialize }
+            pub async fn main() String {
+                specialize().await
+                deferred("wrong").await
+            }
+        "#};
+        let result = build_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty());
+        assert!(result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("async capture cannot publish a polymorphic replaceable binding")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
     fn stored_assignment_contracts_preserve_safe_and_restricted_functions() {
         let producer = dependency_interface(
             indoc::indoc! {r#"
@@ -2729,6 +2790,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_async_scope_error_for_task_annotated_function() {
+        assert_diagnostic_snapshot! {r#"
+            fn wait() Task[()] {
+                Task.sleep(1).await
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_async_scope_error_for_nested_lambda() {
+        assert_diagnostic_snapshot! {r#"
+            async fn make() {
+                () -> Task.sleep(1).await
+            }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_invalid_error_tag_placement_without_color() {
         assert_diagnostic_snapshot! {r#"
             fn invalid() {
@@ -2777,7 +2856,7 @@ mod tests {
     #[tokio::test]
     async fn renders_awaiting_a_non_task_without_color() {
         assert_diagnostic_snapshot! {r#"
-            fn invalid() {
+            async fn invalid() {
                 (42).await
             }
         "#};
@@ -2789,7 +2868,7 @@ mod tests {
             #[extern("alder:kernel", "$taskSleep")]
             fn sleep(milliseconds: Number) Task[()]
 
-            fn invalid() Result[Number] {
+            async fn invalid() Result[Number] {
                 sleep(1).await?
                 Ok(42)
             }

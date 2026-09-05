@@ -1,0 +1,12 @@
+---
+source: crates/alder-parse/src/expression/mod.rs
+description: async x -> x
+---
+Block(
+    Open(
+        1,
+        7,
+    ),
+    1,
+    7,
+)

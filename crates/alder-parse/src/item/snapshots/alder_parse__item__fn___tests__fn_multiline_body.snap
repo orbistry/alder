@@ -3,6 +3,7 @@ source: crates/alder-parse/src/item/fn_.rs
 description: "fn classify(n: Number) String {\n    let sign = if n < 0 { \"neg\" } else { \"pos\" }\n    sign\n}\n"
 ---
 FnDecl {
+    is_async: false,
     name: Located {
         region: Region {
             start: Position {

@@ -1,4 +1,4 @@
-pub fn delayed(value: Number) Number {
+pub async fn delayed(value: Number) Number {
     Task.sleep(1).await
     value
 }

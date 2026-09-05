@@ -57,6 +57,14 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn explicit_async_laziness_capture_and_nested_tasks_execute() {
+        assert_eq!(
+            execute("explicit_async", BuildMode::Build, EntryKind::Standalone).await,
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn standalone_e2e_projects_execute() {
         for name in [
             "hello",
@@ -152,7 +160,7 @@ mod tests {
             app.join("src/main.ald"),
             indoc::indoc! {r#"
             import @vendor/wrapper/api
-            pub fn main() { assert(api.answer().await == 42) }
+            pub async fn main() { assert(api.answer().await == 42) }
         "#},
         )
         .unwrap();

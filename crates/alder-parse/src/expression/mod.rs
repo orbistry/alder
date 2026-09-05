@@ -240,6 +240,15 @@ impl<'a> Parser<'a> {
         let (row, col) = self.position();
         let word = self.peek_word();
         match word {
+            "async" => {
+                self.advance_by(word.len());
+                self.chomp();
+                let block = self.specialize(
+                    |bump, e, row, col| error::Expr::Block(bump.alloc(e), row, col),
+                    |p| p.block(),
+                )?;
+                Ok(self.expr_at(start, block.region.end, Expr::Async(block)))
+            }
             "true" | "false" => {
                 self.advance_by(word.len());
                 Ok(self.add_end(start, Expr::Bool(word == "true")))
@@ -387,6 +396,30 @@ pub(crate) use assert_expression_snapshot;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn async_block_without_await() {
+        assert_expression_snapshot!("async { 42 }");
+    }
+
+    #[test]
+    fn async_block_nested() {
+        assert_expression_snapshot!("async { async { 42 } }");
+    }
+
+    #[test]
+    fn async_block_postfix_await() {
+        assert_expression_snapshot!("async { 42 }.await");
+    }
+
+    #[test]
+    fn async_block_requires_braces() {
+        assert_expression_error_snapshot!("async 42");
+    }
+
+    #[test]
+    fn async_lambda_prefix_is_not_an_expression() {
+        assert_expression_error_snapshot!("async x -> x");
+    }
 
     #[test]
     fn provide_simple() {

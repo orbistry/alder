@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-description: "#[extern(\"globalThis\", \"Promise.resolve\")]\nfn resolved(value: a) Task[a]\n\nfn load(value: Number) Result[Number] {\n    Task.sleep(1).await\n    Ok(value)\n}\n\npub fn main() Result[Number] {\n    let value = 42 |> resolved().await |> load().await?\n    Ok(value)\n}\n"
+description: "#[extern(\"globalThis\", \"Promise.resolve\")]\nfn resolved(value: a) Task[a]\n\nasync fn load(value: Number) Result[Number] {\n    Task.sleep(1).await\n    Ok(value)\n}\n\npub async fn main() Result[Number] {\n    let value = 42 |> resolved().await |> load().await?\n    Ok(value)\n}\n"
 ---
 import { $task, $tryPromise } from "alder:kernel";
 import { sleep as $i_alder_3A_2F_2Fstd_2FTask_2Emjs_sleep } from "alder://std/Task.mjs";

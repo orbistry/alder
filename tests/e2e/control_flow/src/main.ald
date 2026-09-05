@@ -16,7 +16,7 @@ fn matched(flag: Bool) Number {
     }
 }
 
-fn awaited(flag: Bool) Number {
+async fn awaited(flag: Bool) Number {
     Task.sleep(1).await
     if flag { return 42 } else { return 43 }
 }
@@ -57,7 +57,7 @@ fn nested_loop_values(flag: Bool) Number {
     }
 }
 
-fn awaited_loop_value() Number {
+async fn awaited_loop_value() Number {
     loop {
         Task.sleep(1).await
         break 42
@@ -118,7 +118,7 @@ fn tag_segments(parts: Array[String], left: Number, right: Number) Array[String]
 
 fn show_tag(parts: Array[String], value: a) String where a: Show { show(value) }
 
-fn async_tag(parts: Array[String], value: Number) Number {
+async fn async_tag(parts: Array[String], value: Number) Number {
     Task.sleep(1).await
     value
 }
@@ -202,7 +202,7 @@ fn assignment_order() {
     assert(nested == [[3], [2]])
 }
 
-fn suspended_index(nested: Array[Array[Number]], events: Array[Number]) Number {
+async fn suspended_index(nested: Array[Array[Number]], events: Array[Number]) Number {
     Array.push(events, 1)
     Task.sleep(1).await
     let target = nested
@@ -211,7 +211,7 @@ fn suspended_index(nested: Array[Array[Number]], events: Array[Number]) Number {
     0
 }
 
-fn async_assignment_order() {
+async fn async_assignment_order() {
     let events = []
     let nested = [[10]]
     let original = nested[0]
@@ -226,7 +226,7 @@ fn async_assignment_order() {
     assert(events == [1, 2, 3])
 }
 
-fn async_index_only() {
+async fn async_index_only() {
     let events = []
     let nested = [[10]]
     let original = nested[0]
@@ -287,7 +287,7 @@ fn expression_order() {
     assert(captured == [1, 2])
 }
 
-pub fn main() {
+pub async fn main() {
     expression_order()
     template_order()
     assert(assignments.identity(42) == 42)

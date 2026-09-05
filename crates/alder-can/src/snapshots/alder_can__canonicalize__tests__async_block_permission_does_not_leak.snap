@@ -1,0 +1,21 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "fn make() {\n    let task = async { Task.sleep(1).await }\n    Task.sleep(1).await\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 5,
+            },
+            end: Position {
+                line: 3,
+                column: 24,
+            },
+        },
+        kind: Expr(
+            AwaitOutsideAsync,
+        ),
+    },
+]

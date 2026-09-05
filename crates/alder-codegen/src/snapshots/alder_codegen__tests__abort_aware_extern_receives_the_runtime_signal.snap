@@ -1,6 +1,6 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-description: "#[extern(\"globalThis\", \"fetch\", \"abort\")]\nfn fetch(url: String) Task[String]\n\npub fn request(url: String) String {\n    fetch(url).await\n}\n"
+description: "#[extern(\"globalThis\", \"fetch\", \"abort\")]\nfn fetch(url: String) Task[String]\n\npub async fn request(url: String) String {\n    fetch(url).await\n}\n"
 ---
 import { $task, $tryPromise } from "alder:kernel";
 function $v_fetch($a0) {

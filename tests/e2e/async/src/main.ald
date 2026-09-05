@@ -13,11 +13,11 @@ fn resolvedResult(
     value: Result[Number, [:promised(String)]],
 ) Task[Result[Number, [:promised(String)]]]
 
-fn load(value: Number) Result[Number] {
+async fn load(value: Number) Result[Number] {
     Ok(resolved(value).await)
 }
 
-fn checkedDelay(value: Number, milliseconds: Number) Result[Number] {
+async fn checkedDelay(value: Number, milliseconds: Number) Result[Number] {
     Task.sleep(milliseconds).await
     Ok(value)
 }
@@ -26,27 +26,27 @@ fn prepare(value: Number) Number {
     value
 }
 
-fn fail() Result[Number] {
+async fn fail() Result[Number] {
     Task.sleep(1).await
     Err(:not_found("missing"))
 }
 
-fn propagate() Result[Number] {
+async fn propagate() Result[Number] {
     let value = fail().await?
     Ok(value)
 }
 
-fn promisedSuccess() Result[Number] {
+async fn promisedSuccess() Result[Number] {
     let value = resolvedResult(Ok(42)).await?
     Ok(value)
 }
 
-fn promisedFailure() Result[Number] {
+async fn promisedFailure() Result[Number] {
     let value = resolvedResult(Err(:promised("rejected as typed data"))).await?
     Ok(value)
 }
 
-fn choose(flag: Bool) Number {
+async fn choose(flag: Bool) Number {
     if flag {
         resolved(10).await
     } else {
@@ -54,7 +54,7 @@ fn choose(flag: Bool) Number {
     }
 }
 
-fn counted() Number {
+async fn counted() Number {
     let count = 0
     while count < 2 {
         Task.sleep(1).await
@@ -63,21 +63,21 @@ fn counted() Number {
     count
 }
 
-fn early() Number {
+async fn early() Number {
     Task.sleep(1).await
     return 42
 }
 
-fn deep(depth: Number) Number {
+async fn deep(depth: Number) Number {
     if depth == 0 { 42 } else { deep(depth - 1).await }
 }
 
-fn deepSuspended(depth: Number) Number {
+async fn deepSuspended(depth: Number) Number {
     resolved(depth).await
     if depth == 0 { 42 } else { deepSuspended(depth - 1).await }
 }
 
-fn deepResult(depth: Number) Result[Number, [:deep(String)]] {
+async fn deepResult(depth: Number) Result[Number, [:deep(String)]] {
     if depth == 0 {
         Err(:deep("bottom"))
     } else {
@@ -86,7 +86,7 @@ fn deepResult(depth: Number) Result[Number, [:deep(String)]] {
     }
 }
 
-pub fn main() Result[()] {
+pub async fn main() Result[()] {
     assert(aliasedOperation(42).await == 42)
     assert(deep(20000).await == 42)
     assert(deepSuspended(20000).await == 42)
@@ -100,7 +100,7 @@ pub fn main() Result[()] {
     let loadedWithArgument = 42 |> checkedDelay(1).await?
     let directFinal = 42 |> prepare |> resolved().await
     let groupedFinal = (42 |> prepare |> resolved()).await
-    let anonymous = value -> {
+    let anonymous = value -> async {
         Task.sleep(1).await
         value
     }

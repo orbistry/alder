@@ -424,7 +424,7 @@ import_name   = ( lower_ident | upper_ident ) [ 'as' ( lower_ident | upper_ident
 module_path   = '@' raw_lower '/' raw_lower { '/' raw_lower }         (* package *)
               | '~' { '/' raw_lower } ;                               (* this package *)
 
-fn_decl       = 'fn' lower_ident '(' [ params ] ')' [ type ] [ where_clause ] [ block ] ;
+fn_decl       = [ 'async' ] 'fn' lower_ident '(' [ params ] ')' [ type ] [ where_clause ] [ block ] ;
 type_params   = '[' lower_ident { ',' lower_ident } [ ',' ] ']' ;     (* only on definitions with arity *)
 where_clause  = 'where' [ constraint { ',' constraint } [ ',' ] ] ;
 constraint    = lower_ident ':' bound { '+' bound } | lower_ident '.' upper_ident '==' type ;
@@ -517,11 +517,12 @@ primary       = number | bigint | string | template | 'true' | 'false'
               | '(' ')' | '(' expression [ ',' ] ')' | '(' expression ',' expression { ',' expression } [ ',' ] ')'   (* '(' e ',' ')' is e (§10.8) *)
               | '[' [ expression { ',' expression } [ ',' ] ] ']'
               | record | block | lambda | if_expr | match_expr | loop_expr
-              | provide_expr
+              | provide_expr | async_expr
               | 'state' '(' expression ')'
               | 'style' style_block
               | 'query' '{' query_expr '}' | markup
               | macro_call ;
+async_expr    = 'async' block ;
 lambda        = lower_ident '->' ( block | assign | expression )
               | '(' [ params ] ')' [ type ] '->' ( block | assign | expression ) ;       (* §10.13 *)
 if_expr       = 'if' expression block { 'else' 'if' expression block } [ 'else' block ] ;
@@ -649,7 +650,7 @@ error_row     = '[' [ tag_variant { '|' tag_variant } [ '|' lower_ident ] | lowe
 ### Reserved words
 
 ```
-as assert await break comptime component continue else enum error false
+as assert async await break comptime component continue else enum error false
 fn for if impl import in let loop macro match pub provide query
 return schema state style table test tests trait true type use where
 while

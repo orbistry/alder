@@ -43,8 +43,20 @@ use crate::{Parser, error};
 
 impl<'a> Parser<'a> {
     /// After `fn`; body optional.
+    #[cfg(test)]
     pub(crate) fn fn_decl(&mut self) -> Result<&'a FnDecl<'a>, error::Fn<'a>> {
-        self.fn_decl_with_end().map(|(decl, _)| decl)
+        self.fn_decl_with_end(false).map(|(decl, _)| decl)
+    }
+
+    /// Parse a named function, including its optional `async` prefix.
+    pub(super) fn named_function(&mut self) -> Result<(&'a FnDecl<'a>, Position), error::Fn<'a>> {
+        let is_async = self.peek_keyword(b"async");
+        if is_async {
+            self.advance_by(5);
+            self.chomp();
+        }
+        self.keyword(b"fn", error::Fn::Keyword)?;
+        self.fn_decl_with_end(is_async)
     }
 }
 
@@ -53,7 +65,10 @@ impl<'a> Parser<'a> {
     /// declaration's last byte (the body's `}`, the last `where`
     /// constraint, the return type, or the params' `)`), computed before any
     /// trailing whitespace was chomped.
-    pub(super) fn fn_decl_with_end(&mut self) -> Result<(&'a FnDecl<'a>, Position), error::Fn<'a>> {
+    fn fn_decl_with_end(
+        &mut self,
+        is_async: bool,
+    ) -> Result<(&'a FnDecl<'a>, Position), error::Fn<'a>> {
         self.chomp();
         let name = self.located_lower(error::Fn::Name)?;
         self.chomp();
@@ -101,6 +116,7 @@ impl<'a> Parser<'a> {
             None
         };
         let decl = self.alloc(FnDecl {
+            is_async,
             name,
             params,
             ret,

@@ -1065,6 +1065,7 @@ pub(crate) fn trait_method_annotation<'a>(
         )]);
     };
     let ret = canonicalize_type(bump, env, &variables, ret)?;
+    let ret = callable_result(bump, source.is_async, ret);
     let constraints = canonicalize_constraints(bump, env, source.where_clause, &variables)?;
     let mut predicates = Vec::new();
     for constraint in constraints {
@@ -1344,6 +1345,31 @@ fn interface_constructor_annotation<'a>(
     })
 }
 
+/// Async declaration annotations describe completed values, including externs
+/// and trait signatures. Their callable contract adds exactly one Task layer.
+fn callable_result<'a>(
+    bump: &'a Bump,
+    is_async: bool,
+    ret: &'a Located<Type<'a>>,
+) -> &'a Located<Type<'a>> {
+    if !is_async {
+        return ret;
+    }
+    bump.alloc(Located::at(
+        ret.region,
+        Type::Named {
+            reference: QualifiedName {
+                module: ModuleId {
+                    package: alder_ast::PackageId::Builtin,
+                    path: &[],
+                },
+                name: "Task",
+            },
+            args: bump.alloc_slice_copy(&[ret]),
+        },
+    ))
+}
+
 fn canonicalize_item<'a>(
     bump: &'a Bump,
     env: &mut Env<'a>,
@@ -1375,6 +1401,7 @@ fn canonicalize_item<'a>(
             env.pop_scope();
             let constraints = canonicalize_constraints(bump, env, decl.where_clause, &variables)?;
             let ret = canonicalize_type(bump, env, &variables, ret)?;
+            let ret = callable_result(bump, decl.is_async, ret);
             if abort_signal && !is_task_type(ret) {
                 return Err(vec![invalid_extern(
                     item.region,
@@ -1701,6 +1728,7 @@ fn canonicalize_trait_fn<'a>(
     env.push_scope();
     let saved_control = env.control;
     env.control.function_depth += 1;
+    env.control.async_body = source.is_async;
     env.control.loop_depth = 0;
     let result = (|| {
         let method = env
@@ -1729,6 +1757,7 @@ fn canonicalize_trait_fn<'a>(
             })
         };
         Ok(bump.alloc(TraitFn {
+            is_async: source.is_async,
             id: method.id,
             name: source.name,
             params,
@@ -2041,6 +2070,7 @@ fn canonicalize_impl_fn<'a>(
     env.push_scope();
     let saved_control = env.control;
     env.control.function_depth += 1;
+    env.control.async_body = source.is_async;
     env.control.loop_depth = 0;
     let result = (|| {
         let params = canonicalize_params(bump, env, source.params, &variables)?;
@@ -2068,6 +2098,7 @@ fn canonicalize_impl_fn<'a>(
             )),
         };
         Ok(bump.alloc(ImplFn {
+            is_async: source.is_async,
             method: method.id,
             name: source.name,
             params,
@@ -2354,6 +2385,7 @@ fn canonicalize_fn<'a>(
     env.push_scope();
     let saved_control = env.control;
     env.control.function_depth += 1;
+    env.control.async_body = source.is_async;
     env.control.loop_depth = 0;
     let params = canonicalize_params(bump, env, source.params, &variables)?;
     let ret = match source.ret {
@@ -2365,6 +2397,7 @@ fn canonicalize_fn<'a>(
     env.control = saved_control;
     env.pop_scope();
     Ok(bump.alloc(FnDecl {
+        is_async: source.is_async,
         name: top_level_name(env, source.name.value),
         params,
         ret,
@@ -3852,10 +3885,69 @@ mod tests {
     }
 
     #[test]
-    fn await_is_accepted_without_an_explicit_task_return() {
+    fn explicit_async_function_allows_await() {
         let bump = Bump::new();
-        can(&bump, "fn wait() { Task.sleep(1).await }");
-        can(&bump, "fn wait() Task[()] { Task.sleep(1).await }");
+        let result = can(&bump, "async fn wait() { Task.sleep(1).await }");
+        let ItemKind::Fn(function) = result.module.items[0].value.kind else {
+            panic!("expected function");
+        };
+        assert!(function.is_async);
+    }
+
+    #[test]
+    fn plain_function_cannot_await() {
+        assert_can_error_snapshot!("fn wait() { Task.sleep(1).await }");
+    }
+
+    #[test]
+    fn task_annotation_does_not_authorize_await() {
+        assert_can_error_snapshot!("fn wait() Task[()] { Task.sleep(1).await }");
+    }
+
+    #[test]
+    fn lambda_does_not_inherit_async_permission() {
+        assert_can_error_snapshot!("async fn wait() { () -> Task.sleep(1).await }");
+    }
+
+    #[test]
+    fn async_block_cannot_break_outer_loop() {
+        assert_can_error_snapshot!("fn make() { loop { async { break 42 } } }");
+    }
+
+    #[test]
+    fn async_block_cannot_continue_outer_loop() {
+        assert_can_error_snapshot!("fn make() { loop { async { continue } } }");
+    }
+
+    #[test]
+    fn async_block_permission_does_not_leak() {
+        assert_can_error_snapshot!(
+            r#"
+            fn make() {
+                let task = async { Task.sleep(1).await }
+                Task.sleep(1).await
+            }
+        "#
+        );
+    }
+
+    #[test]
+    fn async_block_has_independent_control_flow() {
+        let bump = Bump::new();
+        let result = can(&bump, "let task = async { return Task.sleep(1).await }");
+        let ItemKind::Let(decl) = result.module.items[0].value.kind else {
+            panic!("expected let");
+        };
+        assert!(matches!(decl.value.value, Expr::Async(_)));
+        let flow = alder_ast::flow::expression(decl.value);
+        assert!(flow.falls_through);
+        assert!(!flow.returns && !flow.breaks && !flow.continues);
+    }
+
+    #[test]
+    fn lambda_returning_async_block_allows_await() {
+        let bump = Bump::new();
+        can(&bump, "let wait = () -> async { Task.sleep(1).await }");
     }
 
     #[test]

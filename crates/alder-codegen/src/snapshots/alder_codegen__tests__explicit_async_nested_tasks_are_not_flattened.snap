@@ -1,0 +1,13 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub async fn nested() Task[Number] { async { 42 } }"
+---
+import { $task } from "alder:kernel";
+function $v_nested() {
+	return $task(function* () {
+		return $task(function* () {
+			return 42;
+		});
+	});
+}
+export { $v_nested as nested };

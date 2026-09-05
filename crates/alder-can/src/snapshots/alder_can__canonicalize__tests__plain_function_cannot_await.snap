@@ -1,0 +1,21 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "fn wait() { Task.sleep(1).await }"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 13,
+            },
+            end: Position {
+                line: 1,
+                column: 32,
+            },
+        },
+        kind: Expr(
+            AwaitOutsideAsync,
+        ),
+    },
+]

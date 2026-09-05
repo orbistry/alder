@@ -333,6 +333,7 @@ Module {
                 ),
                 kind: Fn(
                     FnDecl {
+                        is_async: false,
                         name: Located {
                             region: Region {
                                 start: Position {

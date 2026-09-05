@@ -191,9 +191,11 @@ test "arithmetic works" {
 }
 
 test "async declarations run through the fiber scheduler" {
-    let value = 42 |> resolvedForTest().await
-    Task.sleep(1).await
-    assert value == 42
+    async {
+        let value = 42 |> resolvedForTest().await
+        Task.sleep(1).await
+        assert value == 42
+    }
 }
 
 test "trait dictionaries dispatch" {

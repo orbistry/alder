@@ -1193,6 +1193,7 @@ enum FunctionContext<'a> {
 
 #[derive(Clone, Copy)]
 struct FunctionInput<'a> {
+    is_async: bool,
     params: &'a [alder_ast::Param<'a>],
     ret: Option<&'a Located<Type<'a>>>,
     constraints: &'a [alder_ast::TypeConstraint<'a>],
@@ -1534,7 +1535,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         item: &'a ItemKind<'a>,
         region: Region,
     ) -> Result<(), Error> {
-        let suspends = matches!(item, ItemKind::Fn(function) if alder_ast::contains_await_block(function.body));
+        let is_async = matches!(item, ItemKind::Fn(function) if function.is_async);
         let (name, params, ret, constraints) = match item {
             ItemKind::Fn(function) => (
                 function.name,
@@ -1564,10 +1565,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             Some(typ) => self.from_ast(typ, &mut vars),
             None => self.fresh(),
         };
-        if suspends
-            && !matches!(self.prune(ret.clone()), Ty::App(head, ref args)
-                if matches!(*head, Ty::Con(reference) if reference.name == "Task") && args.len() == 1)
-        {
+        if is_async {
             ret = self.named("Task", vec![ret]);
         }
         let predicates = self.predicates_from_constraints(constraints, &vars);
@@ -1625,6 +1623,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         self.infer_function(
                             env,
                             FunctionInput {
+                                is_async: function.is_async,
                                 params: function.params,
                                 ret: function.ret,
                                 constraints: function.constraints,
@@ -1647,6 +1646,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         self.infer_function(
                             env,
                             FunctionInput {
+                                is_async: function.is_async,
                                 params: function.params,
                                 ret: function.ret,
                                 constraints: function.constraints,
@@ -1692,6 +1692,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let (typ, predicates, projection_eqs) = self.infer_function(
                     env,
                     FunctionInput {
+                        is_async: function.is_async,
                         params: function.params,
                         ret: function.ret,
                         constraints: function.constraints,
@@ -1748,6 +1749,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let (typ, predicates, projection_eqs) = self.infer_function(
                     env,
                     FunctionInput {
+                        is_async: false,
                         params: component.params,
                         ret: None,
                         constraints: &[],
@@ -1779,6 +1781,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         input: FunctionInput<'a>,
     ) -> Result<(Ty<'a>, Vec<Predicate<'a>>, Vec<ProjectionEquation<'a>>), Error> {
         let FunctionInput {
+            is_async,
             params,
             ret,
             constraints,
@@ -1803,21 +1806,11 @@ impl<'a, 'db> Infer<'a, 'db> {
             Some(ret) => self.from_ast(ret, &mut vars),
             None => self.fresh(),
         };
-        let suspends = alder_ast::contains_await_block(body);
-        let (result, body_result) = if suspends {
-            match self.prune(declared_result.clone()) {
-                Ty::App(head, args)
-                    if matches!(*head, Ty::Con(reference) if reference.name == "Task")
-                        && args.len() == 1 =>
-                {
-                    let inner = args.into_iter().next().expect("length checked");
-                    (declared_result, inner)
-                }
-                _ => {
-                    let task = self.named("Task", vec![declared_result.clone()]);
-                    (task, declared_result)
-                }
-            }
+        let (result, body_result) = if is_async {
+            (
+                self.named("Task", vec![declared_result.clone()]),
+                declared_result,
+            )
         } else {
             (declared_result.clone(), declared_result)
         };
@@ -2364,6 +2357,20 @@ impl<'a, 'db> Infer<'a, 'db> {
                 right,
             } => self.infer_binop(env, *use_id, op.value, left, right, return_type),
             Expr::Block(block) => self.infer_block(&mut env.clone(), block, return_type),
+            Expr::Async(block) => {
+                let result = self.fresh();
+                let outer_loops = std::mem::take(&mut self.loop_results);
+                let outer_reachable = std::mem::replace(&mut self.reachable, true);
+                let body_type = self.infer_block(&mut env.clone(), block, Some(result.clone()));
+                self.reachable = outer_reachable;
+                self.loop_results = outer_loops;
+                let body_type = body_type?;
+                if alder_ast::flow::block(block).falls_through {
+                    self.unify_return(body_type, result.clone(), region)?;
+                }
+                let result = self.prune(result);
+                Ok(self.named("Task", vec![result]))
+            }
             Expr::Lambda { params, ret, body } => {
                 let mut local = env.clone();
                 let mut vars = self.annotation_scope.clone();
@@ -2379,24 +2386,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let declared_result = ret
                     .map(|ret| self.from_ast(ret, &mut vars))
                     .unwrap_or_else(|| self.fresh());
-                let suspends = alder_ast::contains_await_expr(body);
-                let (result, body_result) = if suspends {
-                    match self.prune(declared_result.clone()) {
-                        Ty::App(head, task_args)
-                            if matches!(*head, Ty::Con(reference) if reference.name == "Task")
-                                && task_args.len() == 1 =>
-                        {
-                            let inner = task_args.into_iter().next().expect("length checked");
-                            (declared_result, inner)
-                        }
-                        _ => {
-                            let task = self.named("Task", vec![declared_result.clone()]);
-                            (task, declared_result)
-                        }
-                    }
-                } else {
-                    (declared_result.clone(), declared_result)
-                };
+                let (result, body_result) = (declared_result.clone(), declared_result);
                 let outer_annotation_scope = std::mem::replace(&mut self.annotation_scope, vars);
                 let outer_loops = std::mem::take(&mut self.loop_results);
                 let outer_reachable = std::mem::replace(&mut self.reachable, true);

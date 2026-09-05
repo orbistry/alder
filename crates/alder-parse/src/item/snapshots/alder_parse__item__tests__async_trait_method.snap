@@ -1,0 +1,94 @@
+---
+source: crates/alder-parse/src/item/mod.rs
+description: "trait Load[a] { async fn load() a }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 36,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Trait(
+            TraitDecl {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 7,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 11,
+                        },
+                    },
+                    value: "Load",
+                },
+                params: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 12,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 13,
+                            },
+                        },
+                        value: "a",
+                    },
+                ],
+                where_clause: [],
+                items: [
+                    Fn(
+                        FnDecl {
+                            is_async: true,
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 26,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 30,
+                                    },
+                                },
+                                value: "load",
+                            },
+                            params: [],
+                            ret: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 33,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 34,
+                                        },
+                                    },
+                                    value: Var {
+                                        name: "a",
+                                        args: [],
+                                    },
+                                },
+                            ),
+                            where_clause: [],
+                            body: None,
+                        },
+                    ),
+                ],
+            },
+        ),
+    },
+}

@@ -1,0 +1,21 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "fn make() { loop { async { continue } } }"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 28,
+            },
+            end: Position {
+                line: 1,
+                column: 36,
+            },
+        },
+        kind: Stmt(
+            ContinueOutsideLoop,
+        ),
+    },
+]
