@@ -863,6 +863,59 @@ fn record_rows_accumulate_fields_independently_of_access_order() {
 }
 
 #[test]
+fn open_spread_cannot_hide_an_incompatible_overwrite() {
+    let source = indoc! {r#"
+        fn fallback(record) Number {
+            let result = { value: 42, ..record }
+            result.value
+        }
+        fn run() Number { fallback({ value: "wrong" }) }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn open_spread_accepts_absent_and_compatible_overwrites() {
+    let source = indoc! {r#"
+        fn fallback(record) Number {
+            let result = { value: 42, ..record }
+            result.value
+        }
+        fn run() Number {
+            fallback({}) + fallback({ extra: true }) + fallback({ value: 7 })
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn optional_spread_checks_fallbacks_hidden_in_an_open_row() {
+    let source = indoc! {r#"
+        fn fallback(record, patch: { value?: String }) Option[String] {
+            let result = { ..record, ..patch }
+            result.value
+        }
+        fn run() Option[String] { fallback({ value: 42 }, {}) }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn final_required_override_does_not_constrain_hidden_row_payloads() {
+    let source = indoc! {r#"
+        fn replace(record: { r | marker: Bool }) ({ r | marker: Bool, value: Bool }) {
+            { ..{ value: 42 }, ..record, value: true }
+        }
+        fn run() Bool { replace({ marker: true, value: "discarded" }).value }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
 fn optional_spread_preserves_a_required_fallback() {
     let source = indoc! {r#"
         fn fallback(record: { value?: Number }) Number {

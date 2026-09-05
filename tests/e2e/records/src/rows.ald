@@ -23,3 +23,7 @@ pub fn boxed(value: a) Boxed[a] { { value } }
 pub fn choose(flag: Bool, record: OptionalName) {
     if flag { { name: "present" } } else { record }
 }
+pub fn fallback(record) Number {
+    let result = { value: 42, ..record }
+    result.value
+}

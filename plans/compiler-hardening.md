@@ -160,6 +160,20 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Open spread overlaps: reproduced an inferred spread operand accepting a
+  String overwrite in a function promising Number. Fields hidden in open tails
+  were omitted from the payload alternatives. Surviving overlaps now add
+  optional-field requirements to the relevant tail, covering both later hidden
+  overwrites and earlier hidden fallbacks for optional fields. Deferred checks
+  preserve universal input tails when a later required field overwrites the
+  alternatives. Four solver regressions and cross-module CLI calls verify
+  rejection, absence, unrelated fields, compatible payloads, and final overrides.
+  Full workspace tests (205 solver integration tests), strict all-target/all-
+  feature Clippy, formatting, and diff checks pass; no snapshot changes or
+  pending snapshots. Added a solve patch changeset and updated row design docs.
+  General merging of independent open tails remains unresolved; this is a
+  targeted soundness fix, not completion of record-row acceptance.
+
 - Optional spread fallbacks: reproduced accepting a numeric fallback as
   `Option[String]` while rejecting the safe required Number result. Inference
   copied the optional spread type and discarded the value retained at runtime

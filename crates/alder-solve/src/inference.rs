@@ -2520,6 +2520,10 @@ impl<'a, 'db> Infer<'a, 'db> {
         fields: &'a [RecordField<'a>],
         return_type: Option<Ty<'a>>,
     ) -> Result<Ty<'a>, Error> {
+        enum Payload<'a> {
+            Known(Ty<'a>, Region),
+            OpenRow(Ty<'a>, Region),
+        }
         let mut result = BTreeMap::new();
         let mut tail: Option<Box<Ty<'a>>> = None;
         for field in fields {
@@ -2528,7 +2532,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                     let typ = self.infer_expr(env, value, return_type.clone())?;
                     result.insert(
                         name.value,
-                        (FieldPresence::Required, vec![(typ, value.region)]),
+                        (
+                            FieldPresence::Required,
+                            vec![Payload::Known(typ, value.region)],
+                        ),
                     );
                 }
                 RecordField::Spread(expr) => {
@@ -2536,6 +2543,14 @@ impl<'a, 'db> Infer<'a, 'db> {
                     let expected = self.open_record(BTreeMap::new());
                     self.unify(spread.clone(), expected, expr.region)?;
                     if let Ty::Record(fields, inherited) = self.prune(spread) {
+                        if let Some(inherited) = &inherited {
+                            for (name, (_, alternatives)) in &mut result {
+                                if !fields.contains_key(name) {
+                                    alternatives
+                                        .push(Payload::OpenRow((**inherited).clone(), expr.region));
+                                }
+                            }
+                        }
                         for (name, (presence, typ)) in fields {
                             if presence == FieldPresence::Optional
                                 && let Some((_, alternatives)) = result.get_mut(name)
@@ -2543,9 +2558,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                                 // An absent spread property leaves the earlier
                                 // value intact. Both payloads are possible, and
                                 // an existing required property stays present.
-                                alternatives.push((typ, expr.region));
+                                alternatives.push(Payload::Known(typ, expr.region));
                             } else {
-                                result.insert(name, (presence, vec![(typ, expr.region)]));
+                                let mut alternatives = Vec::new();
+                                if presence == FieldPresence::Optional
+                                    && let Some(previous) = &tail
+                                {
+                                    alternatives
+                                        .push(Payload::OpenRow((**previous).clone(), expr.region));
+                                }
+                                alternatives.push(Payload::Known(typ, expr.region));
+                                result.insert(name, (presence, alternatives));
                             }
                         }
                         if let (Some(previous), Some(next)) = (&tail, &inherited) {
@@ -2562,12 +2585,29 @@ impl<'a, 'db> Infer<'a, 'db> {
         // only the payloads that can survive in the completed record.
         let mut joined = BTreeMap::new();
         for (name, (presence, alternatives)) in result {
-            let mut alternatives = alternatives.into_iter();
-            let (mut typ, _) = alternatives.next().expect("each field has a payload");
-            for (other, region) in alternatives {
-                typ = self.join_values(typ, other, region)?;
+            let mut joined_payload = None;
+            for alternative in alternatives {
+                let (other, region) = match alternative {
+                    Payload::Known(typ, region) => (typ, region),
+                    Payload::OpenRow(row, region) => {
+                        let typ = self.fresh();
+                        let expected = self.open_record(BTreeMap::from([(
+                            name,
+                            (FieldPresence::Optional, typ.clone()),
+                        )]));
+                        self.unify(row, Ty::RecordRow(Box::new(expected)), region)?;
+                        (typ, region)
+                    }
+                };
+                joined_payload = Some(match joined_payload {
+                    Some(typ) => self.join_values(typ, other, region)?,
+                    None => other,
+                });
             }
-            joined.insert(name, (presence, typ));
+            joined.insert(
+                name,
+                (presence, joined_payload.expect("each field has a payload")),
+            );
         }
         Ok(Ty::Record(joined, tail))
     }

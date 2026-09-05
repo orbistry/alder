@@ -90,6 +90,18 @@ types need not agree. Solver regressions and CLI execution cover absence,
 presence, two optional spreads, incompatible surviving payloads, and final
 required overrides. This does not resolve the independent-open-tail limitation.
 
+Open overlap checkpoint: fields hidden in an unresolved spread tail can also
+overwrite earlier properties, and an earlier unresolved tail can supply the
+fallback for a later optional property. Surviving overlaps now constrain the
+relevant tail with an optional field carrying the joined payload type. Absence
+remains valid and unrelated fields retain their tail. These constraints use
+ordinary record-row types and therefore travel through existing schemes and
+interfaces. Constraints are applied only to alternatives that survive later
+required overwrites; overwritten fields do not restrict an otherwise universal
+input tail. Regression coverage includes both overlap directions, absent and
+compatible calls, universal-tail overrides, and cross-module CLI calls. General
+merging of two independent open tails remains unresolved.
+
 Cross-module checkpoint: executable `records` tests now cover imported row
 updates, independent instantiations, two distinct tails, inferred field
 requirements, and optional results. Driver tests exercise owned-interface

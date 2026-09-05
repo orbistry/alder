@@ -71,6 +71,9 @@ pub fn main() {
     assert(pair.1.y == 3)
     assert(pair.1.right)
     let optional: OptionalName = {}
+    assert(rows.fallback({}) == 42)
+    assert(rows.fallback({ extra: true }) == 42)
+    assert(rows.fallback({ value: 7 }) == 7)
     let absent_spread: { value?: Number } = {}
     let present_spread: { value?: Number } = { value: 7 }
     let fallback = { value: 42, ..absent_spread }
