@@ -160,6 +160,20 @@ Root cause: virtual module imports lack a physical importer location.
 
 ## Evidence log
 
+- Package verification checkpoint: all 17 publishable workspace crates package
+  and build from extracted archives using a fresh temporary target directory
+  and Cargo's staged registry. The old target directory produced stale API
+  errors; a fresh directory passed without compiler changes. Inspected embedded
+  stdlib/kernel archive contents. The packaged CLI runs hello and async/externs/
+  traits/records/control-flow fixtures from `/tmp`. cargo-dist 0.32.0 plans all
+  five configured platforms/installers successfully. Added CI archive build
+  verification in a fresh runner target directory and removed an obsolete M1
+  workspace-build comment. Full tests, strict Clippy, formatting, and diff
+  checks pass; no pending snapshots. See `docs/release-packaging-hardening.md`.
+  No publishable source changes, so no changeset needed. Final-commit packaging,
+  version-update verification, remote platform builds, and the broader semantic
+  acceptance audit remain open; no tags, pushes, or publication performed.
+
 - Wildcard privacy/collision coverage: exact owned-interface assertions verify
   that only public values, aliases, enums, and traits are published, without
   copying private diagnostic names or dependency instances. A consumer with
