@@ -1,5 +1,12 @@
 # M4: Errors, async, and context
 
+Current context direction: services/layers-style DI in
+`docs/dependency-injection.md` and `plans/dependency-injection.md`, agreed but
+deferred. Those documents supersede the `use`/nested-`provide` proposal below.
+The dated starting state and inferred-async checkpoints here are historical;
+explicit async and accepted hardening are recorded in
+`docs/compiler-hardening-final-report.md`.
+
 M4 has three related effect-like features: structural error rows on
 `Result`, inferred `Task` functions, and compile-time-tracked context.
 They share propagation ideas, but they do not share one undifferentiated
@@ -141,8 +148,9 @@ vertical slice; async and context follow without weakening that slice.
 - [x] Lower task functions/await to direct Oxc generator/`yield*` ASTs;
   implement scheduler, fiber operations, scopes, interruption, finalization,
   async entry points, and forwarding-before-postfix pipe lowering.
-- [ ] Implement provider requirements, lexical discharge, interface storage,
-  context propagation, and entry-point validation.
+- [ ] Implement the deferred services/layers DI plan, including requirements,
+  composition validation, owned lifetimes, and migration of the existing context
+  mechanism; see `plans/dependency-injection.md`.
 
 ### Wave 5: sweep
 

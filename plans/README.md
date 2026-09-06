@@ -12,6 +12,7 @@ with file ownership, the tests each step must add, and the risks.
 | `m2-core-language.md`    | Front end green on the new AST, then JS + run | M1 (done)  |
 | `m3-traits.md`           | Type classes, HKT, dictionaries               | M2         |
 | `m4-errors-and-async.md` | Error rows, `Task`, fibers, context           | M2, M3     |
+| `dependency-injection.md` | Deferred services/layers DI; supersedes M4's initial context design | M2, M3, async runtime; not M5 |
 | `m5-macros.md`           | Compile-time Alder, derives                   | M2b, M3    |
 | `m6-web.md`              | Components, SSR, routing, Cloudflare          | M4, M5     |
 | `m7-data.md`             | `table`, `query`, migrations, `schema`        | M3, M4     |

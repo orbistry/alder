@@ -582,13 +582,20 @@ Intentional divergences are:
 
 ## 12. Context contract
 
-`use Provider` adds a function requirement. Direct calls propagate it upward;
-`provide Provider = value { ... }` lexically discharges it. Interfaces publish
-requirements, and entry points must have an empty unsatisfied set.
+The intended DI contract is now the deferred services/layers design in
+`dependency-injection.md`, with implementation planning in
+`../plans/dependency-injection.md`. It supersedes the earlier proposal to infer
+requirements from body-level `use` and satisfy them through nested `provide`.
+Function requirements must survive callbacks and interfaces; statically declared
+composition roots validate and construct provider graphs. Resource ownership and
+scope-escape checks require additional compiler/runtime work, not just a context
+map or a direct-call dependency walk.
 
 At runtime the scheduler carries a fiber-local provider map. Forked fibers
 capture their parent's context, while scoped changes do not leak to siblings.
-Context stays a dedicated compiler structure, not a user-visible error row.
+This existing mechanism does not implement static DI or its proposed lexical
+capture/lifetime guarantees. Requirements remain separate from user-visible error
+rows; migration must be specified before replacing this runtime behavior.
 
 ## 13. Verification order
 

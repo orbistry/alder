@@ -60,10 +60,11 @@ orbistry/alder/
 
 ---
 
-## Foundation (Elm port, done)
+## Compiler foundation
 
-These crates are complete against Elm's semantics and Elm's syntax. They
-are kept through the redesign and adapted incrementally.
+The compiler began as an Elm port; the active modules now implement Alder's
+syntax and semantics. The descriptions below cover the current implementation,
+not the unlinked Elm-era files. See `docs/compiler-implementation-map.md`.
 
 ### Project configuration (`alder-config`) ✅
 
@@ -155,8 +156,11 @@ are kept through the redesign and adapted incrementally.
   depth groups and cycle traversal are sorted too. CLI project builds share
   package/source-root identities between graph resolution and compilation and
   reject duplicate module sources before interface discovery. See
-  `docs/module-resolution-internals.md` and the remaining hardening audit.
-- **Caching:** Interface-only (always regenerate JavaScript), bincode serialization
+  `docs/module-resolution-internals.md` and the accepted hardening report.
+- **Saved interfaces:** Bincode-serialized semantic interfaces and package
+  instance indexes are consumed for interface-only dependencies. Current-project
+  and source-backed dependency modules are recompiled from source; saved
+  interfaces do not yet enable incremental checking or JavaScript reuse.
 - **Invalidation:** Reverse dependency tracking for LSP
 - **Arenas:** Per-module bumpalo arenas
 
@@ -167,7 +171,8 @@ are kept through the redesign and adapted incrementally.
 - `project.rs`: Project loading from `alder.jsonc`, workspace member discovery
 - `graph.rs`: Dependency graph construction with topological sort and cycle detection
 - `compile.rs`: Compilation orchestration (async source fetch, CPU-bound work off the executor)
-- `interface.rs`: Interface serialization with bincode for incremental builds
+- `interface.rs`: Versioned semantic interface/index serialization and validation;
+  incremental rebuild helpers are not wired into the active build path
 - `error.rs`: Driver error types with miette diagnostics
 
 **CLI (`crates/alder-cli/`):**
@@ -202,26 +207,24 @@ are kept through the redesign and adapted incrementally.
 
 ### Type inference (`alder-constrain` + `alder-solve`) ✅
 
-**Goal:** Hindley-Milner type inference via constraint generation and
-rank-based solving, ported from Elm's `Type/*`.
+**Goal:** Alder-native type inference and trait solving over the canonical AST.
 
 **alder-constrain:**
 
-- Generate type constraints from the canonical AST, with the expectation
-  contexts Elm uses for error messages (`Expected`/`Category`/...)
-- Pattern constraints with binding headers
-- Shared vocabulary: union-find variables, descriptors, inference types
+- Preserve the canonical module and collect requirement seeds for inference
+- Retain source expectation contexts and owned diagnostic type information
+- Keep the constraint/inference phase boundary without the old Elm constraint tree
 
 **alder-solve:**
 
-- Weight-balanced union-find unification with number/comparable/appendable
-  supertypes, extensible records, and aliases
-- Let-polymorphism via rank-based generalization (Elm's pools)
-- Occurs check and infinite-type errors
-- `toAnnotation`: solved variables back to canonical annotations, feeding
-  `Interface::from_module`
-- Exhaustiveness checking is a later post-solve pass (Elm's
-  `Nitpick/PatternMatches.hs`), not part of the solver
+- Inference in `inference.rs`, with record/error rows, aliases, higher-kinded
+  types, and occurs checks
+- Generalization with mutation restrictions and universal-contract checking
+- Trait/coherence solving and dictionary evidence for code generation
+- Solved annotations and schemes feeding semantic interface construction
+- Post-inference pattern coverage and binding checks in `pattern_matrix.rs`
+
+The old rank-based Elm solver files are not active compiler modules.
 
 **Reference:** `elm/compiler/src/Type/`
 
@@ -269,7 +272,10 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
 - [x] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing
 - [x] Complete diagnostic parity matrix, validation, and final evidence report
 
-Ordered. Each milestone is the task list for that phase; check items off
+Milestone numbers describe the roadmap, not a requirement to start every
+feature in numerical order. M5 macros/comptime are currently deferred by choice;
+their eventual consumers still need explicit dependency/design review.
+Each milestone is the task list for that phase; check items off
 as they land and update the grammar section alongside. `plans/` holds a
 detailed plan per remaining milestone (starting state, exit criteria,
 settled and open decisions, waves, tests, risks).
@@ -290,11 +296,10 @@ inventory are recorded in `docs/parser-diagnostic-parity.md`.
 
 New parser for the grammar below (`crates/alder-parse` over
 `crates/alder-source`), with snapshot tests per construct. Done; the
-design and its decisions are in `docs/parser-internals.md`. `alder-ast`,
-`alder-can`, `alder-constrain`, `alder-solve`, `alder-driver`, the CLI
-and the language server still consume the old AST and are red until M2
-adapts them; the workspace build and CI are red on the branch until
-then, by design.
+design and its decisions are in `docs/parser-internals.md`. The canonicalizer,
+solver, driver, CLI, and language server are integrated with the Alder parser.
+Workspace builds, tests, and strict Clippy are expected to pass; red CI is not
+intentional.
 
 - [x] Lexer: `//` comments, template literals, `:tag` tokens, `#[`, `::`, `=>`, `->`, `|>`, `??`, `?`, `^`, `@if`/`@for`/`@match`
 - [x] Items: `pub`, path-first `import` with `.{ }`/`.*`/`as`, re-exports (`pub import`)
@@ -337,10 +342,14 @@ then, by design.
 
 ### M4: Errors and async
 
-- [ ] Harden Result's error argument to require rows/groups consistently;
+The language and concurrency hardening items below are implemented and accepted
+in `docs/compiler-hardening-final-report.md`, which supersedes historical open
+checkpoints in the individual plans. Full provider checking remains unfinished.
+
+- [x] Harden Result's error argument to require rows/groups consistently;
   add Option `?` propagation without implicit Option/Result conversion
   (approved decisions in `plans/hardening-language-decisions.md`)
-- [ ] Trailing optional function parameters (`param?: Type`), with omission
+- [x] Trailing optional function parameters (`param?: Type`), with omission
   represented as None and ordinary Option function types; supplied arguments
   prefer direct matches, otherwise recursively lift with Some at call and
   record-initialization boundaries (see approved hardening decisions)
@@ -349,16 +358,25 @@ then, by design.
 - [x] Exhaustiveness on closed groups, `_` requirement on open rows
 - [x] Explicit lazy async functions and blocks; generator codegen; Promise extern lifting;
   fiber scheduler, scopes, interruption, and structured concurrency in the kernel
-- [ ] Ref/SynchronizedRef, cancellation-safe semaphore, and bounded Fiber traversal
+- [x] Ref/SynchronizedRef, cancellation-safe semaphore, and bounded Fiber traversal
   (hardening acceptance tracked in `plans/async-concurrency-hardening.md`)
 
   - [x] Public map/forEach/tryMap/tryForEach with optional MapOptions,
     execution-time bounds validation, and CLI coverage for defaults and Result behavior
   - [x] Expose `Fiber.unbounded` as the explicit concurrency-limit value
-  - [ ] Complete remaining traversal integration/release acceptance gates
-- [ ] `provide`/`use` context resolution and compile-time provider checking
+  - [x] Complete traversal integration and local package-verification acceptance
+    gates (accepted hardening scope; not a claim of release publication)
+- [ ] Statically checked services/layers dependency injection: `#[using(...)]`
+  requirements, provider factories, composition roots, resource scopes, and test
+  overrides (agreed direction, implementation deferred; see
+  `docs/dependency-injection.md` and `plans/dependency-injection.md`). Existing
+  `use`/`provide` runtime context support does not establish these guarantees;
+  proposed service/composition syntax is not part of the grammar below.
 
 ### M5: Macros and comptime
+
+Deferred for now; retain the design and outstanding work in `plans/m5-macros.md`.
+No macro implementation is part of the current provider/context discussion.
 
 - [ ] Syntax API (`TokenStream`/AST) exposed to Alder
 - [ ] Compile macros to JS and execute in embedded V8 during the build

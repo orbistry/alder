@@ -579,31 +579,24 @@ bounds fail at execution as defects, not recoverable Alder errors.
 
 ## Context (dependency injection)
 
-Services are requested by type with `use` and supplied by `provide` in an
-enclosing scope. Missing providers are compile errors at entry points.
+The agreed direction is **Effect-style services and layers with compiler
+integration**, documented in [Services and dependency injection](dependency-injection.md).
+Implementation is deferred; this is not a currently supported language feature.
 
-```alder
-async fn saveUser(user: User) Result[()] {
-    use Db
-    Db.insert(users, user).await
-}
+Consumers will declare typed requirements above functions with
+`#[using(db: Database, cache: Cache)]`. Service identity, not the local names
+`db` and `cache`, determines matching. Provider factories declare their own
+construction dependencies, and composition roots select implementations and own
+their lifetimes. The compiler will check availability across function values and
+module interfaces; tests can replace providers without changing consumers.
+Exact service/composition syntax and scope-escape rules remain to be specified.
+These annotations are compiler constructs and do not require macros.
 
-async fn main() {
-    provide Db = Sqlite.open("app.db") {
-        saveUser(u).await
-    }
-}
-```
-
-- Providers are resolved lexically through the call graph and, in the web
-  runtime, through the render tree, so SSR gets per-request isolation.
-- Tests swap providers with `provide Db = FakeDb.new() { ... }`.
-- `provide … { }` is currently a statement, not a value-producing expression.
-  To return a value from its body, use an explicit `return` belonging to the
-  enclosing function or async block. Await still requires an explicit async
-  boundary. Provider requirement checking and the web integration described
-  above remain future milestone work; the current runtime context mechanism
-  does not establish those compile-time guarantees.
+The existing `use`/`provide` syntax and fiber-local runtime context are a
+provisional mechanism, not an implementation of these static guarantees.
+`provide Provider = value { ... }` is a value-producing expression; await still
+requires an explicit async boundary. Migration to the new DI model will be
+handled separately, without changing current behavior in this documentation pass.
 
 ## Numbers, strings, collections
 
@@ -875,4 +868,5 @@ fn parseJson(s: String) Result[Json, [:syntax(String)]]
 - Convention or attribute for package-internal modules.
 - Macro hygiene and the compile-time API surface.
 - Enum and record runtime representation (see `runtime.md`).
-- Whether `provide … { }` is a statement or an expression (M2).
+- Deferred services/layers DI syntax, requirement representation, and scoped
+  resource/escape rules (see `dependency-injection.md`).
