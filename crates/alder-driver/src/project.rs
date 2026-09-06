@@ -174,10 +174,9 @@ impl Project {
             .collect()
     }
 
-    /// Load persistent semantic artifacts for packages actually imported by
-    /// this build. Path dependencies are read from the dependency project's
-    /// `.alder` cache; workspace dependencies are source modules in this build
-    /// and therefore need no persistent copy.
+    /// Load packages actually imported by this build. Source-backed dependencies
+    /// are compiled from their current sources, without mixing in saved semantic
+    /// artifacts. Only interface-only dependencies read the `.alder` cache.
     pub async fn build_dependencies(
         &self,
         db: &mut Database,
@@ -267,6 +266,10 @@ impl Project {
                         .module_paths
                         .extend(dependency_project.module_paths(&dependency_modules)?);
                     result.source_modules.extend(dependency_modules);
+                    // Saved headers may describe deleted modules or impls, even
+                    // when their format and internal fingerprints are valid.
+                    // The current source build owns this package's semantics.
+                    continue;
                 }
                 let cache = InterfaceCache::new(&root);
                 let index = cache.load_package_index_checked(&package)?;

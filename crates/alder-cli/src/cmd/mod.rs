@@ -415,6 +415,65 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(alder_runtime::execute(bundle, Vec::new()).await.unwrap(), 0);
+        // Keep the saved package interfaces, but change executable behavior
+        // without changing the public contract. A subsequent application build
+        // must emit the current dependency source, not reuse an older body.
+        std::fs::write(
+            dependency.join("src/instances.ald"),
+            indoc::indoc! {r#"
+                import ~/api.{ Token, Display }
+                impl Display[Array[a]] where a: Display {
+                    fn display(value: Array[a]) String { "array" }
+                }
+                impl Display[Token] {
+                    fn display(value: Token) String { "updated token" }
+                }
+            "#},
+        )
+        .unwrap();
+        std::fs::write(
+            application.join("src/main.ald"),
+            indoc::indoc! {r#"
+                import @vendor/widgets/api.{ Token, display }
+                pub fn main() {
+                    assert(display(Token::Token) == "updated token")
+                }
+            "#},
+        )
+        .unwrap();
+        let rebuilt = super::build::compile_ephemeral(&application, BuildMode::Build)
+            .await
+            .unwrap();
+        let bundle = super::build::bundle(&rebuilt.result, EntryKind::Standalone)
+            .await
+            .unwrap();
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                alder_runtime::execute(bundle, Vec::new()),
+            )
+            .await
+            .expect("rebuilt dependency execution timed out")
+            .unwrap(),
+            0
+        );
+        // A removed implementation must not survive through the saved package
+        // index and make a consumer pass type checking with nonexistent evidence.
+        std::fs::write(
+            dependency.join("src/instances.ald"),
+            indoc::indoc! {r#"
+                import ~/api.{ Display }
+                impl Display[Array[a]] where a: Display {
+                    fn display(value: Array[a]) String { "array" }
+                }
+            "#},
+        )
+        .unwrap();
+        let error = super::build::compile_ephemeral(&application, BuildMode::Build)
+            .await
+            .err()
+            .expect("a saved index must not resurrect a removed source implementation");
+        assert!(error.to_string().contains("no implementation"), "{error:?}");
         std::fs::remove_dir_all(root).unwrap();
     }
 }
