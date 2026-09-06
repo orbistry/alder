@@ -4,7 +4,7 @@ description: "import @vendor/widgets.{ propagate }\npub fn invalid() Result[Numb
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `String`, found `Number`
+  × type mismatch: expected `Array[String]`, found `Array[Number]`
    ╭─[/project/src/main.ald:3:5]
  2 │ pub fn invalid() Result[Number, [:saved(Array[String])]] {
  3 │     propagate(({ value: Err(:saved([])) }, ()), {})

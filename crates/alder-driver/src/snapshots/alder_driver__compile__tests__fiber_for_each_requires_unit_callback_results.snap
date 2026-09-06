@@ -4,7 +4,8 @@ description: "pub async fn main() {\n    Fiber.forEach([1, 2], value -> async { 
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `()`, found `Number`
+  × type mismatch: expected `fn(Number) Task[()]`, found `fn(Number)
+  │ Task[Number]`
    ╭─[/project/src/main.ald:2:27]
  1 │ pub async fn main() {
  2 │     Fiber.forEach([1, 2], value -> async { value + 1 }).await

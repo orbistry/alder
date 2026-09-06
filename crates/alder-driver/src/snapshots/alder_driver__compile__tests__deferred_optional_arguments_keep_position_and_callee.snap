@@ -4,7 +4,7 @@ description: "fn need(value?: Number) {}\nfn ordinary() { need(\"wrong\") }\nfn 
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `Number`, found `String`
+  × type mismatch: expected `Option[Number]`, found `String`
    ╭─[/app/src/main.ald:2:22]
  1 │ fn need(value?: Number) {}
  2 │ fn ordinary() { need("wrong") }
@@ -14,7 +14,7 @@ alder::type::type_mismatch
    ╰────
 alder::type::type_mismatch
 
-  × type mismatch: expected `Number`, found `String`
+  × type mismatch: expected `Option[Number]`, found `String`
    ╭─[/app/src/main.ald:3:14]
  2 │ fn ordinary() { need("wrong") }
  3 │ fn piped() { "wrong" |> need() }
@@ -24,7 +24,7 @@ alder::type::type_mismatch
    ╰────
 alder::type::type_mismatch
 
-  × type mismatch: expected `Number`, found `String`
+  × type mismatch: expected `Option[Number]`, found `String`
    ╭─[/app/src/main.ald:5:24]
  4 │ fn later(first: Number, value?: Number) {}
  5 │ fn second() { later(1, "wrong") }

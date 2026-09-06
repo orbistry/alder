@@ -4,7 +4,7 @@ description: "trait Source[a] {\n    type Item\n    fn next(value: a) Item\n}\ni
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `String`, found `Number`
+  × type mismatch: expected `fn(Number) String`, found `fn(Number) Number`
    ╭─[/project/src/main.ald:7:8]
  6 │     type Item = String
  7 │     fn next(value: Number) Number { value }

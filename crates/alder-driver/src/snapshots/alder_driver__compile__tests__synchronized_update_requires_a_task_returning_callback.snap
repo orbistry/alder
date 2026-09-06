@@ -4,7 +4,8 @@ description: "pub async fn main() {\n    let cell = SynchronizedRef.make(0).awai
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `Task[Number]`, found `Number`
+  × type mismatch: expected `fn(Number) Task[Number]`, found `fn(Number)
+  │ Number`
    ╭─[/project/src/main.ald:3:34]
  2 │     let cell = SynchronizedRef.make(0).await
  3 │     SynchronizedRef.update(cell, value -> value + 1).await

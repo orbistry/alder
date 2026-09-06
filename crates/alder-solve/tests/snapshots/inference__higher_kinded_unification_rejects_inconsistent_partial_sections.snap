@@ -15,23 +15,43 @@ description: "fn combine(left: f[a], right: f[b]) f[a] { left }\nfn invalid(\n  
             },
         },
         kind: Mismatch {
-            actual: ErrorRow(
+            actual: Application(
+                Named(
+                    "Result",
+                ),
                 [
-                    (
-                        "right",
-                        [],
+                    Named(
+                        "Bool",
+                    ),
+                    ErrorRow(
+                        [
+                            (
+                                "right",
+                                [],
+                            ),
+                        ],
+                        None,
                     ),
                 ],
-                None,
             ),
-            expected: ErrorRow(
+            expected: Application(
+                Named(
+                    "Result",
+                ),
                 [
-                    (
-                        "left",
-                        [],
+                    Named(
+                        "Bool",
+                    ),
+                    ErrorRow(
+                        [
+                            (
+                                "left",
+                                [],
+                            ),
+                        ],
+                        None,
                     ),
                 ],
-                None,
             ),
         },
         expectation: Some(

@@ -1380,6 +1380,54 @@ mod tests {
     }
 
     #[test]
+    fn compound_mismatches_retain_function_tuple_and_application_shapes() {
+        let source = indoc::indoc! {r#"
+            fn need_function(value: fn(Number) String) {}
+            fn number(value: Number) Number { value }
+            fn wrong_function() { need_function(number) }
+            fn need_tuple(value: (String, Number)) {}
+            fn wrong_tuple() { need_tuple((42, 1)) }
+            fn need_array(value: Array[String]) {}
+            fn wrong_array() { let values = [42]
+                need_array(values)
+            }
+            fn need_option(value: Option[String]) {}
+            fn wrong_option(value: Option[Number]) { need_option(value) }
+            fn need_task(value: Task[String]) {}
+            fn wrong_task(value: Task[Number]) { need_task(value) }
+            fn need_result(value: Result[String, [:failed]]) {}
+            fn wrong_result(value: Result[Number, [:failed]]) { need_result(value) }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("compound mismatches must fail")
+        };
+        assert_eq!(diagnostics.len(), 6, "{diagnostics:?}");
+        for (diagnostic, shape) in diagnostics.iter().zip([
+            "fn(Number) String",
+            "(String, Number)",
+            "Array[String]",
+            "Option[String]",
+            "Task[String]",
+            "Result[String, [:failed]]",
+        ]) {
+            assert!(diagnostic.message().contains(shape), "{diagnostic:?}");
+        }
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.replace("String", "Number")))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(matches!(valid.modules[&uri], ModuleResult::Success { .. }));
+    }
+
+    #[test]
     fn infinite_types_explain_the_actual_recursive_equation() {
         let source = indoc::indoc! {r#"
             fn apply_to_self(value) { value(value) }
@@ -1926,7 +1974,7 @@ mod tests {
         // A catch-and-continue recovery would incorrectly reject avalid too.
         assert_eq!(
             diagnostics[0].message(),
-            "type mismatch: expected `Bool`, found `String`"
+            "type mismatch: expected `(Array[Number], Bool)`, found `(Array[Number], String)`"
         );
         assert_rendered_diagnostics_snapshot!(source, diagnostics);
     }

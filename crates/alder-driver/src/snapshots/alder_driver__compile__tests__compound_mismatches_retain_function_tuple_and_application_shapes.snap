@@ -1,0 +1,64 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn need_function(value: fn(Number) String) {}\nfn number(value: Number) Number { value }\nfn wrong_function() { need_function(number) }\nfn need_tuple(value: (String, Number)) {}\nfn wrong_tuple() { need_tuple((42, 1)) }\nfn need_array(value: Array[String]) {}\nfn wrong_array() { let values = [42]\n    need_array(values)\n}\nfn need_option(value: Option[String]) {}\nfn wrong_option(value: Option[Number]) { need_option(value) }\nfn need_task(value: Task[String]) {}\nfn wrong_task(value: Task[Number]) { need_task(value) }\nfn need_result(value: Result[String, [:failed]]) {}\nfn wrong_result(value: Result[Number, [:failed]]) { need_result(value) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `fn(Number) String`, found `fn(Number) Number`
+   ╭─[/app/src/main.ald:3:37]
+ 2 │ fn number(value: Number) Number { value }
+ 3 │ fn wrong_function() { need_function(number) }
+   ·                                     ───┬──
+   ·                                        ╰── argument 1 of `need_function` has an incompatible type
+ 4 │ fn need_tuple(value: (String, Number)) {}
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `(String, Number)`, found `(Number, Number)`
+   ╭─[/app/src/main.ald:5:31]
+ 4 │ fn need_tuple(value: (String, Number)) {}
+ 5 │ fn wrong_tuple() { need_tuple((42, 1)) }
+   ·                               ───┬───
+   ·                                  ╰── argument 1 of `need_tuple` has an incompatible type
+ 6 │ fn need_array(value: Array[String]) {}
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Array[String]`, found `Array[Number]`
+   ╭─[/app/src/main.ald:8:16]
+ 7 │ fn wrong_array() { let values = [42]
+ 8 │     need_array(values)
+   ·                ───┬──
+   ·                   ╰── argument 1 of `need_array` has an incompatible type
+ 9 │ }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Option[String]`, found `Option[Number]`
+    ╭─[/app/src/main.ald:11:54]
+ 10 │ fn need_option(value: Option[String]) {}
+ 11 │ fn wrong_option(value: Option[Number]) { need_option(value) }
+    ·                                                      ──┬──
+    ·                                                        ╰── argument 1 of `need_option` has an incompatible type
+ 12 │ fn need_task(value: Task[String]) {}
+    ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Task[String]`, found `Task[Number]`
+    ╭─[/app/src/main.ald:13:48]
+ 12 │ fn need_task(value: Task[String]) {}
+ 13 │ fn wrong_task(value: Task[Number]) { need_task(value) }
+    ·                                                ──┬──
+    ·                                                  ╰── argument 1 of `need_task` has an incompatible type
+ 14 │ fn need_result(value: Result[String, [:failed]]) {}
+    ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Result[String, [:failed]]`, found `Result[Number,
+  │ [:failed]]`
+    ╭─[/app/src/main.ald:15:65]
+ 14 │ fn need_result(value: Result[String, [:failed]]) {}
+ 15 │ fn wrong_result(value: Result[Number, [:failed]]) { need_result(value) }
+    ·                                                                 ──┬──
+    ·                                                                   ╰── argument 1 of `need_result` has an incompatible type
+    ╰────

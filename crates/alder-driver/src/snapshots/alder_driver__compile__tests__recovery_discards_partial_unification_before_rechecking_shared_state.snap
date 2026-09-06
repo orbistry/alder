@@ -4,7 +4,8 @@ description: "let shared = []\nfn zzaccept(value: (Array[Number], Bool)) { () }\
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `Bool`, found `String`
+  × type mismatch: expected `(Array[Number], Bool)`, found `(Array[Number],
+  │ String)`
    ╭─[/app/src/main.ald:3:25]
  2 │ fn zzaccept(value: (Array[Number], Bool)) { () }
  3 │ fn zbroken() { zzaccept((shared, "wrong")) }

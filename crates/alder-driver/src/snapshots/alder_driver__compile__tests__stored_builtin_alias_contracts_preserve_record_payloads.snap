@@ -4,7 +4,7 @@ description: "import @vendor/widgets.{ read }\npub fn main() Option[Number] { re
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `Number`, found `String`
+  × type mismatch: expected `Option[Number]`, found `String`
    ╭─[/project/src/main.ald:2:52]
  1 │ import @vendor/widgets.{ read }
  2 │ pub fn main() Option[Number] { read({ concurrency: "eight" }) }

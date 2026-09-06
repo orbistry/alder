@@ -4102,7 +4102,14 @@ impl<'a, 'db> Infer<'a, 'db> {
                     endpoints[1].1.clone(),
                     constraint.region,
                 )
-                .map_err(|error| constraint.explain(error))?;
+                .map_err(|error| {
+                    let error = self.enclosing_mismatch(
+                        error,
+                        constraint.actual.clone(),
+                        constraint.expected.clone(),
+                    );
+                    constraint.explain(error)
+                })?;
                 edges.push(crate::option_levels::Edge {
                     from: endpoints[0].0,
                     to: endpoints[1].0,
@@ -6828,11 +6835,23 @@ impl<'a, 'db> Infer<'a, 'db> {
             (Ty::App(left_head, left_args), Ty::App(right_head, right_args))
                 if left_args.len() == right_args.len() =>
             {
-                self.unify(*left_head, *right_head, region)?;
-                for (left, right) in left_args.into_iter().zip(right_args) {
-                    self.unify(left, right, region)?;
-                }
-                Ok(())
+                let result = self
+                    .unify((*left_head).clone(), (*right_head).clone(), region)
+                    .and_then(|()| {
+                        left_args
+                            .iter()
+                            .zip(&right_args)
+                            .try_for_each(|(left, right)| {
+                                self.unify(left.clone(), right.clone(), region)
+                            })
+                    });
+                result.map_err(|error| {
+                    self.enclosing_mismatch(
+                        error,
+                        Ty::App(left_head, left_args),
+                        Ty::App(right_head, right_args),
+                    )
+                })
             }
             (Ty::Partial(left, left_slots), Ty::Partial(right, right_slots))
                 if left == right && left_slots.len() == right_slots.len() =>
@@ -6865,16 +6884,27 @@ impl<'a, 'db> Infer<'a, 'db> {
             (Ty::Fn(left_args, left_ret), Ty::Fn(right_args, right_ret))
                 if left_args.len() == right_args.len() =>
             {
-                for (left, right) in left_args.into_iter().zip(right_args) {
-                    self.unify(left, right, region)?;
-                }
-                self.unify(*left_ret, *right_ret, region)
+                let result = left_args
+                    .iter()
+                    .zip(&right_args)
+                    .try_for_each(|(left, right)| self.unify(left.clone(), right.clone(), region))
+                    .and_then(|()| self.unify((*left_ret).clone(), (*right_ret).clone(), region));
+                result.map_err(|error| {
+                    self.enclosing_mismatch(
+                        error,
+                        Ty::Fn(left_args, left_ret),
+                        Ty::Fn(right_args, right_ret),
+                    )
+                })
             }
             (Ty::Tuple(left), Ty::Tuple(right)) if left.len() == right.len() => {
-                for (left, right) in left.into_iter().zip(right) {
-                    self.unify(left, right, region)?;
-                }
-                Ok(())
+                let result = left
+                    .iter()
+                    .zip(&right)
+                    .try_for_each(|(left, right)| self.unify(left.clone(), right.clone(), region));
+                result.map_err(|error| {
+                    self.enclosing_mismatch(error, Ty::Tuple(left), Ty::Tuple(right))
+                })
             }
             (Ty::Record(left, left_open), Ty::Record(right, right_open)) => {
                 self.unify_records(left, left_open, right, right_open, region)
@@ -6891,6 +6921,21 @@ impl<'a, 'db> Infer<'a, 'db> {
             ) => self.unify_error_rows(left_tags, left_tail, right_tags, right_tail, region),
             (left, right) => Err(self.mismatch(region, left, right)),
         }
+    }
+
+    fn enclosing_mismatch(&mut self, mut error: Error, actual: Ty<'a>, expected: Ty<'a>) -> Error {
+        // Retain the structural comparison, while leaving specialized failures
+        // (such as an occurs check or missing fields) and their context intact.
+        if matches!(error.kind, ErrorKind::Mismatch { .. }) {
+            let actual = self.normalize_type(actual);
+            let expected = self.normalize_type(expected);
+            let mut names = BTreeMap::new();
+            error.kind = ErrorKind::Mismatch {
+                actual: self.diagnostic_type(actual, &mut names),
+                expected: self.diagnostic_type(expected, &mut names),
+            };
+        }
+        error
     }
 
     fn normalize_projection_root(&mut self, typ: Ty<'a>) -> Ty<'a> {

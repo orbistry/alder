@@ -7200,8 +7200,14 @@ fn impl_method_must_match_the_substituted_associated_type() {
         alder_solve::SolveError::Core(Error {
             kind: ErrorKind::Mismatch { actual, expected },
             ..
-        }) if (*actual == DiagnosticType::Named("String".into()) && *expected == DiagnosticType::Named("Number".into()))
-            || (*actual == DiagnosticType::Named("Number".into()) && *expected == DiagnosticType::Named("String".into()))
+        }) if matches!((actual, expected),
+            (DiagnosticType::Function(actual_args, actual_result),
+             DiagnosticType::Function(expected_args, expected_result))
+            if actual_args == expected_args
+                && actual_args.len() == 1
+                && **actual_result == DiagnosticType::Named("String".into())
+                && **expected_result == DiagnosticType::Named("Number".into())
+        )
     ));
 }
 

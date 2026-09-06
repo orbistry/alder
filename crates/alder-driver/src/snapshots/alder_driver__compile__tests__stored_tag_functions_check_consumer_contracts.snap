@@ -4,7 +4,8 @@ description: "import @vendor/widgets.{ number }\npub fn main() Number {\n    num
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `Number`, found `String`
+  × type mismatch: expected `fn(Array[String], Number) Number`, found
+  │ `fn(Array[String], String) a`
    ╭─[/project/src/main.ald:3:5]
  2 │ pub fn main() Number {
  3 │     number`value: ${"wrong"}`

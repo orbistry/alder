@@ -4,7 +4,8 @@ description: "import @vendor/widgets.{ each }\npub async fn main() {\n    each()
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `()`, found `Number`
+  × type mismatch: expected `fn(Number) Task[()]`, found `fn(Number)
+  │ Task[Number]`
    ╭─[/project/src/main.ald:3:17]
  2 │ pub async fn main() {
  3 │     each()([1], value -> async { value }).await

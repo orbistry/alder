@@ -469,3 +469,34 @@ Validation: full workspace tests passed (228 driver tests, six CLI subprocess
 tests and all other suites; two existing ignored doctests). Strict all-target/
 all-feature Clippy, formatting and diff checks passed. Source snapshots were
 reviewed and no pending snapshot proposals remain.
+
+## Compound comparison checkpoint
+
+Elm's public `Type.Unify.unify` converts the original two variables to error
+types when a nested `subUnify` fails. Alder now similarly preserves enclosing
+function, tuple and application shapes for ordinary mismatch failures. It keeps
+specialized errors (record-field differences, occurs checks, etc.) and their
+source context intact. Captured shapes normalize associated projections, so an
+implementation binding such as `Source[Number]::Item = String` still displays
+the concrete incompatible result inside its function type.
+
+`compound_mismatches_retain_function_tuple_and_application_shapes` first failed
+with disconnected leaf types. Its source snapshot now covers six independent
+function, tuple, Array, Option, Task and Result errors. The same source with
+matching payload types is accepted as a positive control. Deferred Option
+payload equations needed their original constraint shapes retained separately;
+their argument position/callee labels remain unchanged. No Option lifting or
+container variance rules changed. Contextual literal-array element checks still
+report the incompatible element rather than inventing an enclosing comparison.
+
+Reviewed existing source snapshots now show complete callback requirements,
+tuple comparisons after partial unification, and cross-module contract types.
+The associated-type inference assertion checks function result types; the
+higher-kinded partial-section snapshot retains its enclosing Result comparison.
+Alias naming and ambiguous nominal names remain separate unfinished work.
+
+Validation: full workspace tests passed (229 driver tests, 467 inference tests,
+six CLI subprocess tests and all other suites; two existing ignored doctests).
+The additional matching-type positive control also passed. Strict workspace
+Clippy, formatting and diff checks passed; obsolete pending proposals were
+removed after reviewing the accepted snapshots.
