@@ -1,0 +1,69 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "enum Choice { Left(Number), Right(Number) }\npub fn read(input: Choice) Number {\n    match input { Left(value) | Right(value) if value > 0 => value, _ => 0 }\n}\n"
+---
+import { $equalDerived, $matchFailure } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, {
+		"Left": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [{ "eq": ($a, $b) => {
+				return $a === $b;
+			} }]
+		},
+		"Right": {
+			"record": false,
+			"fields": ["_0"],
+			"optional": [],
+			"dictionaries": [{ "eq": ($a, $b) => {
+				return $a === $b;
+			} }]
+		}
+	});
+};
+Object["freeze"]($dict$Eq$0);
+function $c_Choice_Left($a0) {
+	return {
+		"$": "Left",
+		"_0": $a0
+	};
+}
+function $c_Choice_Right($a0) {
+	return {
+		"$": "Right",
+		"_0": $a0
+	};
+}
+function $v_read($a0) {
+	let $l0_input = $a0;
+	const $t0 = $l0_input;
+	let $t1;
+	$match2: {
+		if ($t0 != null && $t0["$"] === "Left" && true) {
+			let $l1_value = $t0["_0"];
+			const $t3 = $l1_value;
+			if ($t3 > 0) {
+				$t1 = $l1_value;
+				break $match2;
+			}
+		}
+		if ($t0 != null && $t0["$"] === "Right" && true) {
+			let $l1_value = $t0["_0"];
+			const $t4 = $l1_value;
+			if ($t4 > 0) {
+				$t1 = $l1_value;
+				break $match2;
+			}
+		}
+		if (true) {
+			$t1 = 0;
+			break $match2;
+		}
+		$matchFailure("alder://app/main.mjs", "3:5", $t0);
+	}
+	return $t1;
+}
+export { $dict$Eq$0, $v_read as read };

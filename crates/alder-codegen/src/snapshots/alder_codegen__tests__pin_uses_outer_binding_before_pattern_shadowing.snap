@@ -1,0 +1,31 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn same(expected: Number, input: (Number, Number)) Bool {\n    match input { (expected, ^expected) => expected == 1, _ => false }\n}\n"
+---
+import { $matchFailure } from "alder:kernel";
+function $v_same($a0, $a1) {
+	let $l0_expected = $a0;
+	let $l1_input = $a1;
+	const $t0 = $l1_input;
+	let $t1;
+	$match2: {
+		let $t4 = Array["isArray"]($t0) && $t0["length"] === 2 && true;
+		if ($t4) {
+			const $t3 = $l0_expected;
+			$t4 = $t0[1] === $t3;
+		}
+		if ($t4) {
+			let $l2_expected = $t0[0];
+			const $t5 = $l2_expected;
+			$t1 = $t5 === 1;
+			break $match2;
+		}
+		if (true) {
+			$t1 = false;
+			break $match2;
+		}
+		$matchFailure("alder://app/main.mjs", "2:5", $t0);
+	}
+	return $t1;
+}
+export { $v_same as same };

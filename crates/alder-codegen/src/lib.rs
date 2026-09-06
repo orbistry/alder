@@ -236,6 +236,58 @@ macro_rules! assert_solved_emit_snapshot {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn alternative_patterns_share_guard_and_body_binding_identity() {
+        assert_solved_emit_snapshot! {r#"
+            enum Choice { Left(Number), Right(Number) }
+            pub fn read(input: Choice) Number {
+                match input { Left(value) | Right(value) if value > 0 => value, _ => 0 }
+            }
+        "#};
+    }
+
+    #[test]
+    fn nested_pin_effects_follow_enclosing_pattern_checks() {
+        assert_solved_emit_snapshot! {r#"
+            fn expected(events: Array[Number]) Number {
+                Array.push(events, 1)
+                42
+            }
+            pub fn same(input: Option[(Number, Number)], events: Array[Number]) Bool {
+                match input { Some((0, ^expected(events))) => true, _ => false }
+            }
+        "#};
+    }
+
+    #[test]
+    fn pin_uses_outer_binding_before_pattern_shadowing() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn same(expected: Number, input: (Number, Number)) Bool {
+                match input { (expected, ^expected) => expected == 1, _ => false }
+            }
+        "#};
+    }
+
+    #[test]
+    fn refutable_let_checks_before_extracting_payload() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn read(value: Option[Number]) Number {
+                let Some(number) = value
+                number
+            }
+        "#};
+    }
+
+    #[test]
+    fn option_constructors_and_nested_patterns_use_kernel_representation() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn nested() Option[Option[Number]] { Some(None) }
+            pub fn read(value: Option[Option[Number]]) Number {
+                match value { Some(Some(number)) => number, _ => 0 }
+            }
+        "#};
+    }
+
+    #[test]
     fn structural_error_equality_uses_runtime_tag_names() {
         assert_solved_emit_snapshot! {r#"
             pub fn same(left: Result[Number, [:payload(Number, String)]], right: Result[Number, [:payload(Number, String)]]) Bool {

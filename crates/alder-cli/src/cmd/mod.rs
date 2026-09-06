@@ -53,7 +53,59 @@ mod tests {
             .await
             .unwrap();
         let bundle = super::build::bundle(&compiled.result, kind).await.unwrap();
-        alder_runtime::execute(bundle, Vec::new()).await.unwrap()
+        tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            alder_runtime::execute(bundle, Vec::new()),
+        )
+        .await
+        .unwrap_or_else(|_| panic!("{name}: execution did not finish within 30 seconds"))
+        .unwrap()
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn refutable_bindings_fail_before_exposing_invalid_payloads() {
+        let compiled =
+            super::build::compile_ephemeral(&fixture("pattern_bindings"), BuildMode::Build)
+                .await
+                .unwrap();
+        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+            .await
+            .unwrap();
+        for argument in [
+            "let",
+            "parameter",
+            "lambda",
+            "loop",
+            "enum",
+            "array",
+            "top",
+            "nested",
+            "async_parameter",
+            "async_body",
+        ] {
+            let error = tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(bundle.clone(), vec![argument.to_owned()]),
+            )
+            .await
+            .expect("failed binding execution must finish")
+            .expect_err("a failed binding must not execute its continuation");
+            let message = error.to_string();
+            assert!(
+                message.contains("Non-exhaustive match at alder://"),
+                "{argument}: {message}"
+            );
+        }
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(bundle, vec!["success".to_owned()]),
+            )
+            .await
+            .expect("binding success and cleanup checks must finish")
+            .unwrap(),
+            0
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]

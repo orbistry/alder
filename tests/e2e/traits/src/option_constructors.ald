@@ -1,0 +1,22 @@
+pub fn verify() {
+    let absent: Option[Number] = None
+    let present: Option[Number] = Some(42)
+    assert(absent == Option.none())
+    assert(present == Option.some(42))
+    assert(match absent { Some(_) => false, None => true })
+    assert(match present { Some(value) => value == 42, None => false })
+    let nested: Option[Option[Number]] = Some(None)
+    assert(match nested { Some(None) => true, _ => false })
+    let unit: Option[()] = Some(())
+    assert(match unit { Some(()) => true, None => false })
+    let Some(payload) = present
+    assert(payload == 42)
+    let qualified: Option[Number] = Option::Some(7)
+    assert(qualified == Some(7))
+    assert(Option::None == absent)
+    let number_wrap = Some
+    let text_wrap = Some
+    let number: Option[Number] = number_wrap(1)
+    let text: Option[String] = text_wrap("text")
+    assert(number == Some(1) && text == Some("text"))
+}

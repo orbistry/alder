@@ -1,0 +1,28 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn nested() Option[Option[Number]] { Some(None) }\npub fn read(value: Option[Option[Number]]) Number {\n    match value { Some(Some(number)) => number, _ => 0 }\n}\n"
+---
+import { $matchFailure, $optionSome, $optionUnbox } from "alder:kernel";
+function $v_nested() {
+	const $t0 = $optionSome;
+	return $t0(null);
+}
+function $v_read($a0) {
+	let $l0_value = $a0;
+	const $t1 = $l0_value;
+	let $t2;
+	$match3: {
+		if ($t1 !== null && $optionUnbox($t1) !== null && true) {
+			let $l1_number = $optionUnbox($optionUnbox($t1));
+			$t2 = $l1_number;
+			break $match3;
+		}
+		if (true) {
+			$t2 = 0;
+			break $match3;
+		}
+		$matchFailure("alder://app/main.mjs", "3:5", $t1);
+	}
+	return $t2;
+}
+export { $v_nested as nested, $v_read as read };

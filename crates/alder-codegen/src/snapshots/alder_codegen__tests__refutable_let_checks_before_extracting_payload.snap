@@ -1,0 +1,15 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn read(value: Option[Number]) Number {\n    let Some(number) = value\n    number\n}\n"
+---
+import { $matchFailure, $optionUnbox } from "alder:kernel";
+function $v_read($a0) {
+	let $l0_value = $a0;
+	const $t0 = $l0_value;
+	if (!($t0 !== null && true)) {
+		$matchFailure("alder://app/main.mjs", "2:9", $t0);
+	}
+	let $l1_number = $optionUnbox($t0);
+	return $l1_number;
+}
+export { $v_read as read };

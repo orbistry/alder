@@ -121,6 +121,7 @@ impl<'a> Env<'a> {
         env.add_builtin_types();
         env.add_builtin_ordering(bump);
         env.add_builtin_result(bump);
+        env.add_builtin_option(bump);
         env.add_builtin_traits(bump);
         env.add_builtin_modules();
         env
@@ -258,6 +259,63 @@ impl<'a> Env<'a> {
                             })),
                         }),
                     }
+                }),
+        );
+        self.register_enum(reference, variants);
+    }
+
+    fn add_builtin_option(&mut self, bump: &'a Bump) {
+        let reference = QualifiedName {
+            module: ModuleId {
+                package: PackageId::Builtin,
+                path: &[],
+            },
+            name: "Option",
+        };
+        let params = bump.alloc_slice_copy(&[alder_ast::TypeParam {
+            name: Located::at_zero("a"),
+            kind: alder_ast::Kind::Type,
+        }]);
+        let payload: &'a Located<Type<'a>> = bump.alloc(Located::at_zero(Type::Var {
+            name: "a",
+            args: &[],
+        }));
+        let payloads = bump.alloc_slice_copy(&[payload]);
+        let option = bump.alloc(Located::at_zero(Type::Named {
+            reference,
+            args: payloads,
+        }));
+        let variants = bump.alloc_slice_fill_iter(
+            [("Some", true), ("None", false)]
+                .into_iter()
+                .enumerate()
+                .map(|(index, (variant, has_payload))| ConstructorRef {
+                    name: ConstructorName {
+                        enum_: reference,
+                        variant,
+                    },
+                    index: index as u16,
+                    alternatives: 2,
+                    payload: if has_payload {
+                        VariantPayload::Tuple(payloads)
+                    } else {
+                        VariantPayload::Unit
+                    },
+                    annotation: bump.alloc(Annotation {
+                        record_overlays: &[],
+                        error_row_inclusions: &[],
+                        params,
+                        trait_predicates: &[],
+                        projection_equalities: &[],
+                        typ: if has_payload {
+                            bump.alloc(Located::at_zero(Type::Fn {
+                                params: payloads,
+                                ret: option,
+                            }))
+                        } else {
+                            option
+                        },
+                    }),
                 }),
         );
         self.register_enum(reference, variants);

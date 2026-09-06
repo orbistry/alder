@@ -1,4 +1,5 @@
 import ~/codec
+import ~/option_constructors
 import ~/facade
 import ~/facade.{ Parcel, Wrap, Extract, extract }
 import ~/facade.{ read_value as read }
@@ -199,6 +200,7 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    option_constructors.verify()
     let first_error: Result[Number, [:payload(Number, String)]] = Err(:payload(1, "first"))
     let different_number: Result[Number, [:payload(Number, String)]] = Err(:payload(2, "first"))
     let different_text: Result[Number, [:payload(Number, String)]] = Err(:payload(1, "second"))

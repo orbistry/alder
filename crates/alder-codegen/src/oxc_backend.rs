@@ -37,6 +37,37 @@ struct Metadata {
     dependencies: Vec<String>,
 }
 
+fn pattern_needs_check(pattern: &Pattern<'_>) -> bool {
+    match pattern {
+        Pattern::Bind(_) | Pattern::Anything | Pattern::Unit => false,
+        Pattern::Alias { pattern, .. } => pattern_needs_check(&pattern.value),
+        Pattern::Tuple(items) => items.iter().any(|item| pattern_needs_check(&item.value)),
+        Pattern::Record { fields, .. } => fields
+            .iter()
+            .any(|field| pattern_needs_check(&field.pattern.value)),
+        Pattern::Constructor { constructor, args } => {
+            constructor.alternatives > 1 || args.iter().any(|item| pattern_needs_check(&item.value))
+        }
+        Pattern::ConstructorRecord {
+            constructor,
+            fields,
+            ..
+        } => {
+            constructor.alternatives > 1
+                || fields
+                    .iter()
+                    .any(|field| pattern_needs_check(&field.pattern.value))
+        }
+        Pattern::Tag { .. }
+        | Pattern::Array { .. }
+        | Pattern::Pin { .. }
+        | Pattern::Number { .. }
+        | Pattern::BigInt(_)
+        | Pattern::Str(_)
+        | Pattern::Bool(_) => true,
+    }
+}
+
 fn impl_origin_index(origin: alder_ast::ImplOrigin) -> u32 {
     match origin {
         alder_ast::ImplOrigin::Source { item_ordinal }
@@ -76,6 +107,7 @@ struct Emitter<'src, 'js> {
 enum PatternStep {
     Field(String),
     OptionalField(String),
+    OptionPayload,
     Index(usize),
 }
 
@@ -499,7 +531,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             .collect::<Vec<_>>();
         let mut statements = self.js.vec();
         for (param, arg) in params.iter().zip(&source_args) {
-            self.bind_pattern(param.pattern, arg, &[], &mut statements);
+            self.checked_bind_pattern(param.pattern, arg, &mut statements)?;
         }
         let outer_loops = std::mem::take(&mut self.loop_results);
         let lowered = self.block_return(body);
@@ -1079,7 +1111,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             self.js
                 .variable(VariableDeclarationKind::Const, &temp, Some(value.expr)),
         );
-        self.bind_pattern(decl.pattern, &temp, &[], &mut statements);
+        self.checked_bind_pattern(decl.pattern, &temp, &mut statements)?;
         Ok(statements)
     }
 
@@ -1738,7 +1770,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             .collect::<Vec<_>>();
         let mut statements = self.js.vec();
         for (param, arg) in params.iter().zip(&args) {
-            self.bind_pattern(param.pattern, arg, &[], &mut statements);
+            self.checked_bind_pattern(param.pattern, arg, &mut statements)?;
         }
         let outer_loops = std::mem::take(&mut self.loop_results);
         let value = self.expr(body);
@@ -2030,7 +2062,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     &temp,
                     Some(value.expr),
                 ));
-                self.bind_pattern(decl.pattern, &temp, &[], &mut statements);
+                self.checked_bind_pattern(decl.pattern, &temp, &mut statements)?;
             }
             alder_ast::Stmt::Use { provider } => {
                 self.kernel.insert("$providerGet");
@@ -2119,7 +2151,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 statements.extend(iter.prefix);
                 let item = self.temp();
                 let mut loop_body = self.js.vec();
-                self.bind_pattern(pattern, &item, &[], &mut loop_body);
+                self.checked_bind_pattern(pattern, &item, &mut loop_body)?;
                 let label = self.temp();
                 self.loop_results.push((label.clone(), None));
                 loop_body.extend(self.block_discard(body)?);
@@ -2276,6 +2308,39 @@ impl<'src, 'js> Emitter<'src, 'js> {
         Ok((prefix, read, write))
     }
 
+    fn checked_bind_pattern(
+        &mut self,
+        pattern: &Located<Pattern<'src>>,
+        root: &str,
+        statements: &mut ArenaVec<'js, Statement<'js>>,
+    ) -> Result<(), Error> {
+        if pattern_needs_check(&pattern.value) {
+            let test = self.pattern_test(pattern, root, &[])?;
+            statements.extend(test.prefix);
+            self.kernel.insert("$matchFailure");
+            let failure = self.js.call(
+                self.js.identifier("$matchFailure"),
+                [
+                    self.js.string(&module_specifier(self.home)),
+                    self.js.string(&format!(
+                        "{}:{}",
+                        pattern.region.start.line, pattern.region.start.column
+                    )),
+                    self.js.identifier(root),
+                ],
+            );
+            let mut failed = self.js.vec();
+            failed.push(self.js.expression_statement(failure));
+            statements.push(self.js.if_statement(
+                self.js.unary(UnaryOperator::LogicalNot, test.expr),
+                failed,
+                None,
+            ));
+        }
+        self.bind_pattern(pattern, root, &[], statements);
+        Ok(())
+    }
+
     fn bind_pattern(
         &mut self,
         pattern: &Located<Pattern<'src>>,
@@ -2304,6 +2369,14 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     let mut nested = steps.to_vec();
                     match pattern.value {
                         Pattern::Tuple(_) => nested.push(PatternStep::Index(index)),
+                        Pattern::Constructor { constructor, .. }
+                            if constructor.name.enum_.module.package
+                                == alder_ast::PackageId::Builtin
+                                && constructor.name.enum_.name == "Option" =>
+                        {
+                            self.kernel.insert("$optionUnbox");
+                            nested.push(PatternStep::OptionPayload);
+                        }
                         _ => nested.push(PatternStep::Field(format!("_{index}"))),
                     }
                     self.bind_pattern(item, root, &nested, statements);
@@ -2364,6 +2437,9 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     [value, self.js.string(field)],
                 ),
                 PatternStep::Index(index) => self.js.index(value, self.js.number(*index as f64)),
+                PatternStep::OptionPayload => {
+                    self.js.call(self.js.identifier("$optionUnbox"), [value])
+                }
             };
         }
         value
@@ -2439,18 +2515,36 @@ impl<'src, 'js> Emitter<'src, 'js> {
             Pattern::Constructor { constructor, args } => {
                 let mut prefix = self.js.vec();
                 let mut tests = Vec::new();
-                tests.push(self.not_null(self.pattern_place(root, steps)));
-                tests.push(self.js.binary(
-                    self.js.member(self.pattern_place(root, steps), "$"),
-                    BinaryOperator::StrictEquality,
-                    self.js.string(constructor.name.variant),
-                ));
+                let option = constructor.name.enum_.module.package == alder_ast::PackageId::Builtin
+                    && constructor.name.enum_.name == "Option";
+                if option {
+                    tests.push(self.js.binary(
+                        self.pattern_place(root, steps),
+                        if constructor.name.variant == "Some" {
+                            BinaryOperator::StrictInequality
+                        } else {
+                            BinaryOperator::StrictEquality
+                        },
+                        self.js.builder.expression_null_literal(oxc_span::SPAN),
+                    ));
+                } else {
+                    tests.push(self.not_null(self.pattern_place(root, steps)));
+                    tests.push(self.js.binary(
+                        self.js.member(self.pattern_place(root, steps), "$"),
+                        BinaryOperator::StrictEquality,
+                        self.js.string(constructor.name.variant),
+                    ));
+                }
                 for (index, pattern) in args.iter().enumerate() {
                     let mut nested = steps.to_vec();
-                    nested.push(PatternStep::Field(format!("_{index}")));
+                    if option {
+                        self.kernel.insert("$optionUnbox");
+                        nested.push(PatternStep::OptionPayload);
+                    } else {
+                        nested.push(PatternStep::Field(format!("_{index}")));
+                    }
                     let test = self.pattern_test(pattern, root, &nested)?;
-                    prefix.extend(test.prefix);
-                    tests.push(test.expr);
+                    self.append_pattern_test(&mut prefix, &mut tests, test);
                 }
                 Value {
                     prefix,
@@ -2473,8 +2567,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     let mut nested = steps.to_vec();
                     nested.push(self.record_pattern_step(&field.name));
                     let test = self.pattern_test(field.pattern, root, &nested)?;
-                    prefix.extend(test.prefix);
-                    tests.push(test.expr);
+                    self.append_pattern_test(&mut prefix, &mut tests, test);
                 }
                 Value {
                     prefix,
@@ -2493,8 +2586,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     let mut nested = steps.to_vec();
                     nested.push(PatternStep::Field(format!("_{index}")));
                     let test = self.pattern_test(pattern, root, &nested)?;
-                    prefix.extend(test.prefix);
-                    tests.push(test.expr);
+                    self.append_pattern_test(&mut prefix, &mut tests, test);
                 }
                 Value {
                     prefix,
@@ -2513,8 +2605,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     let mut nested = steps.to_vec();
                     nested.push(PatternStep::Index(index));
                     let test = self.pattern_test(pattern, root, &nested)?;
-                    prefix.extend(test.prefix);
-                    tests.push(test.expr);
+                    self.append_pattern_test(&mut prefix, &mut tests, test);
                 }
                 Value {
                     prefix,
@@ -2536,8 +2627,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     let mut nested = steps.to_vec();
                     nested.push(self.record_pattern_step(&field.name));
                     let test = self.pattern_test(field.pattern, root, &nested)?;
-                    prefix.extend(test.prefix);
-                    tests.push(test.expr);
+                    self.append_pattern_test(&mut prefix, &mut tests, test);
                 }
                 Value {
                     prefix,
@@ -2560,8 +2650,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     let mut nested = steps.to_vec();
                     nested.push(PatternStep::Index(index));
                     let test = self.pattern_test(pattern, root, &nested)?;
-                    prefix.extend(test.prefix);
-                    tests.push(test.expr);
+                    self.append_pattern_test(&mut prefix, &mut tests, test);
                 }
                 Value {
                     prefix,
@@ -2570,6 +2659,35 @@ impl<'src, 'js> Emitter<'src, 'js> {
             }
         };
         Ok(value)
+    }
+
+    /// Keep a nested test's effects behind all preceding shape/value checks.
+    fn append_pattern_test(
+        &mut self,
+        prefix: &mut ArenaVec<'js, Statement<'js>>,
+        tests: &mut Vec<Expression<'js>>,
+        test: Value<'js>,
+    ) {
+        if test.prefix.is_empty() {
+            tests.push(test.expr);
+            return;
+        }
+        let result = self.temp();
+        let preceding = self.and_all(std::mem::take(tests));
+        prefix.push(
+            self.js
+                .variable(VariableDeclarationKind::Let, &result, Some(preceding)),
+        );
+        let mut body = test.prefix;
+        body.push(
+            self.js
+                .expression_statement(self.js.assign_identifier(&result, test.expr)),
+        );
+        prefix.push(
+            self.js
+                .if_statement(self.js.identifier(&result), body, None),
+        );
+        tests.push(self.js.identifier(&result));
     }
 
     fn not_null(&self, value: Expression<'js>) -> Expression<'js> {
@@ -3119,6 +3237,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
         &mut self,
         constructor: alder_ast::ConstructorRef<'src>,
     ) -> Expression<'js> {
+        if constructor.name.enum_.module.package == alder_ast::PackageId::Builtin
+            && constructor.name.enum_.name == "Option"
+        {
+            if constructor.name.variant == "None" {
+                return self.js.builder.expression_null_literal(oxc_span::SPAN);
+            }
+            self.kernel.insert("$optionSome");
+            return self.js.identifier("$optionSome");
+        }
         if constructor.name.enum_.module.package == alder_ast::PackageId::Builtin
             && constructor.name.enum_.name == "Ordering"
         {
