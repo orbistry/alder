@@ -472,6 +472,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn every_builtin_module_links_all_of_its_exports() {
+        // This is a hand-written JS bundler fixture, not Alder code generation.
+        // Returning namespace objects keeps every export reachable by the host.
+        let names = builtin_modules().into_keys().collect::<Vec<_>>();
+        let imports = names
+            .iter()
+            .map(|name| format!("import * as {name} from 'alder://std/{name}.mjs';"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let source = format!(
+            "{imports}\nexport function main() {{ return [{}]; }}",
+            names.join(", ")
+        );
+        bundle(
+            [parsed_javascript_fixture(&source)],
+            "alder://app/main.mjs",
+            EntryKind::Standalone,
+        )
+        .await
+        .expect("every builtin facade export must resolve against the embedded kernel");
+    }
+
+    #[tokio::test]
     async fn bundles_a_standalone_virtual_module() {
         let code = bundle(
             [parsed_javascript_fixture(

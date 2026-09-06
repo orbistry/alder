@@ -35,6 +35,15 @@ fn throws() Task[Number]
 fn rejects() Task[Number]
 
 pub async fn main() {
+    let parse = Number.parse
+    assert(Array.map(["42", "not a number"], parse) == [Some(42), None])
+    assert(BigInt.parse("9007199254740993") == Some(9007199254740993n))
+    assert(BigInt.parse("4.5") == None)
+    assert(String.length(String.concat("a", "😀é")) == 4)
+    let identity_value = { items: [] }
+    assert(Ref.same(identity_value, identity_value))
+    assert(!Ref.same(identity_value, { items: [] }))
+    assert(!Ref.same(42, "42"))
     let parse_number = number_parser()
     assert(Array.map(["10", "10", "10"], parse_number) == [10, 10, 10])
     assert(bounded_identity(42) == 42)

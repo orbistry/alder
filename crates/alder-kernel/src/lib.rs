@@ -62,6 +62,42 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn scalar_stdlib_helpers_preserve_declared_value_shapes() {
+        let harness = indoc::indoc! {r#"
+            $assert($numberParse("42") === 42);
+            $assert($numberParse("-4.5") === -4.5);
+            $assert($numberParse("not a number") === null);
+            $assert($bigIntParse("9007199254740993") === 9007199254740993n);
+            $assert($bigIntParse("-42") === -42n);
+            $assert($bigIntParse("4.5") === null);
+            $assert($bigIntParse("not an integer") === null);
+            $assert($stringLength("") === 0);
+            $assert($stringLength("a😀e\u0301") === 4);
+            $assert($stringConcat("left", "😀right") === "left😀right");
+            const value = { items: [] };
+            $assert($refSame(value, value));
+            $assert(!$refSame(value, { items: [] }));
+            $assert(!$refSame(42, "42"));
+            $assert($refSame(0, -0));
+            $assert(!$refSame(NaN, NaN));
+            const args = $cliArgs();
+            $assert(Array.isArray(args));
+            $assert(args.length === 2 && args[0] === "first" && args[1] === "😀");
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, vec!["first".to_owned(), "😀".to_owned()]),
+            )
+            .await
+            .expect("scalar stdlib checks must terminate")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn structural_cycle_guards_allow_shared_children_and_later_mutation() {
         let harness = indoc::indoc! {r#"
             for (const value of [[], {}]) {
