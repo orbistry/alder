@@ -361,6 +361,273 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn semaphore_bounds_work_and_releases_after_scoped_cleanup() {
+        let harness = indoc::indoc! {r#"
+            const make = $semaphoreMake(2);
+            const semaphore = await $runTask(make);
+            $assert(semaphore !== await $runTask(make));
+            let active = 0, peak = 0, completed = 0;
+            const tasks = Array.from({ length: 12 }, () => $semaphoreWithPermits(semaphore, 1,
+                $task(function* () {
+                    active++;
+                    peak = Math.max(peak, active);
+                    yield* $fiberAddFinalizer($task(function* () {
+                        yield* $tryPromise(() => Promise.resolve());
+                        active--;
+                        completed++;
+                    }));
+                    yield* $tryPromise(() => Promise.resolve());
+                    return 42;
+                })));
+            $assert(active === 0);
+            const results = await $runTask($fiberAll(tasks));
+            $assert(results.length === 12 && results.every((value) => value === 42));
+            $assert(peak === 2 && active === 0 && completed === 12);
+            $assert(semaphore.available === 2 && semaphore.waiters.size === 0);
+            const defect = new Error("protected failure");
+            let caught = false;
+            try {
+                await $runTask($semaphoreWithPermits(semaphore, 2,
+                    $task(() => { throw defect; })));
+            } catch (error) { caught = error === defect; }
+            $assert(caught && semaphore.available === 2);
+            const err = { $: "Err", _0: { $: ":expected" } };
+            $assert(await $runTask($semaphoreWithPermits(semaphore, 2,
+                $task(function* () { return err; }))) === err);
+            for (const count of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+                let invalid = false;
+                try { await $runTask($semaphoreMake(count)); }
+                catch (error) { invalid = error instanceof RangeError; }
+                $assert(invalid);
+            }
+            for (const count of [0, -1, 1.5, 3, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+                let invalid = false, started = false;
+                const protectedTask = $semaphoreWithPermits(semaphore, count,
+                    $task(function* () { started = true; }));
+                try { await $runTask(protectedTask); }
+                catch (error) { invalid = error instanceof RangeError; }
+                $assert(invalid && !started);
+                $assert(semaphore.available === 2 && semaphore.waiters.size === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("semaphore test must complete")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn semaphore_cancellation_removes_waiters_and_recovers_unconsumed_grants() {
+        let harness = indoc::indoc! {r#"
+            for (const granted of [false, true]) {
+                const semaphore = await $runTask($semaphoreMake(1));
+                const holder = { permits: 1, acquired: false };
+                semaphore.enqueue(holder, () => {});
+                let started = 0;
+                const waiting = new FiberImpl($semaphoreWithPermits(semaphore, 1,
+                    $task(function* () { started++; }))).start();
+                await $runTask($task(function* () {}));
+                $assert(semaphore.waiters.size === 1);
+                if (granted) semaphore.release(holder);
+                waiting.interruptUnsafe();
+                const exit = await waiting.awaitExit();
+                $assert(exit.$ === "Failure" && exit.error instanceof Interrupted);
+                $assert(started === 0 && semaphore.waiters.size === 0);
+                if (!granted) semaphore.release(holder);
+                $assert(semaphore.available === 1);
+                $assert(await $runTask($semaphoreWithPermits(semaphore, 1,
+                    $task(function* () { return 42; }))) === 42);
+            }
+            const semaphore = await $runTask($semaphoreMake(2));
+            const holder = { permits: 1, acquired: false };
+            semaphore.enqueue(holder, () => {});
+            const large = { permits: 2, acquired: false };
+            const small = { permits: 1, acquired: false };
+            const grants = [];
+            semaphore.enqueue(large, () => grants.push("large"));
+            semaphore.enqueue(small, () => grants.push("small"));
+            $assert(grants.length === 0);
+            semaphore.release(large);
+            $assert(grants.join(",") === "small");
+            semaphore.release(small);
+            semaphore.release(small);
+            semaphore.release(holder);
+            $assert(semaphore.available === 2 && semaphore.waiters.size === 0);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("semaphore cancellation must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn semaphore_holds_permits_during_cancelled_finalization() {
+        let harness = indoc::indoc! {r#"
+            const semaphore = await $runTask($semaphoreMake(1));
+            let entered, cleaning, release;
+            const ready = new Promise((resolve) => { entered = resolve; });
+            const cleanupStarted = new Promise((resolve) => { cleaning = resolve; });
+            const gate = new Promise((resolve) => { release = resolve; });
+            const events = [];
+            const holder = new FiberImpl($semaphoreWithPermits(semaphore, 1,
+                $task(function* () {
+                    yield* $fiberAddFinalizer($task(function* () {
+                        yield* $tryPromise(() => { cleaning(); return gate; });
+                        events.push("cleanup");
+                    }));
+                    yield* $tryPromise(() => { entered(); return new Promise(() => {}); });
+                }))).start();
+            await ready;
+            const successor = new FiberImpl($semaphoreWithPermits(semaphore, 1,
+                $task(function* () { events.push("successor"); return 42; }))).start();
+            await $runTask($task(function* () {}));
+            $assert(semaphore.waiters.size === 1);
+            holder.interruptUnsafe();
+            await cleanupStarted;
+            holder.interruptUnsafe();
+            $assert(semaphore.available === 0 && semaphore.waiters.size === 1);
+            $assert(events.length === 0 && holder.exit === null && successor.exit === null);
+            release();
+            const exit = await holder.awaitExit();
+            const next = await successor.awaitExit();
+            $assert(exit.$ === "Failure" && exit.error instanceof Interrupted);
+            $assert(next.$ === "Success" && next.value === 42);
+            $assert(events.join(",") === "cleanup,successor");
+            $assert(semaphore.available === 1 && semaphore.waiters.size === 0);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("semaphore finalization must complete")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn semaphore_joins_owned_child_cleanup_before_releasing_permits() {
+        let harness = indoc::indoc! {r#"
+            for (const interrupt of [false, true]) {
+                const semaphore = await $runTask($semaphoreMake(1));
+                let entered, cleaning, release;
+                const ready = new Promise((resolve) => { entered = resolve; });
+                const cleanupStarted = new Promise((resolve) => { cleaning = resolve; });
+                const gate = new Promise((resolve) => { release = resolve; });
+                const events = [];
+                const holder = new FiberImpl($semaphoreWithPermits(semaphore, 1,
+                    $task(function* () {
+                        yield* $fiberFork($task(function* () {
+                            try {
+                                yield* $tryPromise(() => {
+                                    entered();
+                                    return new Promise(() => {});
+                                });
+                            } finally {
+                                yield* $tryPromise(() => { cleaning(); return gate; });
+                                events.push("child cleanup");
+                            }
+                        }));
+                        yield* $tryPromise(() => ready);
+                        if (interrupt) yield* $tryPromise(() => new Promise(() => {}));
+                        return 7;
+                    }))).start();
+                await ready;
+                const successor = new FiberImpl($semaphoreWithPermits(semaphore, 1,
+                    $task(function* () { events.push("successor"); return 42; }))).start();
+                await $runTask($task(function* () {}));
+                if (interrupt) holder.interruptUnsafe();
+                await cleanupStarted;
+                $assert(semaphore.available === 0 && semaphore.waiters.size === 1);
+                $assert(holder.exit === null && successor.exit === null && events.length === 0);
+                release();
+                const exit = await holder.awaitExit();
+                const next = await successor.awaitExit();
+                $assert(interrupt
+                    ? exit.$ === "Failure" && exit.error instanceof Interrupted
+                    : exit.$ === "Success" && exit.value === 7);
+                $assert(next.$ === "Success" && next.value === 42);
+                $assert(events.join(",") === "child cleanup,successor");
+                $assert(semaphore.available === 1 && semaphore.waiters.size === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("semaphore child cleanup must complete")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn semaphore_handoffs_yield_to_host_and_preserve_provider_context() {
+        let harness = indoc::indoc! {r#"
+            const semaphore = await $runTask($semaphoreMake(1));
+            let timerRan = false, operations = 0;
+            const timer = setTimeout(() => { timerRan = true; }, 0);
+            try {
+                await $runTask($task(function* () {
+                    $providerPush("service", "parent");
+                    try {
+                        const workers = Array.from({ length: 4 }, () => $task(function* () {
+                            for (let index = 0; index < 512; index++) {
+                                yield* $semaphoreWithPermits(semaphore, 1, $task(function* () {
+                                    $assert($providerGet("service") === "parent");
+                                    $providerPush("service", "protected");
+                                    try {
+                                        yield* $tryPromise(() => Promise.resolve());
+                                        $assert($providerGet("service") === "protected");
+                                    } finally { $providerPop("service"); }
+                                    operations++;
+                                    if (operations === 1024) $assert(timerRan);
+                                }));
+                                $assert($providerGet("service") === "parent");
+                            }
+                        }));
+                        yield* $fiberAll(workers);
+                        $assert($providerGet("service") === "parent");
+                    } finally { $providerPop("service"); }
+                }));
+            } finally { clearTimeout(timer); }
+            $assert(timerRan && operations === 2048);
+            $assert(semaphore.available === 1 && semaphore.waiters.size === 0);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("semaphore handoffs must yield")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn primitive_json_codecs_validate_types_and_round_trip() {
         let harness = indoc::indoc! {r#"
             for (const [value, kind] of [[42, "number"], ["text", "string"], [true, "boolean"],

@@ -155,6 +155,44 @@ Specify exact signatures and failure behavior before implementation. Test
 lost-update prevention, interruption of waiters, permit release/finalization,
 and failure during a suspended state transition. Do not port Effect wholesale.
 
+### Semaphore implementation contract
+
+Current ownership review: rechecked `Semaphore.ts` (`waitForPermits` and
+`withPermits`) at the pinned Effect commit. Alder deliberately uses strict
+weighted FIFO rather than Effect's availability-based observer traversal;
+request ownership and scope joins replace the mask/onExit machinery. No source
+was copied. Five focused kernel regressions pass, including a new gated test
+that holds the permit through a forked child's cleanup on both normal parent
+completion and interruption. This supplements direct-finalizer coverage; a
+queued successor cannot enter until the child cleanup completes. Public
+integration remains separate from this kernel checkpoint.
+
+Initial public signatures: `make(permits: Number) Task[Semaphore]` and
+`withPermits(semaphore: Semaphore, permits: Number, task: Task[a]) Task[a]`.
+Both are lazy and reusable. Capacity and requested permits must be positive
+safe integers; a request cannot exceed the fixed capacity. Invalid arguments
+fail at execution with a RangeError defect, never an invented typed error row
+or a permanently unfulfillable waiter. No resizing or manual acquire/release
+API is exposed in this foundation.
+
+Requests are FIFO, including weighted requests: smaller requests do not bypass
+an older request waiting for more permits. Cancellation removes a waiting
+request; cancellation after grant but before resumption releases its ownership
+exactly once. The request's ownership record exists inside a generator's
+try/finally before it is submitted, so no grant-to-cleanup-registration gap
+exists. Waiters suspend their current fiber; no extra waiting fiber is created.
+
+After acquisition, run the protected task in an owned scope. Hold permits until
+that scope's children and finalizers have completed on success, typed Err,
+defect, or interruption. Return values and defects are preserved; Err remains
+ordinary data. Nested acquisition is not reentrant and can deadlock when a
+task requests permits it already holds. This is cooperative coordination,
+not cross-worker synchronization. Resource alias writes outside the protected
+task remain unprotected. Reference: pinned Effect withPermits establishes
+cleanup before restoring interruption. Alder uses explicit request ownership
+and existing scope joins instead of Effect's mask/onExit instruction machinery;
+no source is copied.
+
 ## Bounded Fiber traversal
 
 Provide these distinct operations (schematic types, not final declarations):

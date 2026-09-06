@@ -889,6 +889,11 @@ class FiberImpl {
             case "All": return this.handleAll(operation.tasks);
             case "Race": return this.handleRace(operation.tasks);
             case "Scope": return this.handleScope(operation.task);
+            case "SemaphoreAcquire":
+                return this.suspend((resume) => {
+                    operation.semaphore.enqueue(operation.request, resume);
+                    return () => operation.semaphore.release(operation.request);
+                });
             case "Finalizer": return this.handleFinalizer(operation.finalizer);
             case "Mask":
                 this.interruptMask = Math.max(0, this.interruptMask + operation.delta);
@@ -1239,6 +1244,63 @@ export function $runMain(value) {
 export function $tryPromise(thunk, abort = false, origin = "JavaScript extern", mapRejected = null) {
     return $task(function* () {
         return yield { $: "Promise", thunk, abort, origin, mapRejected };
+    });
+}
+
+class SemaphoreImpl {
+    constructor(capacity) {
+        if (!Number.isSafeInteger(capacity) || capacity <= 0) {
+            throw new RangeError("Semaphore capacity must be a positive safe integer");
+        }
+        this.capacity = capacity;
+        this.available = capacity;
+        this.waiters = new Map();
+    }
+
+    enqueue(request, resume) {
+        this.waiters.set(request, resume);
+        this.drain();
+    }
+
+    drain() {
+        for (const [request, resume] of this.waiters) {
+            if (request.permits > this.available) break;
+            this.waiters.delete(request);
+            this.available -= request.permits;
+            request.acquired = true;
+            resume("next", undefined);
+        }
+    }
+
+    release(request) {
+        this.waiters.delete(request);
+        if (request.acquired) {
+            request.acquired = false;
+            this.available += request.permits;
+        }
+        this.drain();
+    }
+}
+
+export function $semaphoreMake(permits) {
+    return $task(function* () { return new SemaphoreImpl(permits); });
+}
+
+export function $semaphoreWithPermits(semaphore, permits, task) {
+    return $task(function* () {
+        if (!(semaphore instanceof SemaphoreImpl)) {
+            throw new TypeError("Semaphore.withPermits expected a Semaphore");
+        }
+        if (!Number.isSafeInteger(permits) || permits <= 0 || permits > semaphore.capacity) {
+            throw new RangeError("Requested permits must be a positive safe integer within semaphore capacity");
+        }
+        const request = { permits, acquired: false };
+        try {
+            yield { $: "SemaphoreAcquire", semaphore, request };
+            return yield* $fiberScope(task);
+        } finally {
+            semaphore.release(request);
+        }
     });
 }
 
