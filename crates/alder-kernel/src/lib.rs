@@ -62,6 +62,39 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn structural_cycle_guards_allow_shared_children_and_later_mutation() {
+        let harness = indoc::indoc! {r#"
+            for (const value of [[], {}]) {
+                if (Array.isArray(value)) value.push(value);
+                else value.self = value;
+                $assert($show(value) === (Array.isArray(value) ? "[<cycle>]" : "{ self: <cycle> }"));
+                let rejected = false;
+                try { $hash(value); }
+                catch (error) { rejected = error instanceof TypeError && error.message === "Hash: cyclic value"; }
+                $assert(rejected);
+                if (Array.isArray(value)) value[0] = 42;
+                else value.self = 42;
+                const copy = Array.isArray(value) ? [42] : { self: 42 };
+                $assert($hash(value) === $hash(copy));
+                $assert($show(value) === $show(copy));
+                $assert($hash([value, value]) === $hash([value, copy]));
+                $assert($show([value, value]) === $show([value, copy]));
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new()),
+            )
+            .await
+            .expect("structural cycle checks must terminate")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn cyclic_show_has_a_marker() {
         check_cyclic_derived_operation("Show").await;
     }
