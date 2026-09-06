@@ -55,6 +55,18 @@ helpers. Wider foreign-boundary and codec audits remain open.
 
 ## Remaining work
 
+### JSON envelope boundary review
+
+The kernel rejects Result envelopes missing `_0` before invoking the payload
+decoder, preserving its String input contract. Explicit null remains a present
+payload. Derived JSON decoding accepts only own entries of the variant map,
+so inherited names such as `constructor` and `toString` produce the same
+path-qualified unknown-tag error as other unknown variants. Two granular kernel
+tests cover these cases and a valid-tag control. All five JSON-filtered kernel
+tests pass, as do formatting and strict Clippy; the preceding full workspace
+and doctest pass covers this unchanged production source state. Record optional
+presence semantics and the broader structural codec integration remain separate.
+
 - Audit container envelopes, optional/unit/nested Option representation, derived
   payloads, aliases, generic dictionaries, error groups, and round-trip behavior
   at the module API as well as trait calls.

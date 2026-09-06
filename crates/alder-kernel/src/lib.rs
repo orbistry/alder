@@ -1513,6 +1513,46 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn derived_json_rejects_inherited_variant_names_at_tag_path() {
+        let harness = indoc::indoc! {r#"
+            const variants = { Known: { record: false, fields: [] } };
+            for (const tag of ["missing", "toString", "constructor", "__proto__", "hasOwnProperty"]) {
+                const text = JSON.stringify({ tag, fields: [] });
+                const decoded = $jsonDecodeDerived(text, variants);
+                $assert(decoded.$ === "Err" && decoded._0.$ === ":invalid_json");
+                $assert(decoded._0._0 === `$.tag: unknown variant ${JSON.stringify(tag)}`);
+            }
+            $assert($jsonDecodeDerived('{"tag":"Known","fields":[]}', variants)._0.$ === "Known");
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn result_json_requires_payload_before_calling_child_decoder() {
+        let harness = indoc::indoc! {r#"
+            let calls = 0;
+            const child = { decode: text => {
+                calls++;
+                $assert(typeof text === "string");
+                return $resultOk(undefined);
+            }};
+            for (const tag of ["Ok", "Err"]) {
+                const missing = $jsonDecodeContainer(JSON.stringify({ $: tag }), "result", [child, child]);
+                $assert(missing.$ === "Err" && missing._0.$ === ":invalid_json");
+                $assert(calls === 0);
+            }
+            for (const tag of ["Ok", "Err"]) {
+                const present = $jsonDecodeContainer(JSON.stringify({ $: tag, _0: null }), "result", [child, child]);
+                $assert(present.$ === "Ok" && present._0.$ === tag && present._0._0 === undefined);
+            }
+            $assert(calls === 2);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn primitive_json_codecs_validate_types_and_round_trip() {
         let harness = indoc::indoc! {r#"
             for (const [value, kind] of [[42, "number"], ["text", "string"], [true, "boolean"],

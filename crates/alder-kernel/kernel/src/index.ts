@@ -519,6 +519,7 @@ export function $jsonDecodeContainer(value, kind, dictionaries) {
             if (!parsed || typeof parsed !== "object" || !["Ok", "Err"].includes(parsed.$)) {
                 return $jsonErr("$: expected an `Ok` or `Err` result");
             }
+            if (!Object.hasOwn(parsed, "_0")) return $jsonErr("$._0: missing field");
             const index = parsed.$ === "Ok" ? 0 : 1;
             const decoded = decode(dictionaries[index], parsed._0, "$._0");
             return decoded.$ === "Ok" ? $resultOk({ $: parsed.$, _0: decoded._0 }) : decoded;
@@ -556,8 +557,10 @@ export function $jsonDecodeDerived(value, variants) {
         if (!parsed || typeof parsed !== "object" || typeof parsed.tag !== "string") {
             return $jsonErr("$: expected an object with a string `tag`");
         }
+        if (!Object.hasOwn(variants, parsed.tag)) {
+            return $jsonErr(`$.tag: unknown variant ${JSON.stringify(parsed.tag)}`);
+        }
         const shape = variants[parsed.tag];
-        if (!shape) return $jsonErr(`$.tag: unknown variant ${JSON.stringify(parsed.tag)}`);
         const result = { $: parsed.tag };
         if (shape.record) {
             if (Object.keys(parsed).some((key) => key !== "tag" && key !== "value")) {
