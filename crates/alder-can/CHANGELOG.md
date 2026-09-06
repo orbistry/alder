@@ -1,5 +1,27 @@
 # alder-can
 
+## 0.5.0 — 2026-09-06
+
+### Minor changes
+
+- [8e03ebe](https://github.com/orbistry/alder/commit/8e03ebe56450b5f86574e1a2f5a5651c2d7b5023) Recover independent implementation and trait-default body failures using fresh inference attempts, retaining declaration contracts for diagnostics and suppressing dependent bodies without hiding unrelated methods. — Thanks @rvcas!
+- [0b70ba7](https://github.com/orbistry/alder/commit/0b70ba754c594fecfb7fe7344e77ffb32f2ffe3f) Generate unused-local and parameter warnings from resolved source bindings,
+  respecting shadowing, alternatives, captures, pins, guards, and writes. Explain
+  safe pattern discards without recommending removal of needed initializer effects. — Thanks @rvcas!
+- [6590795](https://github.com/orbistry/alder/commit/65907955dca4efc84622b5e72219274763826e95) Generate unused import-binding warnings through resolved source lookups, respecting
+  aliases, shadowing, type and trait uses, and public re-exports. Preserve initializer
+  effects and source-order diagnostic delivery in check, build, and test commands. — Thanks @rvcas!
+- [effb878](https://github.com/orbistry/alder/commit/effb878c6a279ad19eb2f77feae8f57724ea1416) Warn on unused module value bindings using resolved references and conservative
+  reachability. Respect exports, recursion, shadowing, entry points, tests and
+  method bodies, while retaining side-effectful initializers and their helpers. — Thanks @rvcas!
+
+### Patch changes
+
+- [563041a](https://github.com/orbistry/alder/commit/563041aaef0af67e3c1813ad41235a2bd42c2f1e) Accumulate independent declaration type errors using fresh inference attempts,
+  suppress dependent failures, and retain the failed-module publication barrier. — Thanks @rvcas!
+- [5adcd76](https://github.com/orbistry/alder/commit/5adcd76c4e07726d71ba42a6566fe3901c1a6df6) Report independent statement type errors within a function using isolated retries, suppressing invalid local dependencies and delivering the results to CLI and editor consumers. — Thanks @rvcas!
+- Updated dependencies: alder-parse@0.4.0
+
 ## 0.4.0 — 2026-09-06
 
 ### Minor changes

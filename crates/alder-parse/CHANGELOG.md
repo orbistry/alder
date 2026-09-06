@@ -1,5 +1,31 @@
 # alder-parse
 
+## 0.4.0 — 2026-09-06
+
+### Minor changes
+
+- [8727140](https://github.com/orbistry/alder/commit/8727140fdbb63100e9609baea374591a608ff748) Preserve detailed parser failures and nearby source context for core expressions,
+  patterns, and loops. Explain common separator and branch-syntax mistakes, label
+  whole Unicode characters, and identify end-of-file failures without changing
+  source identities or editor coordinates.
+  
+  Render dedicated declaration, template, and escape diagnostics. Raw macro errors
+  now retain the expected closing delimiter and its opening position, enabling
+  precise nested-delimiter and end-of-file messages.
+  
+  Cover active types, traits, impls, imports, attributes, queries, styles, markup,
+  reserved operators, direct errors, and nesting guards with reviewed rendered
+  regressions. Verify canonical CLI hyperlinks and LSP Unicode/EOF ranges and
+  related labels end to end without changing accepted syntax. — Thanks @rvcas!
+- [fe6e840](https://github.com/orbistry/alder/commit/fe6e840c87737e69bcfb3ce033bc274d6f933964) Retain pre-whitespace/comment boundaries in shared delimiter errors, including
+  parser backtracking. Report cross-line missing punctuation at the insertion
+  boundary and label the actual opening punctuation, not the enclosing declaration.
+  Keep detection evidence internal rather than labeling valid following code, retain
+  actual mismatched closer locations, and distinguish required separators from list
+  entries in CLI/editor messages. Delimiter error variants now carry ExpectedEnd
+  instead of a row/column pair; error-row extension and non-select query closers have
+  separate variants so their messages do not offer invalid continuations. — Thanks @rvcas!
+
 ## 0.3.0 — 2026-09-06
 
 ### Minor changes

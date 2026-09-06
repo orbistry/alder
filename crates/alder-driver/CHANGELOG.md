@@ -1,5 +1,89 @@
 # alder-driver
 
+## 0.5.0 — 2026-09-06
+
+### Minor changes
+
+- [52f2954](https://github.com/orbistry/alder/commit/52f29549f4881d0c493332ee8549df1adcf1fbbe) Add consistent Cargo-style CLI statuses, global quiet/verbose/color options,
+  elapsed summaries, accurate diagnostic counts, and compiler proxy reporting.
+  Expose optional semantic driver progress and an injected CLI renderer while
+  preserving source diagnostics, hyperlinks, and program/LSP streams. Add opt-in
+  structured runtime test results so CLI test summaries use actual executed counts
+  on stderr without intercepting user output or duplicating failure summaries. — Thanks @rvcas!
+
+### Patch changes
+
+- [52732c2](https://github.com/orbistry/alder/commit/52732c2173f38376da3372582de0347b8105a3ac) Preserve structured types in missing-return, invalid Result error-kind, and associated-equality diagnostics so nested types use resolved import names at reporting time. — Thanks @rvcas!
+- [6b0010f](https://github.com/orbistry/alder/commit/6b0010f05674b8203029299d717e0c44de267101) Collect invalid declaration error kinds before body inference, preventing dependent type-error cascades. — Thanks @rvcas!
+- [8cb8b18](https://github.com/orbistry/alder/commit/8cb8b181878b325ebd12585d03f7b0172d8c7ef1) Check pattern exhaustiveness and redundancy uniformly across enums, Option,
+  Result, nested payloads, tuples, records and array prefixes. Reject refutable
+  bindings and parameters at compile time, report uncovered patterns and covering
+  source locations, and preserve effectful guard and pin behavior. — Thanks @rvcas!
+- [8e03ebe](https://github.com/orbistry/alder/commit/8e03ebe56450b5f86574e1a2f5a5651c2d7b5023) Recover independent implementation and trait-default body failures using fresh inference attempts, retaining declaration contracts for diagnostics and suppressing dependent bodies without hiding unrelated methods. — Thanks @rvcas!
+- [563041a](https://github.com/orbistry/alder/commit/563041aaef0af67e3c1813ad41235a2bd42c2f1e) Accumulate independent declaration type errors using fresh inference attempts,
+  suppress dependent failures, and retain the failed-module publication barrier. — Thanks @rvcas!
+- [841eb16](https://github.com/orbistry/alder/commit/841eb160815769e46a830e7366206be112bff138) Keep impossible error-pattern advice within the scrutinee's declared contract rather than recommending a broader error type. — Thanks @rvcas!
+- [8dc960c](https://github.com/orbistry/alder/commit/8dc960c1cfd21d9fce64470714dae904d8f2d2b8) Retain available record fields in missing-field diagnostics and offer conservative, unambiguous typo suggestions. — Thanks @rvcas!
+- [8c09806](https://github.com/orbistry/alder/commit/8c098064375e1f07292f89a8dba4288fcb35e12b) Keep enclosing function, tuple and applied type comparisons in mismatch diagnostics, including deferred Option payload checks and normalized associated types. — Thanks @rvcas!
+- [30635be](https://github.com/orbistry/alder/commit/30635be9554d9419a6fae026b0a01f88be6726b2) Retain structured recursive type equations for occurs-check failures and explain
+  why structural cycles cannot have finite types. Use shared readable variable
+  names and preserve call, branch and array-element diagnostic context. — Thanks @rvcas!
+- [ea12495](https://github.com/orbistry/alder/commit/ea1249529f95314799f5241bc725bc9d7541a65d) Preserve owned nominal identities in diagnostic types and render consumer import names, re-export aliases, or explicit module/package provenance instead of ambiguous short names. — Thanks @rvcas!
+- [db5af22](https://github.com/orbistry/alder/commit/db5af22dcae75be7c815d00a3a329fb2a5578d48) Preserve structured mismatch types until diagnostic rendering, including distinct generic variables and open record/error rows. — Thanks @rvcas!
+- [5adcd76](https://github.com/orbistry/alder/commit/5adcd76c4e07726d71ba42a6566fe3901c1a6df6) Report independent statement type errors within a function using isolated retries, suppressing invalid local dependencies and delivering the results to CLI and editor consumers. — Thanks @rvcas!
+- [0b70ba7](https://github.com/orbistry/alder/commit/0b70ba754c594fecfb7fe7344e77ffb32f2ffe3f) Generate unused-local and parameter warnings from resolved source bindings,
+  respecting shadowing, alternatives, captures, pins, guards, and writes. Explain
+  safe pattern discards without recommending removal of needed initializer effects. — Thanks @rvcas!
+- [6590795](https://github.com/orbistry/alder/commit/65907955dca4efc84622b5e72219274763826e95) Generate unused import-binding warnings through resolved source lookups, respecting
+  aliases, shadowing, type and trait uses, and public re-exports. Preserve initializer
+  effects and source-order diagnostic delivery in check, build, and test commands. — Thanks @rvcas!
+- [8727140](https://github.com/orbistry/alder/commit/8727140fdbb63100e9609baea374591a608ff748) Preserve detailed parser failures and nearby source context for core expressions,
+  patterns, and loops. Explain common separator and branch-syntax mistakes, label
+  whole Unicode characters, and identify end-of-file failures without changing
+  source identities or editor coordinates.
+  
+  Render dedicated declaration, template, and escape diagnostics. Raw macro errors
+  now retain the expected closing delimiter and its opening position, enabling
+  precise nested-delimiter and end-of-file messages.
+  
+  Cover active types, traits, impls, imports, attributes, queries, styles, markup,
+  reserved operators, direct errors, and nesting guards with reviewed rendered
+  regressions. Verify canonical CLI hyperlinks and LSP Unicode/EOF ranges and
+  related labels end to end without changing accepted syntax. — Thanks @rvcas!
+- [00451d1](https://github.com/orbistry/alder/commit/00451d103570fbec7a31237cb86d2fbc01a0b1d0) Label the earlier local requirement when associated-type equalities conflict. — Thanks @rvcas!
+- [fe6e840](https://github.com/orbistry/alder/commit/fe6e840c87737e69bcfb3ce033bc274d6f933964) Retain pre-whitespace/comment boundaries in shared delimiter errors, including
+  parser backtracking. Report cross-line missing punctuation at the insertion
+  boundary and label the actual opening punctuation, not the enclosing declaration.
+  Keep detection evidence internal rather than labeling valid following code, retain
+  actual mismatched closer locations, and distinguish required separators from list
+  entries in CLI/editor messages. Delimiter error variants now carry ExpectedEnd
+  instead of a row/column pair; error-row extension and non-select query closers have
+  separate variants so their messages do not offer invalid continuations. — Thanks @rvcas!
+- [750ac88](https://github.com/orbistry/alder/commit/750ac88dddbee64ae137fd553cd7d54bc5fe06cc) Preserve complete structured trait arguments and obligation chains, localize imported names consistently, retain declared and distinct inferred variables, and keep trait hints within valid equality and generic-contract rules. — Thanks @rvcas!
+- [5567bf1](https://github.com/orbistry/alder/commit/5567bf17dd7b016c2cc1f6b108f5db863f887a64) Retain structured generic restrictions and explain concrete specialization, independent-variable equality, open-row restrictions, and shared-storage escape without speculative signature changes. — Thanks @rvcas!
+- [66077d5](https://github.com/orbistry/alder/commit/66077d55c9314328f5fadcefa74b47f62678f103) Do not count nested pinned Result payloads as unconditional pattern coverage. — Thanks @rvcas!
+- [b0bb65b](https://github.com/orbistry/alder/commit/b0bb65bf4f36b5fde164fe8b8ae0f6cb6472db1d) Preserve structured record comparisons and distinguish missing from unexpected fields, including conservative typo suggestions and enclosing nested-record shapes. — Thanks @rvcas!
+- [43eaf30](https://github.com/orbistry/alder/commit/43eaf300b668b9f52371a40fbd92240e19e44e6a) Preserve argument position and callee names when optional-argument compatibility
+  is checked after inference, including piped calls and inconsistent Option depths. — Thanks @rvcas!
+- [5120a13](https://github.com/orbistry/alder/commit/5120a136a3b806684d16edd3856b045e1c53743e) Report independent missing trait evidence after core type-error recovery by
+  checking only the freshly re-inferred remainder. Preserve dependency suppression
+  and failed-build publication gates, and order mixed diagnostic kinds by source. — Thanks @rvcas!
+- [f137a2b](https://github.com/orbistry/alder/commit/f137a2b800e41595e921e29e216a255df9301363) Detect trait resolution cycles using complete predicate identities instead of rendered type names, allowing nested-record equality and preserving the actual missing-payload diagnostic. — Thanks @rvcas!
+- [9893f6c](https://github.com/orbistry/alder/commit/9893f6cf59467b63bd8371bd0d2944a319f7988f) Suppress cascading importer diagnostics after a source module fails, including
+  transitive public re-exports. Failed builds return no executable artifacts,
+  interfaces, or partial package indexes, including consumers of invalid sibling
+  implementation bodies. — Thanks @rvcas!
+- [9e410e9](https://github.com/orbistry/alder/commit/9e410e938fccf5630c83e243b1421b9bf742a29c) Retain return annotation locations for explicit returns and lambda tails, and
+  highlight the returned expression. Isolate annotation origins at nested lambda
+  and async boundaries so diagnostics do not blame an outer function's signature. — Thanks @rvcas!
+- [effb878](https://github.com/orbistry/alder/commit/effb878c6a279ad19eb2f77feae8f57724ea1416) Warn on unused module value bindings using resolved references and conservative
+  reachability. Respect exports, recursion, shadowing, entry points, tests and
+  method bodies, while retaining side-effectful initializers and their helpers. — Thanks @rvcas!
+- [51a458d](https://github.com/orbistry/alder/commit/51a458d94bb965f8d59121b70af0114339572456) Preserve return-annotation context for early record type comparisons, including transparent aliases and explicit returns, without relabeling unrelated projection failures. — Thanks @rvcas!
+- [a63a5e0](https://github.com/orbistry/alder/commit/a63a5e0be9ae9437dcd8b60e615cce5ca8fe1afb) Label written return annotations in missing-return diagnostics, including aliases and async functions, without inventing annotation origins for inferred results. — Thanks @rvcas!
+- [875607f](https://github.com/orbistry/alder/commit/875607f62375e37441f8a9522e97b8955fa443ef) Explain immediate type expectations with contextual source labels and originating annotations, and report call arity with argument counts. — Thanks @rvcas!
+- Updated dependencies: alder-can@0.5.0, alder-codegen@0.4.1, alder-constrain@0.5.0, alder-parse@0.4.0, alder-report@0.3.0, alder-solve@0.5.0
+
 ## 0.4.0 — 2026-09-06
 
 ### Minor changes

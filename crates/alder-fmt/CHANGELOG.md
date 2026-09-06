@@ -1,5 +1,11 @@
 # alder-fmt
 
+## 0.2.2 — 2026-09-06
+
+### Patch changes
+
+- Updated dependencies: alder-parse@0.4.0
+
 ## 0.2.1 — 2026-09-06
 
 ### Patch changes

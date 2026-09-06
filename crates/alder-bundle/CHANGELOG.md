@@ -1,5 +1,11 @@
 # alder-bundle
 
+## 0.3.1 — 2026-09-06
+
+### Patch changes
+
+- Updated dependencies: alder-codegen@0.4.1, alder-kernel@0.4.1, alder-report@0.3.0
+
 ## 0.3.0 — 2026-09-06
 
 ### Minor changes
