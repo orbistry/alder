@@ -29,20 +29,20 @@ not a claim that historical Elm-port modules are active.
 
 ### Current acceptance audit (not final completion)
 
-The baseline table above is historical. Current source evidence narrows the
-remaining work as follows; a passing test gate does not close the open reviews.
+The baseline table above is historical. The acceptance review reconciles current
+source evidence, deliberate differences and unresolved policy as follows.
 
-| Requirement | Verified current evidence | Remaining review / policy |
+| Requirement | Verified current evidence | Deliberate limit / remaining decision |
 | --- | --- | --- |
-| Independent errors and safe recovery | Fresh retries in `infer_recovering`; `independent_type_errors_accumulate_without_publishing`, partial-shared-state and recursive-group tests; implementation/default/generic-method recovery snapshots; invalid declaration Result kinds accumulate in isolated preflight converters; discarded statement retries collect independent core errors inside callables | Recursive structural-group errors still stop at one cycle; invalid metadata prevents body checking; nested sibling expressions and trait obligations inside a core-failing body remain open |
-| Dependent suppression and publication | Callable resolved-dependency traversal; cross-module re-export/invalid-impl publication tests; Check/Build/Test output gates | Final audit of all remaining metadata stop cases |
-| Context and source spans | `mismatch_explains_expectations_at_the_source`, innermost-context, return/lambda/async, optional argument and alias-return-origin tests | Deferred record/error-row paths and specialized errors still need a complete provenance audit |
-| Type comparisons | Structured records, functions, tuples, applications, dense variables, named generic restrictions; nominal import/re-export localization; expanded aliases retain source annotation labels; specialized core errors and complete trait goals retain structured types | Final cross-context review; compact reconstruction of source synonyms is not implemented |
-| Actionable explanations | Field typo/difference, arity, infinite-equation and generic-restriction source snapshots; trait hints respect function equality, implementation ownership and method contracts | Final review of remaining specialized core hints and expectation provenance |
+| Independent errors and safe recovery | Fresh declaration/method/statement retries; partial-shared-state, recursive-group, deferred-constraint and metadata preflight source tests | Atomic nested statements, omitted-body trait obligations and a single structural-cycle report are deliberate safe recovery limits; see acceptance review §1 |
+| Dependent suppression and publication | Resolved local/callable dependencies; cross-module re-export/invalid-impl tests; Check/Build/Test output gates | Invalid metadata stops body inference; no partially checked remainder is published |
+| Context and source spans | All eleven requested contexts, innermost cause, return/lambda/async, optional arguments, aliases and associated-equality origins | Reviewed against source fixtures in acceptance review §2; origins are local, not foreign spans |
+| Type comparisons | Structured core/trait comparisons, dense variables and import/re-export localization; nested structures and stored interfaces tested | Expanded aliases retain annotation origins; source-synonym reconstruction is not implemented |
+| Actionable explanations | Field candidates/differences, arity, infinite equations, generic restrictions and trait-contract hints; impossible-pattern advice corrected | Reviewed against source evidence in acceptance review §3; no promise that changing a contract merely silences an error |
 | Generated warnings | Actual canonical binding/import analysis; shadowing, alternatives, pins, exports, initializer effects and module-root tests | No blanket missing-annotation warning has been adopted; inferred-signature suggestions assessed separately |
-| CLI/editor delivery | Six subprocess tests in `crates/alder-cli/tests/diagnostics.rs`: warnings, dependency cascades, ordering, unsaved edits, stale versions, UTF-16, saved dependencies and clearing | Re-run with final tree |
+| CLI/editor delivery | Seven passing subprocess tests: warnings/effects, dependency cascades, ordering, statement recovery, unsaved edits, stale versions, UTF-16, saved dependencies and clearing | No outstanding delivery change identified by the acceptance review |
 | Pattern diagnostics | Active `check_error_matches` handles Result error rows; ordinary refutable matches remain accepted | General coverage/redundancy policy requested, not resolved; no new acceptance rule or blanket warning may be inferred from Elm |
-| Validation/artifacts | Full tests and strict Clippy run at each implementation checkpoint; current snapshot-reference/package checks recorded below | Final package/CLI verification, current-tree matrix reconciliation and clean committed handoff remain required |
+| Validation/artifacts | Current full tests, strict Clippy and snapshot references pass; fresh 17-crate archive verification and packaged behavioral smoke checks pass | Final policy resolution and final handoff remain required; cached same-version package runs are not current-tree evidence |
 
 ### Implementation sequence
 
@@ -63,15 +63,15 @@ remaining work as follows; a passing test gate does not close the open reviews.
 
 ## Validation gate
 
-- [ ] Reproduced failures before their production fixes
-- [ ] Source snapshots reviewed (not manually manufactured diagnostics alone)
-- [ ] Positive controls and adversarial/cross-module combinations
-- [ ] `cargo fmt --all -- --check`
-- [ ] `cargo clippy --all-targets --all-features -- -D warnings`
-- [ ] `cargo test`
-- [ ] `cargo insta test --check --unreferenced reject`
-- [ ] CLI and editor integration tests
-- [ ] Affected package verification
+- [x] Reproduced failures before their production fixes
+- [x] Source snapshots reviewed (not manually manufactured diagnostics alone)
+- [x] Positive controls and adversarial/cross-module combinations
+- [x] `cargo fmt --all -- --check`
+- [x] `cargo clippy --all-targets --all-features -- -D warnings`
+- [x] Full workspace `cargo test` through the Insta cargo-test runner
+- [x] `cargo insta test --check --unreferenced reject`
+- [x] CLI and editor integration tests
+- [x] Affected package verification in a fresh target directory, with behavioral checks
 - [ ] Sampo changesets, clean committed branch, final evidence report/commit IDs
 
 Use a distinct target directory for separate checkouts: reusing one previously
