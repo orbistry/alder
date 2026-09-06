@@ -339,13 +339,21 @@ struct ResolutionStep<'a, 'names> {
     required_by: Option<ImplId<'a>>,
 }
 
+/// Search identity is the complete predicate, never its diagnostic spelling.
+/// In particular, distinct records and same-named imported types must not
+/// become cycles just because a renderer gives them the same description.
+struct ResolutionFrame<'a> {
+    predicate: Predicate<'a>,
+    diagnostic: crate::ObligationFrame<'a>,
+}
+
 fn resolve_predicate<'a>(
     bump: &'a Bump,
     database: &TraitDatabase<'a>,
     predicate: &Predicate<'a>,
     givens: &[Given<'a>],
     origin: Region,
-    stack: &mut Vec<crate::ObligationFrame<'a>>,
+    stack: &mut Vec<ResolutionFrame<'a>>,
     step: ResolutionStep<'a, '_>,
 ) -> Result<Evidence<'a>, SolveTraitError<'a>> {
     let subject = predicate.args.first().cloned().unwrap_or(Ty::Unit);
@@ -355,16 +363,18 @@ fn resolve_predicate<'a>(
     }) {
         return Ok(given.evidence.clone());
     }
-    if let Some(cycle_start) = stack
-        .iter()
-        .position(|frame| frame.trait_ == predicate.trait_ && frame.subject == rendered)
-    {
+    if let Some(cycle_start) = stack.iter().position(|frame| {
+        frame.predicate.trait_ == predicate.trait_ && frame.predicate.args == predicate.args
+    }) {
         let current = crate::ObligationFrame {
             trait_: predicate.trait_,
             subject: bump.alloc_str(&rendered),
             required_by: step.required_by,
         };
-        let mut cycle = stack[cycle_start..].to_vec();
+        let mut cycle = stack[cycle_start..]
+            .iter()
+            .map(|frame| frame.diagnostic)
+            .collect::<Vec<_>>();
         cycle.push(current);
         let chain = bump.alloc_slice_copy(&cycle);
         return Err(SolveTraitError::InstanceCycle {
@@ -374,10 +384,13 @@ fn resolve_predicate<'a>(
             chain,
         });
     }
-    stack.push(crate::ObligationFrame {
-        trait_: predicate.trait_,
-        subject: bump.alloc_str(&rendered),
-        required_by: step.required_by,
+    stack.push(ResolutionFrame {
+        predicate: predicate.clone(),
+        diagnostic: crate::ObligationFrame {
+            trait_: predicate.trait_,
+            subject: bump.alloc_str(&rendered),
+            required_by: step.required_by,
+        },
     });
     match resolve_structural_capability(bump, database, predicate, givens, origin, stack, step) {
         Ok(Some(evidence)) => {
@@ -452,7 +465,7 @@ fn resolve_predicate<'a>(
             successes.push((impl_id, evidence));
         }
     }
-    let chain = bump.alloc_slice_copy(stack);
+    let chain = bump.alloc_slice_fill_iter(stack.iter().map(|frame| frame.diagnostic));
     stack.pop();
     match successes.len() {
         1 => Ok(successes.pop().expect("one success").1),
@@ -504,7 +517,7 @@ fn resolve_structural_capability<'a>(
     predicate: &Predicate<'a>,
     givens: &[Given<'a>],
     origin: Region,
-    stack: &mut Vec<crate::ObligationFrame<'a>>,
+    stack: &mut Vec<ResolutionFrame<'a>>,
     step: ResolutionStep<'a, '_>,
 ) -> Result<Option<Evidence<'a>>, SolveTraitError<'a>> {
     let capability = if predicate.trait_ == builtin_trait_id("Show") {
@@ -8270,6 +8283,108 @@ fn generated_type_name_rank(name: &str) -> usize {
             .and_then(|index| index.parse().ok())
             .unwrap_or(usize::MAX),
     }
+}
+
+#[test]
+fn instance_cycle_guard_compares_all_arguments_and_nominal_identities() {
+    let bump = Bump::new();
+    let parsed = alder_parse::parse_module(
+        &bump,
+        "trait Witness[a, b] { fn witness(first: a, second: b) Bool }",
+    )
+    .unwrap();
+    let canonical = alder_can::canonicalize(
+        &bump,
+        alder_can::Context {
+            home: ModuleId {
+                package: PackageId::Application,
+                path: &["main"],
+            },
+            imports: &[],
+            interfaces: &[],
+        },
+        &parsed,
+    )
+    .unwrap();
+    let database = TraitDatabase::build(&bump, canonical.module, &[]);
+    let ItemKind::Trait(trait_) = canonical.module.items[0].value.kind else {
+        panic!("fixture declares a trait")
+    };
+    let left = Ty::Con(QualifiedName {
+        module: ModuleId {
+            package: PackageId::Application,
+            path: &["left"],
+        },
+        name: "Token",
+    });
+    let right = Ty::Con(QualifiedName {
+        module: ModuleId {
+            package: PackageId::Application,
+            path: &["right"],
+        },
+        name: "Token",
+    });
+    let names = BTreeMap::new();
+    let generalized = BTreeSet::new();
+    let step = ResolutionStep {
+        variable_names: &names,
+        generalized_variables: &generalized,
+        required_by: None,
+    };
+    let active = Predicate {
+        trait_: trait_.id,
+        args: vec![left.clone(), Ty::Unit],
+    };
+    let mut stack = vec![ResolutionFrame {
+        predicate: active.clone(),
+        diagnostic: crate::ObligationFrame {
+            trait_: trait_.id,
+            subject: "Token",
+            required_by: None,
+        },
+    }];
+    for args in [
+        vec![right, Ty::Unit],
+        vec![left, Ty::Tuple(vec![Ty::Unit, Ty::Unit])],
+    ] {
+        let error = resolve_predicate(
+            &bump,
+            &database,
+            &Predicate {
+                trait_: trait_.id,
+                args,
+            },
+            &[],
+            canonical.module.items[0].region,
+            &mut stack,
+            step,
+        )
+        .expect_err("the distinct goal has no implementation");
+        assert!(
+            matches!(error, SolveTraitError::MissingInstance { .. }),
+            "{error:?}"
+        );
+        assert_eq!(
+            stack.len(),
+            1,
+            "a completed lookup restores its caller's stack"
+        );
+    }
+    let error = resolve_predicate(
+        &bump,
+        &database,
+        &active,
+        &[],
+        canonical.module.items[0].region,
+        &mut stack,
+        step,
+    )
+    .expect_err("an exactly repeated predicate is still a cycle");
+    let SolveTraitError::InstanceCycle { chain, .. } = error else {
+        panic!("expected an exact-goal cycle: {error:?}")
+    };
+    assert_eq!(chain.len(), 2);
+    assert_eq!(stack.len(), 1);
 }
 
 #[test]

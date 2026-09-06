@@ -1,0 +1,21 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn invalid(left: { inner: { value: fn(Number) Number } }, right: { inner: { value: fn(Number) Number } }) Bool {\n    left == right\n}\n"
+---
+alder::trait::missing_instance
+
+  × no implementation of `Eq[fn(Number) Number]` was found
+   ╭─[/app/src/main.ald:2:10]
+ 1 │ pub fn invalid(left: { inner: { value: fn(Number) Number } }, right: { inner: { value: fn(Number) Number } }) Bool {
+ 2 │     left == right
+   ·          ─┬
+   ·           ╰── this use needs trait evidence
+ 3 │ }
+   ╰────
+  help: define an implementation of `Eq[fn(Number) Number]`, or use a type
+        that already has one
+        
+        obligation chain:
+          Eq[{ .. }]
+          -> Eq[{ .. }]
+          -> Eq[fn(Number) Number]

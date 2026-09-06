@@ -72,6 +72,10 @@ fn spread_observation(record: { value: Number }, events: Array[Number]) Number {
 }
 
 pub fn main() {
+    assert({ inner: { value: 42 } } == { inner: { value: 42 } })
+    assert({ inner: { value: 42 } } != { inner: { value: 7 } })
+    assert([{ inner: { value: Some(42) } }] == [{ inner: { value: Some(42) } }])
+    assert([{ inner: { value: Some(42) } }] != [{ inner: { value: None } }])
     let joint_pair = ({ value: Err(:saved([])) }, "kept")
     let joint_result: Result[Number, [:saved(Array[Number])]] = joint_constraints.propagate(joint_pair, {})
     match joint_result {

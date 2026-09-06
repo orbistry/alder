@@ -1748,6 +1748,14 @@ portion of the active stack. Ambiguity reports label every candidate in the
 current module and list foreign candidates by module, explicitly marking sites
 whose source is unavailable.
 
+The active search stack separately retains the complete normalized predicate:
+the resolved trait identity and every type argument. Cycle detection compares
+these semantic values, never the diagnostic subject string. Two records, two
+types from different modules sharing a name, or two multi-parameter goals with
+different later arguments are not the same goal. The nested-record equality
+regression and direct cycle-guard controls are recorded in
+`plans/diagnostic-ux.md`.
+
 Inference retains the source spelling for every generalized type variable used
 by an obligation. Reports render those names (for example, `a`) rather than
 solver implementation details such as numeric unification-variable IDs.

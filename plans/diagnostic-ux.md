@@ -693,3 +693,39 @@ snapshots remain. The associated comparison is boxed to keep the frequently
 returned error enum below Clippy's large-error threshold. Package verification
 has not yet been refreshed after this change; the preceding package checkpoint
 predates it and is not current-tree package evidence.
+
+## Trait-cycle identity checkpoint
+
+Auditing the remaining trait strings found a semantic dependency on diagnostic
+formatting: `resolve_predicate` compared the trait ID and rendered subject to
+detect cycles. Because `render_ty` prints every record as `{ .. }`, equality on
+`{ inner: { value: Number } }` was rejected as an instance cycle. The source
+test `nested_record_equality_does_not_form_a_display_name_cycle` reproduced that
+failure before the fix.
+
+The search now retains `ResolutionFrame` values with the full predicate and a
+separate diagnostic frame. It compares the trait identity and every normalized
+type argument. These owned search values are ordinary dropped Rust allocations,
+not non-dropping arena payloads. Diagnostic chains still retain the root-to-leaf
+frames, and an exact repeated goal still produces `InstanceCycle`.
+
+The source test accepts nested records in Check/Build/Test and rejects nested
+function payloads with their real missing Eq error, without published interfaces
+or artifacts. A direct guard test distinguishes later arguments and same-named
+nominal identities, verifies exact-cycle rejection, and checks stack restoration.
+The records runtime fixture adds equal/unequal nested records, including an
+Array/Option combination.
+
+The source snapshot also exposes remaining trait-report work: record subjects
+in obligation chains are still abbreviated, and the generic missing-instance
+hint suggests defining an implementation even for function Eq, which Alder does
+not permit. Those are confirmed open presentation/advice gaps, not deliberate
+limitations; the structural trait diagnostic audit must address them.
+
+Validation: full workspace tests and snapshot reference checks passed (243
+driver tests, 15 solver unit tests, 467 inference integration tests, six CLI
+subprocess tests and all other suites; two existing ignored doctests). The CLI
+standalone suite compiled, bundled and executed the extended records fixture.
+Strict all-target/all-feature Clippy, formatting and diff checks passed. Package
+verification remains to be refreshed after this and the preceding core-type
+change.

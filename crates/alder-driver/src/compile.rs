@@ -1222,6 +1222,48 @@ mod tests {
     }
 
     #[test]
+    fn nested_record_equality_does_not_form_a_display_name_cycle() {
+        let source = indoc::indoc! {r#"
+            pub fn same(left: { inner: { value: Number } }, right: { inner: { value: Number } }) Bool {
+                left == right
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                mode,
+                BuildDependencies::default(),
+            );
+            assert!(
+                matches!(result.modules[&uri], ModuleResult::Success { .. }),
+                "{result:?}"
+            );
+        }
+        let invalid = indoc::indoc! {r#"
+            pub fn invalid(left: { inner: { value: fn(Number) Number } }, right: { inner: { value: fn(Number) Number } }) Bool {
+                left == right
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(invalid.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("a nested function payload has no equality implementation")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "no implementation of `Eq[fn(Number) Number]` was found"
+        );
+        assert!(result.interfaces.is_empty());
+        assert!(result.artifacts.is_empty());
+        assert_rendered_diagnostics_snapshot!(invalid, diagnostics);
+    }
+
+    #[test]
     fn specialized_type_errors_use_resolved_import_names() {
         for (suffix, source, expected, valid) in [
             (
