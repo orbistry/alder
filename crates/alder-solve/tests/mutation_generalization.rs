@@ -1,0 +1,160 @@
+//! Mutable captures must stay monomorphic, including across recursive groups.
+
+use alder_ast::{ModuleId, PackageId};
+use alder_can::Context;
+use alder_constrain::{Error, ErrorKind};
+use bumpalo::Bump;
+use indoc::indoc;
+
+fn solve_input<'a>(
+    bump: &'a Bump,
+    input: &str,
+) -> Result<alder_solve::SolveOutput<'a>, Vec<alder_solve::SolveError<'a>>> {
+    let src = bump.alloc_str(input);
+    let parsed = alder_parse::parse_module(bump, src).expect("source parses");
+    let canonical = alder_can::canonicalize(
+        bump,
+        Context {
+            home: ModuleId {
+                package: PackageId::Application,
+                path: &["Main"],
+            },
+            imports: &[],
+            interfaces: &[],
+        },
+        &parsed,
+    )
+    .expect("source canonicalizes");
+    let constraints = alder_constrain::constrain(bump, canonical.module);
+    let database = alder_solve::TraitDatabase::build(bump, canonical.module, &[]);
+    alder_solve::solve(bump, &constraints, &database)
+}
+
+fn assert_type_mismatch(source: &str) {
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source).expect_err("shared payload cannot change type");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn allocated_closure_cannot_regeneralize_hidden_mutable_state() {
+    assert_type_mismatch(indoc! {r#"
+        fn make() {
+            let items = []
+            value -> {
+                Array.push(items, value)
+                items
+            }
+        }
+        let store = make()
+        let alias = store
+        fn invalid() {
+            store(42)
+            alias("text")
+        }
+    "#});
+}
+
+#[test]
+fn independent_closure_allocations_preserve_function_polymorphism() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn make() {
+            let items = []
+            value -> {
+                Array.push(items, value)
+                items
+            }
+        }
+        fn valid() {
+            let numbers = make()
+            let strings = make()
+            let first: Array[Number] = numbers(42)
+            let second: Array[String] = strings("text")
+        }
+    "#},
+    )
+    .expect("separate factory calls allocate separate captured arrays");
+}
+
+#[test]
+fn recursive_functions_cannot_regeneralize_captured_array() {
+    assert_type_mismatch(indoc! {r#"
+        let shared = []
+        fn first(count: Number) {
+            if count == 0 { shared } else { second(count - 1) }
+        }
+        fn second(count: Number) {
+            if count == 0 { shared } else { first(count - 1) }
+        }
+        let alias = second
+        fn invalid() {
+            Array.push(first(0), 42)
+            let strings: Array[String] = alias(1)
+        }
+    "#});
+}
+
+#[test]
+fn recursive_group_restricts_state_without_restricting_independent_arguments() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        let shared = [42]
+        fn first(value, count: Number) {
+            if count == 0 { (shared, value) } else { second(value, count - 1) }
+        }
+        fn second(value, count: Number) {
+            if count == 0 { (shared, value) } else { first(value, count - 1) }
+        }
+        fn valid() {
+            let numbers: (Array[Number], Number) = first(42, 0)
+            let strings: (Array[Number], String) = second("text", 1)
+        }
+    "#},
+    )
+    .expect("unrelated arguments remain universal while the captured array stays Number");
+}
+
+#[test]
+fn restricted_record_in_same_recursive_group_protects_its_array() {
+    assert_type_mismatch(indoc! {r#"
+        let shared = { items: [], read: () -> read() }
+        fn read() { shared.items }
+        fn invalid() {
+            Array.push(read(), 42)
+            let strings: Array[String] = shared.read()
+        }
+    "#});
+}
+
+#[test]
+fn reusable_async_closure_cannot_regeneralize_captured_state() {
+    assert_type_mismatch(indoc! {r#"
+        fn make() {
+            let items = []
+            value -> async {
+                Task.sleep(0).await
+                Array.push(items, value)
+                items
+            }
+        }
+        let store = make()
+        async fn invalid() {
+            store(42).await
+            store("text").await
+        }
+    "#});
+}

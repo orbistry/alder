@@ -1,5 +1,38 @@
 # Mutation and generalization acceptance evidence
 
+## Recursive capture follow-up
+
+The current integrated tree adds six focused regressions in
+`crates/alder-solve/tests/mutation_generalization.rs`. A closure returned by a
+factory cannot re-generalize its hidden array through a variable alias; the
+async-block version retains the same restriction. Mutually recursive functions
+cannot re-generalize a captured array. A record containing both an array and a
+lambda referring back to its reader tests a restricted allocation in the same
+recursive group as a function. Each negative reaches solving and requires a
+type mismatch, rather than merely accepting any parse or canonicalization error.
+Positive cases preserve independent closure allocations and independent argument
+types in recursive functions that also return a concrete shared array.
+
+Source review reconfirmed that `infer_module` collects restricted SCC members'
+free variables before generalizing any member, and `generalizable_item` does not
+treat a call returning a closure as a fresh polymorphic function declaration.
+`generalize_global` closes over deferred tuple/overlay/error-row relationships
+before subtracting protected environment variables; `scheme_free_vars` traverses
+those relationships in already-published schemes. `instantiate_scheme` uses one
+replacement map and replaces only quantified variables. These are the active
+owned-type mechanisms, not the inactive Elm-port solver's rank machinery.
+The local Elm `Type/Solve.hs` reference similarly separates environment sharing
+from freshly copied generalizable variables, but its immutable-language
+generalization policy is not sufficient for Alder's mutable captures.
+
+All six cases pass without production changes. Full workspace tests/doctests,
+strict all-target/all-feature Clippy, formatting, and whitespace checks pass;
+there are no pending snapshot files. They extend the evidence below;
+they do not by themselves close the remaining joint deferred-constraint audit
+or the final committed-tree/package gates.
+
+## Earlier acceptance checkpoint
+
 This describes `42c5423` plus the integrated hardening worktree, not an isolated
 validation of that commit or a proof of general compiler soundness. There is no
 mutation permission keyword or borrow system;
