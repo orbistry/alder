@@ -1,5 +1,9 @@
 # Diagnostic recovery and compiler UX
 
+Current requirement-by-requirement review:
+[diagnostic-ux-acceptance.md](diagnostic-ux-acceptance.md). Historical checkpoints
+below are evidence, not an assertion that every remaining policy is resolved.
+
 Branch: `diagnostic-ux`. Scope: restore useful source diagnostics through the
 active compiler, CLI, and editor. No runtime source maps, provider checking,
 later-milestone implementation, merge, or push. This is an acceptance matrix,
@@ -960,3 +964,38 @@ tests/snapshot-reference checks passed (252 driver tests and seven CLI/editor
 subprocess tests). The four new source snapshots were reviewed; no existing
 snapshots changed and no pending/unreferenced snapshots remain. The preceding
 package refresh predates this fix and will need a final refresh.
+
+## Requirement review and contract-safe pattern advice
+
+The current [acceptance review](diagnostic-ux-acceptance.md) maps every requested
+area to active implementations, actual source fixtures and deliberate limits.
+It separately assesses inferred-annotation suggestions without enabling a blanket
+warning. General partial/refutable pattern and redundancy policy remains a user
+decision, including restricted Result payload patterns.
+
+Reporter inspection identified a remaining unsafe suggestion: an impossible tag
+pattern recommended adding the tag to the Result type. The source test
+`impossible_error_pattern_advice_preserves_the_declared_contract` reproduced that
+hint inside a trait default body. It now directs the user to the spelling and
+permitted error row, without promising a contract change as a fix. Correcting
+the tag compiles; the colorless source snapshot was reviewed.
+
+Formatting, strict all-target/all-feature Clippy and full workspace snapshot/
+reference checks passed (253 driver tests, 467 inference tests, seven CLI/editor
+subprocess tests and all other suites; two existing ignored doctests). No pending
+or unreferenced snapshots remain.
+
+A repeated package run in the earlier target directory returned success but
+retained stale same-version dependency code in the packaged CLI. Actual smoke
+tests exposed the old pin acceptance and old hint. That cached run is not counted
+as current-tree package evidence. Final verification uses a newly created target
+directory and behavioral smoke checks, not only Cargo's exit status.
+
+Fresh verification passed for all 17 crates with `cargo package --workspace
+--exclude stub --offline --allow-dirty --target-dir
+/tmp/alder-final-diagnostic-package.GhOMC0`. The resulting binary rejects a
+pinned-only Result match in Check and Build, reports the new contract-safe hint
+for the trait default, and leaves only source/configuration in both negative
+projects. A valid fallback match executes its pin once and prints `pin` then `2`.
+This is current-tree evidence for the pin and hint fixes, unlike the discarded
+cached run. General pattern policy still needs a user decision before completion.

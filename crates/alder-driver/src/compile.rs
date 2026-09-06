@@ -3454,6 +3454,46 @@ mod tests {
     }
 
     #[test]
+    fn impossible_error_pattern_advice_preserves_the_declared_contract() {
+        let source = indoc::indoc! {r#"
+            trait Read[a] {
+                fn read(value: a, result: Result[Number, [:failed]]) Number {
+                    match result { Ok(number) => number, Err(:other) => 0, Err(_) => 1 }
+                }
+            }
+            impl Read[Number] {}
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("the pattern is outside the declared error row")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "`:other` is not part of this closed error row"
+        );
+        let help = miette::Diagnostic::help(&diagnostics[0])
+            .unwrap()
+            .to_string();
+        assert!(!help.contains("add the tag"), "{help}");
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.replace(":other", ":failed")))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+    }
+
+    #[test]
     fn nested_pins_do_not_complete_result_coverage() {
         for (suffix, source) in [
             (

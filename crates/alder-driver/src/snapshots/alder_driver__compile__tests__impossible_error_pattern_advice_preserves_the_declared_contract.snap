@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Read[a] {\n    fn read(value: a, result: Result[Number, [:failed]]) Number {\n        match result { Ok(number) => number, Err(:other) => 0, Err(_) => 1 }\n    }\n}\nimpl Read[Number] {}\n"
+---
+alder::type::impossible_error_pattern
+
+  × `:other` is not part of this closed error row
+   ╭─[/app/src/main.ald:3:50]
+ 2 │     fn read(value: a, result: Result[Number, [:failed]]) Number {
+ 3 │         match result { Ok(number) => number, Err(:other) => 0, Err(_) => 1 }
+   ·                                                  ───┬──
+   ·                                                     ╰── this pattern can never match
+ 4 │     }
+   ╰────
+  help: check the tag spelling and the scrutinee's declared error row; use a
+        pattern for a tag that this row permits

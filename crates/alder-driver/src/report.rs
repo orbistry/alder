@@ -1380,7 +1380,7 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             )
             .with_code("alder::type::impossible_error_pattern")
             .with_primary_label(error.region, "this pattern can never match")
-            .with_help("remove this arm or add the tag to the Result error type");
+            .with_help("check the tag spelling and the scrutinee's declared error row; use a pattern for a tag that this row permits");
         }
         ErrorKind::InvalidErrorTagPlacement => {
             return Diagnostic::error(source, "error tags are only values inside `Err`")
