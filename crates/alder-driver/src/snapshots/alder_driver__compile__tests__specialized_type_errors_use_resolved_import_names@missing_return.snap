@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/left.{ Token as LeftToken }\nfn missing() Option[LeftToken] {}\n"
+---
+alder::type::missing_return
+
+  × this function can finish without returning `Option[LeftToken]`
+   ╭─[/app/src/main.ald:2:32]
+ 1 │ import ~/left.{ Token as LeftToken }
+ 2 │ fn missing() Option[LeftToken] {}
+   ·                                ─┬
+   ·                                 ╰── a path reaches the end without a value
+   ╰────
+  help: add a final expression or return a value on every path; a while or for
+        loop may run zero times

@@ -52,6 +52,14 @@ fn visit_types(error: &mut Error, visit: &mut impl FnMut(&mut DiagnosticType)) {
             actual.visit_mut(visit);
             expected.visit_mut(visit);
         }
+        ErrorKind::AssocTypeMismatch {
+            actual, expected, ..
+        } => {
+            actual.visit_mut(visit);
+            expected.visit_mut(visit);
+        }
+        ErrorKind::InvalidResultErrorType { actual: typ }
+        | ErrorKind::MissingReturn { expected: typ } => typ.visit_mut(visit),
         ErrorKind::InfiniteType {
             equation: Some(equation),
         } => {

@@ -1222,6 +1222,101 @@ mod tests {
     }
 
     #[test]
+    fn specialized_type_errors_use_resolved_import_names() {
+        for (suffix, source, expected, valid) in [
+            (
+                "missing_return",
+                indoc::indoc! {r#"
+                    import ~/left.{ Token as LeftToken }
+                    fn missing() Option[LeftToken] {}
+                "#},
+                "this function can finish without returning `Option[LeftToken]`",
+                indoc::indoc! {r#"
+                    import ~/left.{ Token as LeftToken }
+                    fn present(value: Option[LeftToken]) Option[LeftToken] { value }
+                "#},
+            ),
+            (
+                "associated_equality",
+                indoc::indoc! {r#"
+                    import ~/left.{ Token as LeftToken }
+                    import ~/right.{ Token as RightToken }
+                    trait Iterator[i] {
+                        type Item
+                        fn next(value: i) Item
+                    }
+                    fn impossible(value: i) ()
+                        where i: Iterator, i.Item == Array[LeftToken], i.Item == Array[RightToken]
+                    {}
+                "#},
+                "associated type `Item` has conflicting equalities: expected `Array[LeftToken]`, found `Array[RightToken]`",
+                indoc::indoc! {r#"
+                    import ~/left.{ Token as LeftToken }
+                    trait Iterator[i] {
+                        type Item
+                        fn next(value: i) Item
+                    }
+                    fn consistent(value: i) ()
+                        where i: Iterator, i.Item == Array[LeftToken], i.Item == Array[LeftToken]
+                    {}
+                "#},
+            ),
+            (
+                "result_error_kind",
+                indoc::indoc! {r#"
+                    import ~/left.{ Token as LeftToken }
+                    fn invalid(value: Result[Number, LeftToken]) { value }
+                "#},
+                "Result needs an error row, but this type is `LeftToken`",
+                indoc::indoc! {r#"
+                    import ~/left.{ Token as LeftToken }
+                    fn valid(value: Result[Number, [:failed(LeftToken)]]) { value }
+                "#},
+            ),
+        ] {
+            let uri = url("app/src/main.ald");
+            let result = build_fixture_sync(
+                vec![
+                    (uri.clone(), Ok(source.to_owned())),
+                    (
+                        url("app/src/left.ald"),
+                        Ok("pub enum Token { Token }".to_owned()),
+                    ),
+                    (
+                        url("app/src/right.ald"),
+                        Ok("pub enum Token { Token }".to_owned()),
+                    ),
+                ],
+                BuildMode::Check,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("invalid specialized type contract must fail")
+            };
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            assert_eq!(diagnostics[0].message(), expected);
+            insta::with_settings!({ snapshot_suffix => suffix }, {
+                assert_rendered_diagnostics_snapshot!(source, diagnostics);
+            });
+            let result = build_fixture_sync(
+                vec![
+                    (uri.clone(), Ok(valid.to_owned())),
+                    (
+                        url("app/src/left.ald"),
+                        Ok("pub enum Token { Token }".to_owned()),
+                    ),
+                ],
+                BuildMode::Check,
+                BuildDependencies::default(),
+            );
+            assert!(
+                matches!(result.modules[&uri], ModuleResult::Success { .. }),
+                "{result:?}"
+            );
+        }
+    }
+
+    #[test]
     fn transparent_alias_comparisons_keep_expanded_shapes_and_annotation_origins() {
         let source = indoc::indoc! {r#"
             type Named = { profile: { name: String } }

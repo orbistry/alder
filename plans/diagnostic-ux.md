@@ -33,7 +33,7 @@ remaining work as follows; a passing test gate does not close the open reviews.
 | Independent errors and safe recovery | Fresh retries in `infer_recovering`; `independent_type_errors_accumulate_without_publishing`, partial-shared-state and recursive-group tests; implementation/default/generic-method recovery snapshots | Non-callable metadata failures still stop; expression-level recovery within a failed callable is not implemented |
 | Dependent suppression and publication | Callable resolved-dependency traversal; cross-module re-export/invalid-impl publication tests; Check/Build/Test output gates | Final audit of all remaining metadata stop cases |
 | Context and source spans | `mismatch_explains_expectations_at_the_source`, innermost-context, return/lambda/async, optional argument and alias-return-origin tests | Deferred record/error-row paths and specialized errors still need a complete provenance audit |
-| Type comparisons | Structured records, functions, tuples, applications, dense variables, named generic restrictions; nominal import/re-export localization; expanded aliases retain source annotation labels | Specialized core/trait fields still stored as strings require review; compact reconstruction of source synonyms is not implemented |
+| Type comparisons | Structured records, functions, tuples, applications, dense variables, named generic restrictions; nominal import/re-export localization; expanded aliases retain source annotation labels; specialized core errors retain structured types | Trait fields still stored as strings require review; compact reconstruction of source synonyms is not implemented |
 | Actionable explanations | Field typo/difference, arity, infinite-equation and generic-restriction source snapshots | Remaining specialized trait advice must be checked against implementation/bound rules |
 | Generated warnings | Actual canonical binding/import analysis; shadowing, alternatives, pins, exports, initializer effects and module-root tests | No blanket missing-annotation warning has been adopted; inferred-signature suggestions assessed separately |
 | CLI/editor delivery | Six subprocess tests in `crates/alder-cli/tests/diagnostics.rs`: warnings, dependency cascades, ordering, unsaved edits, stale versions, UTF-16, saved dependencies and clearing | Re-run with final tree |
@@ -666,3 +666,30 @@ and configuration. A positive packaged `run` exited 0, delivered three unused
 warnings, and executed import initialization, local initialization and main
 effects in order. This is local-host checkpoint evidence, not final completion
 of the open audit or cross-platform release verification.
+
+## Specialized core type structure checkpoint
+
+The source test `specialized_type_errors_use_resolved_import_names` first failed:
+an imported `Token as LeftToken` was reported as `Option[Token]` by a missing-return
+error. `MissingReturn`, `InvalidResultErrorType`, and `AssocTypeMismatch` still
+stored strings, bypassing the renderer's identity-based localization. They now
+retain owned `DiagnosticType` values and use the same localization traversal as
+ordinary mismatches. Associated equality comparisons snapshot both sides with
+one variable-name map before attempting unification. This also removes the
+obsolete lossy `Infer::render` implementation.
+
+The source regression covers all three variants, including two distinct imported
+types both originally named `Token` nested in conflicting `Array` equalities.
+Each case has a matching valid source control and a colorless diagnostic snapshot.
+The existing solver associated-equality test now checks structured type values,
+not rendered strings. No acceptance, recovery or trait-resolution rule changed;
+trait subjects and obligation chains remain a separate open structured-type audit.
+
+Validation: formatting, strict all-target/all-feature Clippy, and the full
+workspace snapshot/reference test command passed (242 driver tests, 467 inference
+tests, six CLI subprocess tests and all other suites; two existing ignored
+doctests). The three new snapshots were reviewed; no pending or unreferenced
+snapshots remain. The associated comparison is boxed to keep the frequently
+returned error enum below Clippy's large-error threshold. Package verification
+has not yet been refreshed after this change; the preceding package checkpoint
+predates it and is not current-tree package evidence.

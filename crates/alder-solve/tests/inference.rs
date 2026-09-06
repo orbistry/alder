@@ -7152,7 +7152,9 @@ fn conflicting_associated_equalities_are_structured() {
                 actual,
             },
             ..
-        }) if assoc == "Item" && expected == "Number" && actual == "String"
+        }) if assoc == "Item"
+            && **expected == alder_constrain::DiagnosticType::Named("Number".to_owned())
+            && **actual == alder_constrain::DiagnosticType::Named("String".to_owned())
     ));
 }
 

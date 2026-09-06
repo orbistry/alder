@@ -1826,7 +1826,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     expectation: None,
                     region,
                     kind: ErrorKind::InvalidResultErrorType {
-                        actual: self.render(typ),
+                        actual: self.diagnostic_type(typ, &mut BTreeMap::new()),
                     },
                 });
             }
@@ -2423,7 +2423,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 })?;
             self.resolve_try_boundary(body_result.clone(), &body_type, region)?;
             if alder_ast::flow::block(body).falls_through {
-                let expected = self.render(body_result.clone());
+                let expected = self.diagnostic_type(body_result.clone(), &mut BTreeMap::new());
                 self.unify_return(
                     body_type,
                     body_result,
@@ -5357,8 +5357,9 @@ impl<'a, 'db> Infer<'a, 'db> {
             };
             for previous in &equations {
                 if previous.projection == equation.projection {
-                    let expected = render_ty(&previous.typ, &self.variable_names);
-                    let actual = render_ty(&equation.typ, &self.variable_names);
+                    let mut names = BTreeMap::new();
+                    let expected = self.diagnostic_type(previous.typ.clone(), &mut names);
+                    let actual = self.diagnostic_type(equation.typ.clone(), &mut names);
                     if self
                         .unify(previous.typ.clone(), equation.typ.clone(), *region)
                         .is_err()
@@ -5368,8 +5369,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                             region: *region,
                             kind: ErrorKind::AssocTypeMismatch {
                                 assoc: projection.assoc.name.to_owned(),
-                                expected,
-                                actual,
+                                expected: Box::new(expected),
+                                actual: Box::new(actual),
                             },
                         });
                     }
@@ -8229,72 +8230,6 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
         });
         diagnostic
-    }
-
-    fn render(&mut self, typ: Ty<'a>) -> String {
-        match self.prune(typ) {
-            Ty::Var(_) => "a".to_owned(),
-            Ty::Con(name) => name.name.to_owned(),
-            Ty::App(head, args) => format!(
-                "{}[{}]",
-                self.render(*head),
-                args.into_iter()
-                    .map(|arg| self.render(arg))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Ty::Fn(args, ret) => format!(
-                "fn({}) {}",
-                args.into_iter()
-                    .map(|arg| self.render(arg))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                self.render(*ret)
-            ),
-            Ty::Unit => "()".to_owned(),
-            Ty::Tuple(items) => format!(
-                "({})",
-                items
-                    .into_iter()
-                    .map(|item| self.render(item))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Ty::RecordRow(row) => self.render(*row),
-            Ty::Record(fields, _) => format!(
-                "{{ {} }}",
-                fields
-                    .into_iter()
-                    .map(|(name, typ)| format!("{}: {}", name, self.render(typ)))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Ty::Partial(reference, slots) => format!(
-                "{}[{}]",
-                reference.name,
-                slots
-                    .into_iter()
-                    .map(|slot| match slot {
-                        TySlot::Hole(_) => "_".to_owned(),
-                        TySlot::Fixed(typ) => self.render(typ),
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Ty::Projection(trait_, args, assoc) => format!(
-                "{}[{}]::{}",
-                trait_.0.name,
-                args.into_iter()
-                    .map(|arg| self.render(arg))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                assoc.name
-            ),
-            Ty::ErrorRow { tags, tail } => {
-                render_error_row(&tags, tail.as_deref(), |typ| self.render(typ.clone()))
-            }
-            Ty::Any => "_".to_owned(),
-        }
     }
 }
 

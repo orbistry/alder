@@ -276,7 +276,7 @@ pub enum ErrorKind {
         name: String,
     },
     InvalidResultErrorType {
-        actual: String,
+        actual: DiagnosticType,
     },
     Mismatch {
         actual: DiagnosticType,
@@ -300,8 +300,8 @@ pub enum ErrorKind {
     },
     AssocTypeMismatch {
         assoc: String,
-        expected: String,
-        actual: String,
+        expected: Box<DiagnosticType>,
+        actual: Box<DiagnosticType>,
     },
     InfiniteType {
         equation: Option<Box<(DiagnosticType, DiagnosticType)>>,
@@ -311,7 +311,7 @@ pub enum ErrorKind {
     InvalidTry,
     ReturnMismatch,
     MissingReturn {
-        expected: String,
+        expected: DiagnosticType,
     },
     GenericSpecialization {
         variable: String,

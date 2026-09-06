@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/left.{ Token as LeftToken }\nfn invalid(value: Result[Number, LeftToken]) { value }\n"
+---
+alder::type::invalid_result_error_type
+
+  × Result needs an error row, but this type is `LeftToken`
+   ╭─[/app/src/main.ald:2:34]
+ 1 │ import ~/left.{ Token as LeftToken }
+ 2 │ fn invalid(value: Result[Number, LeftToken]) { value }
+   ·                                  ────┬────
+   ·                                      ╰── this is not an error row or named error group
+   ╰────
+  help: use a tagged error row such as `[:failed(String)]`, or declare a named
+        error group

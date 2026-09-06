@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/left.{ Token as LeftToken }\nimport ~/right.{ Token as RightToken }\ntrait Iterator[i] {\n    type Item\n    fn next(value: i) Item\n}\nfn impossible(value: i) ()\n    where i: Iterator, i.Item == Array[LeftToken], i.Item == Array[RightToken]\n{}\n"
+---
+alder::type::associated_type_mismatch
+
+  × associated type `Item` has conflicting equalities: expected
+  │ `Array[LeftToken]`, found `Array[RightToken]`
+   ╭─[/app/src/main.ald:8:52]
+ 7 │ fn impossible(value: i) ()
+ 8 │     where i: Iterator, i.Item == Array[LeftToken], i.Item == Array[RightToken]
+   ·                                                    ─────────────┬─────────────
+   ·                                                                 ╰── these types are incompatible
+ 9 │ {}
+   ╰────
