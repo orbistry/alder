@@ -179,6 +179,188 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn interrupted_scope_finishes_child_cleanup_before_resuming_caller() {
+        let harness = indoc::indoc! {r#"
+            let entered;
+            const ready = new Promise((resolve) => { entered = resolve; });
+            const events = [];
+            const child = $task(function* () {
+                try {
+                    yield* $tryPromise(() => {
+                        entered();
+                        return new Promise(() => {});
+                    });
+                } finally {
+                    yield* $tryPromise(() => Promise.resolve());
+                    events.push("child cleanup");
+                }
+            });
+            const parent = new FiberImpl($task(function* () {
+                try { yield* $fiberScope(child); }
+                finally { events.push("caller cleanup"); }
+            })).start();
+            await ready;
+            parent.interruptUnsafe();
+            const exit = await parent.awaitExit();
+            $assert(exit.$ === "Failure" && exit.error instanceof Interrupted);
+            $assert(events.join(",") === "child cleanup,caller cleanup");
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("scope cancellation must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn interrupted_combinators_join_cleanup_even_after_selecting_an_exit() {
+        let harness = indoc::indoc! {r#"
+            for (const kind of ["all", "race"]) {
+                for (const selected of [false, true]) {
+                    const events = [];
+                    let entered, cleaning, release;
+                    const ready = new Promise((resolve) => { entered = resolve; });
+                    const cleanupStarted = new Promise((resolve) => { cleaning = resolve; });
+                    const gate = new Promise((resolve) => { release = resolve; });
+                    const child = $task(function* () {
+                        try {
+                            yield* $tryPromise(() => { entered(); return new Promise(() => {}); });
+                        } finally {
+                            yield* $tryPromise(() => { cleaning(); return gate; });
+                            events.push("child cleanup");
+                        }
+                    });
+                    const tasks = [child];
+                    if (selected) tasks.push($task(function* () {
+                        yield* $tryPromise(() => ready);
+                        if (kind === "all") throw new Error("selected failure");
+                        return "selected winner";
+                    }));
+                    const parent = new FiberImpl($task(function* () {
+                        try { yield* (kind === "all" ? $fiberAll(tasks) : $fiberRace(tasks)); }
+                        finally { events.push("caller cleanup"); }
+                    })).start();
+                    await ready;
+                    if (selected) await cleanupStarted;
+                    parent.interruptUnsafe();
+                    parent.interruptUnsafe();
+                    await cleanupStarted;
+                    release();
+                    const exit = await parent.awaitExit();
+                    $assert(exit.$ === "Failure" && exit.error instanceof Interrupted);
+                    $assert(events.join(",") === "child cleanup,caller cleanup");
+                    $assert(parent.children.size === 0);
+                }
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("combinator cancellation must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn interrupted_partial_construction_waits_for_owned_children() {
+        let harness = indoc::indoc! {r#"
+            for (const combine of [$fiberAll, $fiberRace]) {
+                let cleaning, release;
+                const cleanupStarted = new Promise((resolve) => { cleaning = resolve; });
+                const gate = new Promise((resolve) => { release = resolve; });
+                const events = [];
+                let bodies = 0;
+                const valid = $task(function* () { bodies++; });
+                const invalid = $task(() => {
+                    // White-box factory probe: attach a suspending finalizer to
+                    // the already-owned, not-yet-started sibling.
+                    const sibling = [...currentFiber.children][0];
+                    sibling.scope.add(() => $task(function* () {
+                        yield* $tryPromise(() => { cleaning(); return gate; });
+                        events.push("child cleanup");
+                    }));
+                    throw new Error("factory failed");
+                });
+                const parent = new FiberImpl($task(function* () {
+                    try { yield* combine([valid, invalid]); }
+                    finally {
+                        events.push("caller cleanup");
+                        $assert(currentFiber.children.size === 0);
+                    }
+                })).start();
+                await cleanupStarted;
+                parent.interruptUnsafe();
+                release();
+                const exit = await parent.awaitExit();
+                $assert(exit.$ === "Failure" && exit.error instanceof Interrupted);
+                $assert(events.join(",") === "child cleanup,caller cleanup");
+                $assert(bodies === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("partial construction cancellation must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn promise_registration_reentrant_interruption_aborts_and_ignores_settlement() {
+        let harness = indoc::indoc! {r#"
+            for (const settles of ["resolve", "reject", "pending", "throw", "malformed"]) {
+                let aborted = 0, cleaned = 0, continued = false;
+                const parent = new FiberImpl($task(function* () {
+                    try {
+                        yield* $tryPromise((signal) => {
+                            signal.addEventListener("abort", () => { aborted++; });
+                            currentFiber.interruptUnsafe();
+                            if (settles === "throw") throw new Error("registration failed after interruption");
+                            if (settles === "malformed") return 42;
+                            if (settles === "resolve") return Promise.resolve(42);
+                            if (settles === "reject") return Promise.reject(new Error("late"));
+                            return new Promise(() => {});
+                        }, true);
+                        continued = true;
+                    } finally { cleaned++; }
+                })).start();
+                const exit = await parent.awaitExit();
+                await Promise.resolve();
+                $assert(exit.$ === "Failure" && exit.error === parent.interruptError);
+                $assert(aborted === 1 && cleaned === 1 && !continued);
+                $assert(parent.children.size === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("registration interruption must not leave a waiter alive")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn primitive_json_codecs_validate_types_and_round_trip() {
         let harness = indoc::indoc! {r#"
             for (const [value, kind] of [[42, "number"], ["text", "string"], [true, "boolean"],

@@ -782,12 +782,26 @@ class FiberImpl {
         if (this.interruptMask === 0 && this.state === "Suspended") {
             const cancel = this.suspendedCancel;
             this.suspendedCancel = null;
-            if (cancel) cancel();
-            this.state = "Running";
-            this.resumeMethod = "throw";
-            this.resumeValue = this.interruptError;
-            this.interruptDelivered = true;
-            schedule(this);
+            const resumeInterrupted = (error = this.interruptError) => {
+                this.state = "Running";
+                this.resumeMethod = "throw";
+                this.resumeValue = error;
+                this.interruptDelivered = true;
+                schedule(this);
+            };
+            try {
+                const cleanup = cancel?.();
+                if (cleanup) {
+                    Promise.resolve(cleanup).then(
+                        () => resumeInterrupted(),
+                        (error) => resumeInterrupted(error),
+                    );
+                } else {
+                    resumeInterrupted();
+                }
+            } catch (error) {
+                resumeInterrupted(error);
+            }
         }
     }
 
@@ -890,6 +904,19 @@ class FiberImpl {
         this.state = "Suspended";
         let active = true;
         let cleanup = null;
+        let registered = false;
+        let cancelledDuringRegistration = null;
+        // Install ownership before calling user/foreign registration code.
+        // Reentrant interruption must invalidate resume immediately, but cannot
+        // finish cancelling until registration supplies its cleanup hook.
+        this.suspendedCancel = () => {
+            if (!active) return;
+            active = false;
+            if (registered) return cleanup?.();
+            return new Promise((resolve, reject) => {
+                cancelledDuringRegistration = { resolve, reject };
+            });
+        };
         const resume = (method, value) => {
             if (!active || this.state === "Done") return;
             active = false;
@@ -904,12 +931,11 @@ class FiberImpl {
         } catch (error) {
             resume("throw", error);
         }
-        if (active && this.state === "Suspended") {
-            this.suspendedCancel = () => {
-                if (!active) return;
-                active = false;
-                if (cleanup) cleanup();
-            };
+        registered = true;
+        if (cancelledDuringRegistration) {
+            const { resolve, reject } = cancelledDuringRegistration;
+            try { Promise.resolve(cleanup?.()).then(resolve, reject); }
+            catch (error) { reject(error); }
         }
         return true;
     }
@@ -918,6 +944,13 @@ class FiberImpl {
         return this.suspend((resume) => {
             let controller = null;
             let promise;
+            let aborted = false;
+            const cancel = () => {
+                if (controller && !aborted) {
+                    aborted = true;
+                    controller.abort();
+                }
+            };
             try {
                 controller = operation.abort ? new AbortController() : null;
                 const returned = operation.thunk(controller?.signal);
@@ -936,7 +969,7 @@ class FiberImpl {
                 resume("throw", error instanceof ForeignDefect
                     ? error
                     : new ForeignDefect(error, operation.origin));
-                return null;
+                return cancel;
             }
             promise.then(
                 (value) => resume("next", value),
@@ -951,13 +984,7 @@ class FiberImpl {
                     }
                 },
             );
-            let aborted = false;
-            return () => {
-                if (controller && !aborted) {
-                    aborted = true;
-                    controller.abort();
-                }
-            };
+            return cancel;
         });
     }
 
@@ -1007,9 +1034,11 @@ class FiberImpl {
 
     handleChildConstructionFailure(created) {
         return this.suspend((resume) => {
-            Promise.all(created.children.map((child) => child.awaitExit())).then(
+            const cleanup = Promise.all(created.children.map((child) => child.awaitExit()));
+            cleanup.then(
                 () => resume("throw", created.error),
             );
+            return () => cleanup;
         });
     }
 
@@ -1053,10 +1082,10 @@ class FiberImpl {
                 }));
             });
             return () => {
-                if (settled) return;
                 settled = true;
                 removers.forEach((remove) => remove());
                 children.forEach((child) => child.interruptUnsafe());
+                return Promise.all(children.map((child) => child.awaitExit()));
             };
         });
     }
@@ -1083,10 +1112,10 @@ class FiberImpl {
             };
             children.forEach((child) => removers.push(child.observe((exit) => choose(child, exit))));
             return () => {
-                if (settled) return;
                 settled = true;
                 removers.forEach((remove) => remove());
                 children.forEach((child) => child.interruptUnsafe());
+                return Promise.all(children.map((child) => child.awaitExit()));
             };
         });
     }
@@ -1099,7 +1128,11 @@ class FiberImpl {
             const remove = child.observe((exit) => {
                 resume(exit.$ === "Success" ? "next" : "throw", exit.$ === "Success" ? exit.value : exit.error);
             });
-            return () => { remove(); child.interruptUnsafe(); };
+            return () => {
+                remove();
+                child.interruptUnsafe();
+                return child.awaitExit();
+            };
         });
     }
 
