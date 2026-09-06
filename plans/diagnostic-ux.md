@@ -155,3 +155,42 @@ work; a list of available keys is not full structural comparison parity.
 
 Validation: full workspace tests passed (209 driver tests), as did formatting
 and strict all-target/all-feature Clippy. The new source snapshot was reviewed.
+
+## Local warning checkpoint
+
+Full canonicalization now generates unused-local and parameter warnings from
+the resolved AST. The existing expression/dependency traversal is shared through
+two collectors: SCC dependencies remain module names, while local warnings track
+declarations and references by LocalId. Alternative patterns share IDs and warn
+only once. Wildcards declare no binding; nested shadowing, record shorthand,
+captures, guards and pins are inspected as actual references. Writes count as
+uses conservatively, since discarding a written binding would invalidate its
+assignment. This is unused-binding analysis, not dead-store or reachability
+analysis. Headers, bodyless trait signatures and synthetic derive methods do not
+produce unused-local warnings. Public function parameters are still checked;
+exported API names themselves are not local bindings.
+
+Hints distinguish ordinary patterns (`_`), array-rest bindings (unnamed `..`),
+and `as` aliases (keep the underlying pattern). Initializer effects must be
+preserved. Alias labels currently cover the aliased pattern because the canonical
+AST does not retain a separate alias-name region.
+
+`unused_locals_respect_shadowing_patterns_and_effects` first compiled successfully
+with zero warnings instead of four. Its source snapshot now checks an effectful
+initializer, outer/inner shadowing, tuple destructuring and an unused parameter,
+with writes, shorthand and explicit discards as positive controls.
+`unused_locals_share_alternatives_and_count_pins_guards_and_captures` checks one
+warning for shared alternatives plus unused rest/alias bindings, and verifies
+that applying the suggested pattern changes yields valid source with no warnings.
+Neither fixture manually constructs warnings. The older renderer-only snapshot
+was updated for the new safety hint, not counted as production evidence.
+
+Module-level unused bindings, imports/re-exports, real CLI/editor delivery and
+cross-module warning ordering remain open. No missing-annotation warning policy
+or partial-match acceptance rule changed.
+
+Validation: full workspace tests passed (211 driver, 467 inference and 17 CLI
+tests, plus all remaining suites; two existing ignored doctests). Formatting,
+strict all-target/all-feature Clippy and diff checks passed. Source snapshots
+were reviewed. Final snapshot-reference, package and editor verification remain
+open acceptance gates.

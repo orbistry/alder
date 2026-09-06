@@ -198,7 +198,11 @@ fn canonicalize_mode<'a>(
 
     Ok(CanResult {
         module,
-        warnings: &[],
+        warnings: if headers_only {
+            &[]
+        } else {
+            bump.alloc_slice_copy(&crate::value_scc::unused_locals(context.home, items))
+        },
     })
 }
 

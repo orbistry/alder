@@ -1,0 +1,40 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn alternatives(input: Option[Number]) {\n    match input { Some(value) | Some(value) => 0, None => 1 }\n}\npub fn guards(input: Option[Number]) {\n    match input { Some(value) if value > 0 => 1, _ => 0 }\n}\npub fn pins(input: Number, expected: Number) {\n    match input { ^expected => 1, _ => 0 }\n}\npub fn captures(input: Number) { () -> input }\npub fn rest(input: Array[Number]) {\n    match input { [first, ..rest] => first, _ => 0 }\n}\npub fn alias(input: Option[Number]) {\n    match input { Some(value) as whole => value, None => 0 }\n}\npub fn used_alternatives(input: Option[Number]) {\n    match input { Some(value) | Some(value) => value, None => 0 }\n}\ntrait Signature[a] { fn method(value: a) Number }\n"
+---
+alder::warning::unused_binding
+
+  ⚠ unused binding `value`
+   ╭─[/app/src/main.ald:2:24]
+ 1 │ pub fn alternatives(input: Option[Number]) {
+ 2 │     match input { Some(value) | Some(value) => 0, None => 1 }
+   ·                        ──┬──
+   ·                          ╰── not used
+ 3 │ }
+   ╰────
+  help: if this binding is intentionally unused, discard it with `_`; keep any
+        initializer whose effects are needed
+alder::warning::unused_binding
+
+  ⚠ unused binding `rest`
+    ╭─[/app/src/main.ald:12:27]
+ 11 │ pub fn rest(input: Array[Number]) {
+ 12 │     match input { [first, ..rest] => first, _ => 0 }
+    ·                           ───┬──
+    ·                              ╰── not used
+ 13 │ }
+    ╰────
+  help: use an unnamed rest pattern `..` if the remaining elements are
+        intentionally unused
+alder::warning::unused_binding
+
+  ⚠ unused binding `whole`
+    ╭─[/app/src/main.ald:15:19]
+ 14 │ pub fn alias(input: Option[Number]) {
+ 15 │     match input { Some(value) as whole => value, None => 0 }
+    ·                   ──────────┬─────────
+    ·                             ╰── not used
+ 16 │ }
+    ╰────
+  help: remove the unused `as` binding, keeping the underlying pattern and any
+        needed initializer effects

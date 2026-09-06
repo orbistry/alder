@@ -1,6 +1,6 @@
 //! Deterministic top-level value dependency groups for inference.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use alder_ast::{
     AttrValue, Block, Child, ChildBlock, ChildItem, Expr, Item, ItemKind, Markup, ModuleId, Node,
@@ -10,6 +10,88 @@ use alder_ast::{
 use bumpalo::Bump;
 
 use crate::scc;
+
+// Share the resolved expression walk with unused-local analysis. SCCs only
+// care about module dependencies; warnings additionally inspect local IDs.
+trait References<'a> {
+    fn insert(&mut self, name: &'a str);
+    fn bind(
+        &mut self,
+        _name: alder_ast::BindingName<'a>,
+        _region: alder_region::Region,
+        _form: crate::BindingForm,
+    ) {
+    }
+    fn use_local(&mut self, _name: alder_ast::LocalName<'a>) {}
+}
+
+impl<'a> References<'a> for BTreeSet<&'a str> {
+    fn insert(&mut self, name: &'a str) {
+        BTreeSet::insert(self, name);
+    }
+}
+
+#[derive(Default)]
+struct Locals<'a> {
+    bindings: BTreeMap<
+        alder_ast::LocalId,
+        (
+            alder_ast::LocalName<'a>,
+            alder_region::Region,
+            crate::BindingForm,
+        ),
+    >,
+    uses: BTreeSet<alder_ast::LocalId>,
+}
+
+impl<'a> References<'a> for Locals<'a> {
+    fn insert(&mut self, _name: &'a str) {}
+
+    fn bind(
+        &mut self,
+        name: alder_ast::BindingName<'a>,
+        region: alder_region::Region,
+        form: crate::BindingForm,
+    ) {
+        if let alder_ast::BindingName::Local(name) = name {
+            // Alternatives share IDs. Warn once at the first binding site.
+            self.bindings.entry(name.id).or_insert((name, region, form));
+        }
+    }
+
+    fn use_local(&mut self, name: alder_ast::LocalName<'a>) {
+        self.uses.insert(name.id);
+    }
+}
+
+pub(crate) fn unused_locals<'a>(
+    home: ModuleId<'a>,
+    items: &[Node<'a, Item<'a>>],
+) -> Vec<crate::Warning<'a>> {
+    let mut locals = Locals::default();
+    for item in items {
+        if matches!(&item.value.kind, ItemKind::Impl(implementation) if implementation.synthetic.is_some())
+        {
+            continue;
+        }
+        collect_item(home, &item.value.kind, &mut locals);
+    }
+    let mut warnings = locals
+        .bindings
+        .into_iter()
+        .filter_map(|(id, (name, region, form))| {
+            (!locals.uses.contains(&id)).then_some(crate::Warning {
+                region,
+                kind: crate::WarningKind::UnusedBinding {
+                    name: name.text,
+                    form,
+                },
+            })
+        })
+        .collect::<Vec<_>>();
+    warnings.sort_by_key(|warning| warning.region);
+    warnings
+}
 
 struct ValueNode<'a> {
     name: QualifiedName<'a>,
@@ -21,23 +103,35 @@ struct ValueNode<'a> {
 /// a failed binding cannot be mistaken for an independent dependency.
 pub fn dependencies<'a>(home: ModuleId<'a>, item: &ItemKind<'a>) -> BTreeSet<&'a str> {
     let mut out = BTreeSet::new();
+    collect_item(home, item, &mut out);
+    out
+}
+
+fn collect_item<'a>(home: ModuleId<'a>, item: &ItemKind<'a>, out: &mut impl References<'a>) {
     match item {
-        ItemKind::Fn(function) => block(home, function.body, &mut out),
-        ItemKind::Let(declaration) => {
-            pattern(home, declaration.pattern, &mut out);
-            expr(home, declaration.value, &mut out);
+        ItemKind::Fn(function) => {
+            params(home, function.params, out);
+            block(home, function.body, out);
         }
-        ItemKind::Component(component) => block(home, component.body, &mut out),
-        ItemKind::Test(test) => block(home, test.body, &mut out),
+        ItemKind::Let(declaration) => {
+            pattern(home, declaration.pattern, out);
+            expr(home, declaration.value, out);
+        }
+        ItemKind::Component(component) => {
+            params(home, component.params, out);
+            block(home, component.body, out);
+        }
+        ItemKind::Test(test) => block(home, test.body, out),
         ItemKind::Tests(items) => {
             for item in *items {
-                out.extend(dependencies(home, &item.value.kind));
+                collect_item(home, &item.value.kind, out);
             }
         }
         ItemKind::Impl(implementation) => {
             for item in implementation.items {
                 if let alder_ast::ImplItem::Fn(function) = item {
-                    block(home, function.body, &mut out);
+                    params(home, function.params, out);
+                    block(home, function.body, out);
                 }
             }
         }
@@ -46,7 +140,8 @@ pub fn dependencies<'a>(home: ModuleId<'a>, item: &ItemKind<'a>) -> BTreeSet<&'a
                 if let alder_ast::TraitItem::Fn(function) = item
                     && let Some(body) = function.body
                 {
-                    block(home, body, &mut out);
+                    params(home, function.params, out);
+                    block(home, body, out);
                 }
             }
         }
@@ -59,7 +154,12 @@ pub fn dependencies<'a>(home: ModuleId<'a>, item: &ItemKind<'a>) -> BTreeSet<&'a
         | ItemKind::Comptime(_)
         | ItemKind::Extern(_) => {}
     }
-    out
+}
+
+fn params<'a>(home: ModuleId<'a>, params: &[alder_ast::Param<'a>], out: &mut impl References<'a>) {
+    for param in params {
+        pattern(home, param.pattern, out);
+    }
 }
 
 pub fn build<'a>(
@@ -141,7 +241,7 @@ fn node<'a>(
     ValueNode { name, dependencies }
 }
 
-fn block<'a>(home: ModuleId<'a>, value: Node<'a, Block<'a>>, out: &mut BTreeSet<&'a str>) {
+fn block<'a>(home: ModuleId<'a>, value: Node<'a, Block<'a>>, out: &mut impl References<'a>) {
     for statement in value.value.statements {
         stmt(home, statement, out);
     }
@@ -150,7 +250,7 @@ fn block<'a>(home: ModuleId<'a>, value: Node<'a, Block<'a>>, out: &mut BTreeSet<
     }
 }
 
-fn stmt<'a>(home: ModuleId<'a>, value: Node<'a, Stmt<'a>>, out: &mut BTreeSet<&'a str>) {
+fn stmt<'a>(home: ModuleId<'a>, value: Node<'a, Stmt<'a>>, out: &mut impl References<'a>) {
     match &value.value {
         Stmt::Let(declaration) => {
             pattern(home, declaration.pattern, out);
@@ -158,6 +258,11 @@ fn stmt<'a>(home: ModuleId<'a>, value: Node<'a, Stmt<'a>>, out: &mut BTreeSet<&'
         }
         Stmt::Use { .. } | Stmt::Continue => {}
         Stmt::Assign { place, value, .. } => {
+            // Conservatively count writes as uses: replacing a written binding
+            // with `_` would leave an invalid assignment target.
+            if let alder_ast::BindingName::Local(local) = place.root {
+                out.use_local(local);
+            }
             // A write constrains the target's type even without a read. Keep
             // writers in the same dependency analysis as ordinary references.
             if let alder_ast::BindingName::TopLevel(reference) = place.root
@@ -194,7 +299,7 @@ fn stmt<'a>(home: ModuleId<'a>, value: Node<'a, Stmt<'a>>, out: &mut BTreeSet<&'
     }
 }
 
-fn expr<'a>(home: ModuleId<'a>, value: Node<'a, Expr<'a>>, out: &mut BTreeSet<&'a str>) {
+fn expr<'a>(home: ModuleId<'a>, value: Node<'a, Expr<'a>>, out: &mut impl References<'a>) {
     match &value.value {
         Expr::Number { .. }
         | Expr::BigInt(_)
@@ -224,6 +329,10 @@ fn expr<'a>(home: ModuleId<'a>, value: Node<'a, Expr<'a>>, out: &mut BTreeSet<&'
         } if reference.module == home => {
             out.insert(reference.name);
         }
+        Expr::Var {
+            reference: ValueRef::Local(local),
+            ..
+        } => out.use_local(*local),
         Expr::Var { .. } => {}
         Expr::Tag { args, .. } | Expr::Array(args) | Expr::Tuple(args) => {
             for argument in *args {
@@ -300,7 +409,7 @@ fn expr<'a>(home: ModuleId<'a>, value: Node<'a, Expr<'a>>, out: &mut BTreeSet<&'
     }
 }
 
-fn pattern<'a>(home: ModuleId<'a>, value: Node<'a, Pattern<'a>>, out: &mut BTreeSet<&'a str>) {
+fn pattern<'a>(home: ModuleId<'a>, value: Node<'a, Pattern<'a>>, out: &mut impl References<'a>) {
     match &value.value {
         Pattern::Pin { value, .. } => expr(home, value, out),
         Pattern::Constructor { args, .. } | Pattern::Tag { args, .. } | Pattern::Tuple(args) => {
@@ -313,16 +422,25 @@ fn pattern<'a>(home: ModuleId<'a>, value: Node<'a, Pattern<'a>>, out: &mut BTree
                 pattern(home, field.pattern, out);
             }
         }
-        Pattern::Array { elements, .. } => {
+        Pattern::Array { elements, rest } => {
             for element in *elements {
                 pattern(home, element, out);
             }
+            if let Some(rest) = rest
+                && let Some(name) = rest.name
+            {
+                out.bind(name, rest.region, crate::BindingForm::ArrayRest);
+            }
         }
         Pattern::Alias {
-            pattern: nested, ..
-        } => pattern(home, nested, out),
+            pattern: nested,
+            name,
+        } => {
+            pattern(home, nested, out);
+            out.bind(*name, value.region, crate::BindingForm::Alias);
+        }
+        Pattern::Bind(name) => out.bind(*name, value.region, crate::BindingForm::Pattern),
         Pattern::Anything
-        | Pattern::Bind(_)
         | Pattern::Number { .. }
         | Pattern::BigInt(_)
         | Pattern::Str(_)
@@ -334,7 +452,7 @@ fn pattern<'a>(home: ModuleId<'a>, value: Node<'a, Pattern<'a>>, out: &mut BTree
 fn record_fields<'a>(
     home: ModuleId<'a>,
     fields: &'a [RecordField<'a>],
-    out: &mut BTreeSet<&'a str>,
+    out: &mut impl References<'a>,
 ) {
     for field in fields {
         match field {
@@ -345,7 +463,7 @@ fn record_fields<'a>(
     }
 }
 
-fn collect_style<'a>(home: ModuleId<'a>, style: &'a Style<'a>, out: &mut BTreeSet<&'a str>) {
+fn collect_style<'a>(home: ModuleId<'a>, style: &'a Style<'a>, out: &mut impl References<'a>) {
     for entry in style.entries {
         match entry.value {
             StyleValue::Expr(value) => expr(home, value, out),
@@ -355,7 +473,7 @@ fn collect_style<'a>(home: ModuleId<'a>, style: &'a Style<'a>, out: &mut BTreeSe
     }
 }
 
-fn collect_query<'a>(home: ModuleId<'a>, query: &'a Query<'a>, out: &mut BTreeSet<&'a str>) {
+fn collect_query<'a>(home: ModuleId<'a>, query: &'a Query<'a>, out: &mut impl References<'a>) {
     match query {
         Query::Select(select) => {
             if let Projection::Fields(fields) = select.projection {
@@ -397,7 +515,7 @@ fn collect_query<'a>(home: ModuleId<'a>, query: &'a Query<'a>, out: &mut BTreeSe
     }
 }
 
-fn collect_markup<'a>(home: ModuleId<'a>, markup: &'a Markup<'a>, out: &mut BTreeSet<&'a str>) {
+fn collect_markup<'a>(home: ModuleId<'a>, markup: &'a Markup<'a>, out: &mut impl References<'a>) {
     match markup {
         Markup::Element(element) => collect_element(home, element, out),
         Markup::Fragment(children) => {
@@ -411,7 +529,7 @@ fn collect_markup<'a>(home: ModuleId<'a>, markup: &'a Markup<'a>, out: &mut BTre
 fn collect_element<'a>(
     home: ModuleId<'a>,
     element: &'a alder_ast::Element<'a>,
-    out: &mut BTreeSet<&'a str>,
+    out: &mut impl References<'a>,
 ) {
     if let alder_ast::ElementName::Component(reference) = element.name.value
         && reference.module == home
@@ -428,7 +546,11 @@ fn collect_element<'a>(
     }
 }
 
-fn collect_child<'a>(home: ModuleId<'a>, child: Node<'a, Child<'a>>, out: &mut BTreeSet<&'a str>) {
+fn collect_child<'a>(
+    home: ModuleId<'a>,
+    child: Node<'a, Child<'a>>,
+    out: &mut impl References<'a>,
+) {
     match &child.value {
         Child::Element(element) => collect_element(home, element, out),
         Child::Fragment(children) => {
@@ -485,7 +607,7 @@ fn collect_child<'a>(home: ModuleId<'a>, child: Node<'a, Child<'a>>, out: &mut B
 fn collect_child_block<'a>(
     home: ModuleId<'a>,
     value: Node<'a, ChildBlock<'a>>,
-    out: &mut BTreeSet<&'a str>,
+    out: &mut impl References<'a>,
 ) {
     for item in value.value.items {
         match item {

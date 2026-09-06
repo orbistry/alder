@@ -1,0 +1,51 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let calls = 0\nfn effect() { calls += 1 }\npub fn example(input: Number) {\n    let ignored = effect()\n    let outer = input\n    let result = {\n        let outer = 2\n        outer\n    }\n    let (used, unused) = (result, 3)\n    let _ = effect()\n    let counter = 0\n    counter = 1\n    { used }\n}\npub fn unused_parameter(value: Number) { 1 }\n"
+---
+alder::warning::unused_binding
+
+  ⚠ unused binding `ignored`
+   ╭─[/app/src/main.ald:4:9]
+ 3 │ pub fn example(input: Number) {
+ 4 │     let ignored = effect()
+   ·         ───┬───
+   ·            ╰── not used
+ 5 │     let outer = input
+   ╰────
+  help: if this binding is intentionally unused, discard it with `_`; keep any
+        initializer whose effects are needed
+alder::warning::unused_binding
+
+  ⚠ unused binding `outer`
+   ╭─[/app/src/main.ald:5:9]
+ 4 │     let ignored = effect()
+ 5 │     let outer = input
+   ·         ──┬──
+   ·           ╰── not used
+ 6 │     let result = {
+   ╰────
+  help: if this binding is intentionally unused, discard it with `_`; keep any
+        initializer whose effects are needed
+alder::warning::unused_binding
+
+  ⚠ unused binding `unused`
+    ╭─[/app/src/main.ald:10:16]
+  9 │     }
+ 10 │     let (used, unused) = (result, 3)
+    ·                ───┬──
+    ·                   ╰── not used
+ 11 │     let _ = effect()
+    ╰────
+  help: if this binding is intentionally unused, discard it with `_`; keep any
+        initializer whose effects are needed
+alder::warning::unused_binding
+
+  ⚠ unused binding `value`
+    ╭─[/app/src/main.ald:16:25]
+ 15 │ }
+ 16 │ pub fn unused_parameter(value: Number) { 1 }
+    ·                         ──┬──
+    ·                           ╰── not used
+    ╰────
+  help: if this binding is intentionally unused, discard it with `_`; keep any
+        initializer whose effects are needed

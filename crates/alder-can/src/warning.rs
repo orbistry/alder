@@ -9,6 +9,13 @@ pub struct Warning<'a> {
 #[derive(Clone, Copy, Debug)]
 pub enum WarningKind<'a> {
     UnusedImport { name: &'a str },
-    UnusedBinding { name: &'a str },
+    UnusedBinding { name: &'a str, form: BindingForm },
     UnusedTypeParameter { name: &'a str },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum BindingForm {
+    Pattern,
+    ArrayRest,
+    Alias,
 }

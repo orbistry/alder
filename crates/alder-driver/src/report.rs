@@ -1201,7 +1201,7 @@ pub fn canonicalize(source: Source, error: &alder_can::Error<'_>) -> Diagnostic 
 pub fn warning(source: Source, warning: &alder_can::Warning<'_>) -> Diagnostic {
     let (code, message) = match warning.kind {
         WarningKind::UnusedImport { name } => ("unused_import", format!("unused import `{name}`")),
-        WarningKind::UnusedBinding { name } => {
+        WarningKind::UnusedBinding { name, .. } => {
             ("unused_binding", format!("unused binding `{name}`"))
         }
         WarningKind::UnusedTypeParameter { name } => (
@@ -1209,9 +1209,18 @@ pub fn warning(source: Source, warning: &alder_can::Warning<'_>) -> Diagnostic {
             format!("unused type parameter `{name}`"),
         ),
     };
-    Diagnostic::warning(source, message)
+    let diagnostic = Diagnostic::warning(source, message)
         .with_code(format!("alder::warning::{code}"))
-        .with_primary_label(warning.region, "not used")
+        .with_primary_label(warning.region, "not used");
+    if let WarningKind::UnusedBinding { form, .. } = warning.kind {
+        diagnostic.with_help(match form {
+            alder_can::BindingForm::Pattern => "if this binding is intentionally unused, discard it with `_`; keep any initializer whose effects are needed",
+            alder_can::BindingForm::ArrayRest => "use an unnamed rest pattern `..` if the remaining elements are intentionally unused",
+            alder_can::BindingForm::Alias => "remove the unused `as` binding, keeping the underlying pattern and any needed initializer effects",
+        })
+    } else {
+        diagnostic
+    }
 }
 
 pub fn solve(source: Source, module: &Module<'_>, error: &SolveError<'_>) -> Diagnostic {

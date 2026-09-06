@@ -235,6 +235,9 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
 - [ ] Complete recovery parity around nominal metadata, traits, and finer-grained contexts
 - [ ] Preserve structured expected/actual types and source expectation context
 - [ ] Generate actionable unused-import/binding warnings from source
+  - [x] Warn on unused resolved locals and parameters, respecting shared pattern
+    bindings, shadowing, captures, wildcard discards, and writes
+  - [ ] Complete module-level binding and import analysis and consumer tests
 - [ ] Reconcile general pattern and inferred-annotation diagnostic policy
 - [ ] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing
 - [ ] Complete diagnostic parity matrix, validation, and final evidence report

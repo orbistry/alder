@@ -1207,6 +1207,90 @@ mod tests {
     }
 
     #[test]
+    fn unused_locals_share_alternatives_and_count_pins_guards_and_captures() {
+        let source = indoc::indoc! {r#"
+            pub fn alternatives(input: Option[Number]) {
+                match input { Some(value) | Some(value) => 0, None => 1 }
+            }
+            pub fn guards(input: Option[Number]) {
+                match input { Some(value) if value > 0 => 1, _ => 0 }
+            }
+            pub fn pins(input: Number, expected: Number) {
+                match input { ^expected => 1, _ => 0 }
+            }
+            pub fn captures(input: Number) { () -> input }
+            pub fn rest(input: Array[Number]) {
+                match input { [first, ..rest] => first, _ => 0 }
+            }
+            pub fn alias(input: Option[Number]) {
+                match input { Some(value) as whole => value, None => 0 }
+            }
+            pub fn used_alternatives(input: Option[Number]) {
+                match input { Some(value) | Some(value) => value, None => 0 }
+            }
+            trait Signature[a] { fn method(value: a) Number }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+        assert_eq!(result.warnings.len(), 3, "{:?}", result.warnings);
+        assert_rendered_diagnostics_snapshot!(source, &result.warnings);
+
+        let corrected = source
+            .replace("Some(value) | Some(value) => 0", "Some(_) | Some(_) => 0")
+            .replace("..rest", "..")
+            .replace(" as whole", "");
+        let result = build_fixture_sync(
+            vec![(uri, Ok(corrected))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.failed, 0, "{result:?}");
+        assert!(result.warnings.is_empty(), "{:?}", result.warnings);
+    }
+
+    #[test]
+    fn unused_locals_respect_shadowing_patterns_and_effects() {
+        let source = indoc::indoc! {r#"
+            let calls = 0
+            fn effect() { calls += 1 }
+            pub fn example(input: Number) {
+                let ignored = effect()
+                let outer = input
+                let result = {
+                    let outer = 2
+                    outer
+                }
+                let (used, unused) = (result, 3)
+                let _ = effect()
+                let counter = 0
+                counter = 1
+                { used }
+            }
+            pub fn unused_parameter(value: Number) { 1 }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+        assert_eq!(result.warnings.len(), 4, "{:?}", result.warnings);
+        assert_rendered_diagnostics_snapshot!(source, &result.warnings);
+    }
+
+    #[test]
     fn missing_record_field_suggests_only_existing_nearby_fields() {
         let source = indoc::indoc! {r#"
             fn typo(record: { username: String, age: Number }) { record.usernme }
@@ -4847,7 +4931,10 @@ mod tests {
                 alder_region::Position::new(2, 9),
                 alder_region::Position::new(2, 15),
             ),
-            kind: alder_can::WarningKind::UnusedBinding { name: "unused" },
+            kind: alder_can::WarningKind::UnusedBinding {
+                name: "unused",
+                form: alder_can::BindingForm::Pattern,
+            },
         };
         let diagnostic =
             crate::report::warning(Source::new("/project/src/main.ald", source), &warning);

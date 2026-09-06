@@ -12,3 +12,5 @@ alder::warning::unused_binding
    ·            ╰── not used
  3 │     2
    ╰────
+  help: if this binding is intentionally unused, discard it with `_`; keep any
+        initializer whose effects are needed
