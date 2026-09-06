@@ -1,5 +1,12 @@
 # alder-fmt
 
+## 0.2.1 — 2026-09-06
+
+### Patch changes
+
+- [94c055b](https://github.com/orbistry/alder/commit/94c055bd548fac411537df3f0bea79f5e38d2edd) Preserve parser-designated template, markup, raw macro, and comment text while formatting. Keep literal whitespace and line endings intact, validate verbatim payloads and physical token lines, and track formatting ranges through parser backtracking. — Thanks @rvcas!
+- Updated dependencies: alder-parse@0.3.0, alder-source@0.3.0
+
 ## 0.2.0 — 2026-09-03
 
 ### Minor changes
