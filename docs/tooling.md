@@ -81,13 +81,18 @@ miette diagnostics with Elm-quality messages, including the full
 `Reporting/Error/Syntax.hs` hierarchy ported from Elm and
 Levenshtein-based suggestions.
 
-The active compiler emits unused-local/parameter and unused-import-binding
+The active compiler emits unused-local/parameter, module-value and unused-import-binding
 warnings. Import usage includes type and trait references, constructors, and
 qualified value access; public re-exports count as intentional uses. Warnings
 do not remove code. In particular, an import with no directly referenced names
 may still be needed for initialization effects or trait instances. Local discard
 hints preserve needed initializer effects and distinguish `_`, unnamed array
-rests, and aliases. Module-level dead-code analysis is not implemented.
+rests, and aliases. Module-value reachability starts at exports, `main`, and
+references in evaluated initializers, tests, and trait/impl bodies. Unused private
+recursive functions can warn; helpers needed by initializers do not. This is a
+conservative module-local value analysis, not whole-program dead-code elimination
+or unused-type analysis. Declaration warnings do not suggest invalid `_` function
+names, and warnings never remove code.
 
 CLI diagnostics are ordered by source file and primary source location, not
 message text. The diagnostic-restoration acceptance matrix and remaining work

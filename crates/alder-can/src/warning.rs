@@ -15,6 +15,7 @@ pub enum WarningKind<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum BindingForm {
+    Declaration,
     Pattern,
     ArrayRest,
     Alias,

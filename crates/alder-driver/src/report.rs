@@ -1220,6 +1220,7 @@ pub fn warning(source: Source, warning: &alder_can::Warning<'_>) -> Diagnostic {
         .with_primary_label(warning.region, "not used");
     if let WarningKind::UnusedBinding { form, .. } = warning.kind {
         diagnostic.with_help(match form {
+            alder_can::BindingForm::Declaration => "this private declaration is not reachable from an export, entry point, or evaluated initializer; remove it only if it is not needed",
             alder_can::BindingForm::Pattern => "if this binding is intentionally unused, discard it with `_`; keep any initializer whose effects are needed",
             alder_can::BindingForm::ArrayRest => "use an unnamed rest pattern `..` if the remaining elements are intentionally unused",
             alder_can::BindingForm::Alias => "remove the unused `as` binding, keeping the underlying pattern and any needed initializer effects",

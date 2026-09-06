@@ -1,0 +1,63 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn cycle_a() Number { cycle_b() }\nfn cycle_b() Number { cycle_a() }\nfn isolated() Number { 1 }\nfn initialize() { Io.print(\"keep this effect\") }\nlet ignored = initialize()\nlet shadowed = 1\npub fn exported(shadowed: Number) Number { shadowed }\npub let public_value = 42\npub fn main() Number { public_value }\n"
+---
+alder::warning::unused_binding
+
+  ⚠ unused binding `cycle_a`
+   ╭─[/app/src/main.ald:1:4]
+ 1 │ fn cycle_a() Number { cycle_b() }
+   ·    ───┬───
+   ·       ╰── not used
+ 2 │ fn cycle_b() Number { cycle_a() }
+   ╰────
+  help: this private declaration is not reachable from an export, entry point,
+        or evaluated initializer; remove it only if it is not needed
+alder::warning::unused_binding
+
+  ⚠ unused binding `cycle_b`
+   ╭─[/app/src/main.ald:2:4]
+ 1 │ fn cycle_a() Number { cycle_b() }
+ 2 │ fn cycle_b() Number { cycle_a() }
+   ·    ───┬───
+   ·       ╰── not used
+ 3 │ fn isolated() Number { 1 }
+   ╰────
+  help: this private declaration is not reachable from an export, entry point,
+        or evaluated initializer; remove it only if it is not needed
+alder::warning::unused_binding
+
+  ⚠ unused binding `isolated`
+   ╭─[/app/src/main.ald:3:4]
+ 2 │ fn cycle_b() Number { cycle_a() }
+ 3 │ fn isolated() Number { 1 }
+   ·    ────┬───
+   ·        ╰── not used
+ 4 │ fn initialize() { Io.print("keep this effect") }
+   ╰────
+  help: this private declaration is not reachable from an export, entry point,
+        or evaluated initializer; remove it only if it is not needed
+alder::warning::unused_binding
+
+  ⚠ unused binding `ignored`
+   ╭─[/app/src/main.ald:5:5]
+ 4 │ fn initialize() { Io.print("keep this effect") }
+ 5 │ let ignored = initialize()
+   ·     ───┬───
+   ·        ╰── not used
+ 6 │ let shadowed = 1
+   ╰────
+  help: if this binding is intentionally unused, discard it with `_`; keep any
+        initializer whose effects are needed
+alder::warning::unused_binding
+
+  ⚠ unused binding `shadowed`
+   ╭─[/app/src/main.ald:6:5]
+ 5 │ let ignored = initialize()
+ 6 │ let shadowed = 1
+   ·     ────┬───
+   ·         ╰── not used
+ 7 │ pub fn exported(shadowed: Number) Number { shadowed }
+   ╰────
+  help: if this binding is intentionally unused, discard it with `_`; keep any
+        initializer whose effects are needed

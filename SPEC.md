@@ -236,12 +236,13 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
   and package indexes from any failed source build
 - [ ] Complete recovery parity around nominal metadata, traits, and finer-grained contexts
 - [ ] Preserve structured expected/actual types and source expectation context
-- [ ] Generate actionable unused-import/binding warnings from source
+- [x] Generate actionable unused-import/binding warnings from source
   - [x] Warn on unused resolved locals and parameters, respecting shared pattern
     bindings, shadowing, captures, wildcard discards, and writes
   - [x] Track unused named/module/wildcard import bindings through resolution,
     preserving re-exports and verifying CLI delivery without removing effects
-  - [ ] Complete module-level binding and import analysis and consumer tests
+  - [x] Warn on unused module value bindings with conservative reachability,
+    initializer-effect preservation, and CLI/editor delivery tests
 - [ ] Reconcile general pattern and inferred-annotation diagnostic policy
 - [x] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing
 - [ ] Complete diagnostic parity matrix, validation, and final evidence report

@@ -1244,6 +1244,59 @@ mod tests {
     }
 
     #[test]
+    fn unused_module_bindings_respect_exports_recursion_and_initializers() {
+        let source = indoc::indoc! {r#"
+            fn cycle_a() Number { cycle_b() }
+            fn cycle_b() Number { cycle_a() }
+            fn isolated() Number { 1 }
+            fn initialize() { Io.print("keep this effect") }
+            let ignored = initialize()
+            let shadowed = 1
+            pub fn exported(shadowed: Number) Number { shadowed }
+            pub let public_value = 42
+            pub fn main() Number { public_value }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri, Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(result.is_success(), "{result:?}");
+        assert_eq!(result.warnings.len(), 5, "{:?}", result.warnings);
+        for name in ["cycle_a", "cycle_b", "isolated", "ignored", "shadowed"] {
+            assert!(
+                result
+                    .warnings
+                    .iter()
+                    .any(|warning| warning.message() == format!("unused binding `{name}`"))
+            );
+        }
+        assert_rendered_diagnostics_snapshot!(source, &result.warnings);
+    }
+
+    #[test]
+    fn module_warning_roots_include_tests_methods_and_entry_points() {
+        let source = indoc::indoc! {r#"
+            fn tested() Number { 42 }
+            test "keeps its helper" { assert tested() == 42 }
+            fn from_method() String { "number" }
+            pub trait Describe[a] { fn describe(value: a) String }
+            impl Describe[Number] {
+                fn describe(_: Number) String { from_method() }
+            }
+            fn main() Number { 0 }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("app/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(result.is_success(), "{result:?}");
+        assert!(result.warnings.is_empty(), "{:?}", result.warnings);
+    }
+
+    #[test]
     fn deferred_optional_arguments_keep_position_and_callee() {
         let source = indoc::indoc! {r#"
             fn need(value?: Number) {}

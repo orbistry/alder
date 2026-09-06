@@ -98,6 +98,87 @@ struct ValueNode<'a> {
     dependencies: BTreeSet<&'a str>,
 }
 
+#[derive(Default)]
+struct ModuleBindings<'a>(BTreeMap<&'a str, (alder_region::Region, crate::BindingForm)>);
+
+impl<'a> References<'a> for ModuleBindings<'a> {
+    fn insert(&mut self, _: &'a str) {}
+    fn bind(
+        &mut self,
+        name: alder_ast::BindingName<'a>,
+        region: alder_region::Region,
+        form: crate::BindingForm,
+    ) {
+        if let alder_ast::BindingName::TopLevel(name) = name {
+            self.0.entry(name.name).or_insert((region, form));
+        }
+    }
+}
+
+pub(crate) fn unused_module_bindings<'a>(
+    home: ModuleId<'a>,
+    items: &[Node<'a, Item<'a>>],
+    env: &crate::environment::Env<'a>,
+) -> Vec<crate::Warning<'a>> {
+    let mut candidates = ModuleBindings::default();
+    let mut edges = BTreeMap::new();
+    let mut roots = BTreeSet::new();
+    for item in items {
+        let dependencies = dependencies(home, &item.value.kind);
+        let names = match &item.value.kind {
+            ItemKind::Fn(function) => vec![function.name.name],
+            ItemKind::Component(component) => vec![component.name.name],
+            ItemKind::Extern(alder_ast::ExternDecl::Fn { name, .. }) => vec![name.name],
+            ItemKind::Let(declaration) => {
+                pattern(home, declaration.pattern, &mut candidates);
+                // Initializers and refutable/pinned patterns are evaluated even
+                // when none of their bound names are subsequently read.
+                roots.extend(dependencies.iter().copied());
+                declaration.bindings.iter().map(|name| name.name).collect()
+            }
+            _ => {
+                // Test bodies and trait/impl methods can be entered without a
+                // direct local value reference, so retain their dependencies.
+                roots.extend(dependencies);
+                continue;
+            }
+        };
+        for name in names {
+            let region = env.scopes[0]
+                .values
+                .get(name)
+                .map_or(item.region, |binding| binding.region);
+            candidates
+                .0
+                .entry(name)
+                .or_insert((region, crate::BindingForm::Declaration));
+            edges.insert(name, dependencies.clone());
+            if matches!(item.value.visibility, alder_ast::Visibility::Public(_)) || name == "main" {
+                roots.insert(name);
+            }
+        }
+    }
+    let mut reachable = BTreeSet::new();
+    let mut pending = roots.into_iter().collect::<Vec<_>>();
+    while let Some(name) = pending.pop() {
+        if reachable.insert(name)
+            && let Some(dependencies) = edges.get(name)
+        {
+            pending.extend(dependencies);
+        }
+    }
+    candidates
+        .0
+        .into_iter()
+        .filter_map(|(name, (region, form))| {
+            (!reachable.contains(name)).then_some(crate::Warning {
+                region,
+                kind: crate::WarningKind::UnusedBinding { name, form },
+            })
+        })
+        .collect()
+}
+
 /// Local module values read or written by this declaration, including nested
 /// bodies and pins. Recovery uses the same resolved traversal as value SCCs so
 /// a failed binding cannot be mistaken for an independent dependency.

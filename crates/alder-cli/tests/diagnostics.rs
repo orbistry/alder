@@ -170,6 +170,7 @@ fn editor_publishes_unsaved_errors_warnings_and_clears_stale_diagnostics() {
         (3, "pub fn main() { 0 }", 0),
         (4, "pub fn main( {", 1),
         (5, "pub fn main() { 0 }", 0),
+        (6, "let unused = 1\npub fn main() { 0 }", 1),
     ] {
         editor.send(
             json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
@@ -183,7 +184,7 @@ fn editor_publishes_unsaved_errors_warnings_and_clears_stale_diagnostics() {
             "{diagnostics}"
         );
         if count == 1 {
-            assert_eq!(diagnostics[0]["severity"], if version == 2 { 2 } else { 1 });
+            assert_eq!(diagnostics[0]["severity"], if version == 4 { 1 } else { 2 });
         }
     }
     editor.send(json!({"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":uri}}}));
@@ -316,7 +317,7 @@ fn cli_delivers_unused_warnings_without_removing_effects() {
     project.source(
         "library.ald",
         indoc::indoc! {r#"
-            let _ = Io.print("import effect")
+            let initialization = Io.print("import effect")
             pub let value = 1
         "#},
     );
@@ -336,6 +337,10 @@ fn cli_delivers_unused_warnings_without_removing_effects() {
         assert!(output.status.success(), "{command}: {stderr}");
         assert!(stderr.contains("unused import binding `value`"), "{stderr}");
         assert!(stderr.contains("unused binding `unused`"), "{stderr}");
+        assert!(
+            stderr.contains("unused binding `initialization`"),
+            "{stderr}"
+        );
         assert!(stderr.contains("main.ald"), "{stderr}");
         assert!(!stderr.contains("\u{1b}["), "{stderr}");
         if command == "run" {

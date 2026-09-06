@@ -204,6 +204,11 @@ fn canonicalize_mode<'a>(
             &[]
         } else {
             let mut warnings = crate::value_scc::unused_locals(context.home, items);
+            warnings.extend(crate::value_scc::unused_module_bindings(
+                context.home,
+                items,
+                &env,
+            ));
             warnings.extend(env.unused_imports());
             warnings.sort_by_key(|warning| warning.region);
             bump.alloc_slice_copy(&warnings)
