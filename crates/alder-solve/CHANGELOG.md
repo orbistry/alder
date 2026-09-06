@@ -1,5 +1,214 @@
 # alder-solve
 
+## 0.4.0 — 2026-09-06
+
+### Minor changes
+
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Provide structural Json codecs for closed error rows with Json-capable payloads,
+  independent of group names and declaration order. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Apply contextual recursive Option lifting to fresh record field initializers,
+  including direct record return contexts, without converting existing mutable
+  record aliases. Emit field wrapping through the centralized Option helpers. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Provide structural Show for closed error rows when every payload supports Show,
+  independent of named error groups and their declaration order. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Treat optional record-field shorthand as an ordinary Option type and materialize omitted Option fields as None during contextual record construction.
+  
+  Remove separate record-field optionality from serialized interfaces and invalidate the previous interface format.
+  
+  Read Fiber traversal concurrency options using ordinary Option semantics so omitted and explicit None fields both select the sequential default.
+  
+  Preserve known generic Result error rows during propagation, including explicit Option fallback branches.
+  
+  Provide conditional Option ordering and Unit ordering so derived record payloads use ordinary field dictionaries, including nested Options. — Thanks @rvcas!
+- [f87e540](https://github.com/orbistry/alder/commit/f87e540113feb6c1052b2d782a7ad6e1faa7d204) Add inferred lazy tasks, generator-based async lowering, Promise extern lifting,
+  and a structured fiber runtime with interruption, scopes, finalizers, `all`, and
+  `race`. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Reject custom trait implementations directly targeting named error groups or
+  their transparent aliases, with a source-aware structural-row diagnostic. — Thanks @rvcas!
+- [0db756d](https://github.com/orbistry/alder/commit/0db756d7014df5c506fafe13df0b93306896d1fa) Represent explicit async function declarations and lazy async block syntax. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Resolve Hash structurally for closed error rows, honoring payload dictionaries
+  and preserving hashes across equivalent groups and row widening. Share payload
+  evidence with the equality superclass without duplicating nested generated code.
+  Remove nominal error-group derives and their declaration-order-dependent behavior;
+  error groups use conditional structural Eq, Show, Hash, and Json capabilities.
+  Normalize derived enum payloads through the ordinary annotation converter so
+  nominal wrappers of named error groups retain their checked structural evidence. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Infer contextual outer Option wrapping jointly across call arguments and emit
+  the resolved Some layers directly through the centralized kernel representation.
+  Report incompatible inference preferences with a source-aware diagnostic. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Allow omission of trailing Option arguments and emit explicit None values at
+  direct, higher-order, and piped call sites using solver-provided call metadata. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Support Option propagation with postfix `?` in Option-returning contexts,
+  including async bodies and pipe destinations, without implicit Result conversion.
+  Wait for recursive peers to constrain unknown propagation carriers before
+  generalization, preserving inferred Option contracts across module boundaries. — Thanks @rvcas!
+
+### Patch changes
+
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Preserve expected field types through if, match, and block-tail initializers.
+  Keep implicit Option wrapping at call and field boundaries, reject conversions
+  of existing mutable records, and preserve reachable fallthrough checks. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Reject contradictory field requirements on equivalent parenthesizations of
+  record spreads, empty operands, and redundant earlier repeated inputs while preserving
+  independent generic merge instantiations and rightmost overwrite priority. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Normalize adjacent closed record spread operands before comparing inferred
+  contracts, so grouping fields cannot hide contradictory inherited-field types
+  in local or imported functions. Also discard closed fields guaranteed shadowed
+  by later closed writes across open spreads when comparing contracts. Preserve
+  rightmost writes, other inherited fields, and runtime initializer evaluation.
+  Known fields of acyclic open input records also establish guaranteed overwrites;
+  opaque cyclic producer obligations do not. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Match constructor applications in generic trait implementation heads,
+  including leftmost partial-constructor recovery. Preserve shared constructor
+  bindings, prerequisite dictionaries, and overlap detection for recovered sections.
+  Honor explicit constructor sections before applying leftmost recovery during
+  coherence checking, including sections supplied by later trait arguments. — Thanks @rvcas!
+- [23b763c](https://github.com/orbistry/alder/commit/23b763c58372b388f9af9388bd3afc0ae658205d) Respect Boolean short circuits and false match guards when checking loop exits
+  and structural divergence. — Thanks @rvcas!
+- [3156c57](https://github.com/orbistry/alder/commit/3156c574db10a698f5e48b0f6cc2f2452f380261) Check ordinary record field types across reachable loop exits independently of
+  break order, rejecting incompatible result alternatives. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Normalize direct named error-group annotations to structural rows, including
+  nested aliases, arrays, records, and stored function signatures. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Propagate expected Option payload types through explicit Some and Option.some
+  construction, allowing fresh record fields to receive their contextual Option
+  types without converting existing mutable payload aliases. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Keep later pattern alternatives reachable after a failed guard. Check their pin
+  exits against loop results, matching the existing per-alternative runtime guard
+  retry semantics. — Thanks @rvcas!
+- [f7fb26b](https://github.com/orbistry/alder/commit/f7fb26bab952eeb7c574638b5e237e82ebd817ad) Include assignment indices when detecting function suspension, and check their
+  early returns and error propagation against the enclosing function's contract. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Select trait implementations for function types by matching arity, parameter
+  types, result types, and shared template variables. — Thanks @rvcas!
+- [e8ed91a](https://github.com/orbistry/alder/commit/e8ed91a4411928673a776a2f64e2fa8946a5e716) Check implementation bounds against the trait contract and preserve declared method dictionary order, including inherited bounds and renamed type variables. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Report out-of-range tuple reads and writes at the index with the tuple length
+  and valid zero-based bounds instead of a misleading unit-type mismatch. — Thanks @rvcas!
+- [ea6b284](https://github.com/orbistry/alder/commit/ea6b2849eee22f4332de8319392a1cbe60d7c5d7) Resolve embedded stdlib members through packaged Alder signatures, rejecting unknown members, wrong arguments, invalid callbacks, and arity mismatches. Remove untyped builtin references and correct expected-versus-actual call diagnostics. — Thanks @rvcas!
+- [0304ee5](https://github.com/orbistry/alder/commit/0304ee5bf8bf0a6525a371556a86d5be161a54e4) Reject specialization and escape of declared generic function and trait method
+  contracts, with source-aware diagnostics for invalid implementations. — Thanks @rvcas!
+- [0ddfea3](https://github.com/orbistry/alder/commit/0ddfea32658c54e74da4aa92e583caae15147876) Report invalid stored dependency trait indexes once at build level, preserving
+  canonical module identities without attributing errors to unrelated source.
+  Reject incoherent registries even when the build contains no source modules. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Reject ordinary types in converted Result error annotations even when the
+  function only forwards its argument without constructing or matching a Result.
+  Validate unused alias and enum payload declarations too, and report invalid
+  error arguments with a source-labeled error-row diagnostic.
+  Check bodyless trait signatures, associated-type bindings, and error-group
+  payloads without requiring a use site.
+  Validate fixed error slots in partial Result constructors and match structural
+  error rows when resolving higher-kinded trait implementations. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Compare named Result error groups structurally when detecting overlapping implementations and selecting trait dictionaries, including aliases and fixed error slots in partial constructors. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Check returns and propagation inside match-pin expressions against their
+  enclosing function contract, including pins nested inside destructuring patterns. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Track pattern matching, rejection, and pin-expression exits in control-flow
+  analysis. Keep pin break values in loop result checking and exclude guards,
+  arm bodies, later alternatives, and sibling pattern operands that an earlier
+  pin exits before reaching. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Preserve contextual field types inside fresh Option-wrapped record and array
+  payloads. Apply ordinary checked-call rules to bare pipe destinations, including
+  Option lifting, omitted arguments, and dictionary passing. — Thanks @rvcas!
+- [12b09ad](https://github.com/orbistry/alder/commit/12b09ad1f41251491b7a548e9d6f1e16ad320bd4) Validate primitive Json trait decoding against the requested type, preserving
+  validation inside derived and container codecs. Encode unit as null and BigInt
+  as a decimal JSON string; reject non-finite JSON numbers instead of silently
+  encoding them as null. — Thanks @rvcas!
+- [677e20f](https://github.com/orbistry/alder/commit/677e20fd158941294eb7688d34180b68cda0e17e) Preserve record-tail identities during inference and publication, check ordinary
+  field types at value boundaries, and read stored Option fields directly. — Thanks @rvcas!
+- [c9bb0b6](https://github.com/orbistry/alder/commit/c9bb0b6fa425b1b26c5d5c21f2705129ec0e9c34) Fix Option coalescing to return its payload type, preserve unit and nested
+  Options, and evaluate the default only for None. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Collect tuple read and write projections before inferring a fixed length, making
+  inference independent of projection order and preserving nested alias relations. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Preserve error-row tails when checking trait implementation overlap, rejecting
+  open-row instances that could match the same concrete Result constructor. — Thanks @rvcas!
+- [80159fd](https://github.com/orbistry/alder/commit/80159fd415bb27186262eb250de7013f3c21efe6) Check payloads hidden in open record spread tails when they can overwrite an earlier property, including Option-valued fields. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Require compatible payload types for alternative match bindings, preventing
+  incompatible values escaping through another alternative. — Thanks @rvcas!
+- [13079e7](https://github.com/orbistry/alder/commit/13079e73b1ea0756df0323a7bbabcb9fe8841967) Read stored Option fields directly in record destructuring and record-shaped
+  enum patterns, preserving nested Option values without presence-based wrapping. — Thanks @rvcas!
+- [138d0d0](https://github.com/orbistry/alder/commit/138d0d0f10b38f2d6065ef790a5a46c61b584950) Distinguish normal fallthrough from control-flow exits, reject missing function results after zero-iteration loops, accept returning branches and lambdas without artificial unit values, and preserve loop-tail and break-payload effects in generated JavaScript. — Thanks @rvcas!
+- [9c00543](https://github.com/orbistry/alder/commit/9c005437e69c689a3360bdef4aae08daa5c177c1) Preserve universal error-row tails when unifying empty residual rows, allowing
+  generic Result identities directly and through transparent aliases. — Thanks @rvcas!
+- [d8c4983](https://github.com/orbistry/alder/commit/d8c4983815b570e62b4c3085e309a460f508ce20) Allow type variables in local let annotations and reuse the enclosing callable's
+  generic variables consistently with lambda annotations. Preserve generic
+  contract checking and monomorphic local bindings. — Thanks @rvcas!
+- [b58dec3](https://github.com/orbistry/alder/commit/b58dec3394c2ed7e6a5c5f6d52488a9b75c05876) Accumulate inferred error rows across early returns and resolve mutually
+  recursive exact unions without closing externally open error sources. — Thanks @rvcas!
+- [f7fb26b](https://github.com/orbistry/alder/commit/f7fb26bab952eeb7c574638b5e237e82ebd817ad) Preserve ordered record-overlay relationships through inference, generalization, and owned interfaces. Keep independent input rows distinct, respect rightmost field overwrites, and check exposed fields against generic contracts. — Thanks @rvcas!
+- [69af036](https://github.com/orbistry/alder/commit/69af0361975479f2d18511a46ae37c335cdec9a9) Infer right-biased record spreads using ordinary field types. A later Option field overwrites earlier values even when it contains None. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Allow fresh Err constructors to satisfy contextual multi-tag error rows while checking permitted tags and payload types. Preserve expected types through block result expressions without changing early-return boundaries. — Thanks @rvcas!
+- [8be2b83](https://github.com/orbistry/alder/commit/8be2b83a931c55e68518e2cd1bfcb527c98236bc) Preserve all trait parameters in default-method annotation scopes, including
+  parameters omitted from a method signature. Reject specialization through local
+  annotations and retain the trait's superclass evidence in nested bodies. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Carry reachability across aggregate elements, record fields, tag payloads,
+  template interpolations, indexing, and assignment operands so unreachable break
+  payloads do not constrain an enclosing loop's result. Include contextually
+  checked arrays and records. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Retain and emit inherited default methods when implementing an imported trait,
+  including async defaults and constrained dictionary factories. Publish accurate
+  default-helper symbols and implementation method metadata, and invalidate stale
+  interface caches. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Preserve contextual Option field initialization in records containing spreads.
+  Resolve written-field wrapping through ordered field relationships so overwritten
+  values retain their own types, later Option fields overwrite earlier values, and inherited
+  mutable payloads are not converted. Support nested fresh constructors and arrays. — Thanks @rvcas!
+- [edbcd63](https://github.com/orbistry/alder/commit/edbcd633652e4097acc18656bca8cd1b891a219a) Add Array.iter and independent ArrayIterator cursors, replacing the non-advancing
+  Iterator instance on arrays. Preserve shared source values, live iteration, and
+  correct Option payloads through exhaustion. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Attribute Option lifting failures to a source argument in the failing constraint
+  component, preserving its actual types instead of blaming an unrelated earlier
+  argument. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Preserve fresh record and array initializer context on pipe inputs, including
+  Option-valued fields and optional parameters. Check each input once without
+  converting existing mutable aliases or changing runtime evaluation order. — Thanks @rvcas!
+- [8055981](https://github.com/orbistry/alder/commit/8055981a5072ecb558f0932c7a2bb9dffa4c0b48) Infer loop expression results from reachable break values, isolate nested loop
+  targets, and reject incompatible break payloads. — Thanks @rvcas!
+- [d87e721](https://github.com/orbistry/alder/commit/d87e721ad6aa621a26853257257f3f5b2989d3e9) Carry error-row inclusion relationships in canonical and serialized annotations,
+  preserving them through arena copies and interface hydration. Bump the interface
+  format for the new scheme layout.
+  
+  Retain inclusion dependencies during solver generalization and instantiation,
+  and reject inferred inclusions between independent universal error-row tails.
+  
+  Resolve concrete error unions for inferred results, including exhaustive matches
+  across module boundaries. Preserve explicitly open result contracts and apply
+  directional Result return checking consistently to named functions and lambdas. — Thanks @rvcas!
+- [a708527](https://github.com/orbistry/alder/commit/a70852762e00f2168b7cb3462ad722cc4393efe1) Keep shared top-level state monomorphic, preserve safe factory polymorphism, and prevent interfaces from turning unresolved shared types into independent generics. Diagnose incomplete shared export types. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Preserve explicitly universal type parameters during contextual Option lifting.
+  Insert Some wrappers when required instead of specializing a generic function
+  or trait method to an Option-shaped parameter. — Thanks @rvcas!
+- [da17cab](https://github.com/orbistry/alder/commit/da17cab2397dca24da7124364a3c9a06c992c4d6) Support lowercase type variables in lambda annotations and share enclosing generic variables and trait bounds without leaking names between sibling scopes. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Check generic call arguments from left to right, including piped arguments,
+  so mismatches report the expected type and label the incompatible argument. — Thanks @rvcas!
+- [fd795d5](https://github.com/orbistry/alder/commit/fd795d5efec4b19179a2a3fc451fdfc793674a9a) Report deferred error-row constraint failures at the local function reference,
+  including calls through imported interfaces, instead of reusing definition
+  coordinates against the caller's source. — Thanks @rvcas!
+- [f7fb26b](https://github.com/orbistry/alder/commit/f7fb26bab952eeb7c574638b5e237e82ebd817ad) Preserve template interpolation evaluation and string-conversion order across
+  later setup statements. Check tagged templates against the actual tag function,
+  including argument types and its return type, instead of assuming String.
+  Preserve empty tagged-template segments around adjacent interpolations. — Thanks @rvcas!
+- [30f6650](https://github.com/orbistry/alder/commit/30f6650e4b737300d115cf89ce8c259c6dc17416) Check record-field assignments against their ordinary stored type, requiring
+  Option values for Option fields and rejecting implicit payload lifting or
+  traversal through an Option parent. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Preserve record row tails when checking overlapping trait implementations,
+  including shared residual-field constraints across trait arguments.
+  Match record instance heads during dictionary selection so valid record
+  implementations can be called, including across module boundaries. — Thanks @rvcas!
+- [f7fb26b](https://github.com/orbistry/alder/commit/f7fb26bab952eeb7c574638b5e237e82ebd817ad) Base top-level generalization on resolved assignments rather than mutation permission flags. Preserve safe polymorphism for never-assigned function bindings while restricting shared replaceable functions, including writes inside nested closures. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Index Option depth constraints by their incident variables instead of rescanning
+  all constraints for every independent component. Preserve field initializer
+  context in explicitly annotated lambda record returns. — Thanks @rvcas!
+- [f7fb26b](https://github.com/orbistry/alder/commit/f7fb26bab952eeb7c574638b5e237e82ebd817ad) Resolve newly closed record overlays after bare-function pipe calls before
+  checking field access, preserving the final stored field type like ordinary calls. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Detect cyclic structural error-group expansion and report the recursive source
+  reference instead of aborting the compiler with a stack overflow. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Add sparse exact-length tuple constraint metadata to annotations and stored interfaces, preserving arena copies and fingerprint identity with a new interface format. Carry imported constraints through inference and check concrete tuple lengths, constrained elements, and generic contracts.
+  
+  Finalize source tuple projections without allocating by the largest index, preserve fixed tuple lengths, and reject recursive tuple-element constraints. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Solve consistent direct-match Option depth constraints without dense closure.
+  Report impossible constraint components consistently even when another component
+  has ambiguous wrapping preferences.
+  Preserve inferred record/error-row kinds while selecting contextual Some wrappers. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Require the built-in Result module identity when granting Result.err error-tag construction behavior, rather than accepting similarly named user modules. — Thanks @rvcas!
+- Updated dependencies: alder-ast@0.3.0, alder-can@0.4.0, alder-constrain@0.4.0
+
 ## 0.3.0 — 2026-09-04
 
 ### Minor changes

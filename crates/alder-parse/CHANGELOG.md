@@ -1,5 +1,25 @@
 # alder-parse
 
+## 0.3.0 — 2026-09-06
+
+### Minor changes
+
+- [470e3ef](https://github.com/orbistry/alder/commit/470e3ef31e57097de46903b6a2c9513af3410c1c) Parse named optional parameter annotations and canonicalize their shorthand to
+  ordinary builtin Option types, including lambda and trait signatures. — Thanks @rvcas!
+- [f7fb26b](https://github.com/orbistry/alder/commit/f7fb26bab952eeb7c574638b5e237e82ebd817ad) Permit type-checked reassignment and field/index writes through ordinary let bindings and function or lambda parameters. Keep assignment-aware generalization restrictions on shared replaceable values.
+  
+  Remove obsolete mutability fields from canonical lets, parameters, and assignment places. Local pattern bindings are writable; non-storage references retain assignment-target checks with diagnostics that no longer suggest adding `mut`.
+  
+  Remove `mut` from the grammar, keyword list, and source AST. Parsing uses the current grammar without compatibility handling or migration diagnostics. — Thanks @rvcas!
+- [0db756d](https://github.com/orbistry/alder/commit/0db756d7014df5c506fafe13df0b93306896d1fa) Represent explicit async function declarations and lazy async block syntax. — Thanks @rvcas!
+
+### Patch changes
+
+- [94c055b](https://github.com/orbistry/alder/commit/94c055bd548fac411537df3f0bea79f5e38d2edd) Preserve parser-designated template, markup, raw macro, and comment text while formatting. Keep literal whitespace and line endings intact, validate verbatim payloads and physical token lines, and track formatting ranges through parser backtracking. — Thanks @rvcas!
+- [14be079](https://github.com/orbistry/alder/commit/14be07997423e789b7a0f52954a1f709fcfa7afe) Reject overflowing tuple indices with a source diagnostic instead of silently
+  changing them to the largest representable index. — Thanks @rvcas!
+- Updated dependencies: alder-source@0.3.0
+
 ## 0.2.0 — 2026-09-03
 
 ### Minor changes

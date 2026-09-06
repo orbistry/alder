@@ -1,5 +1,146 @@
 # alder-driver
 
+## 0.4.0 — 2026-09-06
+
+### Minor changes
+
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Treat optional record-field shorthand as an ordinary Option type and materialize omitted Option fields as None during contextual record construction.
+  
+  Remove separate record-field optionality from serialized interfaces and invalidate the previous interface format.
+  
+  Read Fiber traversal concurrency options using ordinary Option semantics so omitted and explicit None fields both select the sequential default.
+  
+  Preserve known generic Result error rows during propagation, including explicit Option fallback branches.
+  
+  Provide conditional Option ordering and Unit ordering so derived record payloads use ordinary field dictionaries, including nested Options. — Thanks @rvcas!
+- [0ddfea3](https://github.com/orbistry/alder/commit/0ddfea32658c54e74da4aa92e583caae15147876) Report invalid stored dependency trait indexes once at build level, preserving
+  canonical module identities without attributing errors to unrelated source.
+  Reject incoherent registries even when the build contains no source modules. — Thanks @rvcas!
+- [f87e540](https://github.com/orbistry/alder/commit/f87e540113feb6c1052b2d782a7ad6e1faa7d204) Add inferred lazy tasks, generator-based async lowering, Promise extern lifting,
+  and a structured fiber runtime with interruption, scopes, finalizers, `all`, and
+  `race`. — Thanks @rvcas!
+- [9c16136](https://github.com/orbistry/alder/commit/9c161364551c7f921bef5c7c3394349ac50e328a) Require explicit package and source-relative identity metadata for every source
+  module. Remove URI-based identity guesses and metadata-free driver entry points;
+  report missing metadata deterministically before publishing compiler artifacts. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Add sparse exact-length tuple constraint metadata to annotations and stored interfaces, preserving arena copies and fingerprint identity with a new interface format. Carry imported constraints through inference and check concrete tuple lengths, constrained elements, and generic contracts.
+  
+  Finalize source tuple projections without allocating by the largest index, preserve fixed tuple lengths, and reject recursive tuple-element constraints. — Thanks @rvcas!
+- [0ddfea3](https://github.com/orbistry/alder/commit/0ddfea32658c54e74da4aa92e583caae15147876) Stop body compilation after source-package coherence failures, reporting errors
+  at their defining modules and marking other modules blocked. Avoid phantom
+  source labels for overlapping implementations declared in different modules. — Thanks @rvcas!
+
+### Patch changes
+
+- [470e3ef](https://github.com/orbistry/alder/commit/470e3ef31e57097de46903b6a2c9513af3410c1c) Parse named optional parameter annotations and canonicalize their shorthand to
+  ordinary builtin Option types, including lambda and trait signatures. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Apply contextual recursive Option lifting to fresh record field initializers,
+  including direct record return contexts, without converting existing mutable
+  record aliases. Emit field wrapping through the centralized Option helpers. — Thanks @rvcas!
+- [0b1add3](https://github.com/orbistry/alder/commit/0b1add3a764ce6e4e537394b84f33cd7bee94235) Keep workspace applications in distinct module namespaces using stable member-specific identities, preventing collisions between local imports, generated modules, and cached interfaces. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Normalize adjacent closed record spread operands before comparing inferred
+  contracts, so grouping fields cannot hide contradictory inherited-field types
+  in local or imported functions. Also discard closed fields guaranteed shadowed
+  by later closed writes across open spreads when comparing contracts. Preserve
+  rightmost writes, other inherited fields, and runtime initializer evaluation.
+  Known fields of acyclic open input records also establish guaranteed overwrites;
+  opaque cyclic producer obligations do not. — Thanks @rvcas!
+- [f7fb26b](https://github.com/orbistry/alder/commit/f7fb26bab952eeb7c574638b5e237e82ebd817ad) Permit type-checked reassignment and field/index writes through ordinary let bindings and function or lambda parameters. Keep assignment-aware generalization restrictions on shared replaceable values.
+  
+  Remove obsolete mutability fields from canonical lets, parameters, and assignment places. Local pattern bindings are writable; non-storage references retain assignment-target checks with diagnostics that no longer suggest adding `mut`.
+  
+  Remove `mut` from the grammar, keyword list, and source AST. Parsing uses the current grammar without compatibility handling or migration diagnostics. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Report out-of-range tuple reads and writes at the index with the tuple length
+  and valid zero-based bounds instead of a misleading unit-type mismatch. — Thanks @rvcas!
+- [54d1b63](https://github.com/orbistry/alder/commit/54d1b636097930bb115607e6b11b391954927339) Carry physical source origins alongside generated ASTs so local JavaScript extern modules resolve beside their Alder declarations. Preserve virtual module identities after AST transfer, order bundle inputs deterministically, and verify Promise fulfillment, foreign defects, and cancellation through local wrappers. — Thanks @rvcas!
+- [9b47b90](https://github.com/orbistry/alder/commit/9b47b901ab68583292cdaf7e2574075eba85222c) Separate interface and instance-index cache paths by package identity kind so
+  application modules, workspace members, named packages, and builtins cannot
+  overwrite one another's artifacts. Remove the unused unqualified cache lookup. — Thanks @rvcas!
+- [0304ee5](https://github.com/orbistry/alder/commit/0304ee5bf8bf0a6525a371556a86d5be161a54e4) Reject specialization and escape of declared generic function and trait method
+  contracts, with source-aware diagnostics for invalid implementations. — Thanks @rvcas!
+- [8918255](https://github.com/orbistry/alder/commit/8918255ba17b27d7ae2c62db2d89cc13ce9fe4db) Make dependency ordering, compilation depth groups, and import-cycle selection deterministic regardless of module discovery and import order. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Reject ordinary types in converted Result error annotations even when the
+  function only forwards its argument without constructing or matching a Result.
+  Validate unused alias and enum payload declarations too, and report invalid
+  error arguments with a source-labeled error-row diagnostic.
+  Check bodyless trait signatures, associated-type bindings, and error-group
+  payloads without requiring a use site.
+  Validate fixed error slots in partial Result constructors and match structural
+  error rows when resolving higher-kinded trait implementations. — Thanks @rvcas!
+- [0ddfea3](https://github.com/orbistry/alder/commit/0ddfea32658c54e74da4aa92e583caae15147876) Locate trait implementation diagnostic labels by implementation identity so imports and omitted header-pass declarations cannot shift their source spans. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Reject custom trait implementations directly targeting named error groups or
+  their transparent aliases, with a source-aware structural-row diagnostic. — Thanks @rvcas!
+- [2971f2a](https://github.com/orbistry/alder/commit/2971f2ac82ab548eb91228568b60a8d1063909de) Preserve external application-member identities when a workspace and its sibling members are relocated together. — Thanks @rvcas!
+- [08c77e5](https://github.com/orbistry/alder/commit/08c77e55441ccd3a3ca944c7a5425a6139ac41f8) Reject imported types and traits bound under the same name, consistently with
+  local declarations, including wildcard and renamed public re-exports. Preserve
+  distinct aliases and report both conflicting source imports. — Thanks @rvcas!
+- [0db756d](https://github.com/orbistry/alder/commit/0db756d7014df5c506fafe13df0b93306896d1fa) Represent explicit async function declarations and lazy async block syntax. — Thanks @rvcas!
+- [41f55b6](https://github.com/orbistry/alder/commit/41f55b6201ca3abebac3fafd4e88ff0031d627a7) Retain Alder source and extern declaration regions through bundling, render unresolved externs as labeled shared diagnostics, and verify sibling JavaScript wrapper resolution across path-dependency packages. — Thanks @rvcas!
+- [daef79b](https://github.com/orbistry/alder/commit/daef79b53ec5d3249cef75704a1ed3d2f99c06fb) Reject recursive type-alias dependencies during canonicalization and report a
+  source-aware diagnostic explaining how to represent recursive data with enums.
+  Expand local and imported alias references with instantiated canonical targets,
+  including generic arguments and ordinary record field types. — Thanks @rvcas!
+- [32f5ff4](https://github.com/orbistry/alder/commit/32f5ff4672ede60400b057cf54cd9cccddfcbfb7) Reject duplicate module identities before publishing interfaces or code, with diagnostics for both source files. Resolve CLI project imports and canonical module paths using package identity and actual source roots, and resolve package-root imports to mod.ald. — Thanks @rvcas!
+- [adb35ac](https://github.com/orbistry/alder/commit/adb35acf5e70ddd26ca44e1c21771af88e3f70ac) Resolve nested workspace source files against their most specific containing source root, keeping package identity and local imports independent of member discovery order. — Thanks @rvcas!
+- [138d0d0](https://github.com/orbistry/alder/commit/138d0d0f10b38f2d6065ef790a5a46c61b584950) Distinguish normal fallthrough from control-flow exits, reject missing function results after zero-iteration loops, accept returning branches and lambdas without artificial unit values, and preserve loop-tail and break-payload effects in generated JavaScript. — Thanks @rvcas!
+- [6b4af4c](https://github.com/orbistry/alder/commit/6b4af4ce186ce4539bcde262161d4b6f67a39f0d) Reject interface-only dependency caches whose package instance index disagrees
+  with the implementation headers in their module interfaces, even when each file
+  has a valid fingerprint. — Thanks @rvcas!
+- [f7fb26b](https://github.com/orbistry/alder/commit/f7fb26bab952eeb7c574638b5e237e82ebd817ad) Preserve ordered record-overlay relationships through inference, generalization, and owned interfaces. Keep independent input rows distinct, respect rightmost field overwrites, and check exposed fields against generic contracts. — Thanks @rvcas!
+- [cb89192](https://github.com/orbistry/alder/commit/cb89192e12cf6d2d57b92ba023c8a3302370155d) Reject distinct workspace roots declaring the same package name before module
+  discovery, with a deterministic diagnostic identifying both roots. Repeated
+  paths to the same physical package remain one member. — Thanks @rvcas!
+- [743a09c](https://github.com/orbistry/alder/commit/743a09c81ed6f65f5bddd21f7ebd853cf8350e18) Require alternative match patterns to bind identical names and share canonical
+  binding identities, with source-aware diagnostics for missing or extra names. — Thanks @rvcas!
+- [14be079](https://github.com/orbistry/alder/commit/14be07997423e789b7a0f52954a1f709fcfa7afe) Reject overflowing tuple indices with a source diagnostic instead of silently
+  changing them to the largest representable index. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Infer contextual outer Option wrapping jointly across call arguments and emit
+  the resolved Some layers directly through the centralized kernel representation.
+  Report incompatible inference preferences with a source-aware diagnostic. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Retain and emit inherited default methods when implementing an imported trait,
+  including async defaults and constrained dictionary factories. Publish accurate
+  default-helper symbols and implementation method metadata, and invalidate stale
+  interface caches. — Thanks @rvcas!
+- [209141d](https://github.com/orbistry/alder/commit/209141d018dd734c5294da337c763128ea362224) Discover transitive source dependencies using each dependency project's own
+  manifest and path base, without requiring prebuilt semantic caches.
+  Reject distinct dependency roots claiming one package identity, while coalescing
+  equivalent paths to the same canonical root.
+  Resolve workspace imports against their owning member's dependency declarations,
+  without activating unused sibling dependencies. — Thanks @rvcas!
+- [0ddfea3](https://github.com/orbistry/alder/commit/0ddfea32658c54e74da4aa92e583caae15147876) Label a locally declared trait when reporting superclass cycles spanning modules,
+  instead of falling back to the start of the file for a foreign trait. — Thanks @rvcas!
+- [cc5d41e](https://github.com/orbistry/alder/commit/cc5d41edbddcd232512dc9148f0acf13bf28a79d) Build source-backed dependencies from current source without mixing in saved
+  interfaces or instance indexes, so removed trait implementations cannot remain
+  available to consumers through stale caches. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Attribute Option lifting failures to a source argument in the failing constraint
+  component, preserving its actual types instead of blaming an unrelated earlier
+  argument. — Thanks @rvcas!
+- [d87e721](https://github.com/orbistry/alder/commit/d87e721ad6aa621a26853257257f3f5b2989d3e9) Carry error-row inclusion relationships in canonical and serialized annotations,
+  preserving them through arena copies and interface hydration. Bump the interface
+  format for the new scheme layout.
+  
+  Retain inclusion dependencies during solver generalization and instantiation,
+  and reject inferred inclusions between independent universal error-row tails.
+  
+  Resolve concrete error unions for inferred results, including exhaustive matches
+  across module boundaries. Preserve explicitly open result contracts and apply
+  directional Result return checking consistently to named functions and lambdas. — Thanks @rvcas!
+- [a708527](https://github.com/orbistry/alder/commit/a70852762e00f2168b7cb3462ad722cc4393efe1) Keep shared top-level state monomorphic, preserve safe factory polymorphism, and prevent interfaces from turning unresolved shared types into independent generics. Diagnose incomplete shared export types. — Thanks @rvcas!
+- [fd795d5](https://github.com/orbistry/alder/commit/fd795d5efec4b19179a2a3fc451fdfc793674a9a) Report deferred error-row constraint failures at the local function reference,
+  including calls through imported interfaces, instead of reusing definition
+  coordinates against the caller's source. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Support Option propagation with postfix `?` in Option-returning contexts,
+  including async bodies and pipe destinations, without implicit Result conversion.
+  Wait for recursive peers to constrain unknown propagation carriers before
+  generalization, preserving inferred Option contracts across module boundaries. — Thanks @rvcas!
+- [556a21c](https://github.com/orbistry/alder/commit/556a21c7166f51c0b914eabad951440b797ccba4) Detect cyclic structural error-group expansion and report the recursive source
+  reference instead of aborting the compiler with a stack overflow. — Thanks @rvcas!
+- [ca9ab0e](https://github.com/orbistry/alder/commit/ca9ab0eb46454b5407d43eabb79a517cb679aa38) Canonicalize and deduplicate workspace member roots so repeated patterns, parent-path spellings, and symlink aliases cannot compile one source tree under multiple identities. — Thanks @rvcas!
+- [749ba31](https://github.com/orbistry/alder/commit/749ba31c566f66ced41107e9591da82ddd329370) Publish public named and wildcard imports in module interfaces, preserving
+  original identities and checked schemes including multiple aliases of one name.
+  Interface construction APIs now require dependency interfaces; the driver threads
+  them through header and final publication. — Thanks @rvcas!
+- Updated dependencies: alder-ast@0.3.0, alder-can@0.4.0, alder-codegen@0.4.0, alder-constrain@0.4.0, alder-parse@0.3.0, alder-solve@0.4.0, alder-source@0.3.0
+
 ## 0.3.0 — 2026-09-04
 
 ### Minor changes
