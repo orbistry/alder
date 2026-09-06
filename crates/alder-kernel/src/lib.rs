@@ -628,6 +628,161 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn synchronized_ref_serializes_suspended_updates_and_preserves_failure_state() {
+        let harness = indoc::indoc! {r#"
+            const make = $synchronizedRefMake(0);
+            const cell = await $runTask(make);
+            $assert(cell !== await $runTask(make));
+            let calls = 0;
+            const update = $synchronizedRefUpdate(cell, (value) => {
+                calls++;
+                return $task(function* () {
+                    yield* $tryPromise(() => Promise.resolve());
+                    return value + 1;
+                });
+            });
+            $assert(calls === 0);
+            await $runTask($fiberAll(Array.from({ length: 32 }, () => update)));
+            $assert(calls === 32 && await $runTask($synchronizedRefGet(cell)) === 32);
+            const defect = new Error("suspended transition failed");
+            for (const transform of [
+                () => { throw defect; },
+                () => $task(function* () {
+                    yield* $tryPromise(() => Promise.resolve());
+                    throw defect;
+                })
+            ]) {
+                let caught = false;
+                try { await $runTask($synchronizedRefUpdate(cell, transform)); }
+                catch (error) { caught = error === defect; }
+                $assert(caught && await $runTask($synchronizedRefGet(cell)) === 32);
+            }
+            const err = { $: "Err", _0: { $: ":expected" } };
+            $assert(await $runTask($synchronizedRefModify(cell,
+                (value) => $task(function* () { return [err, value]; }))) === err);
+            $assert(await $runTask($synchronizedRefGet(cell)) === 32);
+            await $runTask($synchronizedRefSet(cell, 42));
+            $assert(await $runTask($synchronizedRefGet(cell)) === 42);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("synchronized updates must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn synchronized_ref_cancellation_preserves_commit_boundary_and_write_order() {
+        let harness = indoc::indoc! {r#"
+            for (const committed of [false, true]) {
+                const cell = await $runTask($synchronizedRefMake(1));
+                let entered, cleaning, release;
+                const ready = new Promise((resolve) => { entered = resolve; });
+                const cleanupStarted = new Promise((resolve) => { cleaning = resolve; });
+                const gate = new Promise((resolve) => { release = resolve; });
+                let cleanupCount = 0;
+                const writer = new FiberImpl($synchronizedRefUpdate(cell, (value) =>
+                    $task(function* () {
+                        yield* $fiberAddFinalizer($task(function* () {
+                            yield* $tryPromise(() => { cleaning(); return gate; });
+                            cleanupCount++;
+                        }));
+                        if (!committed) {
+                            yield* $tryPromise(() => { entered(); return new Promise(() => {}); });
+                        }
+                        return value + 1;
+                    }))).start();
+                if (committed) await cleanupStarted;
+                else await ready;
+                // Reads do not wait for the write lock, even during cleanup.
+                $assert(await $runTask($synchronizedRefGet(cell)) === (committed ? 2 : 1));
+                const setter = new FiberImpl($synchronizedRefSet(cell, 10)).start();
+                let observed;
+                const successor = new FiberImpl($synchronizedRefUpdate(cell, (value) => {
+                    observed = value;
+                    return $task(function* () { return value + 1; });
+                })).start();
+                await $runTask($task(function* () {}));
+                $assert(cell.semaphore.waiters.size === 2 && observed === undefined);
+                writer.interruptUnsafe();
+                await cleanupStarted;
+                $assert(await $runTask($synchronizedRefGet(cell)) === (committed ? 2 : 1));
+                $assert(observed === undefined && setter.exit === null);
+                release();
+                const exit = await writer.awaitExit();
+                $assert(exit.$ === "Failure" && exit.error instanceof Interrupted);
+                $assert((await setter.awaitExit()).$ === "Success");
+                $assert((await successor.awaitExit()).$ === "Success");
+                $assert(observed === 10 && cleanupCount === 1);
+                $assert(await $runTask($synchronizedRefGet(cell)) === 11);
+                $assert(cell.semaphore.available === 1 && cell.semaphore.waiters.size === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("synchronized cancellation must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn synchronized_ref_preserves_aliases_and_does_not_roll_back_cleanup_defects() {
+        let harness = indoc::indoc! {r#"
+            const payload = [];
+            const allocation = $synchronizedRefMake(payload);
+            const left = await $runTask(allocation);
+            const right = await $runTask(allocation);
+            const defect = new Error("aliased mutation");
+            let caught = false;
+            try {
+                await $runTask($synchronizedRefUpdate(left, (value) => $task(function* () {
+                    $assert((yield* $synchronizedRefGet(left)) === value);
+                    value.push(42);
+                    yield* $tryPromise(() => Promise.resolve());
+                    throw defect;
+                })));
+            } catch (error) { caught = error === defect; }
+            $assert(caught && (await $runTask($synchronizedRefGet(left))) === payload);
+            $assert((await $runTask($synchronizedRefGet(right))) === payload && payload[0] === 42);
+            const number = await $runTask($synchronizedRefMake(1));
+            const cleanupDefect = new Error("after commit");
+            caught = false;
+            try {
+                await $runTask($synchronizedRefUpdate(number, () => $task(function* () {
+                    yield* $fiberAddFinalizer($task(function* () { throw cleanupDefect; }));
+                    return 2;
+                })));
+            } catch (error) { caught = error === cleanupDefect; }
+            $assert(caught && await $runTask($synchronizedRefGet(number)) === 2);
+            await $runTask($synchronizedRefSet(number, 3));
+            $assert(await $runTask($synchronizedRefGet(number)) === 3);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("synchronized alias probes must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn primitive_json_codecs_validate_types_and_round_trip() {
         let harness = indoc::indoc! {r#"
             for (const [value, kind] of [[42, "number"], ["text", "string"], [true, "boolean"],

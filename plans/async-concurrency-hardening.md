@@ -193,6 +193,45 @@ cleanup before restoring interruption. Alder uses explicit request ownership
 and existing scope joins instead of Effect's mask/onExit instruction machinery;
 no source is copied.
 
+### SynchronizedRef implementation contract
+
+Current kernel review: rechecked pinned Effect `modifyEffect`/`updateEffect`.
+The implementation reads under the write permit, invokes the lazy callback,
+then commits only after its task returns normally. The three kernel tests
+cover 32 serialized suspended updates, queued set/update order, interruption
+on either side of commit, reads while the write lock is held, shared payload
+aliases, and post-commit cleanup defects. Alias mutations and completed commits
+are intentionally not rolled back. This review does not close public API,
+interface, or final release acceptance.
+
+Initial API: `make(a) Task[SynchronizedRef[a]]`,
+`get(SynchronizedRef[a]) Task[a]`, `set(SynchronizedRef[a], a) Task[()]`,
+`update(SynchronizedRef[a], fn(a) Task[a]) Task[()]`, and
+`modify(SynchronizedRef[a], fn(a) Task[(b, a)]) Task[b]`.
+All operations are lazy/reusable. Each make execution creates a fresh cell and
+one-permit semaphore while preserving its argument's alias identity.
+
+All writes use that semaphore. Invoke an update callback only after acquiring
+the permit, reading the latest stored value then. Commit its replacement after
+the callback task completes normally; synchronous throws, task defects, or
+interruption before commit leave the stored binding unchanged. Hold the permit
+through the protected scope's cleanup. A failure or interruption after commit
+does not roll it back, nor are prior alias mutations transactional.
+Reads do not acquire the permit: get returns the last committed binding even
+while a transformation is suspended. This allows a callback to read its own
+cell without deadlocking; a nested write to the same cell is non-reentrant.
+
+Result payloads are ordinary values. To return a typed failure without changing
+state, modify can complete with `(Err(error), oldValue)`; it does not implicitly
+interpret Err or invent a checked-error channel. This choice preserves Alder's
+Result semantics. Ref.update remains synchronous; SynchronizedRef.update's
+callback explicitly returns a task. Both opaque cell types remain invariant.
+
+Rechecked pinned Effect SynchronizedRef.ts get/modifyEffect at commit
+bd393d63c19bdd0ab212d95576cec89051c8501c. Alder uses scoped semaphore protection
+and its existing generator frames; no reference source is copied. Effect's
+separate checked-error channel is not reproduced.
+
 ## Bounded Fiber traversal
 
 Provide these distinct operations (schematic types, not final declarations):

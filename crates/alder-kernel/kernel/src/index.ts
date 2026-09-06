@@ -1331,6 +1331,41 @@ export function $refModify(ref, modify) {
     });
 }
 
+export function $synchronizedRefMake(value) {
+    return $task(function* () {
+        return { value, semaphore: new SemaphoreImpl(1) };
+    });
+}
+
+export function $synchronizedRefGet(ref) {
+    return $refGet(ref);
+}
+
+export function $synchronizedRefSet(ref, value) {
+    return $task(function* () {
+        return yield* $semaphoreWithPermits(ref.semaphore, 1, $refSet(ref, value));
+    });
+}
+
+export function $synchronizedRefUpdate(ref, update) {
+    return $task(function* () {
+        return yield* $semaphoreWithPermits(ref.semaphore, 1, $task(function* () {
+            const next = yield* update(ref.value);
+            ref.value = next;
+        }));
+    });
+}
+
+export function $synchronizedRefModify(ref, modify) {
+    return $task(function* () {
+        return yield* $semaphoreWithPermits(ref.semaphore, 1, $task(function* () {
+            const [result, next] = yield* modify(ref.value);
+            ref.value = next;
+            return result;
+        }));
+    });
+}
+
 export function $taskSleep(milliseconds) {
     return $tryPromise((signal) => new Promise((resolve, reject) => {
         const timer = setTimeout(resolve, milliseconds);
