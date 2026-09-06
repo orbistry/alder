@@ -292,6 +292,80 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn source_dependency_builds_without_saved_interfaces() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-cli-cold-dependency-{}-{nonce}",
+            std::process::id()
+        ));
+        for directory in ["src", "widgets/src"] {
+            std::fs::create_dir_all(root.join(directory)).unwrap();
+        }
+        for (path, source) in [
+            (
+                "alder.jsonc",
+                indoc::indoc! {r#"
+                    { "type": "application", "target": "standalone",
+                      "dependencies": { "vendor/widgets": { "path": "widgets" } } }
+                "#},
+            ),
+            (
+                "widgets/alder.jsonc",
+                indoc::indoc! {r#"
+                    { "type": "package", "name": "vendor/widgets",
+                      "version": "0.1.0", "summary": "Cold dependency fixture",
+                      "license": "MIT", "target": "standalone" }
+                "#},
+            ),
+            (
+                "widgets/src/api.ald",
+                indoc::indoc! {r#"
+                    pub enum Token { Token }
+                    pub trait Display[a] { fn display(value: a) String }
+                "#},
+            ),
+            (
+                "widgets/src/instances.ald",
+                indoc::indoc! {r#"
+                    import ~/api.{ Token, Display }
+                    impl Display[Token] {
+                        fn display(value: Token) String { "cold token" }
+                    }
+                "#},
+            ),
+            (
+                "src/main.ald",
+                indoc::indoc! {r#"
+                    import @vendor/widgets/api.{ Token, display }
+                    pub fn main() { assert(display(Token::Token) == "cold token") }
+                "#},
+            ),
+        ] {
+            std::fs::write(root.join(path), source).unwrap();
+        }
+        assert!(!root.join("widgets/.alder").exists());
+        let compiled = super::build::compile_ephemeral(&root, BuildMode::Build)
+            .await
+            .unwrap();
+        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+            .await
+            .unwrap();
+        let exit = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            alder_runtime::execute(bundle, Vec::new()),
+        )
+        .await
+        .expect("cold dependency execution timed out")
+        .unwrap();
+        assert_eq!(exit, 0);
+        assert!(!root.join("widgets/.alder").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn cli_loads_a_path_dependency_package_instance_index() {
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
