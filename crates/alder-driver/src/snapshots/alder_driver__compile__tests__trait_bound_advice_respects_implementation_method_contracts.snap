@@ -1,0 +1,17 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Render[a] { fn render(value: a, extra: element) String }\nimpl Render[Number] {\n    fn render(value: Number, extra: element) String { show(extra) }\n}\n"
+---
+alder::trait::unsatisfied_bound
+
+  × the generic contract does not provide `Show[element]`
+   ╭─[/app/src/main.ald:3:55]
+ 2 │ impl Render[Number] {
+ 3 │     fn render(value: Number, extra: element) String { show(extra) }
+   ·                                                       ──┬─
+   ·                                                         ╰── this use requires a bound
+ 4 │ }
+   ╰────
+  help: this operation requires `Show[element]` in the generic contract; an
+        implementation method cannot require stronger bounds than its trait
+        method

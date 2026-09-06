@@ -4,7 +4,7 @@ description: "fn ambiguous() {\n    let equal = (left, right) -> { left == right
 ---
 alder::trait::ambiguous_type_variable
 
-  × cannot determine which type must implement `Eq[a]`
+  × cannot determine the types required by `Eq[a]`
    ╭─[/project/src/main.ald:2:41]
  1 │ fn ambiguous() {
  2 │     let equal = (left, right) -> { left == right }

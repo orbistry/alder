@@ -192,45 +192,45 @@ pub enum SolveError<'a> {
 pub enum SolveTraitError<'a> {
     MissingInstance {
         trait_: TraitId<'a>,
-        subject: &'a str,
+        args: Box<[alder_constrain::DiagnosticType]>,
         origin: Region,
-        chain: &'a [ObligationFrame<'a>],
+        chain: Box<[ObligationFrame<'a>]>,
     },
     AmbiguousInstance {
         trait_: TraitId<'a>,
-        subject: &'a str,
+        args: Box<[alder_constrain::DiagnosticType]>,
         origin: Region,
-        details: &'a AmbiguousInstanceDetails<'a>,
+        details: Box<AmbiguousInstanceDetails<'a>>,
     },
     UnsatisfiedBound {
         trait_: TraitId<'a>,
-        subject: &'a str,
+        args: Box<[alder_constrain::DiagnosticType]>,
         origin: Region,
-        chain: &'a [ObligationFrame<'a>],
+        chain: Box<[ObligationFrame<'a>]>,
     },
     AmbiguousTypeVariable {
         trait_: TraitId<'a>,
-        subject: &'a str,
+        args: Box<[alder_constrain::DiagnosticType]>,
         origin: Region,
-        chain: &'a [ObligationFrame<'a>],
+        chain: Box<[ObligationFrame<'a>]>,
     },
     InstanceCycle {
         trait_: TraitId<'a>,
-        subject: &'a str,
+        args: Box<[alder_constrain::DiagnosticType]>,
         origin: Region,
-        chain: &'a [ObligationFrame<'a>],
+        chain: Box<[ObligationFrame<'a>]>,
     },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct AmbiguousInstanceDetails<'a> {
-    pub candidates: &'a [ImplId<'a>],
-    pub chain: &'a [ObligationFrame<'a>],
+    pub candidates: Box<[ImplId<'a>]>,
+    pub chain: Box<[ObligationFrame<'a>]>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct ObligationFrame<'a> {
     pub trait_: TraitId<'a>,
-    pub subject: &'a str,
+    pub args: Box<[alder_constrain::DiagnosticType]>,
     pub required_by: Option<ImplId<'a>>,
 }

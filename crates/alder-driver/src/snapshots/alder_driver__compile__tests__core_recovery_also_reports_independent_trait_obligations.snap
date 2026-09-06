@@ -12,8 +12,9 @@ alder::trait::missing_instance
    ·                                   ╰── this use needs trait evidence
  3 │ fn core() Number { true }
    ╰────
-  help: define an implementation of `Needed[String]`, or use a type that
-        already has one
+  help: check the operand type and the implementations available for
+        `Needed[String]`; a new implementation must satisfy Alder's
+        implementation-head and ownership rules
 alder::type::type_mismatch
 
   × type mismatch: expected `Number`, found `Bool`
@@ -34,5 +35,6 @@ alder::trait::missing_instance
    ·                             ────────┬───────
    ·                                     ╰── this use needs trait evidence
    ╰────
-  help: define an implementation of `Needed[Number]`, or use a type that
-        already has one
+  help: check the operand type and the implementations available for
+        `Needed[Number]`; a new implementation must satisfy Alder's
+        implementation-head and ownership rules

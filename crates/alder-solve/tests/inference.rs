@@ -6991,8 +6991,8 @@ fn implementation_must_supply_each_superclass_dictionary() {
     assert!(errors.iter().any(|error| matches!(
         error,
         alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
-            trait_, subject, ..
-        }) if trait_.0.name == "Equal" && *subject == "Number"
+            trait_, args, ..
+        }) if trait_.0.name == "Equal" && matches!(args.as_ref(), [alder_constrain::DiagnosticType::Named(name)] if name == "Number")
     )));
 }
 
@@ -7091,8 +7091,8 @@ fn missing_trait_instance_is_structured() {
     assert!(matches!(
         &errors[0],
         alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
-            trait_, subject, ..
-        }) if trait_.0.name == "Show" && *subject == "String"
+            trait_, args, ..
+        }) if trait_.0.name == "Show" && matches!(args.as_ref(), [alder_constrain::DiagnosticType::Named(name)] if name == "String")
     ));
 }
 
@@ -7602,9 +7602,9 @@ fn trait_errors_preserve_structured_missing_evidence() {
         error,
         alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
             trait_,
-            subject: "Number",
+            args,
             ..
-        }) if trait_.0.name == "Display"
+        }) if trait_.0.name == "Display" && matches!(args.as_ref(), [alder_constrain::DiagnosticType::Named(name)] if name == "Number")
     )));
     assert!(errors.iter().any(|error| matches!(
         error,
@@ -7633,16 +7633,16 @@ fn nested_instance_failure_retains_the_obligation_chain() {
             alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
                 chain,
                 ..
-            }) => Some(*chain),
+            }) => Some(chain.as_ref()),
             _ => None,
         })
         .expect("the nested missing instance is retained");
     assert_eq!(chain.len(), 2);
     assert_eq!(chain[0].trait_.0.name, "Show");
-    assert_eq!(chain[0].subject, "Array[fn(Number) Number]");
+    assert_eq!(chain[0].args[0].to_string(), "Array[fn(Number) Number]");
     assert!(chain[0].required_by.is_none());
     assert_eq!(chain[1].trait_.0.name, "Show");
-    assert_eq!(chain[1].subject, "fn(Number) Number");
+    assert_eq!(chain[1].args[0].to_string(), "fn(Number) Number");
     assert!(chain[1].required_by.is_some());
 }
 
@@ -7691,8 +7691,8 @@ fn builtin_containers_require_equality_for_every_type_argument() {
     assert!(errors.iter().any(|error| matches!(
         error,
         alder_solve::SolveError::Trait(alder_solve::SolveTraitError::MissingInstance {
-            trait_, subject, ..
-        }) if trait_.0.name == "Eq" && subject.starts_with("fn(")
+            trait_, args, ..
+        }) if trait_.0.name == "Eq" && matches!(args.as_ref(), [alder_constrain::DiagnosticType::Function(..)])
     )));
 }
 

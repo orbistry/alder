@@ -16,7 +16,11 @@ description: "trait Display[a] { fn display(value: a) String }\ntrait Hashable[a
                     name: "Hashable",
                 },
             ),
-            subject: "a",
+            args: [
+                NamedVariable(
+                    "a",
+                ),
+            ],
             origin: Region {
                 start: Position {
                     line: 4,
@@ -40,7 +44,11 @@ description: "trait Display[a] { fn display(value: a) String }\ntrait Hashable[a
                             name: "Hashable",
                         },
                     ),
-                    subject: "a",
+                    args: [
+                        NamedVariable(
+                            "a",
+                        ),
+                    ],
                     required_by: None,
                 },
             ],
@@ -59,7 +67,11 @@ description: "trait Display[a] { fn display(value: a) String }\ntrait Hashable[a
                     name: "Display",
                 },
             ),
-            subject: "a",
+            args: [
+                NamedVariable(
+                    "a",
+                ),
+            ],
             origin: Region {
                 start: Position {
                     line: 5,
@@ -83,7 +95,11 @@ description: "trait Display[a] { fn display(value: a) String }\ntrait Hashable[a
                             name: "Display",
                         },
                     ),
-                    subject: "a",
+                    args: [
+                        NamedVariable(
+                            "a",
+                        ),
+                    ],
                     required_by: None,
                 },
             ],

@@ -33,8 +33,8 @@ remaining work as follows; a passing test gate does not close the open reviews.
 | Independent errors and safe recovery | Fresh retries in `infer_recovering`; `independent_type_errors_accumulate_without_publishing`, partial-shared-state and recursive-group tests; implementation/default/generic-method recovery snapshots | Non-callable metadata failures still stop; expression-level recovery within a failed callable is not implemented |
 | Dependent suppression and publication | Callable resolved-dependency traversal; cross-module re-export/invalid-impl publication tests; Check/Build/Test output gates | Final audit of all remaining metadata stop cases |
 | Context and source spans | `mismatch_explains_expectations_at_the_source`, innermost-context, return/lambda/async, optional argument and alias-return-origin tests | Deferred record/error-row paths and specialized errors still need a complete provenance audit |
-| Type comparisons | Structured records, functions, tuples, applications, dense variables, named generic restrictions; nominal import/re-export localization; expanded aliases retain source annotation labels; specialized core errors retain structured types | Trait fields still stored as strings require review; compact reconstruction of source synonyms is not implemented |
-| Actionable explanations | Field typo/difference, arity, infinite-equation and generic-restriction source snapshots | Remaining specialized trait advice must be checked against implementation/bound rules |
+| Type comparisons | Structured records, functions, tuples, applications, dense variables, named generic restrictions; nominal import/re-export localization; expanded aliases retain source annotation labels; specialized core errors and complete trait goals retain structured types | Final cross-context review; compact reconstruction of source synonyms is not implemented |
+| Actionable explanations | Field typo/difference, arity, infinite-equation and generic-restriction source snapshots; trait hints respect function equality, implementation ownership and method contracts | Final review of remaining specialized core hints and expectation provenance |
 | Generated warnings | Actual canonical binding/import analysis; shadowing, alternatives, pins, exports, initializer effects and module-root tests | No blanket missing-annotation warning has been adopted; inferred-signature suggestions assessed separately |
 | CLI/editor delivery | Six subprocess tests in `crates/alder-cli/tests/diagnostics.rs`: warnings, dependency cascades, ordering, unsaved edits, stale versions, UTF-16, saved dependencies and clearing | Re-run with final tree |
 | Pattern diagnostics | Active `check_error_matches` handles Result error rows; ordinary refutable matches remain accepted | General coverage/redundancy policy requested, not resolved; no new acceptance rule or blanket warning may be inferred from Elm |
@@ -729,3 +729,63 @@ standalone suite compiled, bundled and executed the extended records fixture.
 Strict all-target/all-feature Clippy, formatting and diff checks passed. Package
 verification remains to be refreshed after this and the preceding core-type
 change.
+
+## Structured trait diagnostics and contract-aware hints checkpoint
+
+`trait_diagnostics_preserve_record_shapes_and_all_imported_arguments` reproduced
+`Show[{ .. }]` for a record whose fields matter to the missing capability. Trait
+errors also dropped every argument after the first, and imported names were
+flattened before reporting. They now retain owned structured argument slices,
+including all arguments of multi-parameter traits. The root error and its
+complete obligation chain are localized together using resolved identities.
+The test covers a nested Array/record with an imported nominal type and a renamed
+two-parameter trait, with valid source controls and no failed-build publication.
+
+Snapshot review and follow-up regressions caught two naming problems. Declared
+names needed to follow final unification representatives (`element` had become
+`a`); fresh names needed to follow structural appearance instead of solver ID
+order and ignore unrelated declarations. A root-goal map now preserves the same
+`fn(a, b) a` relationship through Array and leaf obligations. Existing recursive
+generic-bound source snapshots continue to use their declared `a`.
+
+The method-contract regression reproduced a misleading ambiguous-operand error
+for the universal `element`. Checked method universals now join the set used to
+classify unresolved evidence as a missing contract, without introducing any new
+scheme quantification or dictionary authority. Adding a stronger implementation
+bound remains rejected; adding the requirement to the trait declaration is the
+positive control. Function Eq failures no longer suggest defining Eq for a
+function. Other missing-instance advice is conditional on implementation-head
+and ownership rules; ambiguous-instance rendering no longer promises that an
+annotation can choose between implementations of one concrete goal. The latter
+is defensive renderer coverage, not a claim that source coherence admits overlap.
+
+The source tests are `trait_diagnostics_keep_distinct_inferred_variables`,
+`trait_diagnostics_preserve_declared_generic_names_after_unification`,
+`trait_bound_advice_respects_implementation_method_contracts`, and the imported
+argument test above; the nested-record equality regression now also checks the
+full chain and function-specific hint. Owned diagnostics are not allocated as
+non-dropping arena payloads. Semantic cycle detection remains separate and still
+compares complete predicates. No acceptance or trait-evidence rule was relaxed.
+
+Validation: formatting and strict all-target/all-feature Clippy passed. The full
+workspace snapshot/reference command passed (247 driver tests, 15 solver unit
+tests, 467 inference integration tests, six CLI subprocess tests and all other
+suites; two existing ignored doctests), with no pending or unreferenced snapshots.
+Four new source snapshots and the changed renderer/structured-solver snapshots
+were reviewed.
+
+Fresh extracted-archive verification passed for all 17 publishable crates with
+`cargo package --workspace --exclude stub --offline --allow-dirty --target-dir
+/tmp/alder-trait-diagnostic-package.rgNVx6`. This refresh also covers the preceding
+specialized-core and trait-cycle changes. The packaged CLI, outside the checkout,
+reported three missing-instance errors and one missing method-contract error in
+both Check and Build, exited 1, retained complete imported arguments and record
+chains, and emitted no ANSI escapes under `NO_COLOR=1`. The failed fixture retained
+only its source files and configuration. A positive packaged Run executed nested
+record equality/inequality, Array/Option nesting and permitted method-bound
+dictionary passing, exiting 0. An initial smoke assertion incorrectly expected
+`show(String)` to omit quotes; kernel/source inspection identified the fixture
+mistake, and a numeric Show control passed without compiler changes.
+
+This is local-host checkpoint evidence, not a claim that the remaining provenance,
+metadata-recovery or pattern-policy audit is complete.

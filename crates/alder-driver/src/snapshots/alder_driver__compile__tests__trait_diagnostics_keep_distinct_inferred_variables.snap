@@ -1,0 +1,21 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn identity(value: a) a { value }\npub fn inspect_unknown() {\n    let callback = (left, right) -> left\n    show([callback])\n    ()\n}\n"
+---
+alder::trait::missing_instance
+
+  × no implementation of `Show[fn(a, b) a]` was found
+   ╭─[/app/src/main.ald:4:5]
+ 3 │     let callback = (left, right) -> left
+ 4 │     show([callback])
+   ·     ──┬─
+   ·       ╰── this use needs trait evidence
+ 5 │     ()
+   ╰────
+  help: check the operand type and the implementations available for
+        `Show[fn(a, b) a]`; a new implementation must satisfy Alder's
+        implementation-head and ownership rules
+        
+        obligation chain:
+          Show[Array[fn(a, b) a]]
+          -> Show[fn(a, b) a], required by a standard-library implementation

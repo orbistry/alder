@@ -75,6 +75,7 @@ fn resolve_obligations<'a>(
     let mut errors = Vec::new();
     for obligation in result.obligations {
         let mut stack = Vec::new();
+        let diagnostic_names = diagnostic_variable_names(&obligation.predicate, &variable_names);
         match resolve_predicate(
             bump,
             database,
@@ -83,7 +84,7 @@ fn resolve_obligations<'a>(
             obligation.region,
             &mut stack,
             ResolutionStep {
-                variable_names: &variable_names,
+                diagnostic_names: &diagnostic_names,
                 generalized_variables: &generalized_variables,
                 required_by: None,
             },
@@ -304,6 +305,7 @@ fn resolve_derived_variant_fields<'a>(
             })
             .collect::<BTreeMap<_, _>>();
         let generalized_variables = variable_names.keys().copied().collect();
+        let diagnostic_names = diagnostic_variable_names(&predicate, &variable_names);
         match resolve_predicate(
             bump,
             database,
@@ -312,7 +314,7 @@ fn resolve_derived_variant_fields<'a>(
             typ.region,
             &mut stack,
             ResolutionStep {
-                variable_names: &variable_names,
+                diagnostic_names: &diagnostic_names,
                 generalized_variables: &generalized_variables,
                 required_by: None,
             },
@@ -334,7 +336,7 @@ fn resolve_derived_variant_fields<'a>(
 
 #[derive(Clone, Copy)]
 struct ResolutionStep<'a, 'names> {
-    variable_names: &'names BTreeMap<usize, &'a str>,
+    diagnostic_names: &'names BTreeMap<usize, String>,
     generalized_variables: &'names BTreeSet<usize>,
     required_by: Option<ImplId<'a>>,
 }
@@ -357,7 +359,11 @@ fn resolve_predicate<'a>(
     step: ResolutionStep<'a, '_>,
 ) -> Result<Evidence<'a>, SolveTraitError<'a>> {
     let subject = predicate.args.first().cloned().unwrap_or(Ty::Unit);
-    let rendered = render_ty(&subject, step.variable_names);
+    let args = predicate
+        .args
+        .iter()
+        .map(|typ| diagnostic_resolved_type(typ, step.diagnostic_names))
+        .collect::<Box<[_]>>();
     if let Some(given) = givens.iter().find(|given| {
         given.predicate.trait_ == predicate.trait_ && given.predicate.args == predicate.args
     }) {
@@ -368,18 +374,18 @@ fn resolve_predicate<'a>(
     }) {
         let current = crate::ObligationFrame {
             trait_: predicate.trait_,
-            subject: bump.alloc_str(&rendered),
+            args: args.clone(),
             required_by: step.required_by,
         };
         let mut cycle = stack[cycle_start..]
             .iter()
-            .map(|frame| frame.diagnostic)
+            .map(|frame| frame.diagnostic.clone())
             .collect::<Vec<_>>();
         cycle.push(current);
-        let chain = bump.alloc_slice_copy(&cycle);
+        let chain = cycle.into_boxed_slice();
         return Err(SolveTraitError::InstanceCycle {
             trait_: predicate.trait_,
-            subject: bump.alloc_str(&rendered),
+            args,
             origin,
             chain,
         });
@@ -388,7 +394,7 @@ fn resolve_predicate<'a>(
         predicate: predicate.clone(),
         diagnostic: crate::ObligationFrame {
             trait_: predicate.trait_,
-            subject: bump.alloc_str(&rendered),
+            args: args.clone(),
             required_by: step.required_by,
         },
     });
@@ -465,17 +471,16 @@ fn resolve_predicate<'a>(
             successes.push((impl_id, evidence));
         }
     }
-    let chain = bump.alloc_slice_fill_iter(stack.iter().map(|frame| frame.diagnostic));
+    let chain = stack.iter().map(|frame| frame.diagnostic.clone()).collect();
     stack.pop();
     match successes.len() {
         1 => Ok(successes.pop().expect("one success").1),
         count if count > 1 => Err(SolveTraitError::AmbiguousInstance {
             trait_: predicate.trait_,
-            subject: bump.alloc_str(&rendered),
+            args,
             origin,
-            details: bump.alloc(crate::AmbiguousInstanceDetails {
-                candidates: bump
-                    .alloc_slice_fill_iter(successes.into_iter().map(|(impl_id, _)| impl_id)),
+            details: Box::new(crate::AmbiguousInstanceDetails {
+                candidates: successes.into_iter().map(|(impl_id, _)| impl_id).collect(),
                 chain,
             }),
         }),
@@ -489,14 +494,14 @@ fn resolve_predicate<'a>(
             {
                 Err(SolveTraitError::UnsatisfiedBound {
                     trait_: predicate.trait_,
-                    subject: bump.alloc_str(&rendered),
+                    args,
                     origin,
                     chain,
                 })
             } else {
                 Err(SolveTraitError::AmbiguousTypeVariable {
                     trait_: predicate.trait_,
-                    subject: bump.alloc_str(&rendered),
+                    args,
                     origin,
                     chain,
                 })
@@ -504,7 +509,7 @@ fn resolve_predicate<'a>(
         }
         _ => Err(SolveTraitError::MissingInstance {
             trait_: predicate.trait_,
-            subject: bump.alloc_str(&rendered),
+            args,
             origin,
             chain,
         }),
@@ -930,10 +935,10 @@ fn has_variable_head(typ: &Ty<'_>) -> bool {
     }
 }
 
-fn collect_variables(typ: &Ty<'_>, variables: &mut BTreeSet<usize>) {
+fn collect_variables(typ: &Ty<'_>, variables: &mut impl Extend<usize>) {
     match typ {
         Ty::Var(variable) => {
-            variables.insert(*variable);
+            variables.extend([*variable]);
         }
         Ty::App(head, arguments) => {
             collect_variables(head, variables);
@@ -982,91 +987,119 @@ fn collect_variables(typ: &Ty<'_>, variables: &mut BTreeSet<usize>) {
     }
 }
 
-fn render_ty(typ: &Ty<'_>, variable_names: &BTreeMap<usize, &str>) -> String {
+/// One naming map per root goal keeps unknown variables distinct and preserves
+/// their names as resolution descends into container prerequisites. Fresh names
+/// follow structural appearance order, not solver allocation order.
+fn diagnostic_variable_names(
+    predicate: &Predicate<'_>,
+    declared: &BTreeMap<usize, &str>,
+) -> BTreeMap<usize, String> {
+    let mut variables = Vec::new();
+    for typ in &predicate.args {
+        collect_variables(typ, &mut variables);
+    }
+    let mut reserved = variables
+        .iter()
+        .filter_map(|id| declared.get(id).map(|name| (*name).to_owned()))
+        .collect::<BTreeSet<_>>();
+    let mut next = 0;
+    let mut seen = BTreeSet::new();
+    variables
+        .into_iter()
+        .filter(|id| seen.insert(*id))
+        .map(|id| {
+            let name = if let Some(name) = declared.get(&id) {
+                (*name).to_owned()
+            } else {
+                loop {
+                    let candidate = if next < 26 {
+                        ((b'a' + next as u8) as char).to_string()
+                    } else {
+                        format!("t{next}")
+                    };
+                    next += 1;
+                    if reserved.insert(candidate.clone()) {
+                        break candidate;
+                    }
+                }
+            };
+            (id, name)
+        })
+        .collect()
+}
+
+/// Obligation arguments have already been normalized before search. Preserve
+/// their structure here; reporting, not inference, chooses visible type names.
+fn diagnostic_resolved_type(typ: &Ty<'_>, names: &BTreeMap<usize, String>) -> DiagnosticType {
+    use DiagnosticType as D;
     match typ {
-        Ty::Var(id) => variable_names.get(id).copied().unwrap_or("a").to_owned(),
-        Ty::Con(name) => name.name.to_owned(),
-        Ty::App(head, args) => format!(
-            "{}[{}]",
-            render_ty(head, variable_names),
+        Ty::Var(id) => names.get(id).cloned().map_or(D::Hole, D::NamedVariable),
+        Ty::Con(name) => Infer::diagnostic_named_type(*name),
+        Ty::App(head, args) => D::Application(
+            Box::new(diagnostic_resolved_type(head, names)),
             args.iter()
-                .map(|arg| render_ty(arg, variable_names))
-                .collect::<Vec<_>>()
-                .join(", ")
+                .map(|arg| diagnostic_resolved_type(arg, names))
+                .collect(),
         ),
-        Ty::Partial(name, slots) => format!(
-            "{}[{}]",
-            name.name,
+        Ty::Partial(name, slots) => D::Application(
+            Box::new(Infer::diagnostic_named_type(*name)),
             slots
                 .iter()
                 .map(|slot| match slot {
-                    TySlot::Hole(_) => "_".to_owned(),
-                    TySlot::Fixed(typ) => render_ty(typ, variable_names),
+                    TySlot::Hole(_) => D::Hole,
+                    TySlot::Fixed(typ) => diagnostic_resolved_type(typ, names),
                 })
-                .collect::<Vec<_>>()
-                .join(", ")
+                .collect(),
         ),
-        Ty::Projection(trait_, args, assoc) => format!(
-            "{}[{}]::{}",
-            trait_.0.name,
-            args.iter()
-                .map(|arg| render_ty(arg, variable_names))
-                .collect::<Vec<_>>()
-                .join(", "),
-            assoc.name
+        Ty::Projection(trait_, args, assoc) => D::Projection(
+            Box::new(D::Application(
+                Box::new(Infer::diagnostic_named_type(trait_.0)),
+                args.iter()
+                    .map(|arg| diagnostic_resolved_type(arg, names))
+                    .collect(),
+            )),
+            assoc.name.to_owned(),
         ),
-        Ty::Fn(params, ret) => format!(
-            "fn({}) {}",
+        Ty::Fn(params, ret) => D::Function(
             params
                 .iter()
-                .map(|param| render_ty(param, variable_names))
-                .collect::<Vec<_>>()
-                .join(", "),
-            render_ty(ret, variable_names)
+                .map(|param| diagnostic_resolved_type(param, names))
+                .collect(),
+            Box::new(diagnostic_resolved_type(ret, names)),
         ),
-        Ty::Unit => "()".to_owned(),
-        Ty::Tuple(items) => format!(
-            "({})",
+        Ty::Unit => D::Unit,
+        Ty::Tuple(items) => D::Tuple(
             items
                 .iter()
-                .map(|item| render_ty(item, variable_names))
-                .collect::<Vec<_>>()
-                .join(", ")
+                .map(|item| diagnostic_resolved_type(item, names))
+                .collect(),
         ),
-        Ty::Record(_, _) | Ty::RecordRow(_) => "{ .. }".to_owned(),
-        Ty::ErrorRow { tags, tail } => {
-            render_error_row(tags, tail.as_deref(), |typ| render_ty(typ, variable_names))
-        }
-        Ty::Any => "_".to_owned(),
+        Ty::RecordRow(row) => diagnostic_resolved_type(row, names),
+        Ty::Record(fields, tail) => D::Record(
+            fields
+                .iter()
+                .map(|(name, typ)| ((*name).to_owned(), diagnostic_resolved_type(typ, names)))
+                .collect(),
+            tail.as_ref()
+                .map(|tail| Box::new(diagnostic_resolved_type(tail, names))),
+        ),
+        Ty::ErrorRow { tags, tail } => D::ErrorRow(
+            tags.iter()
+                .map(|(name, payloads)| {
+                    (
+                        (*name).to_owned(),
+                        payloads
+                            .iter()
+                            .map(|typ| diagnostic_resolved_type(typ, names))
+                            .collect(),
+                    )
+                })
+                .collect(),
+            tail.as_ref()
+                .map(|tail| Box::new(diagnostic_resolved_type(tail, names))),
+        ),
+        Ty::Any => D::Hole,
     }
-}
-
-fn render_error_row<'a>(
-    tags: &BTreeMap<&str, Vec<Ty<'a>>>,
-    tail: Option<&Ty<'a>>,
-    mut render_type: impl FnMut(&Ty<'a>) -> String,
-) -> String {
-    let mut parts = tags
-        .iter()
-        .map(|(name, payloads)| {
-            if payloads.is_empty() {
-                format!(":{name}")
-            } else {
-                format!(
-                    ":{name}({})",
-                    payloads
-                        .iter()
-                        .map(&mut render_type)
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-        })
-        .collect::<Vec<_>>();
-    if tail.is_some() {
-        parts.push("_".to_owned());
-    }
-    format!("[{}]", parts.join(" | "))
 }
 
 #[derive(Clone, Debug)]
@@ -1892,6 +1925,22 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
             }
         }
+        // Obligations refer to final representatives, so declaration spellings
+        // must follow the same links. Keeping the old IDs loses names when a
+        // call unifies a signature variable with its instantiated operand.
+        let mut variable_names = BTreeMap::new();
+        for (id, name) in std::mem::take(&mut self.variable_names) {
+            if let Ty::Var(id) = self.prune(Ty::Var(id)) {
+                variable_names.entry(id).or_insert(name);
+            }
+        }
+        let generalized_variables = std::mem::take(&mut self.generalized_variables)
+            .into_iter()
+            .filter_map(|id| match self.prune(Ty::Var(id)) {
+                Ty::Var(id) => Some(id),
+                _ => None,
+            })
+            .collect();
         Ok(InferenceResult {
             option_tries: std::mem::take(&mut self.option_tries),
             omitted_arguments: std::mem::take(&mut self.omitted_arguments),
@@ -1902,8 +1951,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             bindings,
             obligations,
             calls: std::mem::take(&mut self.calls),
-            variable_names: std::mem::take(&mut self.variable_names),
-            generalized_variables: std::mem::take(&mut self.generalized_variables),
+            variable_names,
+            generalized_variables,
         })
     }
 
@@ -6239,6 +6288,11 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             self.check_universal_error_row_inclusions(&representatives)?;
         }
+        // This set only classifies unresolved evidence diagnostics. Method
+        // universals are checked contracts too, even though their bodies do
+        // not go through ordinary value-scheme generalization. An annotation
+        // cannot fix one to a concrete operand type.
+        self.generalized_variables.extend(universals.into_keys());
         Ok(())
     }
 
@@ -8327,7 +8381,7 @@ fn instance_cycle_guard_compares_all_arguments_and_nominal_identities() {
     let names = BTreeMap::new();
     let generalized = BTreeSet::new();
     let step = ResolutionStep {
-        variable_names: &names,
+        diagnostic_names: &names,
         generalized_variables: &generalized,
         required_by: None,
     };
@@ -8339,7 +8393,11 @@ fn instance_cycle_guard_compares_all_arguments_and_nominal_identities() {
         predicate: active.clone(),
         diagnostic: crate::ObligationFrame {
             trait_: trait_.id,
-            subject: "Token",
+            args: active
+                .args
+                .iter()
+                .map(|typ| diagnostic_resolved_type(typ, &names))
+                .collect(),
             required_by: None,
         },
     }];

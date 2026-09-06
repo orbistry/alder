@@ -1,6 +1,6 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "trait Display[a] {\n    fn display(value: a) -> String\n}\n\nfn main() {\n    display(1)\n}\n"
+description: "trait Display[a] {\n    fn display(value: a) String\n}\n\nfn main() {\n    display(1)\n}\n"
 ---
 alder::trait::missing_instance
 
@@ -12,5 +12,6 @@ alder::trait::missing_instance
    ·        ╰── this use needs trait evidence
  7 │ }
    ╰────
-  help: define an implementation of `Display[Number]`, or use a type that
-        already has one
+  help: check the operand type and the implementations available for
+        `Display[Number]`; a new implementation must satisfy Alder's
+        implementation-head and ownership rules

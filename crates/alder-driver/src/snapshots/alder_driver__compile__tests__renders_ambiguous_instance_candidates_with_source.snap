@@ -21,7 +21,9 @@ alder::trait::ambiguous_instance
     ·     ────────────┬───────────
     ·                 ╰── the implementation cannot be selected here
     ╰────
-  help: add a type annotation that selects one implementation; candidates:
+  help: the matching implementations must be made unambiguous; a type
+        annotation cannot choose between implementations of the same concrete
+        goal. Candidates:
           1. a source implementation in `main`
           2. a source implementation in `main`
           3. a source implementation in `example/dependency/display` (source

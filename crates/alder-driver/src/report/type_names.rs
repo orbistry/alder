@@ -9,17 +9,31 @@ use alder_constrain::{
 /// including identities reached through re-exported interfaces.
 pub(super) fn localize(module: &Module<'_>, interfaces: &[Interface<'_>], error: &Error) -> Error {
     let mut error = error.clone();
+    localize_types(module, interfaces, core_types(&mut error));
+    error
+}
+
+/// Localize an entire comparison or obligation chain together so collisions
+/// are resolved consistently in every part of one diagnostic.
+pub(super) fn localize_types<'t>(
+    module: &Module<'_>,
+    interfaces: &[Interface<'_>],
+    types: impl IntoIterator<Item = &'t mut DiagnosticType>,
+) {
+    let mut types = types.into_iter().collect::<Vec<_>>();
     let mut references = BTreeSet::new();
     let mut builtins = BTreeSet::new();
-    visit_types(&mut error, &mut |typ| match typ {
-        DiagnosticType::NamedReference(reference) => {
-            references.insert(reference.clone());
-        }
-        DiagnosticType::Named(name) => {
-            builtins.insert(name.clone());
-        }
-        _ => {}
-    });
+    for typ in &mut types {
+        typ.visit_mut(&mut |typ| match typ {
+            DiagnosticType::NamedReference(reference) => {
+                references.insert(reference.clone());
+            }
+            DiagnosticType::Named(name) => {
+                builtins.insert(name.clone());
+            }
+            _ => {}
+        });
+    }
     let mut names = references
         .into_iter()
         .map(|reference| {
@@ -37,40 +51,32 @@ pub(super) fn localize(module: &Module<'_>, interfaces: &[Interface<'_>], error:
             *name = origin_name(reference);
         }
     }
-    visit_types(&mut error, &mut |typ| {
-        if let DiagnosticType::NamedReference(reference) = typ {
-            *typ = DiagnosticType::Named(names[reference].clone());
-        }
-    });
-    error
+    for typ in types {
+        typ.visit_mut(&mut |typ| {
+            if let DiagnosticType::NamedReference(reference) = typ {
+                *typ = DiagnosticType::Named(names[reference].clone());
+            }
+        });
+    }
 }
 
-fn visit_types(error: &mut Error, visit: &mut impl FnMut(&mut DiagnosticType)) {
+fn core_types(error: &mut Error) -> Vec<&mut DiagnosticType> {
     match &mut error.kind {
         ErrorKind::Mismatch { actual, expected }
-        | ErrorKind::RecordFieldsMismatch { actual, expected } => {
-            actual.visit_mut(visit);
-            expected.visit_mut(visit);
-        }
+        | ErrorKind::RecordFieldsMismatch { actual, expected } => vec![actual, expected],
         ErrorKind::AssocTypeMismatch {
             actual, expected, ..
-        } => {
-            actual.visit_mut(visit);
-            expected.visit_mut(visit);
-        }
+        } => vec![actual, expected],
         ErrorKind::InvalidResultErrorType { actual: typ }
-        | ErrorKind::MissingReturn { expected: typ } => typ.visit_mut(visit),
+        | ErrorKind::MissingReturn { expected: typ } => vec![typ],
         ErrorKind::InfiniteType {
             equation: Some(equation),
-        } => {
-            equation.0.visit_mut(visit);
-            equation.1.visit_mut(visit);
-        }
+        } => vec![&mut equation.0, &mut equation.1],
         ErrorKind::GenericSpecialization {
             restriction: GenericRestriction::Type(typ),
             ..
-        } => typ.visit_mut(visit),
-        _ => {}
+        } => vec![typ],
+        _ => vec![],
     }
 }
 

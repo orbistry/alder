@@ -11,5 +11,6 @@ alder::trait::missing_instance
    ·                        ────┬───
    ·                            ╰── this use needs trait evidence
    ╰────
-  help: define an implementation of `Show[fn(Number) Number]`, or use a type
-        that already has one
+  help: check the operand type and the implementations available for
+        `Show[fn(Number) Number]`; a new implementation must satisfy Alder's
+        implementation-head and ownership rules

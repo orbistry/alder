@@ -238,6 +238,10 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
   - [x] Recover independent implementation/default method bodies with fresh
     state, method-level dependency suppression, and no failed-build publication
 - [ ] Preserve structured expected/actual types and source expectation context
+  - [x] Retain ordinary and specialized core comparison types through reporting
+    with resolved nominal-name localization
+  - [x] Retain all trait arguments and obligation-chain types, preserving generic
+    names and respecting implementation contracts in diagnostic hints
 - [x] Generate actionable unused-import/binding warnings from source
   - [x] Warn on unused resolved locals and parameters, respecting shared pattern
     bindings, shadowing, captures, wildcard discards, and writes

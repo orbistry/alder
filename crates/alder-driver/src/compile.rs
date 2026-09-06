@@ -1222,6 +1222,202 @@ mod tests {
     }
 
     #[test]
+    fn trait_diagnostics_keep_distinct_inferred_variables() {
+        let source = indoc::indoc! {r#"
+            fn identity(value: a) a { value }
+            pub fn inspect_unknown() {
+                let callback = (left, right) -> left
+                show([callback])
+                ()
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("the callback has no Show implementation")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "no implementation of `Show[fn(a, b) a]` was found"
+        );
+        let help = miette::Diagnostic::help(&diagnostics[0])
+            .unwrap()
+            .to_string();
+        assert!(help.contains("Show[Array[fn(a, b) a]]"));
+        assert!(help.contains("-> Show[fn(a, b) a]"));
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let result = build_fixture_sync(
+            vec![(
+                uri.clone(),
+                Ok(source.replace("show([callback])", "show([42])")),
+            )],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn trait_bound_advice_respects_implementation_method_contracts() {
+        let source = indoc::indoc! {r#"
+            trait Render[a] { fn render(value: a, extra: element) String }
+            impl Render[Number] {
+                fn render(value: Number, extra: element) String { show(extra) }
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        for input in [
+            source.to_owned(),
+            source.replace(
+                "fn render(value: Number, extra: element) String",
+                "fn render(value: Number, extra: element) String where element: Show",
+            ),
+        ] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(input.clone()))],
+                BuildMode::Check,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("an implementation cannot add the missing trait-method requirement")
+            };
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.message() == "the generic contract does not provide `Show[element]`"
+                        && miette::Diagnostic::help(diagnostic)
+                            .unwrap()
+                            .to_string()
+                            .contains("cannot require stronger bounds than its trait method")
+                }),
+                "{diagnostics:?}"
+            );
+            if input == source {
+                assert_rendered_diagnostics_snapshot!(source, diagnostics);
+            }
+        }
+        let valid = source.replace(
+            "fn render(value: a, extra: element) String",
+            "fn render(value: a, extra: element) String where element: Show",
+        );
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(valid))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn trait_diagnostics_preserve_declared_generic_names_after_unification() {
+        let source = indoc::indoc! {r#"
+            trait Display[a] { fn display(value: a) String }
+            pub fn render(value: element) String { display(value) }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("the generic function does not declare its required bound")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].message(),
+            "the generic contract does not provide `Display[element]`"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = source.replace(
+            "String { display(value) }",
+            "String where element: Display { display(value) }",
+        );
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(valid))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn trait_diagnostics_preserve_record_shapes_and_all_imported_arguments() {
+        let source = indoc::indoc! {r#"
+            import ~/types.{ Token as ImportedToken, Inspect as PairInspect, inspect }
+            pub fn record(value: Array[{ token: ImportedToken, callback: fn(Number) Number }]) String {
+                show(value)
+            }
+            pub fn pair(value: ImportedToken) Bool { inspect(value, 42) }
+        "#};
+        let types = indoc::indoc! {r#"
+            pub enum Token { Token }
+            pub trait Inspect[a, b] { fn inspect(first: a, second: b) Bool }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![
+                (uri.clone(), Ok(source.to_owned())),
+                (url("app/src/types.ald"), Ok(types.to_owned())),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("these uses have no matching trait implementations")
+        };
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "no implementation of `Show[{ callback: fn(Number) Number, token: ImportedToken }]` was found"
+        );
+        assert_eq!(
+            diagnostics[1].message(),
+            "no implementation of `PairInspect[ImportedToken, Number]` was found"
+        );
+        assert!(result.interfaces.is_empty());
+        assert!(result.artifacts.is_empty());
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = source.replace(
+            "Array[{ token: ImportedToken, callback: fn(Number) Number }]",
+            "Array[Number]",
+        );
+        let valid_types = format!(
+            "{types}\n{}",
+            indoc::indoc! {r#"
+            impl Inspect[Token, Number] {
+                fn inspect(first: Token, second: Number) Bool { second == 42 }
+            }
+        "#}
+        );
+        let result = build_fixture_sync(
+            vec![
+                (uri.clone(), Ok(valid)),
+                (url("app/src/types.ald"), Ok(valid_types)),
+            ],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+    }
+
+    #[test]
     fn nested_record_equality_does_not_form_a_display_name_cycle() {
         let source = indoc::indoc! {r#"
             pub fn same(left: { inner: { value: Number } }, right: { inner: { value: Number } }) Bool {
@@ -1258,6 +1454,12 @@ mod tests {
             diagnostics[0].message(),
             "no implementation of `Eq[fn(Number) Number]` was found"
         );
+        let help = miette::Diagnostic::help(&diagnostics[0])
+            .unwrap()
+            .to_string();
+        assert!(help.contains("functions cannot be compared for equality"));
+        assert!(!help.contains("define an implementation"));
+        assert!(help.contains("Eq[{ inner: { value: fn(Number) Number } }]"));
         assert!(result.interfaces.is_empty());
         assert!(result.artifacts.is_empty());
         assert_rendered_diagnostics_snapshot!(invalid, diagnostics);
@@ -5741,16 +5943,16 @@ mod tests {
         let error =
             alder_solve::SolveError::Trait(alder_solve::SolveTraitError::AmbiguousInstance {
                 trait_,
-                subject: "Number",
+                args: Box::new([alder_constrain::DiagnosticType::Named("Number".to_owned())]),
                 origin: canonical
                     .module
                     .items
                     .last()
                     .expect("fixture has a call")
                     .region,
-                details: bump.alloc(alder_solve::AmbiguousInstanceDetails {
-                    candidates: bump.alloc_slice_copy(&candidates),
-                    chain: &[],
+                details: Box::new(alder_solve::AmbiguousInstanceDetails {
+                    candidates: candidates.into_boxed_slice(),
+                    chain: Box::new([]),
                 }),
             });
         crate::report::solve(
@@ -5795,14 +5997,14 @@ mod tests {
             .region;
         let frame = alder_solve::ObligationFrame {
             trait_,
-            subject: "Number",
+            args: Box::new([alder_constrain::DiagnosticType::Named("Number".to_owned())]),
             required_by: None,
         };
         let error = alder_solve::SolveError::Trait(alder_solve::SolveTraitError::InstanceCycle {
             trait_,
-            subject: "Number",
+            args: frame.args.clone(),
             origin,
-            chain: bump.alloc_slice_copy(&[frame, frame]),
+            chain: Box::new([frame.clone(), frame]),
         });
         crate::report::solve(
             Source::new("/project/src/main.ald", source.to_owned()),

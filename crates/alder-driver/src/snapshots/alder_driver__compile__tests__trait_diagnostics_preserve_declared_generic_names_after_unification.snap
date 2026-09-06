@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Display[a] { fn display(value: a) String }\npub fn render(value: element) String { display(value) }\n"
+---
+alder::trait::unsatisfied_bound
+
+  × the generic contract does not provide `Display[element]`
+   ╭─[/app/src/main.ald:2:40]
+ 1 │ trait Display[a] { fn display(value: a) String }
+ 2 │ pub fn render(value: element) String { display(value) }
+   ·                                        ───┬───
+   ·                                           ╰── this use requires a bound
+   ╰────
+  help: this operation requires `Display[element]` in the generic contract;
+        an implementation method cannot require stronger bounds than its trait
+        method

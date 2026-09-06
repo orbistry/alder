@@ -14,7 +14,11 @@ description: "fn ambiguous() {\n    let equal = (left, right) -> { left == right
                     name: "Eq",
                 },
             ),
-            subject: "a",
+            args: [
+                NamedVariable(
+                    "a",
+                ),
+            ],
             origin: Region {
                 start: Position {
                     line: 2,
@@ -36,7 +40,11 @@ description: "fn ambiguous() {\n    let equal = (left, right) -> { left == right
                             name: "Eq",
                         },
                     ),
-                    subject: "a",
+                    args: [
+                        NamedVariable(
+                            "a",
+                        ),
+                    ],
                     required_by: None,
                 },
             ],

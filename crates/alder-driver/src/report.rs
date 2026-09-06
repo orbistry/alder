@@ -1244,7 +1244,7 @@ pub fn solve(
         SolveError::Core(error) => {
             constrain(source, &type_names::localize(module, interfaces, error))
         }
-        SolveError::Trait(error) => trait_error(source, module, error),
+        SolveError::Trait(error) => trait_error(source, module, interfaces, error),
         SolveError::Coherence(error) => coherence(source, module, error),
     }
 }
@@ -1596,41 +1596,85 @@ fn nearest_field<'a>(field: &str, available: &'a [String]) -> Option<&'a str> {
         .then_some(candidate)
 }
 
-fn trait_error(source: Source, module: &Module<'_>, error: &SolveTraitError<'_>) -> Diagnostic {
-    match error {
+fn trait_error(
+    source: Source,
+    module: &Module<'_>,
+    interfaces: &[alder_ast::Interface<'_>],
+    error: &SolveTraitError<'_>,
+) -> Diagnostic {
+    let (trait_, args, chain) = match error {
         SolveTraitError::MissingInstance {
             trait_,
-            subject,
-            origin,
+            args,
             chain,
+            ..
+        }
+        | SolveTraitError::UnsatisfiedBound {
+            trait_,
+            args,
+            chain,
+            ..
+        }
+        | SolveTraitError::AmbiguousTypeVariable {
+            trait_,
+            args,
+            chain,
+            ..
+        }
+        | SolveTraitError::InstanceCycle {
+            trait_,
+            args,
+            chain,
+            ..
+        } => (*trait_, args.as_ref(), chain.as_ref()),
+        SolveTraitError::AmbiguousInstance {
+            trait_,
+            args,
+            details,
+            ..
+        } => (*trait_, args.as_ref(), details.chain.as_ref()),
+    };
+    let mut goals = std::iter::once(trait_goal_type(trait_, args))
+        .chain(
+            chain
+                .iter()
+                .map(|frame| trait_goal_type(frame.trait_, &frame.args)),
+        )
+        .collect::<Vec<_>>();
+    type_names::localize_types(module, interfaces, goals.iter_mut());
+    let goal = &goals[0];
+    let chain_goals = &goals[1..];
+    match error {
+        SolveTraitError::MissingInstance {
+            origin,
+            ..
         } => Diagnostic::error(
             source,
-            format!(
-                "no implementation of `{}[{subject}]` was found",
-                trait_.0.name
-            ),
+            format!("no implementation of `{goal}` was found"),
         )
         .with_code("alder::trait::missing_instance")
         .with_primary_label(*origin, "this use needs trait evidence")
         .with_help(with_obligation_chain(
-            format!(
-                "define an implementation of `{}[{subject}]`, or use a type that already has one",
-                trait_.0.name
-            ),
+            if trait_ == alder_solve::builtin_trait_id("Eq")
+                && matches!(args, [alder_constrain::DiagnosticType::Function(..)])
+            {
+                "functions cannot be compared for equality; compare the data that represents what you need to distinguish instead".to_owned()
+            } else {
+                format!("check the operand type and the implementations available for `{goal}`; a new implementation must satisfy Alder's implementation-head and ownership rules")
+            },
             chain,
+            chain_goals,
         )),
         SolveTraitError::AmbiguousInstance {
-            trait_,
-            subject,
             origin,
             details,
+            ..
         } => {
-            let candidates = details.candidates;
+            let candidates = &details.candidates;
             let mut diagnostic = Diagnostic::error(
                 source,
                 format!(
-                    "multiple implementations of `{}[{subject}]` match ({} candidates)",
-                    trait_.0.name,
+                    "multiple implementations of `{goal}` match ({} candidates)",
                     candidates.len()
                 ),
             )
@@ -1663,39 +1707,35 @@ fn trait_error(source: Source, module: &Module<'_>, error: &SolveTraitError<'_>)
                 .join("\n");
             diagnostic.with_help(with_obligation_chain(
                 format!(
-                    "add a type annotation that selects one implementation; candidates:\n{candidates}"
+                    "the matching implementations must be made unambiguous; a type annotation cannot choose between implementations of the same concrete goal. Candidates:\n{candidates}"
                 ),
-                details.chain,
+                chain,
+                chain_goals,
             ))
         }
         SolveTraitError::UnsatisfiedBound {
-            trait_,
-            subject,
             origin,
-            chain,
+            ..
         } => Diagnostic::error(
             source,
-            format!("the generic type `{subject}` requires `{}`", trait_.0.name),
+            format!("the generic contract does not provide `{goal}`"),
         )
         .with_code("alder::trait::unsatisfied_bound")
         .with_primary_label(*origin, "this use requires a bound")
         .with_help(with_obligation_chain(
             format!(
-                "add a matching bound, such as `where {subject}: {}`",
-                trait_.0.name
+                "this operation requires `{goal}` in the generic contract; an implementation method cannot require stronger bounds than its trait method"
             ),
             chain,
+            chain_goals,
         )),
         SolveTraitError::AmbiguousTypeVariable {
-            trait_,
-            subject,
             origin,
-            chain,
+            ..
         } => Diagnostic::error(
             source,
             format!(
-                "cannot determine which type must implement `{}[{subject}]`",
-                trait_.0.name
+                "cannot determine the types required by `{goal}`"
             ),
         )
         .with_code("alder::trait::ambiguous_type_variable")
@@ -1703,17 +1743,15 @@ fn trait_error(source: Source, module: &Module<'_>, error: &SolveTraitError<'_>)
         .with_help(with_obligation_chain(
             "add a type annotation that fixes the operand type".to_owned(),
             chain,
+            chain_goals,
         )),
         SolveTraitError::InstanceCycle {
-            trait_,
-            subject,
             origin,
-            chain,
+            ..
         } => Diagnostic::error(
             source,
             format!(
-                "resolving `{}[{subject}]` forms an instance cycle",
-                trait_.0.name
+                "resolving `{goal}` forms an instance cycle"
             ),
         )
         .with_code("alder::trait::instance_cycle")
@@ -1721,18 +1759,39 @@ fn trait_error(source: Source, module: &Module<'_>, error: &SolveTraitError<'_>)
         .with_help(with_obligation_chain(
             "make the instance prerequisites structurally decrease".to_owned(),
             chain,
+            chain_goals,
         )),
     }
 }
 
-fn with_obligation_chain(help: String, chain: &[alder_solve::ObligationFrame<'_>]) -> String {
+fn trait_goal_type(
+    trait_: alder_ast::TraitId<'_>,
+    args: &[alder_constrain::DiagnosticType],
+) -> alder_constrain::DiagnosticType {
+    use alder_constrain::DiagnosticType as D;
+    let head = if trait_.0.module.package == alder_ast::PackageId::Builtin
+        && trait_.0.module.path.is_empty()
+    {
+        D::Named(trait_.0.name.to_owned())
+    } else {
+        D::NamedReference(Box::new(trait_.0.into()))
+    };
+    D::Application(Box::new(head), args.to_vec())
+}
+
+fn with_obligation_chain(
+    help: String,
+    chain: &[alder_solve::ObligationFrame<'_>],
+    goals: &[alder_constrain::DiagnosticType],
+) -> String {
     if chain.len() < 2 {
         return help;
     }
     let chain = chain
         .iter()
-        .map(|frame| {
-            let goal = format!("{}[{}]", frame.trait_.0.name, frame.subject);
+        .zip(goals)
+        .map(|(frame, goal)| {
+            let goal = goal.to_string();
             frame.required_by.map_or(goal.clone(), |implementation| {
                 format!("{goal}, required by {}", impl_description(implementation))
             })

@@ -1,0 +1,36 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/types.{ Token as ImportedToken, Inspect as PairInspect, inspect }\npub fn record(value: Array[{ token: ImportedToken, callback: fn(Number) Number }]) String {\n    show(value)\n}\npub fn pair(value: ImportedToken) Bool { inspect(value, 42) }\n"
+---
+alder::trait::missing_instance
+
+  × no implementation of `Show[{ callback: fn(Number) Number, token:
+  │ ImportedToken }]` was found
+   ╭─[/app/src/main.ald:3:5]
+ 2 │ pub fn record(value: Array[{ token: ImportedToken, callback: fn(Number) Number }]) String {
+ 3 │     show(value)
+   ·     ──┬─
+   ·       ╰── this use needs trait evidence
+ 4 │ }
+   ╰────
+  help: check the operand type and the implementations available for
+        `Show[{ callback: fn(Number) Number, token: ImportedToken }]`; a new
+        implementation must satisfy Alder's implementation-head and ownership
+        rules
+        
+        obligation chain:
+          Show[Array[{ callback: fn(Number) Number, token: ImportedToken }]]
+          -> Show[{ callback: fn(Number) Number, token: ImportedToken }],
+        required by a standard-library implementation
+alder::trait::missing_instance
+
+  × no implementation of `PairInspect[ImportedToken, Number]` was found
+   ╭─[/app/src/main.ald:5:42]
+ 4 │ }
+ 5 │ pub fn pair(value: ImportedToken) Bool { inspect(value, 42) }
+   ·                                          ───┬───
+   ·                                             ╰── this use needs trait evidence
+   ╰────
+  help: check the operand type and the implementations available for
+        `PairInspect[ImportedToken, Number]`; a new implementation must
+        satisfy Alder's implementation-head and ownership rules

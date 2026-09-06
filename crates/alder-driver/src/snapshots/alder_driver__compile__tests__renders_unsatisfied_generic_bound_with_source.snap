@@ -4,7 +4,7 @@ description: "trait Display[a] {\n    fn display(value: a) String\n}\n\nfn rende
 ---
 alder::trait::unsatisfied_bound
 
-  × the generic type `a` requires `Display`
+  × the generic contract does not provide `Display[a]`
    ╭─[/project/src/main.ald:6:5]
  5 │ fn render(value: a) String {
  6 │     display(value)
@@ -12,4 +12,6 @@ alder::trait::unsatisfied_bound
    ·        ╰── this use requires a bound
  7 │ }
    ╰────
-  help: add a matching bound, such as `where a: Display`
+  help: this operation requires `Display[a]` in the generic contract; an
+        implementation method cannot require stronger bounds than its trait
+        method

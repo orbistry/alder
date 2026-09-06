@@ -55,5 +55,6 @@ alder::trait::missing_instance
     ·                            ─────────┬────────
     ·                                     ╰── this use needs trait evidence
     ╰────
-  help: define an implementation of `Required[Missing]`, or use a type that
-        already has one
+  help: check the operand type and the implementations available for
+        `Required[Missing]`; a new implementation must satisfy Alder's
+        implementation-head and ownership rules

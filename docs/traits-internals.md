@@ -1759,6 +1759,26 @@ regression and direct cycle-guard controls are recorded in
 Inference retains the source spelling for every generalized type variable used
 by an obligation. Reports render those names (for example, `a`) rather than
 solver implementation details such as numeric unification-variable IDs.
+The spellings follow final unification representatives. Checked method
+universals count as declared contracts when classifying missing evidence; they
+are not undetermined operands that a concrete annotation could fix.
+
+Trait failures and their obligation frames retain all arguments as owned
+`DiagnosticType` trees. Boxed argument/chain slices are normally dropped Rust
+values, not non-dropping arena allocations. A root-goal naming map assigns
+fresh variables by structural appearance, reserves only declaration names used
+by that goal, and remains shared throughout prerequisite resolution. Reporting
+localizes the whole chain together, including imported trait/type aliases and
+every argument of a multi-parameter trait. Search still compares the separate
+complete semantic predicates, not these display trees.
+
+Missing-instance advice does not unconditionally propose a new implementation:
+implementation-head and ownership rules still apply. Function Eq failures
+explain that functions cannot be compared for equality. Missing generic evidence
+is a contract issue; an implementation method cannot introduce a stronger bound
+than its trait method. Ambiguity reports do not promise that annotations can
+select between implementations of the same concrete goal.
+
 Coherence reports label the exact impl sites involved and include an actionable
 help message; overlap reports label both source sites when both are available.
 
