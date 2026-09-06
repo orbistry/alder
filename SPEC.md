@@ -262,7 +262,7 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
   - [x] Exclude nested pins, including effectful payload pins, from unconditional
     Result coverage; preserve fallback and alternative coverage
 - [x] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing
-- [ ] Complete diagnostic parity matrix, validation, and final evidence report
+- [x] Complete diagnostic parity matrix, validation, and final evidence report
 
 Ordered. Each milestone is the task list for that phase; check items off
 as they land and update the grammar section alongside. `plans/` holds a

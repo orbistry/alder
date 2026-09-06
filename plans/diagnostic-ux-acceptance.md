@@ -1,9 +1,9 @@
 # Diagnostic UX acceptance review
 
-This is the current requirement-by-requirement review, not a completion claim.
+This is the final requirement-by-requirement acceptance review.
 The historical baseline and implementation checkpoints remain in
 [diagnostic-ux.md](diagnostic-ux.md). General pattern policy is resolved and
-implemented; final committed handoff remains. Tests below are source-driven unless
+implemented in `1a851af`; all completion gates below passed. Tests below are source-driven unless
 explicitly described otherwise.
 
 ## Active path and reference boundary
@@ -167,6 +167,24 @@ No runtime source maps, M5–M10 or provider checking are part of this work.
 - Sampo changesets accompany behavior changes; work remains on `diagnostic-ux`
   without merge or push.
 - Pattern policy is resolved and the family matrix above is implemented and tested.
-- Final handoff must identify current commits, validated gates and deliberate
-  limitations, and leave a clean committed branch. This review does not mark the
-  whole goal complete while those remaining gates are open.
+- Implementation commit: `1a851af` (uniform pattern coverage and redundancy),
+  following the previously accepted recovery/context/warning work through
+  `b28fb8c`. This final acceptance update changes documentation only.
+
+## Final handoff
+
+Restored behavior includes safe independent-error recovery, structured contextual
+type comparisons and source origins, evidence-based explanations, actual unused
+binding/import warnings, uniform pattern diagnostics, deterministic CLI/editor
+delivery and stale-diagnostic clearing. Failed modules do not publish interfaces,
+package indexes or executable artifacts.
+
+Deliberate limits remain those documented above: recovery uses atomic nested
+statements and does not solve trait obligations from partially omitted bodies;
+recursive structural failures retain a cycle boundary; expanded aliases do not
+reconstruct source synonyms; no blanket missing-annotation warning is enabled;
+pattern witnesses are representative and effect analysis is conservative. These
+are explicit language/design boundaries, not unimplemented completion tasks.
+
+Work is committed on `diagnostic-ux`. No merge, push, provider checking, source
+maps or later milestone implementation was performed.

@@ -54,7 +54,7 @@ Implementation sequence and acceptance requirements:
 
 ## Recovery invariants and implementation sequence
 
-### Current acceptance audit (not final completion)
+### Final acceptance audit
 
 The baseline table above is historical. The acceptance review reconciles current
 source evidence, deliberate differences and resolved policy as follows.
@@ -69,7 +69,7 @@ source evidence, deliberate differences and resolved policy as follows.
 | Generated warnings | Actual canonical binding/import analysis; shadowing, alternatives, pins, exports, initializer effects and module-root tests | No blanket missing-annotation warning has been adopted; inferred-signature suggestions assessed separately |
 | CLI/editor delivery | Eight passing subprocess tests: warnings/effects, dependency cascades, ordering, statement/pattern errors, unsaved edits, stale versions, UTF-16, saved dependencies and clearing | No outstanding delivery change identified by the acceptance review |
 | Pattern diagnostics | Approved uniform policy implemented by `check_patterns` and `pattern_matrix`; enums, payloads, products, arrays/rest, binding sites and redundant alternatives tested | Guards/pins do not supply coverage; mutable refinements are conservatively invalidated across their effects; no blanket missing-annotation warning |
-| Validation/artifacts | Current full tests, strict Clippy, snapshot references and fresh 17-crate archive verification pass; packaged negative/positive checks verify actual behavior | Final committed handoff remains; cached same-version package runs are not current-tree evidence |
+| Validation/artifacts | Current full tests, strict Clippy, snapshot references and fresh 17-crate archive verification pass; packaged negative/positive checks verify actual behavior | Completed in `1a851af` and this final documentation handoff; cached same-version package runs are not current-tree evidence |
 
 ### Implementation sequence
 
@@ -99,7 +99,7 @@ source evidence, deliberate differences and resolved policy as follows.
 - [x] `cargo insta test --check --unreferenced reject`
 - [x] CLI and editor integration tests
 - [x] Affected package verification in a fresh target directory, with behavioral checks
-- [ ] Sampo changesets, clean committed branch, final evidence report/commit IDs
+- [x] Sampo changesets, clean committed branch, final evidence report/commit IDs
 
 Use a distinct target directory for separate checkouts: reusing one previously
 left stale embedded snapshot paths and produced false unreferenced reports.
