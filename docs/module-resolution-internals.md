@@ -68,6 +68,15 @@ package `members/<key>` cannot overwrite a workspace member's index. Cache APIs
 take owned canonical identities rather than unqualified dotted module names.
 There is no fallback reader for the previous colliding layout.
 
+Interface-only dependencies validate the package index and every listed module
+interface before use. In addition to each file's version/fingerprint and owner
+checks, indexed implementation headers must match the module's declarations,
+independent of header ordering. A stale index cannot add a deleted implementation
+or omit a current one. The error identifies the dependency package and module;
+it does not fabricate an application-source label for inconsistent cache files.
+Source-backed dependencies continue to rebuild from current sources without
+loading these saved headers.
+
 Every source build requires both `BuildDependencies::module_paths` and
 `module_packages` entries for each source URI. `Project::build_dependencies`
 supplies them for filesystem projects; embedders supply the identities of their

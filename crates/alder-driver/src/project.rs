@@ -346,6 +346,24 @@ impl Project {
                                     .to_owned(),
                             });
                         }
+                        // Individually valid fingerprints do not establish that
+                        // these files describe the same package generation.
+                        let mut declared = interface.instances.iter().collect::<Vec<_>>();
+                        let mut indexed = index
+                            .instances
+                            .iter()
+                            .filter(|implementation| implementation.id.module == *module)
+                            .collect::<Vec<_>>();
+                        declared.sort_by(|left, right| left.id.cmp(&right.id));
+                        indexed.sort_by(|left, right| left.id.cmp(&right.id));
+                        if declared != indexed {
+                            return Err(DriverError::IncompatibleInterface {
+                                reason: format!(
+                                    "dependency instance index disagrees with module `{}` in package `{name}`",
+                                    module.path.join("/")
+                                ),
+                            });
+                        }
                         result.interfaces.push(interface);
                     }
                     result.package_instance_indexes.push(index);
@@ -922,6 +940,20 @@ mod tests {
 
     #[tokio::test]
     async fn imported_path_dependency_loads_each_interface_and_its_package_index() {
+        check_interface_only_generation(true, true).await;
+    }
+
+    #[tokio::test]
+    async fn interface_only_dependency_rejects_an_index_missing_an_implementation() {
+        check_interface_only_generation(true, false).await;
+    }
+
+    #[tokio::test]
+    async fn interface_only_dependency_rejects_an_index_with_a_deleted_implementation() {
+        check_interface_only_generation(false, true).await;
+    }
+
+    async fn check_interface_only_generation(interface_has_impl: bool, index_has_impl: bool) {
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -940,27 +972,56 @@ mod tests {
             package: package.clone(),
             path: vec!["api".to_owned()],
         };
-        let interface = alder_ast::Interface {
-            home: alder_ast::ModuleId {
-                package: alder_ast::PackageId::Named(alder_ast::PackageName {
-                    author: "vendor",
-                    project: "widgets",
-                }),
-                path: &["api"],
+        let bump = bumpalo::Bump::new();
+        let parsed = alder_parse::parse_module(
+            &bump,
+            indoc::indoc! {r#"
+            pub trait Inspect[a] {}
+            impl Inspect[Number] {}
+        "#},
+        )
+        .unwrap();
+        let canonical = alder_can::canonicalize(
+            &bump,
+            alder_can::Context {
+                home: alder_ast::ModuleId {
+                    package: alder_ast::PackageId::Named(alder_ast::PackageName {
+                        author: "vendor",
+                        project: "widgets",
+                    }),
+                    path: &["api"],
+                },
+                imports: &[],
+                interfaces: &[],
             },
-            values: &[],
-            types: &[],
-            enums: &[],
-            traits: &[],
-            instances: &[],
-            modules: &[],
-            private_names: &[],
-        };
+            &parsed,
+        )
+        .unwrap();
+        let constraints = alder_constrain::constrain(&bump, canonical.module);
+        let database = alder_solve::TraitDatabase::build(&bump, canonical.module, &[]);
+        let solved = alder_solve::solve(&bump, &constraints, &database).unwrap();
+        let mut interface =
+            alder_can::from_module(&bump, canonical.module, &solved.annotations, &[]);
+        let complete =
+            InterfaceFile::dehydrate_with_source(&interface, "file:///dependency/src/api.ald")
+                .unwrap();
+        assert_eq!(complete.instances.len(), 1);
+        if !interface_has_impl {
+            interface.instances = &[];
+        }
         let interface =
             InterfaceFile::dehydrate_with_source(&interface, "file:///dependency/src/api.ald")
                 .unwrap();
-        let index =
-            PackageInstanceIndexFile::new(package.clone(), vec![module.clone()], vec![]).unwrap();
+        let index = PackageInstanceIndexFile::new(
+            package.clone(),
+            vec![module.clone()],
+            if index_has_impl {
+                complete.instances
+            } else {
+                vec![]
+            },
+        )
+        .unwrap();
         let cache = InterfaceCache::new(&dependency_root);
         cache.save(&interface).unwrap();
         cache.save_package_index(&index).unwrap();
@@ -994,8 +1055,16 @@ mod tests {
         let mut database = Database::new(source);
         let dependencies = project
             .build_dependencies(&mut database, std::slice::from_ref(&source_uri), false)
-            .await
-            .unwrap();
+            .await;
+        std::fs::remove_dir_all(root).unwrap();
+        if interface_has_impl != index_has_impl {
+            assert!(
+                matches!(dependencies, Err(DriverError::IncompatibleInterface { .. })),
+                "mismatched interface/index generations must be rejected: {dependencies:?}"
+            );
+            return;
+        }
+        let dependencies = dependencies.unwrap();
 
         assert_eq!(dependencies.interfaces.len(), 1);
         assert_eq!(dependencies.interfaces[0].module, module);
@@ -1004,7 +1073,6 @@ mod tests {
             dependencies.module_packages[&source_uri],
             OwnedPackageId::Application
         );
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[tokio::test]
