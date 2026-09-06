@@ -239,6 +239,7 @@ pub struct Expectation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExpectationKind {
     Annotation,
+    AssociatedEquality,
     Argument {
         position: usize,
         callee: Option<String>,

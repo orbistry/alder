@@ -1594,6 +1594,16 @@ mod tests {
             };
             assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
             assert_eq!(diagnostics[0].message(), expected);
+            if suffix == "associated_equality" {
+                let origin = miette::Diagnostic::labels(&diagnostics[0])
+                    .unwrap()
+                    .find(|label| label.label() == Some("the earlier associated-type requirement"))
+                    .expect("conflicting equalities must retain the earlier requirement");
+                assert_eq!(
+                    &source[origin.offset()..origin.offset() + origin.len()],
+                    "i.Item == Array[LeftToken]"
+                );
+            }
             insta::with_settings!({ snapshot_suffix => suffix }, {
                 assert_rendered_diagnostics_snapshot!(source, diagnostics);
             });

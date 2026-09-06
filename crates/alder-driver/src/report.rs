@@ -1458,6 +1458,9 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             use alder_constrain::ExpectationKind as E;
             match &expectation.kind {
                 E::Annotation => "this value does not match its annotation".to_owned(),
+                E::AssociatedEquality => {
+                    "this associated-type requirement conflicts with an earlier equality".to_owned()
+                }
                 E::Argument { position, callee } => match callee {
                     Some(callee) => {
                         format!("argument {position} of `{callee}` has an incompatible type")
@@ -1567,6 +1570,7 @@ fn with_expectation_origin(
         use alder_constrain::ExpectationKind as E;
         let label = match expectation.kind {
             E::Annotation => "the declared type",
+            E::AssociatedEquality => "the earlier associated-type requirement",
             E::Return => "the declared return type",
             E::ArrayElement { .. } => "an earlier array element",
             E::Branch => "another branch in this expression",

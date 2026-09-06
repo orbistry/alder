@@ -810,3 +810,19 @@ workspace snapshot/reference check passed (248 driver tests), with no pending
 or unreferenced snapshots. The new source snapshot and both changed snapshots
 were reviewed. Package verification above predates this checkpoint and remains
 to be refreshed for the final branch.
+
+## Associated-equality provenance checkpoint
+
+The imported-name source regression `specialized_type_errors_use_resolved_import_names`
+now asserts that a conflicting associated equality labels the exact earlier
+`i.Item == Array[LeftToken]` requirement. This assertion failed before the fix.
+The local constraint conversion retains regions alongside equations only while
+checking the declaration; successful equations and published interfaces are
+unchanged. The renderer distinguishes this requirement from a value annotation.
+The existing repeated-compatible-equality control still compiles. The reviewed
+source snapshot displays both requirements and preserves distinct imported names.
+
+Validation: formatting, strict all-target/all-feature Clippy and the full
+workspace snapshot/reference check passed, including 248 driver tests and six
+CLI/editor subprocess tests. No pending or unreferenced snapshots remain.
+Final package verification and the open acceptance-matrix reviews remain pending.

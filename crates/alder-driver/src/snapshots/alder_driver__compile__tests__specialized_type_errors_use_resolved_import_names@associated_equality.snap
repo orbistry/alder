@@ -9,7 +9,8 @@ alder::type::associated_type_mismatch
    ╭─[/app/src/main.ald:8:52]
  7 │ fn impossible(value: i) ()
  8 │     where i: Iterator, i.Item == Array[LeftToken], i.Item == Array[RightToken]
-   ·                                                    ─────────────┬─────────────
-   ·                                                                 ╰── these types are incompatible
+   ·                        ─────────────┬────────────  ─────────────┬─────────────
+   ·                                     │                           ╰── this associated-type requirement conflicts with an earlier equality
+   ·                                     ╰── the earlier associated-type requirement
  9 │ {}
    ╰────

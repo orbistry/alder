@@ -5403,7 +5403,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         constraints: &'a [alder_ast::TypeConstraint<'a>],
         vars: &BTreeMap<&'a str, Ty<'a>>,
     ) -> Result<Vec<ProjectionEquation<'a>>, Error> {
-        let mut equations: Vec<ProjectionEquation<'a>> = Vec::new();
+        let mut equations: Vec<(ProjectionEquation<'a>, Region)> = Vec::new();
         for constraint in constraints {
             let alder_ast::TypeConstraint::AssocEq {
                 projection,
@@ -5418,7 +5418,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 projection: self.projection_from_ast(*projection, &mut vars),
                 typ: self.from_ast(typ, &mut vars),
             };
-            for previous in &equations {
+            for (previous, origin) in &equations {
                 if previous.projection == equation.projection {
                     let mut names = BTreeMap::new();
                     let expected = self.diagnostic_type(previous.typ.clone(), &mut names);
@@ -5435,13 +5435,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                                 expected: Box::new(expected),
                                 actual: Box::new(actual),
                             },
-                        });
+                        }
+                        .expected_by(ExpectationKind::AssociatedEquality, Some(*origin)));
                     }
                 }
             }
-            equations.push(equation);
+            equations.push((equation, *region));
         }
-        Ok(equations)
+        Ok(equations
+            .into_iter()
+            .map(|(equation, _)| equation)
+            .collect())
     }
 
     fn projection_from_ast(
