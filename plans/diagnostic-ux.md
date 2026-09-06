@@ -194,3 +194,47 @@ tests, plus all remaining suites; two existing ignored doctests). Formatting,
 strict all-target/all-feature Clippy and diff checks passed. Source snapshots
 were reviewed. Final snapshot-reference, package and editor verification remain
 open acceptance gates.
+
+## Import usage and CLI delivery checkpoint
+
+Private import bindings now retain usage by their source binding region through
+successful resolved value/module/type/trait/constructor lookups. Shared usage
+state survives cloned lexical environments; shadowing a selected import with a
+local does not mark that import used. A wildcard import has one shared region
+and therefore warns once only if none of its bindings is referenced. Public
+re-exports are intentional and do not warn. Installation and header-only passes
+do not generate warnings. This records direct name usage, not whether deleting
+an import would preserve module initialization or available trait instances;
+the wording and hint explicitly distinguish those questions.
+
+`unused_imports_respect_aliases_shadowing_exports_and_constructors` first
+compiled valid source with zero warnings instead of three. It now renders three
+source-ordered warnings for an unused selection, a shadowed selection, and an
+unused module alias. Other aliases, a constructor and a public re-export are
+positive controls. `unused_wildcard_import_reports_one_source_warning` covers
+the shared wildcard site. `import_usage_includes_types_traits_qualified_names_and_wildcards`
+checks type aliases, trait method calls and constraints, qualified module values,
+used wildcard imports and wildcard re-exports without spurious warnings.
+`cross_module_warnings_have_stable_source_order` verifies file order regardless
+of dependency order and fixture insertion order.
+
+New real-binary integration tests in `alder-cli/tests/diagnostics.rs` execute
+`check` and `run`, assert rendered warnings and source paths without ANSI escapes,
+and verify both imported-module and local-initializer effects still run in order.
+The three-error CLI test reproduced `check` sorting messages alphabetically.
+Inspection also found `build` popped the last sorted error as its primary report.
+`Diagnostic::source_order` now uses source path, primary byte offset, then message;
+both CLI paths use it and build chooses the first error. The subprocess regression
+checks source ordering for `check`, `build` and `test`, and no failed command
+creates a `dist` artifact. Driver warning aggregation uses the same ordering.
+
+Module-level dead-code/binding analysis and editor delivery remain open; these
+tests do not claim stale editor diagnostics are handled. Pattern/annotation
+policy, full recovery/context parity, and cross-module invalid-publication audit
+remain on the broader matrix.
+
+Validation: full workspace tests passed (215 driver tests, two new CLI subprocess
+tests, 17 existing CLI tests and all other suites; two existing ignored doctests).
+Strict all-target/all-feature Clippy, formatting and diff checks passed. The two
+new source snapshots were reviewed; final snapshot-reference and package gates
+still need to run against the completed work.

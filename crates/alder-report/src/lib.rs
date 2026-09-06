@@ -107,6 +107,25 @@ impl Diagnostic {
     pub fn message(&self) -> &str {
         &self.message
     }
+
+    /// Deterministic user-facing order: source file, primary location, then
+    /// message for diagnostics sharing a location. Secondary origins must not
+    /// move an error away from the expression that actually failed.
+    pub fn source_order(&self, other: &Self) -> std::cmp::Ordering {
+        let offset = |diagnostic: &Self| {
+            diagnostic
+                .labels
+                .iter()
+                .find(|label| label.primary())
+                .or_else(|| diagnostic.labels.first())
+                .map_or(0, LabeledSpan::offset)
+        };
+        self.source()
+            .name()
+            .cmp(other.source().name())
+            .then_with(|| offset(self).cmp(&offset(other)))
+            .then_with(|| self.message.cmp(&other.message))
+    }
 }
 
 impl MietteDiagnostic for Diagnostic {

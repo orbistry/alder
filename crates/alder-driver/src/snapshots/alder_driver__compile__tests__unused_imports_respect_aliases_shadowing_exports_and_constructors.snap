@@ -1,0 +1,41 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/library.{ value as used, spare as unused, value as shadowed, Token }\nimport ~/library as library\npub import ~/library.{ spare as exported }\npub fn read() { (used, Token::Token) }\npub fn shadow(shadowed: Number) { shadowed }\n"
+---
+alder::warning::unused_import
+
+  ⚠ unused import binding `unused`
+   ╭─[/app/src/main.ald:1:44]
+ 1 │ import ~/library.{ value as used, spare as unused, value as shadowed, Token }
+   ·                                            ───┬──
+   ·                                               ╰── not used
+ 2 │ import ~/library as library
+   ╰────
+  help: this imported name is not referenced directly; before removing the
+        import, check whether the module is needed for initialization effects
+        or trait instances
+alder::warning::unused_import
+
+  ⚠ unused import binding `shadowed`
+   ╭─[/app/src/main.ald:1:61]
+ 1 │ import ~/library.{ value as used, spare as unused, value as shadowed, Token }
+   ·                                                             ────┬───
+   ·                                                                 ╰── not used
+ 2 │ import ~/library as library
+   ╰────
+  help: this imported name is not referenced directly; before removing the
+        import, check whether the module is needed for initialization effects
+        or trait instances
+alder::warning::unused_import
+
+  ⚠ unused import binding `library`
+   ╭─[/app/src/main.ald:2:21]
+ 1 │ import ~/library.{ value as used, spare as unused, value as shadowed, Token }
+ 2 │ import ~/library as library
+   ·                     ───┬───
+   ·                        ╰── not used
+ 3 │ pub import ~/library.{ spare as exported }
+   ╰────
+  help: this imported name is not referenced directly; before removing the
+        import, check whether the module is needed for initialization effects
+        or trait instances

@@ -237,6 +237,8 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
 - [ ] Generate actionable unused-import/binding warnings from source
   - [x] Warn on unused resolved locals and parameters, respecting shared pattern
     bindings, shadowing, captures, wildcard discards, and writes
+  - [x] Track unused named/module/wildcard import bindings through resolution,
+    preserving re-exports and verifying CLI delivery without removing effects
   - [ ] Complete module-level binding and import analysis and consumer tests
 - [ ] Reconcile general pattern and inferred-annotation diagnostic policy
 - [ ] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing

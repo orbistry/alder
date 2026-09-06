@@ -1200,7 +1200,13 @@ pub fn canonicalize(source: Source, error: &alder_can::Error<'_>) -> Diagnostic 
 
 pub fn warning(source: Source, warning: &alder_can::Warning<'_>) -> Diagnostic {
     let (code, message) = match warning.kind {
-        WarningKind::UnusedImport { name } => ("unused_import", format!("unused import `{name}`")),
+        WarningKind::UnusedImport { name: "*" } => (
+            "unused_import",
+            "no names from this wildcard import are referenced directly".to_owned(),
+        ),
+        WarningKind::UnusedImport { name } => {
+            ("unused_import", format!("unused import binding `{name}`"))
+        }
         WarningKind::UnusedBinding { name, .. } => {
             ("unused_binding", format!("unused binding `{name}`"))
         }
@@ -1218,6 +1224,8 @@ pub fn warning(source: Source, warning: &alder_can::Warning<'_>) -> Diagnostic {
             alder_can::BindingForm::ArrayRest => "use an unnamed rest pattern `..` if the remaining elements are intentionally unused",
             alder_can::BindingForm::Alias => "remove the unused `as` binding, keeping the underlying pattern and any needed initializer effects",
         })
+    } else if matches!(warning.kind, WarningKind::UnusedImport { .. }) {
+        diagnostic.with_help("this imported name is not referenced directly; before removing the import, check whether the module is needed for initialization effects or trait instances")
     } else {
         diagnostic
     }

@@ -61,6 +61,8 @@ fn canonicalize_mode<'a>(
 ) -> Result<CanResult<'a>, Vec<Error<'a>>> {
     let mut env = Env::new(bump, context.home);
     let mut errors = load_imports(bump, &mut env, context.imports, context.interfaces);
+    // Start after installation: importing a name is not itself a source use.
+    env.track_imports(context.imports);
     errors.extend(predeclare(&mut env, source));
     let alias_order = crate::types::alias_order(source)?;
     for interface in context.interfaces {
@@ -201,7 +203,10 @@ fn canonicalize_mode<'a>(
         warnings: if headers_only {
             &[]
         } else {
-            bump.alloc_slice_copy(&crate::value_scc::unused_locals(context.home, items))
+            let mut warnings = crate::value_scc::unused_locals(context.home, items);
+            warnings.extend(env.unused_imports());
+            warnings.sort_by_key(|warning| warning.region);
+            bump.alloc_slice_copy(&warnings)
         },
     })
 }

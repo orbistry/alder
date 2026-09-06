@@ -99,6 +99,8 @@ pub struct Env<'a> {
     next_local: Rc<Cell<u32>>,
     next_use: Rc<Cell<u32>>,
     assigned_bindings: Rc<RefCell<BTreeSet<QualifiedName<'a>>>>,
+    import_bindings: BTreeMap<Region, &'a str>,
+    used_imports: Rc<RefCell<BTreeSet<Region>>>,
 }
 
 impl<'a> Env<'a> {
@@ -119,6 +121,8 @@ impl<'a> Env<'a> {
             next_local: Rc::new(Cell::new(0)),
             next_use: Rc::new(Cell::new(0)),
             assigned_bindings: Rc::new(RefCell::new(BTreeSet::new())),
+            import_bindings: BTreeMap::new(),
+            used_imports: Rc::new(RefCell::new(BTreeSet::new())),
         };
         env.add_builtin_types();
         env.add_builtin_ordering(bump);
@@ -933,6 +937,47 @@ impl<'a> Env<'a> {
         }
     }
 
+    pub(crate) fn track_imports(&mut self, imports: &[alder_ast::ResolvedImport<'a>]) {
+        for import in imports {
+            if matches!(import.visibility, alder_ast::Visibility::Public(_)) {
+                continue;
+            }
+            match import.kind {
+                alder_ast::ResolvedImportKind::Module { binding } => {
+                    self.import_bindings.insert(binding.region, binding.value);
+                }
+                alder_ast::ResolvedImportKind::Names(names) => {
+                    for name in names {
+                        self.import_bindings
+                            .insert(name.binding.region, name.binding.value);
+                    }
+                }
+                alder_ast::ResolvedImportKind::All => {
+                    self.import_bindings.insert(import.region, "*");
+                }
+            }
+        }
+    }
+
+    fn record_import_use(&self, region: Region) {
+        if self.import_bindings.contains_key(&region) {
+            self.used_imports.borrow_mut().insert(region);
+        }
+    }
+
+    pub(crate) fn unused_imports(&self) -> Vec<crate::Warning<'a>> {
+        let used = self.used_imports.borrow();
+        self.import_bindings
+            .iter()
+            .filter_map(|(&region, &name)| {
+                (!used.contains(&region)).then_some(crate::Warning {
+                    region,
+                    kind: crate::WarningKind::UnusedImport { name },
+                })
+            })
+            .collect()
+    }
+
     pub(crate) fn assigned_bindings(&self, bump: &'a Bump) -> &'a [QualifiedName<'a>] {
         bump.alloc_slice_fill_iter(self.assigned_bindings.borrow().iter().copied())
     }
@@ -1014,15 +1059,21 @@ impl<'a> Env<'a> {
     }
 
     pub fn find_value(&self, text: &str) -> Option<ValueBinding<'a>> {
-        self.scopes
+        let binding = self
+            .scopes
             .iter()
             .rev()
-            .find_map(|scope| scope.values.get(text).copied())
+            .find_map(|scope| scope.values.get(text).copied())?;
+        self.record_import_use(binding.region);
+        Some(binding)
     }
 
     pub fn find_module(&self, text: &str) -> Option<ModuleBinding<'a>> {
         match self.modules.get(text) {
-            Some(Candidate::Unique(module)) => Some(*module),
+            Some(Candidate::Unique(module)) => {
+                self.record_import_use(module.region);
+                Some(*module)
+            }
             _ => None,
         }
     }
@@ -1207,6 +1258,9 @@ impl<'a> Env<'a> {
                     .iter()
                     .find(|constructor| constructor.name.variant == variant.value)
             {
+                if let Some(typ) = self.type_binding(enum_name) {
+                    self.record_import_use(typ.region);
+                }
                 return Ok(*constructor);
             }
         } else if allow_unqualified || matches!(variant.value, "Some" | "None" | "Ok" | "Err") {
@@ -1223,6 +1277,13 @@ impl<'a> Env<'a> {
                 })
                 .collect();
             if matches.len() == 1 {
+                for candidate in self.types.values() {
+                    if let Candidate::Unique(binding) = candidate
+                        && binding.reference == matches[0].name.enum_
+                    {
+                        self.record_import_use(binding.region);
+                    }
+                }
                 return Ok(matches[0]);
             }
             if matches.len() > 1 {
@@ -1352,11 +1413,13 @@ impl<'a> Env<'a> {
         let Candidate::Unique(trait_) = self.traits.get(trait_name)? else {
             return None;
         };
-        trait_
+        let method = trait_
             .methods
             .iter()
             .find(|method| method.id.name == method_name)
-            .copied()
+            .copied()?;
+        self.record_import_use(trait_.region);
+        Some(method)
     }
 
     pub fn push_associated_types(
@@ -1469,7 +1532,10 @@ impl<'a> Env<'a> {
             ));
         }
         match self.traits.get(name) {
-            Some(Candidate::Unique(binding)) => Ok(*binding),
+            Some(Candidate::Unique(binding)) => {
+                self.record_import_use(binding.region);
+                Ok(*binding)
+            }
             Some(Candidate::Ambiguous(candidates)) => Err(Error::new(
                 region,
                 ErrorKind::Type(crate::TypeError::Name(NameError::Ambiguous {
@@ -1539,7 +1605,10 @@ impl<'a> Env<'a> {
             ));
         }
         match self.types.get(name) {
-            Some(Candidate::Unique(binding)) => Ok(*binding),
+            Some(Candidate::Unique(binding)) => {
+                self.record_import_use(binding.region);
+                Ok(*binding)
+            }
             Some(Candidate::Ambiguous(candidates)) => Err(Error::new(
                 region,
                 ErrorKind::Type(crate::TypeError::Name(NameError::Ambiguous {

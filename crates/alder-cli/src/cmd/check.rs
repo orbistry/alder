@@ -105,12 +105,7 @@ impl Args {
                 .flatten()
                 .chain(result.diagnostics.iter())
                 .collect::<Vec<_>>();
-            diagnostics.sort_by(|left, right| {
-                left.source()
-                    .name()
-                    .cmp(right.source().name())
-                    .then_with(|| left.message().cmp(right.message()))
-            });
+            diagnostics.sort_by(|left, right| left.source_order(right));
             for diagnostic in diagnostics {
                 eprintln!();
                 eprintln!("{:?}", miette::Report::new(diagnostic.clone()));

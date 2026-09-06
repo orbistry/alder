@@ -93,18 +93,12 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
             .flatten()
             .chain(result.diagnostics.iter().cloned())
             .collect::<Vec<_>>();
-        errors.sort_by(|left, right| {
-            left.source()
-                .name()
-                .cmp(right.source().name())
-                .then_with(|| left.message().cmp(right.message()))
-        });
-        let Some(primary) = errors.pop() else {
+        errors.sort_by(|left, right| left.source_order(right));
+        let mut errors = errors.into_iter();
+        let Some(primary) = errors.next() else {
             return Err(miette!("compilation failed without a diagnostic"));
         };
-        let primary = errors
-            .into_iter()
-            .fold(primary, |primary, related| primary.with_related(related));
+        let primary = errors.fold(primary, |primary, related| primary.with_related(related));
         return Err(miette::Report::new(primary));
     }
     if persist {

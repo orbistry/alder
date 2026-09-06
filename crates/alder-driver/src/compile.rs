@@ -414,6 +414,7 @@ fn build_sync(
         .filter(|r| matches!(r, ModuleResult::Success { .. }))
         .count();
     interface_files.sort_by(|left, right| left.module.cmp(&right.module));
+    all_warnings.sort_by(Diagnostic::source_order);
     let package_instance_indexes = package_indexes(&interface_files);
 
     BuildResult {
@@ -1204,6 +1205,119 @@ mod tests {
         assert!(diagnostics[0].to_string().contains("expected 1, found 0"));
         assert!(diagnostics[1].to_string().contains("expected 1, found 2"));
         assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn cross_module_warnings_have_stable_source_order() {
+        let fixtures = vec![
+            (
+                url("app/src/main.ald"),
+                Ok("import ~/z\npub fn read(unused: Number) { z.value }".to_owned()),
+            ),
+            (
+                url("app/src/z.ald"),
+                Ok("pub let value = 1\npub fn helper(unused: Bool) { 0 }".to_owned()),
+            ),
+        ];
+        for fixtures in [fixtures.clone(), fixtures.into_iter().rev().collect()] {
+            let result =
+                build_fixture_sync(fixtures, BuildMode::Check, BuildDependencies::default());
+            assert_eq!(result.failed, 0, "{result:?}");
+            let sources = result
+                .warnings
+                .iter()
+                .map(|warning| warning.source().name())
+                .collect::<Vec<_>>();
+            assert_eq!(sources, ["/app/src/main.ald", "/app/src/z.ald"]);
+        }
+    }
+
+    #[test]
+    fn import_usage_includes_types_traits_qualified_names_and_wildcards() {
+        let library = indoc::indoc! {r#"
+            pub type Payload = { number: Number }
+            pub enum Token { Token }
+            pub trait Measure[a] { fn measure(value: a) Number }
+            impl Measure[Number] { fn measure(value: Number) Number { value } }
+            pub let value = 1
+        "#};
+        for source in [
+            indoc::indoc! {r#"
+                import ~/library.{ Payload, Measure }
+                import ~/library as library
+                pub fn read(payload: Payload) { Measure::measure(payload.number) }
+                pub fn value() { library.value }
+            "#},
+            indoc::indoc! {r#"
+                import ~/library.*
+                pub fn read() { value }
+            "#},
+            indoc::indoc! {r#"
+                import ~/library.{ Measure as Size }
+                pub fn read(value: a) Number where a: Size { Size::measure(value) }
+            "#},
+            "pub import ~/library.*",
+        ] {
+            let result = build_fixture_sync(
+                vec![
+                    (url("app/src/main.ald"), Ok(source.to_owned())),
+                    (url("app/src/library.ald"), Ok(library.to_owned())),
+                ],
+                BuildMode::Check,
+                BuildDependencies::default(),
+            );
+            assert_eq!(result.failed, 0, "{source}\n{result:?}");
+            assert!(
+                result.warnings.is_empty(),
+                "{source}\n{:?}",
+                result.warnings
+            );
+        }
+    }
+
+    #[test]
+    fn unused_wildcard_import_reports_one_source_warning() {
+        let source = "import ~/library.*\npub fn main() { 1 }";
+        let result = build_fixture_sync(
+            vec![
+                (url("app/src/main.ald"), Ok(source.to_owned())),
+                (
+                    url("app/src/library.ald"),
+                    Ok("pub let first = 1\npub let second = 2".to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.failed, 0, "{result:?}");
+        assert_eq!(result.warnings.len(), 1);
+        assert_rendered_diagnostics_snapshot!(source, &result.warnings);
+    }
+
+    #[test]
+    fn unused_imports_respect_aliases_shadowing_exports_and_constructors() {
+        let source = indoc::indoc! {r#"
+            import ~/library.{ value as used, spare as unused, value as shadowed, Token }
+            import ~/library as library
+            pub import ~/library.{ spare as exported }
+            pub fn read() { (used, Token::Token) }
+            pub fn shadow(shadowed: Number) { shadowed }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![
+                (uri.clone(), Ok(source.to_owned())),
+                (
+                    url("app/src/library.ald"),
+                    Ok("pub let value = 1\npub let spare = 2\npub enum Token { Token }".to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.failed, 0, "{result:?}");
+        assert_eq!(result.warnings.len(), 3, "{:?}", result.warnings);
+        assert_rendered_diagnostics_snapshot!(source, &result.warnings);
     }
 
     #[test]

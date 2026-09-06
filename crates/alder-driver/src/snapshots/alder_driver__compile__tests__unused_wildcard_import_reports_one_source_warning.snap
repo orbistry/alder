@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/library.*\npub fn main() { 1 }"
+---
+alder::warning::unused_import
+
+  ⚠ no names from this wildcard import are referenced directly
+   ╭─[/app/src/main.ald:1:1]
+ 1 │ import ~/library.*
+   · ─────────┬────────
+   ·          ╰── not used
+ 2 │ pub fn main() { 1 }
+   ╰────
+  help: this imported name is not referenced directly; before removing the
+        import, check whether the module is needed for initialization effects
+        or trait instances
