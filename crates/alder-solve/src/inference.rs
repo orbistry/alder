@@ -1333,6 +1333,7 @@ struct Infer<'a, 'db> {
     generalized_variables: BTreeSet<usize>,
     generic_contracts: Vec<GenericContract<'a>>,
     annotation_scope: BTreeMap<&'a str, Ty<'a>>,
+    return_origin: Option<Region>,
     active_scc: BTreeSet<QualifiedName<'a>>,
     loop_results: Vec<Ty<'a>>,
     reachable: bool,
@@ -1523,6 +1524,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             generalized_variables: BTreeSet::new(),
             generic_contracts: Vec::new(),
             annotation_scope: BTreeMap::new(),
+            return_origin: None,
             active_scc: BTreeSet::new(),
             loop_results: Vec::new(),
             reachable: true,
@@ -2237,6 +2239,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             region,
         });
         let outer_annotation_scope = std::mem::replace(&mut self.annotation_scope, vars);
+        let outer_return_origin =
+            std::mem::replace(&mut self.return_origin, ret.map(|ret| ret.region));
         let inferred = (|| {
             if let Some((expected, method_region)) = expected_method {
                 self.unify(
@@ -2289,6 +2293,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         self.givens = outer_givens;
         self.projection_equations = outer_projection_equations;
         self.annotation_scope = outer_annotation_scope;
+        self.return_origin = outer_return_origin;
         inferred
     }
 
@@ -2486,8 +2491,12 @@ impl<'a, 'db> Infer<'a, 'db> {
                     // and `?` may contribute other errors to the same result.
                     self.require_result_parts(expected.clone(), statement.region)?;
                 }
-                self.unify_return(actual, expected, statement.region)
-                    .map_err(|error| error.expected_by(ExpectationKind::Return, None))?;
+                self.unify_return(
+                    actual,
+                    expected,
+                    value.map_or(statement.region, |value| value.region),
+                )
+                .map_err(|error| error.expected_by(ExpectationKind::Return, self.return_origin))?;
             }
             Stmt::Break(value) => {
                 let actual = match value {
@@ -2744,11 +2753,13 @@ impl<'a, 'db> Infer<'a, 'db> {
             Expr::Block(block) => self.infer_block(&mut env.clone(), block, return_type),
             Expr::Async(block) => {
                 let result = self.fresh();
+                let outer_return_origin = self.return_origin.take();
                 let outer_loops = std::mem::take(&mut self.loop_results);
                 let outer_reachable = std::mem::replace(&mut self.reachable, true);
                 let body_type = self.infer_block(&mut env.clone(), block, Some(result.clone()));
                 self.reachable = outer_reachable;
                 self.loop_results = outer_loops;
+                self.return_origin = outer_return_origin;
                 let body_type = body_type?;
                 self.resolve_try_boundary(result.clone(), &body_type, region)?;
                 if alder_ast::flow::block(block).falls_through {
@@ -2774,6 +2785,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                     .unwrap_or_else(|| self.fresh());
                 let (result, body_result) = (declared_result.clone(), declared_result);
                 let outer_annotation_scope = std::mem::replace(&mut self.annotation_scope, vars);
+                let outer_return_origin =
+                    std::mem::replace(&mut self.return_origin, ret.map(|ret| ret.region));
                 let outer_loops = std::mem::take(&mut self.loop_results);
                 let outer_reachable = std::mem::replace(&mut self.reachable, true);
                 let body_type = if matches!(self.prune(body_result.clone()), Ty::Record(..)) {
@@ -2789,10 +2802,14 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.reachable = outer_reachable;
                 self.loop_results = outer_loops;
                 self.annotation_scope = outer_annotation_scope;
+                self.return_origin = outer_return_origin;
                 let body_type = body_type?;
                 self.resolve_try_boundary(body_result.clone(), &body_type, region)?;
                 if alder_ast::flow::expression(body).falls_through {
-                    self.unify_return(body_type, body_result, region)?;
+                    self.unify_return(body_type, body_result, body.region)
+                        .map_err(|error| {
+                            error.expected_by(ExpectationKind::Return, ret.map(|ret| ret.region))
+                        })?;
                 }
                 Ok(Ty::Fn(args, Box::new(self.prune(result))))
             }

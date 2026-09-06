@@ -7,12 +7,14 @@ struct Project(PathBuf);
 
 impl Project {
     fn new() -> Self {
+        static NEXT_PROJECT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let sequence = NEXT_PROJECT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "alder-cli-diagnostics-{}-{nonce} space",
+            "alder-cli-diagnostics-{}-{nonce}-{sequence} space",
             std::process::id()
         ));
         std::fs::create_dir(&root).unwrap();

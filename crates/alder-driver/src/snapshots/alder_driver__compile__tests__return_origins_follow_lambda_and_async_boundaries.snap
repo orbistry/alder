@@ -1,0 +1,61 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn lambda() {\n    let _ = () Number -> { return \"lambda\" }\n}\nfn tail() {\n    let _ = () Bool -> 42\n}\nfn nested() String {\n    let _ = () -> {\n        return 1\n        return \"nested\"\n    }\n    \"outer\"\n}\nfn task() String {\n    let _ = async {\n        return 1\n        return \"task\"\n    }\n    \"outer\"\n}\nfn restored() Bool {\n    let _ = () Number -> 1\n    let _ = async { 1 }\n    return \"restored\"\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/app/src/main.ald:2:35]
+ 1 │ fn lambda() {
+ 2 │     let _ = () Number -> { return "lambda" }
+   ·                ───┬──             ────┬───
+   ·                   │                   ╰── this return value has an incompatible type
+   ·                   ╰── the declared return type
+ 3 │ }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:5:24]
+ 4 │ fn tail() {
+ 5 │     let _ = () Bool -> 42
+   ·                ──┬─    ─┬
+   ·                  │      ╰── this return value has an incompatible type
+   ·                  ╰── the declared return type
+ 6 │ }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+    ╭─[/app/src/main.ald:10:16]
+  9 │         return 1
+ 10 │         return "nested"
+    ·                ────┬───
+    ·                    ╰── this return value has an incompatible type
+ 11 │     }
+    ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+    ╭─[/app/src/main.ald:17:16]
+ 16 │         return 1
+ 17 │         return "task"
+    ·                ───┬──
+    ·                   ╰── this return value has an incompatible type
+ 18 │     }
+    ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `String`
+    ╭─[/app/src/main.ald:24:12]
+ 20 │ }
+ 21 │ fn restored() Bool {
+    ·               ──┬─
+    ·                 ╰── the declared return type
+ 22 │     let _ = () Number -> 1
+ 23 │     let _ = async { 1 }
+ 24 │     return "restored"
+    ·            ─────┬────
+    ·                 ╰── this return value has an incompatible type
+ 25 │ }
+    ╰────

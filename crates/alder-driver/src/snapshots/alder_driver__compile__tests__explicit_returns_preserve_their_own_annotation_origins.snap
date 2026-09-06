@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn early() Number {\n    return \"wrong\"\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/app/src/main.ald:2:12]
+ 1 │ fn early() Number {
+   ·            ───┬──
+   ·               ╰── the declared return type
+ 2 │     return "wrong"
+   ·            ───┬───
+   ·               ╰── this return value has an incompatible type
+ 3 │ }
+   ╰────

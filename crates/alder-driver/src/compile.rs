@@ -1157,6 +1157,93 @@ mod tests {
     }
 
     #[test]
+    fn explicit_returns_preserve_their_own_annotation_origins() {
+        let source = indoc::indoc! {r#"
+            fn early() Number {
+                return "wrong"
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid return must fail")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        let labels = miette::Diagnostic::labels(&diagnostics[0])
+            .unwrap()
+            .collect::<Vec<_>>();
+        assert!(
+            labels
+                .iter()
+                .any(|label| label.label() == Some("the declared return type")),
+            "{diagnostics:?}"
+        );
+        let primary = labels.iter().find(|label| label.primary()).unwrap();
+        assert_eq!(primary.offset(), source.find("\"wrong\"").unwrap());
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn return_origins_follow_lambda_and_async_boundaries() {
+        let source = indoc::indoc! {r#"
+            fn lambda() {
+                let _ = () Number -> { return "lambda" }
+            }
+            fn tail() {
+                let _ = () Bool -> 42
+            }
+            fn nested() String {
+                let _ = () -> {
+                    return 1
+                    return "nested"
+                }
+                "outer"
+            }
+            fn task() String {
+                let _ = async {
+                    return 1
+                    return "task"
+                }
+                "outer"
+            }
+            fn restored() Bool {
+                let _ = () Number -> 1
+                let _ = async { 1 }
+                return "restored"
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid returns must fail")
+        };
+        assert_eq!(diagnostics.len(), 5, "{diagnostics:?}");
+        for (diagnostic, expected_origin) in
+            diagnostics.iter().zip([true, true, false, false, true])
+        {
+            let labels = miette::Diagnostic::labels(diagnostic)
+                .unwrap()
+                .collect::<Vec<_>>();
+            assert_eq!(
+                labels
+                    .iter()
+                    .any(|label| label.label() == Some("the declared return type")),
+                expected_origin,
+                "{diagnostic:?}"
+            );
+        }
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
     fn mismatch_explains_expectations_at_the_source() {
         let source = indoc::indoc! {r#"
             fn need(value: Number) { () }

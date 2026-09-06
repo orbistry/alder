@@ -129,8 +129,8 @@ existing constructor arity snapshot showed only two incompatible function types.
 
 This is not full context coverage: deferred overlays/Option lifting/row and tuple
 constraints still lose some expectation provenance, as visible in existing
-imported-interface snapshots. Explicit-return and lambda annotation origins,
-contextually checked arrays/branches, tagged calls and constructor callee names
+imported-interface snapshots. Explicit-return and lambda annotation origins were
+subsequently restored below. Contextually checked arrays/branches, tagged calls and constructor callee names
 also need completion. Specialized renderers currently retain their own labels.
 No foreign declaration span is presented as a location in the consumer source.
 
@@ -314,3 +314,26 @@ Validation: full workspace tests passed (217 driver tests, six CLI subprocess
 tests and all other suites; two existing ignored doctests). Strict workspace
 Clippy, formatting and diff checks passed. Broader nominal/trait recovery, context/comparison completion,
 pattern policy and final snapshot/package verification remain open.
+
+## Return annotation provenance checkpoint
+
+`explicit_returns_preserve_their_own_annotation_origins` first failed because an
+explicit return had no annotation secondary label and highlighted the complete
+`return` statement. Inference now scopes the same-source return annotation across
+the function body and highlights the returned expression. Lambda tails retain
+their own declared result location too. Nested lambdas replace this origin, and
+async blocks clear it; both restore the enclosing origin on success or failure.
+This is diagnostic provenance only, not a change to return typing or async rules.
+
+Two real source snapshots cover explicit returns, annotated lambda returns and
+tails, unannotated nested lambda/async returns that must not blame an outer
+signature, and restoration of the outer signature after successful nested bodies.
+The existing 467 inference tests pass unchanged. Contextually checked record
+returns and deferred constraints still need the broader context audit.
+
+Validation: full workspace tests, strict all-target/all-feature Clippy, formatting
+and diff checks passed; the two new colorless source snapshots were reviewed.
+The first full run exposed a timestamp collision between parallel CLI test
+directories. Their names now include a per-process atomic sequence, and the
+complete rerun passed (219 driver tests, six CLI subprocess tests, 467 inference
+tests and the remaining suites; two existing ignored doctests).
