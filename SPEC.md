@@ -226,6 +226,19 @@ rank-based solving, ported from Elm's `Type/*`.
 
 ## Roadmap
 
+### Diagnostic UX restoration (cross-cutting)
+
+Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansion.
+
+- [x] Recover independent executable-declaration type errors with fresh inference
+  state and dependent suppression; failed attempts never publish checked output
+- [ ] Complete recovery parity around nominal metadata, traits, and finer-grained contexts
+- [ ] Preserve structured expected/actual types and source expectation context
+- [ ] Generate actionable unused-import/binding warnings from source
+- [ ] Reconcile general pattern and inferred-annotation diagnostic policy
+- [ ] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing
+- [ ] Complete diagnostic parity matrix, validation, and final evidence report
+
 Ordered. Each milestone is the task list for that phase; check items off
 as they land and update the grammar section alongside. `plans/` holds a
 detailed plan per remaining milestone (starting state, exit criteria,

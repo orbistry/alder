@@ -1,0 +1,34 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn projection(value: (Number, Bool)) { value.2 }\nfn propagate(value: Number) Option[Number] { Some(value?) }\nasync fn wait() Number { \"wrong\" }\npub fn dependent() { projection((1, true)) }\n"
+---
+alder::type::tuple_index_out_of_bounds
+
+  × index 2 is outside this 2-element tuple
+   ╭─[/app/src/main.ald:1:46]
+ 1 │ fn projection(value: (Number, Bool)) { value.2 }
+   ·                                              ┬
+   ·                                              ╰── there is no element at this index
+ 2 │ fn propagate(value: Number) Option[Number] { Some(value?) }
+   ╰────
+  help: tuple indices start at zero; valid indices are 0 through 1
+alder::type::type_mismatch
+
+  × type mismatch: expected `Option[a]`, found `Number`
+   ╭─[/app/src/main.ald:2:51]
+ 1 │ fn projection(value: (Number, Bool)) { value.2 }
+ 2 │ fn propagate(value: Number) Option[Number] { Some(value?) }
+   ·                                                   ───┬──
+   ·                                                      ╰── type requirement originates here
+ 3 │ async fn wait() Number { "wrong" }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/app/src/main.ald:3:1]
+ 2 │ fn propagate(value: Number) Option[Number] { Some(value?) }
+ 3 │ async fn wait() Number { "wrong" }
+   · ─────────────────┬────────────────
+   ·                  ╰── type requirement originates here
+ 4 │ pub fn dependent() { projection((1, true)) }
+   ╰────

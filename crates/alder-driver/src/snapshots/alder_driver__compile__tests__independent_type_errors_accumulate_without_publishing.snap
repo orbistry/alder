@@ -1,0 +1,23 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn first() Number { \"wrong\" }\nfn second() Bool { 42 }\npub fn dependent() { first() + 1 }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/app/src/main.ald:1:1]
+ 1 │ fn first() Number { "wrong" }
+   · ──────────────┬──────────────
+   ·               ╰── type requirement originates here
+ 2 │ fn second() Bool { 42 }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:2:1]
+ 1 │ fn first() Number { "wrong" }
+ 2 │ fn second() Bool { 42 }
+   · ───────────┬───────────
+   ·            ╰── type requirement originates here
+ 3 │ pub fn dependent() { first() + 1 }
+   ╰────

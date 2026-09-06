@@ -1,0 +1,29 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn first(value: a) a { second(value) }\nfn second(value) { if true { first(value) } else { 42 } }\nfn independent(value: b) b { \"wrong\" }\npub fn dependent() { first(1) }\n"
+---
+alder::type::generic_specialization
+
+  × this implementation does not work for every `a`
+   ╭─[/app/src/main.ald:1:1]
+ 1 │ fn first(value: a) a { second(value) }
+   · ───────────────────┬──────────────────
+   ·                    ╰── the signature promises an independent `a`, but the body requires `Number`
+ 2 │ fn second(value) { if true { first(value) } else { 42 } }
+   ╰────
+  help: use the same value generically, or give the declaration a concrete
+        signature; a trait implementation must preserve the trait's generic
+        contract
+alder::type::generic_specialization
+
+  × this implementation does not work for every `b`
+   ╭─[/app/src/main.ald:3:1]
+ 2 │ fn second(value) { if true { first(value) } else { 42 } }
+ 3 │ fn independent(value: b) b { "wrong" }
+   · ───────────────────┬──────────────────
+   ·                    ╰── the signature promises an independent `b`, but the body requires `String`
+ 4 │ pub fn dependent() { first(1) }
+   ╰────
+  help: use the same value generically, or give the declaration a concrete
+        signature; a trait implementation must preserve the trait's generic
+        contract

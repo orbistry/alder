@@ -16,6 +16,52 @@ struct ValueNode<'a> {
     dependencies: BTreeSet<&'a str>,
 }
 
+/// Local module values read or written by this declaration, including nested
+/// bodies and pins. Recovery uses the same resolved traversal as value SCCs so
+/// a failed binding cannot be mistaken for an independent dependency.
+pub fn dependencies<'a>(home: ModuleId<'a>, item: &ItemKind<'a>) -> BTreeSet<&'a str> {
+    let mut out = BTreeSet::new();
+    match item {
+        ItemKind::Fn(function) => block(home, function.body, &mut out),
+        ItemKind::Let(declaration) => {
+            pattern(home, declaration.pattern, &mut out);
+            expr(home, declaration.value, &mut out);
+        }
+        ItemKind::Component(component) => block(home, component.body, &mut out),
+        ItemKind::Test(test) => block(home, test.body, &mut out),
+        ItemKind::Tests(items) => {
+            for item in *items {
+                out.extend(dependencies(home, &item.value.kind));
+            }
+        }
+        ItemKind::Impl(implementation) => {
+            for item in implementation.items {
+                if let alder_ast::ImplItem::Fn(function) = item {
+                    block(home, function.body, &mut out);
+                }
+            }
+        }
+        ItemKind::Trait(trait_) => {
+            for item in trait_.items {
+                if let alder_ast::TraitItem::Fn(function) = item
+                    && let Some(body) = function.body
+                {
+                    block(home, body, &mut out);
+                }
+            }
+        }
+        ItemKind::TypeAlias(_)
+        | ItemKind::Enum(_)
+        | ItemKind::ErrorGroup(_)
+        | ItemKind::Table(_)
+        | ItemKind::Schema(_)
+        | ItemKind::Macro(_)
+        | ItemKind::Comptime(_)
+        | ItemKind::Extern(_) => {}
+    }
+    out
+}
+
 pub fn build<'a>(
     bump: &'a Bump,
     home: ModuleId<'a>,

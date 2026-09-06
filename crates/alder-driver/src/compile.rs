@@ -938,6 +938,22 @@ macro_rules! assert_rendered_diagnostic_snapshot {
 }
 
 #[cfg(test)]
+macro_rules! assert_rendered_diagnostics_snapshot {
+    ($source:expr, $diagnostics:expr) => {{
+        let mut rendered = String::new();
+        let handler = miette::GraphicalReportHandler::new_themed(
+            miette::GraphicalTheme::unicode_nocolor(),
+        ).with_width(80);
+        for diagnostic in $diagnostics {
+            handler.render_report(&mut rendered, diagnostic).expect("diagnostic renders");
+        }
+        insta::with_settings!({ description => $source, omit_expression => true }, {
+            insta::assert_snapshot!(rendered);
+        });
+    }};
+}
+
+#[cfg(test)]
 macro_rules! assert_diagnostic_snapshot {
     ($source:expr) => {{
         let source = indoc::indoc!($source);
@@ -1039,6 +1055,105 @@ mod tests {
 
     fn url(path: &str) -> Url {
         Url::parse(&format!("file:///{}", path)).unwrap()
+    }
+
+    #[test]
+    fn independent_type_errors_accumulate_without_publishing() {
+        let source = indoc::indoc! {r#"
+            fn first() Number { "wrong" }
+            fn second() Bool { 42 }
+            pub fn dependent() { first() + 1 }
+        "#};
+        let uri = url("app/src/main.ald");
+        for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                mode,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("invalid source must fail");
+            };
+            assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+            if matches!(mode, BuildMode::Check) {
+                assert_rendered_diagnostics_snapshot!(source, diagnostics);
+            }
+            assert!(result.artifacts.is_empty());
+            assert!(result.interfaces.is_empty());
+            assert!(!result.is_success());
+        }
+    }
+
+    #[test]
+    fn recovery_isolates_recursive_peers_and_deferred_generic_contracts() {
+        let source = indoc::indoc! {r#"
+            fn first(value: a) a { second(value) }
+            fn second(value) { if true { first(value) } else { 42 } }
+            fn independent(value: b) b { "wrong" }
+            pub fn dependent() { first(1) }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid generic contracts must fail");
+        };
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        assert!(result.interfaces.is_empty());
+    }
+
+    #[test]
+    fn recovery_discards_partial_unification_before_rechecking_shared_state() {
+        let source = indoc::indoc! {r#"
+            let shared = []
+            fn zzaccept(value: (Array[Number], Bool)) { () }
+            fn zbroken() { zzaccept((shared, "wrong")) }
+            fn avalid() { Array.push(shared, "text") }
+            fn unrelated() Bool { 42 }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid source must fail");
+        };
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        // The broken call is visited before avalid: its first tuple element
+        // temporarily constrains shared to Array[Number], then Bool fails.
+        // A catch-and-continue recovery would incorrectly reject avalid too.
+        assert_eq!(
+            diagnostics[0].message(),
+            "type mismatch: expected `Bool`, found `String`"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn recovery_accumulates_independent_deferred_and_async_errors() {
+        let source = indoc::indoc! {r#"
+            fn projection(value: (Number, Bool)) { value.2 }
+            fn propagate(value: Number) Option[Number] { Some(value?) }
+            async fn wait() Number { "wrong" }
+            pub fn dependent() { projection((1, true)) }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid source must fail");
+        };
+        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
     }
 
     #[tokio::test]

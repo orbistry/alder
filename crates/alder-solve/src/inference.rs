@@ -1356,10 +1356,7 @@ pub fn run<'a>(
     constraints: &Constraints<'a>,
 ) -> Result<Annotations<'a>, Vec<Error>> {
     let database = TraitDatabase::build(bump, constraints.module, &[]);
-    Infer::new(bump, &database, constraints.requirement_seeds)
-        .infer_module(constraints.module)
-        .map(|result| result.annotations)
-        .map_err(|error| vec![error])
+    infer_recovering(bump, &database, constraints).map(|result| result.annotations)
 }
 
 /// Validate coherence, infer the module, and resolve its trait obligations into
@@ -1377,10 +1374,119 @@ pub fn solve<'a>(
     if !coherence_errors.is_empty() {
         return Err(coherence_errors);
     }
-    let result = Infer::new(bump, database, constraints.requirement_seeds)
-        .infer_module(constraints.module)
-        .map_err(|error| vec![SolveError::Core(error)])?;
+    let result = infer_recovering(bump, database, constraints)
+        .map_err(|errors| errors.into_iter().map(SolveError::Core).collect::<Vec<_>>())?;
     resolve_obligations(bump, constraints.module, database, result)
+}
+
+/// Each failed attempt is discarded in its entirety. In particular, neither
+/// partial substitutions nor deferred constraints/evidence survive a failure.
+/// Removed bindings taint all transitive users (including writes and recursive
+/// peers). Rechecking is only for diagnostics: once any attempt failed, even a
+/// successful remainder must never escape as a checked module/interface.
+fn infer_recovering<'a>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    constraints: &Constraints<'a>,
+) -> Result<InferenceResult<'a>, Vec<Error>> {
+    let original = constraints.module;
+    let mut module = original;
+    let mut errors = Vec::new();
+    let mut excluded = BTreeSet::new();
+    loop {
+        match Infer::new(bump, database, constraints.requirement_seeds).infer_module(module) {
+            Ok(result) if errors.is_empty() => return Ok(result),
+            Ok(_) => break,
+            Err(error) => {
+                // An unknown/external origin cannot safely identify a recovery
+                // unit. Report it and stop instead of guessing a declaration.
+                let owner = original.items.iter().position(|item| {
+                    !excluded.contains(&item.region) && item.region.contains(&error.region)
+                });
+                errors.push(error);
+                let Some(owner) = owner else { break };
+                // Nominal declarations also live in the frozen trait/type
+                // database. Removing their AST item alone would leave invalid
+                // metadata available to retries and can duplicate cycle errors.
+                // Only executable declarations are recovery units here.
+                if !is_value_item(&original.items[owner].value.kind)
+                    && !matches!(
+                        original.items[owner].value.kind,
+                        ItemKind::Test(_) | ItemKind::Tests(_)
+                    )
+                {
+                    break;
+                }
+                excluded.insert(original.items[owner].region);
+            }
+        }
+
+        loop {
+            let invalid_names: BTreeSet<_> = original
+                .items
+                .iter()
+                .filter(|item| excluded.contains(&item.region))
+                .flat_map(|item| value_names(&item.value.kind))
+                .collect();
+            let before = excluded.len();
+            for item in original.items {
+                if alder_can::value_dependencies(original.id, &item.value.kind)
+                    .iter()
+                    .any(|name| invalid_names.contains(name))
+                {
+                    excluded.insert(item.region);
+                }
+            }
+            if before == excluded.len() {
+                break;
+            }
+        }
+
+        let items = bump.alloc_slice_fill_iter(
+            original
+                .items
+                .iter()
+                .copied()
+                .filter(|item| !excluded.contains(&item.region))
+                .collect::<Vec<_>>(),
+        );
+        let surviving_names: BTreeSet<_> = items
+            .iter()
+            .flat_map(|item| value_names(&item.value.kind))
+            .collect();
+        let value_sccs = bump.alloc_slice_fill_iter(
+            original
+                .value_sccs
+                .iter()
+                .copied()
+                .filter(|group| {
+                    group
+                        .members
+                        .iter()
+                        .all(|name| surviving_names.contains(name.name))
+                })
+                .collect::<Vec<_>>(),
+        );
+        module = bump.alloc(Module {
+            id: original.id,
+            imports: original.imports,
+            items,
+            value_sccs,
+            assigned_bindings: original.assigned_bindings,
+        });
+    }
+    errors.sort_by_key(|error| error.region);
+    Err(errors)
+}
+
+fn value_names<'a>(item: &ItemKind<'a>) -> Vec<&'a str> {
+    match item {
+        ItemKind::Fn(function) => vec![function.name.name],
+        ItemKind::Let(declaration) => declaration.bindings.iter().map(|name| name.name).collect(),
+        ItemKind::Component(component) => vec![component.name.name],
+        ItemKind::Extern(alder_ast::ExternDecl::Fn { name, .. }) => vec![name.name],
+        _ => Vec::new(),
+    }
 }
 
 impl<'a, 'db> Infer<'a, 'db> {

@@ -20,6 +20,7 @@ pub use error::{
     StmtError, TypeError,
 };
 pub use interface::{builtin_trait_interface, from_module, headers_from_module};
+pub use value_scc::dependencies as value_dependencies;
 pub use warning::{Warning, WarningKind};
 
 /// Type annotations produced for top-level values by the solver.

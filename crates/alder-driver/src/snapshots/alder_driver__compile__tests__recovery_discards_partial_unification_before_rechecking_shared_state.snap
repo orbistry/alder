@@ -1,0 +1,23 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let shared = []\nfn zzaccept(value: (Array[Number], Bool)) { () }\nfn zbroken() { zzaccept((shared, \"wrong\")) }\nfn avalid() { Array.push(shared, \"text\") }\nfn unrelated() Bool { 42 }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `String`
+   ╭─[/app/src/main.ald:3:25]
+ 2 │ fn zzaccept(value: (Array[Number], Bool)) { () }
+ 3 │ fn zbroken() { zzaccept((shared, "wrong")) }
+   ·                         ────────┬────────
+   ·                                 ╰── type requirement originates here
+ 4 │ fn avalid() { Array.push(shared, "text") }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:5:1]
+ 4 │ fn avalid() { Array.push(shared, "text") }
+ 5 │ fn unrelated() Bool { 42 }
+   · ─────────────┬────────────
+   ·              ╰── type requirement originates here
+   ╰────
