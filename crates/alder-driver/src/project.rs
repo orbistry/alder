@@ -583,7 +583,7 @@ mod tests {
         assert_eq!(project.module_packages(&modules), packages);
         assert_eq!(project.module_paths(&modules).unwrap(), paths);
 
-        let sources = InMemorySource::with_files([
+        let sources = [
             (
                 outer_module.clone(),
                 indoc::indoc! {r#"
@@ -608,10 +608,17 @@ mod tests {
                 inner_util.clone(),
                 "pub fn answer() String { \"inner\" }".to_owned(),
             ),
-        ]);
-        let db = std::sync::Arc::new(tokio::sync::Mutex::new(Database::new(sources)));
+        ];
         let mut previous = None;
-        for _ in 0..2 {
+        for iteration in 0..12 {
+            let mut discovered_sources = sources.clone();
+            discovered_sources.rotate_left(iteration % sources.len());
+            if iteration % 2 == 0 {
+                discovered_sources.reverse();
+            }
+            let db = std::sync::Arc::new(tokio::sync::Mutex::new(Database::new(
+                InMemorySource::with_files(discovered_sources),
+            )));
             let dependencies = BuildDependencies {
                 module_packages: project.module_packages(&modules),
                 module_paths: project.module_paths(&modules).unwrap(),
@@ -645,13 +652,17 @@ mod tests {
                     )
                 })
                 .collect::<BTreeMap<_, _>>();
-            let current = (artifacts, interfaces);
+            let indexes = bincode::serialize(&result.package_instance_indexes).unwrap();
+            let current = (graph.order.clone(), artifacts, interfaces, indexes);
             if let Some(previous) = &previous {
                 assert_eq!(&current, previous);
             }
             previous = Some(current);
             project.members.reverse();
-            modules.reverse();
+            modules.rotate_left(1);
+            if iteration % 3 == 0 {
+                modules.reverse();
+            }
         }
     }
 

@@ -24,3 +24,23 @@ changes. All 124 driver tests, formatting checks, strict workspace Clippy, and
 the full workspace test/doctest run passed there (two existing doctests remain
 ignored). No pending snapshot files were produced. This evidence does not close
 the remaining package-coherence or final release-readiness audit.
+
+## Fresh-build discovery-order regression
+
+The nested-workspace regression now constructs twelve fresh databases instead
+of reusing one database for two builds. It varies source insertion, module
+discovery, and workspace member order. Every run compares graph build order,
+emitted module identities and JavaScript, serialized interfaces, and serialized
+package instance indexes. Local imports from both nested source roots retain
+their separate owning packages. The expanded regression passes without changing
+production code.
+
+This is stronger evidence for this concrete nested-root build than the earlier
+warm-database comparison. It does not establish arbitrary downstream runtime
+initialization ordering or relocatability of external workspace members; those
+remain separate acceptance questions.
+
+Validation on the joint hardening worktree: full workspace tests and doctests,
+formatting, and strict all-target/all-feature Clippy pass (170 driver tests,
+436 solver integration tests; two existing ignored doctests). No pending
+snapshots were produced. This checkpoint changes tests and documentation only.
