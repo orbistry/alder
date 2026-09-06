@@ -322,45 +322,6 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn promise_registration_reentrant_interruption_aborts_and_ignores_settlement() {
-        let harness = indoc::indoc! {r#"
-            for (const settles of ["resolve", "reject", "pending", "throw", "malformed"]) {
-                let aborted = 0, cleaned = 0, continued = false;
-                const parent = new FiberImpl($task(function* () {
-                    try {
-                        yield* $tryPromise((signal) => {
-                            signal.addEventListener("abort", () => { aborted++; });
-                            currentFiber.interruptUnsafe();
-                            if (settles === "throw") throw new Error("registration failed after interruption");
-                            if (settles === "malformed") return 42;
-                            if (settles === "resolve") return Promise.resolve(42);
-                            if (settles === "reject") return Promise.reject(new Error("late"));
-                            return new Promise(() => {});
-                        }, true);
-                        continued = true;
-                    } finally { cleaned++; }
-                })).start();
-                const exit = await parent.awaitExit();
-                await Promise.resolve();
-                $assert(exit.$ === "Failure" && exit.error === parent.interruptError);
-                $assert(aborted === 1 && cleaned === 1 && !continued);
-                $assert(parent.children.size === 0);
-            }
-        "#};
-        let code = format!("{KERNEL_JS}\n{harness}");
-        assert_eq!(
-            tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                alder_runtime::execute(code, Vec::new())
-            )
-            .await
-            .expect("registration interruption must not leave a waiter alive")
-            .unwrap(),
-            0
-        );
-    }
-
-    #[tokio::test(flavor = "current_thread")]
     async fn semaphore_bounds_work_and_releases_after_scoped_cleanup() {
         let harness = indoc::indoc! {r#"
             const make = $semaphoreMake(2);
@@ -777,6 +738,90 @@ mod tests {
             )
             .await
             .expect("synchronized alias probes must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cancelled_promise_does_not_run_a_late_rejection_mapper() {
+        let harness = indoc::indoc! {r#"
+            let reject, registered;
+            const ready = new Promise(resolve => { registered = resolve; });
+            let mapped = 0, cleaned = 0, continued = 0, aborted = 0;
+            const fiber = new FiberImpl($task(function* () {
+                try {
+                    yield* $tryPromise(signal => {
+                        signal.addEventListener("abort", () => { aborted++; });
+                        const pending = new Promise((resolve, fail) => { reject = fail; });
+                        registered();
+                        return pending;
+                    }, true, "cancelled mapper", error => {
+                        mapped++;
+                        return $resultErr(error);
+                    });
+                    continued++;
+                } finally { cleaned++; }
+            })).start();
+            await ready;
+            fiber.interruptUnsafe();
+            const exit = await fiber.awaitExit();
+            reject(new Error("late rejection"));
+            await Promise.resolve();
+            await Promise.resolve();
+            $assert(exit.$ === "Failure" && exit.error === fiber.interruptError);
+            $assert(mapped === 0 && continued === 0 && cleaned === 1 && aborted === 1);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("late rejection must be observed without running its mapper")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn promise_registration_reentrant_interruption_aborts_and_ignores_settlement() {
+        let harness = indoc::indoc! {r#"
+            for (const settles of ["resolve", "reject", "pending", "throw", "malformed"]) {
+                let aborted = 0, cleaned = 0, mapped = 0, continued = false;
+                const parent = new FiberImpl($task(function* () {
+                    try {
+                        yield* $tryPromise((signal) => {
+                            signal.addEventListener("abort", () => { aborted++; });
+                            currentFiber.interruptUnsafe();
+                            if (settles === "throw") throw new Error("registration failed after interruption");
+                            if (settles === "malformed") return 42;
+                            if (settles === "resolve") return Promise.resolve(42);
+                            if (settles === "reject") return Promise.reject(new Error("late"));
+                            return new Promise(() => {});
+                        }, true, "reentrant interruption", error => {
+                            mapped++;
+                            return $resultErr(error);
+                        });
+                        continued = true;
+                    } finally { cleaned++; }
+                })).start();
+                const exit = await parent.awaitExit();
+                await Promise.resolve();
+                $assert(exit.$ === "Failure" && exit.error === parent.interruptError);
+                $assert(aborted === 1 && cleaned === 1 && mapped === 0 && !continued);
+                $assert(parent.children.size === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("registration interruption must not leave a waiter alive")
             .unwrap(),
             0
         );

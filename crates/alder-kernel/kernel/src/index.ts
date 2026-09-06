@@ -936,7 +936,7 @@ class FiberImpl {
             schedule(this);
         };
         try {
-            cleanup = register(resume) ?? null;
+            cleanup = register(resume, () => active) ?? null;
         } catch (error) {
             resume("throw", error);
         }
@@ -950,7 +950,7 @@ class FiberImpl {
     }
 
     handlePromise(operation) {
-        return this.suspend((resume) => {
+        return this.suspend((resume, isActive) => {
             let controller = null;
             let promise;
             let aborted = false;
@@ -983,6 +983,9 @@ class FiberImpl {
             promise.then(
                 (value) => resume("next", value),
                 (error) => {
+                    // Observe late rejection without running foreign mapping
+                    // code after cancellation has invalidated this waiter.
+                    if (!isActive()) return;
                     if (operation.mapRejected) {
                         try { resume("next", operation.mapRejected(error)); }
                         catch (mappingError) {
