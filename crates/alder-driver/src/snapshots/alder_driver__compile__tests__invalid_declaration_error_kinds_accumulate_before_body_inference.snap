@@ -1,0 +1,75 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub type First = Result[Number, String]\npub type Second = Result[String, Number]\npub enum Envelope { Envelope(Result[Number, Bool]) }\npub trait Read[a] {\n    fn read(value: a) Result[Number, Array[String]]\n}\nerror Failure { :nested(Result[Number, String]) }\ntrait Container[a] { type Item }\nimpl Container[Number] { type Item = Result[Number, Bool] }\npub type Indirect = First\npub fn dependent(value: Indirect) Indirect { value }\n"
+---
+alder::type::invalid_result_error_type
+
+  × Result needs an error row, but this type is `String`
+   ╭─[/app/src/main.ald:1:33]
+ 1 │ pub type First = Result[Number, String]
+   ·                                 ───┬──
+   ·                                    ╰── this is not an error row or named error group
+ 2 │ pub type Second = Result[String, Number]
+   ╰────
+  help: use a tagged error row such as `[:failed(String)]`, or declare a named
+        error group
+alder::type::invalid_result_error_type
+
+  × Result needs an error row, but this type is `Number`
+   ╭─[/app/src/main.ald:2:34]
+ 1 │ pub type First = Result[Number, String]
+ 2 │ pub type Second = Result[String, Number]
+   ·                                  ───┬──
+   ·                                     ╰── this is not an error row or named error group
+ 3 │ pub enum Envelope { Envelope(Result[Number, Bool]) }
+   ╰────
+  help: use a tagged error row such as `[:failed(String)]`, or declare a named
+        error group
+alder::type::invalid_result_error_type
+
+  × Result needs an error row, but this type is `Bool`
+   ╭─[/app/src/main.ald:3:45]
+ 2 │ pub type Second = Result[String, Number]
+ 3 │ pub enum Envelope { Envelope(Result[Number, Bool]) }
+   ·                                             ──┬─
+   ·                                               ╰── this is not an error row or named error group
+ 4 │ pub trait Read[a] {
+   ╰────
+  help: use a tagged error row such as `[:failed(String)]`, or declare a named
+        error group
+alder::type::invalid_result_error_type
+
+  × Result needs an error row, but this type is `Array[String]`
+   ╭─[/app/src/main.ald:5:38]
+ 4 │ pub trait Read[a] {
+ 5 │     fn read(value: a) Result[Number, Array[String]]
+   ·                                      ──────┬──────
+   ·                                            ╰── this is not an error row or named error group
+ 6 │ }
+   ╰────
+  help: use a tagged error row such as `[:failed(String)]`, or declare a named
+        error group
+alder::type::invalid_result_error_type
+
+  × Result needs an error row, but this type is `String`
+   ╭─[/app/src/main.ald:7:40]
+ 6 │ }
+ 7 │ error Failure { :nested(Result[Number, String]) }
+   ·                                        ───┬──
+   ·                                           ╰── this is not an error row or named error group
+ 8 │ trait Container[a] { type Item }
+   ╰────
+  help: use a tagged error row such as `[:failed(String)]`, or declare a named
+        error group
+alder::type::invalid_result_error_type
+
+  × Result needs an error row, but this type is `Bool`
+    ╭─[/app/src/main.ald:9:53]
+  8 │ trait Container[a] { type Item }
+  9 │ impl Container[Number] { type Item = Result[Number, Bool] }
+    ·                                                     ──┬─
+    ·                                                       ╰── this is not an error row or named error group
+ 10 │ pub type Indirect = First
+    ╰────
+  help: use a tagged error row such as `[:failed(String)]`, or declare a named
+        error group

@@ -1478,6 +1478,13 @@ fn infer_recovering<'a>(
     constraints: &Constraints<'a>,
 ) -> RecoveredInference<'a> {
     let original = constraints.module;
+    let declaration_errors = declaration_annotation_errors(bump, database, constraints);
+    if !declaration_errors.is_empty() {
+        return RecoveredInference {
+            errors: declaration_errors,
+            remainder: None,
+        };
+    }
     let mut module = original;
     let mut errors = Vec::new();
     let mut excluded = BTreeSet::new();
@@ -1606,6 +1613,30 @@ fn infer_recovering<'a>(
         errors,
         remainder: None,
     }
+}
+
+/// Declaration shapes must be valid before any body can instantiate them.
+/// These converters never infer expressions or unify types, and none of their
+/// state is reused by inference or another declaration.
+fn declaration_annotation_errors<'a>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    constraints: &Constraints<'a>,
+) -> Vec<Error> {
+    let mut errors = Vec::new();
+    for item in constraints.module.items {
+        let mut converter = Infer::new(bump, database, constraints.requirement_seeds);
+        converter.convert_declaration_types(&item.value.kind);
+        // Recursive groups can be reached from several declarations. Preserve
+        // the single cycle report rather than diagnosing its poisoned expansion.
+        if let Some(error) = converter.annotation_error.take() {
+            return vec![error];
+        }
+        errors.extend(converter.invalid_error_kinds());
+    }
+    errors.sort_by_key(|error| error.region);
+    errors.dedup();
+    errors
 }
 
 struct CallableUnit<'a> {
@@ -1860,22 +1891,8 @@ impl<'a, 'db> Infer<'a, 'db> {
         if let Some(error) = self.annotation_error.take() {
             return Err(error);
         }
-        for (typ, region) in std::mem::take(&mut self.error_kind_checks) {
-            let typ = self.prune(typ);
-            let valid = match &typ {
-                Ty::ErrorRow { .. } => true,
-                Ty::Var(id) => self.variable_kinds[*id] == VariableKind::ErrorRow,
-                _ => false,
-            };
-            if !valid {
-                return Err(Error {
-                    expectation: None,
-                    region,
-                    kind: ErrorKind::InvalidResultErrorType {
-                        actual: self.diagnostic_type(typ, &mut BTreeMap::new()),
-                    },
-                });
-            }
+        if let Some(error) = self.invalid_error_kinds().into_iter().next() {
+            return Err(error);
         }
         // Contract rigidity is final: no subsequent pass may introduce type
         // equalities or unsolved error unions after these promises are checked.
@@ -2026,12 +2043,85 @@ impl<'a, 'db> Infer<'a, 'db> {
         Ok(())
     }
 
+    fn invalid_error_kinds(&mut self) -> Vec<Error> {
+        let mut errors = Vec::new();
+        for (typ, region) in std::mem::take(&mut self.error_kind_checks) {
+            let typ = self.prune(typ);
+            let valid = match &typ {
+                Ty::ErrorRow { .. } => true,
+                Ty::Var(id) => self.variable_kinds[*id] == VariableKind::ErrorRow,
+                _ => false,
+            };
+            if !valid {
+                errors.push(Error {
+                    expectation: None,
+                    region,
+                    kind: ErrorKind::InvalidResultErrorType {
+                        actual: self.diagnostic_type(typ, &mut BTreeMap::new()),
+                    },
+                });
+            }
+        }
+        errors
+    }
+
+    fn convert_declaration_types(&mut self, item: &'a ItemKind<'a>) {
+        match item {
+            ItemKind::TypeAlias(alias) => {
+                self.from_ast(alias.typ, &mut BTreeMap::new());
+            }
+            ItemKind::Enum(declaration) => {
+                let mut vars = BTreeMap::new();
+                for variant in declaration.variants {
+                    match variant.payload {
+                        alder_ast::VariantPayload::Unit => {}
+                        alder_ast::VariantPayload::Tuple(types) => {
+                            for typ in types {
+                                self.from_ast(typ, &mut vars);
+                            }
+                        }
+                        alder_ast::VariantPayload::Record(fields) => {
+                            for field in fields {
+                                self.from_ast(field.typ, &mut vars);
+                            }
+                        }
+                    }
+                }
+            }
+            ItemKind::ErrorGroup(group) => {
+                let mut vars = BTreeMap::new();
+                for tag in group.tags {
+                    for typ in tag.args {
+                        self.from_ast(typ, &mut vars);
+                    }
+                }
+            }
+            ItemKind::Impl(implementation) => {
+                let mut vars = BTreeMap::new();
+                for binding in implementation.assoc_bindings {
+                    self.from_ast(binding.typ, &mut vars);
+                }
+            }
+            ItemKind::Trait(trait_) => {
+                for item in trait_.items {
+                    if let alder_ast::TraitItem::Fn(function) = item
+                        && function.body.is_none()
+                    {
+                        self.from_ast(function.scheme.typ, &mut BTreeMap::new());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn infer_item(
         &mut self,
         env: &mut Env<'a>,
         item: &'a ItemKind<'a>,
         region: Region,
     ) -> Result<(), Error> {
+        self.convert_declaration_types(item);
         match item {
             ItemKind::Fn(function) => {
                 self.infer_value_item(env, item, region)?;
@@ -2061,10 +2151,6 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             ItemKind::Impl(impl_) => {
                 self.require_impl_superclasses(impl_, region);
-                let mut binding_vars = BTreeMap::new();
-                for binding in impl_.assoc_bindings {
-                    self.from_ast(binding.typ, &mut binding_vars);
-                }
                 for item in impl_.items {
                     if let alder_ast::ImplItem::Fn(function) = item {
                         let region = callable_region(function.name.region, function.body.region);
@@ -2091,11 +2177,6 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             ItemKind::Trait(trait_) => {
                 for item in trait_.items {
-                    if let alder_ast::TraitItem::Fn(function) = item
-                        && function.body.is_none()
-                    {
-                        self.from_ast(function.scheme.typ, &mut BTreeMap::new());
-                    }
                     if let alder_ast::TraitItem::Fn(function) = item
                         && let Some(body) = function.body
                     {
@@ -2129,38 +2210,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.infer_item(&mut nested, &item.value.kind, item.region)?;
                 }
             }
-            ItemKind::TypeAlias(alias) => {
-                // Validate declarations even when no expression instantiates
-                // them: exported aliases must not contain invalid error kinds.
-                self.from_ast(alias.typ, &mut BTreeMap::new());
-            }
-            ItemKind::Enum(declaration) => {
-                let mut vars = BTreeMap::new();
-                for variant in declaration.variants {
-                    match variant.payload {
-                        alder_ast::VariantPayload::Unit => {}
-                        alder_ast::VariantPayload::Tuple(types) => {
-                            for typ in types {
-                                self.from_ast(typ, &mut vars);
-                            }
-                        }
-                        alder_ast::VariantPayload::Record(fields) => {
-                            for field in fields {
-                                self.from_ast(field.typ, &mut vars);
-                            }
-                        }
-                    }
-                }
-            }
-            ItemKind::ErrorGroup(group) => {
-                let mut vars = BTreeMap::new();
-                for tag in group.tags {
-                    for typ in tag.args {
-                        self.from_ast(typ, &mut vars);
-                    }
-                }
-            }
-            ItemKind::Table(_)
+            ItemKind::TypeAlias(_)
+            | ItemKind::Enum(_)
+            | ItemKind::ErrorGroup(_)
+            | ItemKind::Table(_)
             | ItemKind::Schema(_)
             | ItemKind::Macro(_)
             | ItemKind::Comptime(_)

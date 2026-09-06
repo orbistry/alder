@@ -3,6 +3,19 @@
 Status: annotation, alias, and enum declaration checks implemented;
 broader error-kind audit remains open.
 
+## Diagnostic preflight update
+
+Declaration Result kinds are now checked before body inference with an isolated
+converter per declaration. Invalid aliases, enum/error-group payloads, bodyless
+trait signatures and associated bindings accumulate source errors together;
+dependent aliases are deduplicated by their original diagnostic. No inference
+remainder or interface can escape a failed preflight. This prevents a reproduced
+dependent `expected String, found String` cascade from an invalid Result alias.
+Expression annotations retain their post-inference kind checks. Structural group
+cycles retain the single-cycle diagnostic boundary. See the declaration preflight
+checkpoint in `plans/diagnostic-ux.md` for source and cross-module evidence and the
+remaining recovery limitations.
+
 ## Direct group annotation normalization checkpoint
 
 Derived-field normalization now uses the same `Infer::from_ast` conversion as

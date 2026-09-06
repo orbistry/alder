@@ -30,7 +30,7 @@ remaining work as follows; a passing test gate does not close the open reviews.
 
 | Requirement | Verified current evidence | Remaining review / policy |
 | --- | --- | --- |
-| Independent errors and safe recovery | Fresh retries in `infer_recovering`; `independent_type_errors_accumulate_without_publishing`, partial-shared-state and recursive-group tests; implementation/default/generic-method recovery snapshots | Non-callable metadata failures still stop; expression-level recovery within a failed callable is not implemented |
+| Independent errors and safe recovery | Fresh retries in `infer_recovering`; `independent_type_errors_accumulate_without_publishing`, partial-shared-state and recursive-group tests; implementation/default/generic-method recovery snapshots; invalid declaration Result kinds accumulate in isolated preflight converters | Recursive structural-group errors still stop at one cycle; invalid metadata prevents body checking; expression-level recovery within a failed callable is not implemented |
 | Dependent suppression and publication | Callable resolved-dependency traversal; cross-module re-export/invalid-impl publication tests; Check/Build/Test output gates | Final audit of all remaining metadata stop cases |
 | Context and source spans | `mismatch_explains_expectations_at_the_source`, innermost-context, return/lambda/async, optional argument and alias-return-origin tests | Deferred record/error-row paths and specialized errors still need a complete provenance audit |
 | Type comparisons | Structured records, functions, tuples, applications, dense variables, named generic restrictions; nominal import/re-export localization; expanded aliases retain source annotation labels; specialized core errors and complete trait goals retain structured types | Final cross-context review; compact reconstruction of source synonyms is not implemented |
@@ -826,3 +826,40 @@ Validation: formatting, strict all-target/all-feature Clippy and the full
 workspace snapshot/reference check passed, including 248 driver tests and six
 CLI/editor subprocess tests. No pending or unreferenced snapshots remain.
 Final package verification and the open acceptance-matrix reviews remain pending.
+
+## Declaration error-kind preflight checkpoint
+
+The source regression `invalid_declaration_error_kinds_accumulate_before_body_inference`
+reproduced a missing-diagnostic and cascade combination: four independently
+invalid declarations yielded only the first declaration error and a dependent
+function's misleading `expected String, found String` return mismatch.
+
+Declaration-only conversion now runs before executable inference. Each item
+uses a fresh converter with no expression inference or type unification; all
+invalid converted Result error arguments are collected, sorted and deduplicated.
+Failed preflight returns no inference remainder. The immutable database is never
+made usable by merely removing a bad AST declaration. Normal inference and this
+preflight share the declaration traversal and kind-check implementation.
+
+The expanded regression covers six errors in aliases, an enum payload, a
+bodyless trait signature, an error-group payload and an associated binding.
+An alias chain produces neither duplicate origin reports nor dependent body
+errors. Check/Build/Test all withhold interfaces/artifacts and block an importer;
+corrected tagged rows allow both producer and consumer to compile. The reviewed
+colorless source snapshot labels each of the six actual invalid error arguments.
+
+Elm's `Canonicalize/Module.hs` establishes local type declarations before
+canonicalizing values. Alder's Result error-kind checks live in the solver, so
+this checkpoint establishes an analogous validation boundary without moving
+language-specific kind semantics into Elm's pipeline. Invalid metadata still
+prevents checking bodies (including independent bodies) in that module. Recursive
+structural groups retain the existing single-cycle stop to avoid duplicate
+expansion errors; collecting independent cycles and finer-grained executable
+recovery remain open. This is not a claim of complete metadata recovery.
+
+Validation: formatting and strict all-target/all-feature Clippy passed. Full
+workspace tests and snapshot-reference checks passed (249 driver tests, 467
+solver inference tests, six CLI/editor subprocess tests and all other suites;
+two existing ignored doctests). There are no pending or unreferenced snapshots.
+The new source snapshot was reviewed; existing snapshots required no changes.
+Final extracted-package verification remains to be refreshed.

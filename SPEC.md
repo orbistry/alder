@@ -237,6 +237,8 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
 - [ ] Complete recovery parity around nominal metadata, traits, and finer-grained contexts
   - [x] Recover independent implementation/default method bodies with fresh
     state, method-level dependency suppression, and no failed-build publication
+  - [x] Collect invalid declaration Result error kinds before body inference,
+    suppressing dependent alias/body cascades without reusing converter state
 - [ ] Preserve structured expected/actual types and source expectation context
   - [x] Retain ordinary and specialized core comparison types through reporting
     with resolved nominal-name localization

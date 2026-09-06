@@ -3469,6 +3469,92 @@ mod tests {
         "#};
     }
 
+    #[test]
+    fn invalid_declaration_error_kinds_accumulate_before_body_inference() {
+        let source = indoc::indoc! {r#"
+            pub type First = Result[Number, String]
+            pub type Second = Result[String, Number]
+            pub enum Envelope { Envelope(Result[Number, Bool]) }
+            pub trait Read[a] {
+                fn read(value: a) Result[Number, Array[String]]
+            }
+            error Failure { :nested(Result[Number, String]) }
+            trait Container[a] { type Item }
+            impl Container[Number] { type Item = Result[Number, Bool] }
+            pub type Indirect = First
+            pub fn dependent(value: Indirect) Indirect { value }
+        "#};
+        let uri = url("app/src/main.ald");
+        let consumer = url("app/src/consumer.ald");
+        let consumer_source = indoc::indoc! {r#"
+            import ~/main.{ Indirect }
+            pub fn consume(value: Indirect) Indirect { value }
+        "#};
+        for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+            let result = build_fixture_sync(
+                vec![
+                    (uri.clone(), Ok(source.to_owned())),
+                    (consumer.clone(), Ok(consumer_source.to_owned())),
+                ],
+                mode,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("invalid declaration contracts must fail")
+            };
+            assert_eq!(diagnostics.len(), 6, "{diagnostics:?}");
+            for (diagnostic, typ) in diagnostics.iter().zip([
+                "String",
+                "Number",
+                "Bool",
+                "Array[String]",
+                "String",
+                "Bool",
+            ]) {
+                assert_eq!(
+                    diagnostic.message(),
+                    format!("Result needs an error row, but this type is `{typ}`")
+                );
+            }
+            assert!(result.interfaces.is_empty());
+            assert!(result.artifacts.is_empty());
+            assert!(matches!(result.modules[&consumer], ModuleResult::Blocked));
+            if matches!(mode, BuildMode::Check) {
+                assert_rendered_diagnostics_snapshot!(source, diagnostics);
+            }
+        }
+        let valid = source
+            .replace(
+                "Result[Number, String]",
+                "Result[Number, [:failed(String)]]",
+            )
+            .replace(
+                "Result[String, Number]",
+                "Result[String, [:failed(Number)]]",
+            )
+            .replace("Result[Number, Bool]", "Result[Number, [:failed(Bool)]]")
+            .replace(
+                "Result[Number, Array[String]]",
+                "Result[Number, [:failed(Array[String])]]",
+            );
+        let result = build_fixture_sync(
+            vec![
+                (uri.clone(), Ok(valid)),
+                (consumer.clone(), Ok(consumer_source.to_owned())),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+        assert!(matches!(
+            result.modules[&consumer],
+            ModuleResult::Success { .. }
+        ));
+    }
+
     #[tokio::test]
     async fn renders_missing_alternative_binding_without_color() {
         assert_diagnostic_snapshot! {r#"
