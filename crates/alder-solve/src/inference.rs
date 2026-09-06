@@ -1360,6 +1360,7 @@ struct Infer<'a, 'db> {
     option_lifts: Vec<OptionLift<'a>>,
     omitted_record_fields: BTreeMap<Region, Vec<&'a str>>,
     record_initializers: Vec<(Ty<'a>, Ty<'a>, Region)>,
+    ignored_callable_regions: BTreeSet<Region>,
 }
 
 /// Infer core annotations only, without validating coherence or resolving trait
@@ -1434,8 +1435,11 @@ fn infer_recovering<'a>(
     let mut module = original;
     let mut errors = Vec::new();
     let mut excluded = BTreeSet::new();
+    let mut ignored_callables = BTreeSet::new();
     loop {
-        match Infer::new(bump, database, constraints.requirement_seeds).infer_module(module) {
+        let mut attempt = Infer::new(bump, database, constraints.requirement_seeds);
+        attempt.ignored_callable_regions = ignored_callables.clone();
+        match attempt.infer_module(module) {
             Ok(result) => {
                 errors.sort_by_key(|error: &Error| error.region);
                 return RecoveredInference {
@@ -1449,21 +1453,35 @@ fn infer_recovering<'a>(
                 let owner = original.items.iter().position(|item| {
                     !excluded.contains(&item.region) && item.region.contains(&error.region)
                 });
+                let failed_region = error.region;
                 errors.push(error);
                 let Some(owner) = owner else { break };
-                // Nominal declarations also live in the frozen trait/type
-                // database. Removing their AST item alone would leave invalid
-                // metadata available to retries and can duplicate cycle errors.
-                // Only executable declarations are recovery units here.
-                if !is_value_item(&original.items[owner].value.kind)
-                    && !matches!(
-                        original.items[owner].value.kind,
-                        ItemKind::Test(_) | ItemKind::Tests(_)
-                    )
+                if let Some(callable) = callable_units(&original.items[owner].value.kind)
+                    .into_iter()
+                    .find(|callable| {
+                        callable.region.contains(&failed_region)
+                            && !ignored_callables.contains(&callable.region)
+                    })
                 {
-                    break;
+                    // Keep the immutable declared contract, not failed body
+                    // inference state. It is usable only for further diagnostics;
+                    // accumulated errors prohibit publishing any solved output.
+                    ignored_callables.insert(callable.region);
+                } else {
+                    // Nominal declarations also live in the frozen trait/type
+                    // database. Removing their AST item alone would leave invalid
+                    // metadata available to retries and can duplicate cycle errors.
+                    // Only executable declarations are recovery units here.
+                    if !is_value_item(&original.items[owner].value.kind)
+                        && !matches!(
+                            original.items[owner].value.kind,
+                            ItemKind::Test(_) | ItemKind::Tests(_)
+                        )
+                    {
+                        break;
+                    }
+                    excluded.insert(original.items[owner].region);
                 }
-                excluded.insert(original.items[owner].region);
             }
         }
 
@@ -1476,6 +1494,22 @@ fn infer_recovering<'a>(
                 .collect();
             let before = excluded.len();
             for item in original.items {
+                let callables = callable_units(&item.value.kind);
+                if !callables.is_empty() {
+                    for callable in callables {
+                        if alder_can::callable_dependencies(
+                            original.id,
+                            callable.params,
+                            callable.body,
+                        )
+                        .iter()
+                        .any(|name| invalid_names.contains(name))
+                        {
+                            ignored_callables.insert(callable.region);
+                        }
+                    }
+                    continue;
+                }
                 if alder_can::value_dependencies(original.id, &item.value.kind)
                     .iter()
                     .any(|name| invalid_names.contains(name))
@@ -1525,6 +1559,54 @@ fn infer_recovering<'a>(
     RecoveredInference {
         errors,
         remainder: None,
+    }
+}
+
+struct CallableUnit<'a> {
+    region: Region,
+    params: &'a [alder_ast::Param<'a>],
+    body: &'a Located<Block<'a>>,
+}
+
+fn callable_region(name: Region, body: Region) -> Region {
+    Region::new(name.start, body.end)
+}
+
+fn callable_units<'a>(item: &ItemKind<'a>) -> Vec<CallableUnit<'a>> {
+    match item {
+        ItemKind::Impl(implementation) => implementation
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let alder_ast::ImplItem::Fn(function) = item {
+                    Some(CallableUnit {
+                        region: callable_region(function.name.region, function.body.region),
+                        params: function.params,
+                        body: function.body,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect(),
+        ItemKind::Trait(trait_) => trait_
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let alder_ast::TraitItem::Fn(function) = item
+                    && let Some(body) = function.body
+                {
+                    Some(CallableUnit {
+                        region: callable_region(function.name.region, body.region),
+                        params: function.params,
+                        body,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -1585,6 +1667,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             omitted_record_fields: BTreeMap::new(),
             option_lifts: Vec::new(),
             record_initializers: Vec::new(),
+            ignored_callable_regions: BTreeSet::new(),
         }
     }
 
@@ -1922,6 +2005,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 for item in impl_.items {
                     if let alder_ast::ImplItem::Fn(function) = item {
+                        let region = callable_region(function.name.region, function.body.region);
+                        if self.ignored_callable_regions.contains(&region) {
+                            continue;
+                        }
                         self.infer_function(
                             env,
                             FunctionInput {
@@ -1950,6 +2037,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                     if let alder_ast::TraitItem::Fn(function) = item
                         && let Some(body) = function.body
                     {
+                        let region = callable_region(function.name.region, body.region);
+                        if self.ignored_callable_regions.contains(&region) {
+                            continue;
+                        }
                         self.infer_function(
                             env,
                             FunctionInput {

@@ -1,0 +1,32 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Convert[a] {\n    fn first(value: a, other: b) b\n    fn second(value: a, other: b) b\n}\nimpl Convert[Number] {\n    fn first(value: Number, other: b) b { 42 }\n    fn second(value: Number, other: b) b { false }\n}\n"
+---
+alder::type::generic_specialization
+
+  × this implementation does not work for every `b`
+   ╭─[/app/src/main.ald:6:8]
+ 5 │ impl Convert[Number] {
+ 6 │     fn first(value: Number, other: b) b { 42 }
+   ·        ──┬──
+   ·          ╰── the signature promises an independent `b`, but the body requires `Number`
+ 7 │     fn second(value: Number, other: b) b { false }
+   ╰────
+  help: the caller chooses `b` for each call; the body must work for every
+        type allowed by the declared bounds, not just `Number`. Check
+        the operation or value that imposes this restriction; a trait
+        implementation must preserve the trait's generic contract
+alder::type::generic_specialization
+
+  × this implementation does not work for every `b`
+   ╭─[/app/src/main.ald:7:8]
+ 6 │     fn first(value: Number, other: b) b { 42 }
+ 7 │     fn second(value: Number, other: b) b { false }
+   ·        ───┬──
+   ·           ╰── the signature promises an independent `b`, but the body requires `Bool`
+ 8 │ }
+   ╰────
+  help: the caller chooses `b` for each call; the body must work for
+        every type allowed by the declared bounds, not just `Bool`. Check
+        the operation or value that imposes this restriction; a trait
+        implementation must preserve the trait's generic contract

@@ -235,6 +235,8 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
 - [x] Suppress cross-module importer cascades and withhold artifacts, interfaces,
   and package indexes from any failed source build
 - [ ] Complete recovery parity around nominal metadata, traits, and finer-grained contexts
+  - [x] Recover independent implementation/default method bodies with fresh
+    state, method-level dependency suppression, and no failed-build publication
 - [ ] Preserve structured expected/actual types and source expectation context
 - [x] Generate actionable unused-import/binding warnings from source
   - [x] Warn on unused resolved locals and parameters, respecting shared pattern

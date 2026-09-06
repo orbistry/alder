@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let shared = []\nfn need(value: (Array[Number], Bool)) {}\ntrait Work[a] {\n    fn broken(marker: a) ()\n    fn valid(marker: a) ()\n}\nimpl Work[Number] {\n    fn broken(marker: Number) () { need((shared, \"wrong\")) }\n    fn valid(marker: Number) () { Array.push(shared, \"ok\") }\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `(Array[Number], Bool)`, found `(Array[Number],
+  │ String)`
+   ╭─[/app/src/main.ald:8:41]
+ 7 │ impl Work[Number] {
+ 8 │     fn broken(marker: Number) () { need((shared, "wrong")) }
+   ·                                         ────────┬────────
+   ·                                                 ╰── argument 1 of `need` has an incompatible type
+ 9 │     fn valid(marker: Number) () { Array.push(shared, "ok") }
+   ╰────

@@ -1,0 +1,36 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Defaults[a] {\n    fn first(value: a) String { 42 }\n    fn second(value: a) Bool { 42 }\n    fn dependent(value: a) String { broken() }\n}\nimpl Defaults[Number] {}\nimpl Defaults[String] {}\nfn broken() String { 42 }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/app/src/main.ald:2:33]
+ 1 │ trait Defaults[a] {
+ 2 │     fn first(value: a) String { 42 }
+   ·                        ───┬──   ─┬
+   ·                           │      ╰── this return value has an incompatible type
+   ·                           ╰── the declared return type
+ 3 │     fn second(value: a) Bool { 42 }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:3:32]
+ 2 │     fn first(value: a) String { 42 }
+ 3 │     fn second(value: a) Bool { 42 }
+   ·                         ──┬─   ─┬
+   ·                           │     ╰── this return value has an incompatible type
+   ·                           ╰── the declared return type
+ 4 │     fn dependent(value: a) String { broken() }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/app/src/main.ald:8:22]
+ 7 │ impl Defaults[String] {}
+ 8 │ fn broken() String { 42 }
+   ·             ───┬──   ─┬
+   ·                │      ╰── this return value has an incompatible type
+   ·                ╰── the declared return type
+   ╰────

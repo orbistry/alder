@@ -1,0 +1,59 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Convert[a] {\n    fn first(value: a) String\n    fn second(value: a) Bool\n}\nimpl Convert[Number] {\n    fn first(value: Number) String { 42 }\n    fn second(value: Number) Bool { 42 }\n}\nimpl Convert[String] {\n    fn first(value: String) String { independent() }\n    fn second(value: String) Bool { 42 }\n}\nfn independent() String { 42 }\nfn dependent() { Convert::first(42) }\ntrait Required[a] { fn required(value: a) String }\nenum Missing { Missing }\nfn unmet(value: Missing) { Required::required(value) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/app/src/main.ald:6:38]
+ 5 │ impl Convert[Number] {
+ 6 │     fn first(value: Number) String { 42 }
+   ·                             ───┬──   ─┬
+   ·                                │      ╰── this return value has an incompatible type
+   ·                                ╰── the declared return type
+ 7 │     fn second(value: Number) Bool { 42 }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:7:37]
+ 6 │     fn first(value: Number) String { 42 }
+ 7 │     fn second(value: Number) Bool { 42 }
+   ·                              ──┬─   ─┬
+   ·                                │     ╰── this return value has an incompatible type
+   ·                                ╰── the declared return type
+ 8 │ }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+    ╭─[/app/src/main.ald:11:37]
+ 10 │     fn first(value: String) String { independent() }
+ 11 │     fn second(value: String) Bool { 42 }
+    ·                              ──┬─   ─┬
+    ·                                │     ╰── this return value has an incompatible type
+    ·                                ╰── the declared return type
+ 12 │ }
+    ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+    ╭─[/app/src/main.ald:13:27]
+ 12 │ }
+ 13 │ fn independent() String { 42 }
+    ·                  ───┬──   ─┬
+    ·                     │      ╰── this return value has an incompatible type
+    ·                     ╰── the declared return type
+ 14 │ fn dependent() { Convert::first(42) }
+    ╰────
+alder::trait::missing_instance
+
+  × no implementation of `Required[Missing]` was found
+    ╭─[/app/src/main.ald:17:28]
+ 16 │ enum Missing { Missing }
+ 17 │ fn unmet(value: Missing) { Required::required(value) }
+    ·                            ─────────┬────────
+    ·                                     ╰── this use needs trait evidence
+    ╰────
+  help: define an implementation of `Required[Missing]`, or use a type that
+        already has one

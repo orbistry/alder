@@ -566,3 +566,41 @@ followed by the added stored-interface unimported-type case. Strict all-target/
 all-feature Clippy, formatting and diff checks passed. All five new colorless
 source snapshots were reviewed; existing inference and driver snapshots remained
 unchanged.
+
+## Implementation/default body recovery checkpoint
+
+`recovery_accumulates_independent_impl_method_errors` first reported only two
+errors, hiding later independent methods after the first implementation failure.
+The dependency filter also removed an entire implementation when just one
+method used an invalid module function. Recovery now tracks callable source
+regions separately from excluded value declarations. Each retry still creates
+a fresh `Infer`; neither partial unifications nor deferred obligations survive.
+
+Implementation and trait-default bodies are skipped individually after a root
+failure, while immutable declared headers remain available for diagnostic type
+checking. These headers are not evidence that the failed body is valid: the
+accumulated errors still force `solve`/`run` failure, and no diagnostic remainder
+is publishable. The resolved SCC dependency traversal is shared at callable
+granularity, including parameter pins and nested writes. A dependent method no
+longer hides independent peers. Inherited copies of an invalid default share
+its source region and do not produce duplicate errors.
+
+Non-callable nominal/header failures and unknown/external origins still stop
+recovery; deleting those declarations while retaining the frozen database is
+not safe. This change does not relax coherence, associated-type, generic or
+publication contracts. Callable-local regions also keep deferred universal
+checks attributable to the correct method rather than the whole implementation.
+
+Source evidence covers multiple methods across two implementations, a dependent
+method, an independent ordinary error, and an independent missing trait instance
+in Check/Build/Test, with no interfaces, artifacts or package indexes. Additional
+snapshots cover default failures inherited twice, separate deferred generic
+contracts, and a failed tuple equation that temporarily constrains shared storage
+to Number before an independent String writer. The writer produces no cascade
+after retry; a corrected source compiles. Existing inference snapshots remain
+unchanged.
+
+Validation: full workspace tests passed (239 driver tests, 467 inference tests,
+six CLI subprocess tests and all other suites; two existing ignored doctests).
+Strict all-target/all-feature Clippy, formatting and diff checks passed. All four
+new source snapshots were reviewed; existing snapshots remained unchanged.

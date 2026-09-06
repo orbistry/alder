@@ -2160,6 +2160,145 @@ mod tests {
     }
 
     #[test]
+    fn recovery_accumulates_independent_impl_method_errors() {
+        let source = indoc::indoc! {r#"
+            trait Convert[a] {
+                fn first(value: a) String
+                fn second(value: a) Bool
+            }
+            impl Convert[Number] {
+                fn first(value: Number) String { 42 }
+                fn second(value: Number) Bool { 42 }
+            }
+            impl Convert[String] {
+                fn first(value: String) String { independent() }
+                fn second(value: String) Bool { 42 }
+            }
+            fn independent() String { 42 }
+            fn dependent() { Convert::first(42) }
+            trait Required[a] { fn required(value: a) String }
+            enum Missing { Missing }
+            fn unmet(value: Missing) { Required::required(value) }
+        "#};
+        let uri = url("app/src/main.ald");
+        for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                mode,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("invalid implementation bodies must fail")
+            };
+            assert_eq!(diagnostics.len(), 5, "{diagnostics:?}");
+            assert!(result.interfaces.is_empty());
+            assert!(result.artifacts.is_empty());
+            assert!(result.package_instance_indexes.is_empty());
+            if mode == BuildMode::Check {
+                assert_rendered_diagnostics_snapshot!(source, diagnostics);
+            }
+        }
+    }
+
+    #[test]
+    fn recovery_reports_default_body_errors_once_across_inheriting_impls() {
+        let source = indoc::indoc! {r#"
+            trait Defaults[a] {
+                fn first(value: a) String { 42 }
+                fn second(value: a) Bool { 42 }
+                fn dependent(value: a) String { broken() }
+            }
+            impl Defaults[Number] {}
+            impl Defaults[String] {}
+            fn broken() String { 42 }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid defaults must fail")
+        };
+        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        assert!(result.interfaces.is_empty());
+        assert!(result.artifacts.is_empty());
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn recovery_keeps_deferred_generic_method_contracts_separate() {
+        let source = indoc::indoc! {r#"
+            trait Convert[a] {
+                fn first(value: a, other: b) b
+                fn second(value: a, other: b) b
+            }
+            impl Convert[Number] {
+                fn first(value: Number, other: b) b { 42 }
+                fn second(value: Number, other: b) b { false }
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("both independent generic contracts must fail")
+        };
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.message().contains("does not work for every"))
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn impl_method_recovery_discards_partial_shared_type_unification() {
+        let source = indoc::indoc! {r#"
+            let shared = []
+            fn need(value: (Array[Number], Bool)) {}
+            trait Work[a] {
+                fn broken(marker: a) ()
+                fn valid(marker: a) ()
+            }
+            impl Work[Number] {
+                fn broken(marker: Number) () { need((shared, "wrong")) }
+                fn valid(marker: Number) () { Array.push(shared, "ok") }
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("the first method must fail")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            diagnostics[0].message().contains("(Array[Number], Bool)"),
+            "{diagnostics:?}"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = source.replace("need((shared, \"wrong\"))", "()");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(valid))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+    }
+
+    #[test]
     fn recovery_discards_partial_unification_before_rechecking_shared_state() {
         let source = indoc::indoc! {r#"
             let shared = []

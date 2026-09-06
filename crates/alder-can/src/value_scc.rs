@@ -188,6 +188,19 @@ pub fn dependencies<'a>(home: ModuleId<'a>, item: &ItemKind<'a>) -> BTreeSet<&'a
     out
 }
 
+/// The resolved value dependencies of one method or default body. Keeping this
+/// traversal shared with SCCs includes parameter pins and nested writes.
+pub fn callable_dependencies<'a>(
+    home: ModuleId<'a>,
+    parameters: &[alder_ast::Param<'a>],
+    body: Node<'a, Block<'a>>,
+) -> BTreeSet<&'a str> {
+    let mut out = BTreeSet::new();
+    params(home, parameters, &mut out);
+    block(home, body, &mut out);
+    out
+}
+
 fn collect_item<'a>(home: ModuleId<'a>, item: &ItemKind<'a>, out: &mut impl References<'a>) {
     match item {
         ItemKind::Fn(function) => {
