@@ -8,6 +8,37 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn coalesce_unwraps_exactly_one_option_layer() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn with_default(value: Option[a], fallback: a) a { value ?? fallback }
+        fn inferred(value, fallback) { value ?? fallback }
+        pub fn number() Number { inferred(Some(42), 0) }
+        pub fn text() String { inferred(None, "fallback") }
+        pub fn nested(value: Option[Option[Number]]) Option[Number] {
+            with_default(value, Some(42))
+        }
+        pub fn unit(value: Option[()]) () { value ?? () }
+    "#},
+    )
+    .expect("coalesce returns the payload type, not the Option wrapper");
+}
+
+#[test]
+fn coalesce_requires_an_option_and_a_matching_payload_default() {
+    for source in [
+        "pub fn invalid() Number { 42 ?? 0 }",
+        "pub fn invalid(value: Option[Number]) String { value ?? \"wrong\" }",
+        "pub fn invalid(value: Option[Number]) Option[Number] { value ?? Some(0) }",
+    ] {
+        let bump = Bump::new();
+        assert!(solve_input(&bump, source).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn synchronized_ref_accepts_task_callbacks_and_preserves_payload_types() {
     let bump = Bump::new();
     let result = solve_input(

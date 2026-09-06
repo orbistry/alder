@@ -236,6 +236,21 @@ macro_rules! assert_solved_emit_snapshot {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn coalesce_unwraps_only_the_present_branch() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn default_unit(value: Option[()], events: Array[Number]) () {
+                value ?? {
+                    let ignored = Array.push(events, 1)
+                    ()
+                }
+            }
+            pub fn nested(value: Option[Option[Number]]) Option[Number] {
+                value ?? Some(42)
+            }
+        "#};
+    }
+
+    #[test]
     fn alternative_patterns_share_guard_and_body_binding_identity() {
         assert_solved_emit_snapshot! {r#"
             enum Choice { Left(Number), Right(Number) }

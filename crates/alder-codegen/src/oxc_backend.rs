@@ -1566,7 +1566,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     .unary(UnaryOperator::LogicalNot, self.js.identifier(&result)),
                 alder_ast::BinOp::Coalesce => self.js.binary(
                     self.js.identifier(&result),
-                    BinaryOperator::Equality,
+                    BinaryOperator::StrictEquality,
                     self.js.builder.expression_null_literal(oxc_span::SPAN),
                 ),
                 _ => unreachable!(),
@@ -1575,7 +1575,22 @@ impl<'src, 'js> Emitter<'src, 'js> {
             let mut consequent = right.prefix;
             let assignment = self.js.assign_identifier(&result, right.expr);
             consequent.push(self.js.expression_statement(assignment));
-            prefix.push(self.js.if_statement(condition, consequent, None));
+            let alternate = if op == alder_ast::BinOp::Coalesce {
+                self.kernel.insert("$optionUnbox");
+                let payload = self.js.call(
+                    self.js.identifier("$optionUnbox"),
+                    [self.js.identifier(&result)],
+                );
+                let mut body = self.js.vec();
+                body.push(
+                    self.js
+                        .expression_statement(self.js.assign_identifier(&result, payload)),
+                );
+                Some(self.js.block(body))
+            } else {
+                None
+            };
+            prefix.push(self.js.if_statement(condition, consequent, alternate));
             return Ok(Value {
                 prefix,
                 expr: self.js.identifier(&result),

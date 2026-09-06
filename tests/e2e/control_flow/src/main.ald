@@ -1,4 +1,5 @@
 import ~/tags
+import ~/call_order
 import ~/assignments
 
 fn choose(flag: Bool) Number {
@@ -310,6 +311,10 @@ fn expression_order() {
 }
 
 pub async fn main() {
+    call_order.run()
+    assert(call_order.with_default(Some(42), 0) == 42)
+    assert(call_order.with_default(None, "fallback") == "fallback")
+    call_order.verify_async().await
     expression_order()
     template_order()
     assert(assignments.identity(42) == 42)

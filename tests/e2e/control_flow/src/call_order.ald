@@ -1,0 +1,125 @@
+fn mark(events: Array[Number], value: Number) Number {
+    Array.push(events, value)
+    value
+}
+
+fn choose(events: Array[Number]) fn(Number, Number) Number {
+    Array.push(events, 0)
+    (left, right) -> {
+        Array.push(events, 3)
+        left + right
+    }
+}
+
+pub fn with_default(value: Option[a], fallback: a) a { value ?? fallback }
+
+fn return_default(value: Option[Number]) Number { value ?? { return 42 } }
+
+fn failed_default(value: Option[Number]) Result[Number, [:missing]] {
+    Ok(value ?? { let missing: Result[Number, [:missing]] = Err(:missing)
+        missing?
+    })
+}
+
+pub fn run() {
+    let operation: fn(Number) Number = value -> value + 1
+    let answer = operation({
+        let replacement = value -> value + 100
+        operation = replacement
+        41
+    })
+    assert(answer == 42)
+    assert(operation(1) == 101)
+
+    let holder = { call: (value: Number) -> value + 1 }
+    let member = holder.call({
+        let replacement = (value: Number) -> value + 100
+        holder.call = replacement
+        41
+    })
+    assert(member == 42)
+    assert(holder.call(1) == 101)
+
+    let events = []
+    let result = choose(events)(mark(events, 1), {
+        let argument = mark(events, 2)
+        argument
+    })
+    assert(result == 3)
+    assert(events == [0, 1, 2, 3])
+    let piped_events = []
+    let piped = mark(piped_events, 1) |> choose(piped_events)(mark(piped_events, 2))
+    assert(piped == 3)
+    assert(piped_events == [1, 0, 2, 3])
+
+    let branches = []
+    let skipped_and = false && { mark(branches, 1) == 1 }
+    let skipped_or = true || { mark(branches, 2) == 2 }
+    let reached_and = true && { mark(branches, 3) == 3 }
+    let reached_or = false || { mark(branches, 4) == 4 }
+    assert(!skipped_and && skipped_or && reached_and && reached_or)
+    assert(branches == [3, 4])
+
+    let defaults = []
+    let present = Some(42) ?? { let value = mark(defaults, 1)
+        value
+    }
+    let absent: Option[Number] = None
+    let fallback = absent ?? { let value = mark(defaults, 2)
+        value
+    }
+    assert(present == 42 && fallback == 2)
+    assert(defaults == [2])
+    let unit_default = Some(()) ?? { let value = mark(defaults, 3)
+        ()
+    }
+    assert(defaults == [2])
+    let nested: Option[Option[Number]] = Some(None)
+    assert((nested ?? Some(42)) == None)
+    let empty_outer: Option[Option[Option[Number]]] = None
+    assert((empty_outer ?? Some(None)) == Some(None))
+    assert(return_default(Some(7)) == 7)
+    assert(return_default(None) == 42)
+    assert(failed_default(Some(7)) == Ok(7))
+    assert(failed_default(None) == Err(:missing))
+}
+
+async fn total(left: Number, right: Number, events: Array[Number]) Number {
+    Array.push(events, 3)
+    Task.sleep(0).await
+    left + right
+}
+
+pub async fn verify_async() {
+    let events = []
+    let value = 1
+    let task = total(value, {
+        let replacement = 2
+        value = replacement
+        mark(events, 2)
+    }, events)
+    assert(events == [2])
+    value = 99
+    assert(task.await == 3)
+    assert(task.await == 3)
+    assert(events == [2, 3, 3])
+
+    let operation: fn(Number) Task[Number] = value -> async { value + 1 }
+    let result = operation({
+        let pause = Task.sleep(0).await
+        operation = value -> async { value + 100 }
+        41
+    }).await
+    assert(result == 42)
+    assert(operation(1).await == 101)
+    let defaults = []
+    let absent: Option[Number] = None
+    let first = Some(42) ?? { let pause = Task.sleep(0).await
+        mark(defaults, 1)
+    }
+    let second = absent ?? { let pause = Task.sleep(0).await
+        mark(defaults, 2)
+    }
+    assert(first == 42 && second == 2)
+    assert(defaults == [2])
+}

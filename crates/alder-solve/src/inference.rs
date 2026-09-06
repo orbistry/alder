@@ -3218,8 +3218,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                 Ok(bool_)
             }
             BinOp::Coalesce => {
-                self.unify(left_type.clone(), right_type, right.region)?;
-                Ok(self.prune(left_type))
+                let optional = self.named("Option", vec![right_type.clone()]);
+                self.unify(left_type, optional, left.region)?;
+                Ok(self.prune(right_type))
             }
             BinOp::Pipe => unreachable!("pipe expressions return before ordinary binop inference"),
             BinOp::In => Ok(self.named("Bool", Vec::new())),

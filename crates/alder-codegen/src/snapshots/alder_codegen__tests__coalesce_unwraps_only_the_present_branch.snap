@@ -1,0 +1,36 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn default_unit(value: Option[()], events: Array[Number]) () {\n    value ?? {\n        let ignored = Array.push(events, 1)\n        ()\n    }\n}\npub fn nested(value: Option[Option[Number]]) Option[Number] {\n    value ?? Some(42)\n}\n"
+---
+import { $optionSome, $optionUnbox } from "alder:kernel";
+import { push as $i_alder_3A_2F_2Fstd_2FArray_2Emjs_push } from "alder://std/Array.mjs";
+function $v_default_unit($a0, $a1) {
+	let $l0_value = $a0;
+	let $l1_events = $a1;
+	const $t0 = $l0_value;
+	let $t1 = $t0;
+	if ($t1 === null) {
+		let $t2;
+		const $t3 = $i_alder_3A_2F_2Fstd_2FArray_2Emjs_push;
+		const $t4 = $t3($l1_events, 1);
+		let $l2_ignored = $t4;
+		$t2 = undefined;
+		$t1 = $t2;
+	} else {
+		$t1 = $optionUnbox($t1);
+	}
+	return $t1;
+}
+function $v_nested($a0) {
+	let $l3_value = $a0;
+	const $t5 = $l3_value;
+	let $t6 = $t5;
+	if ($t6 === null) {
+		const $t7 = $optionSome;
+		$t6 = $t7(42);
+	} else {
+		$t6 = $optionUnbox($t6);
+	}
+	return $t6;
+}
+export { $v_default_unit as default_unit, $v_nested as nested };
