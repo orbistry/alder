@@ -45,6 +45,14 @@ pub enum DriverError {
         second: PathBuf,
     },
 
+    #[error("dependency package {name} resolves to both {first} and {second}")]
+    #[diagnostic(code(alder::driver::duplicate_dependency_package))]
+    DuplicateDependencyPackage {
+        name: String,
+        first: PathBuf,
+        second: PathBuf,
+    },
+
     #[error("import cycle detected: {cycle}")]
     ImportCycle { cycle: String },
 

@@ -183,112 +183,173 @@ impl Project {
         modules: &[Url],
         include_test: bool,
     ) -> Result<BuildDependencies, DriverError> {
-        let mut imported = std::collections::BTreeSet::new();
-        for uri in modules {
-            let source = db.source(uri).await?;
-            let bump = bumpalo::Bump::new();
-            let source = bump.alloc_str(source);
-            let Ok(module) = alder_parse::parse_module(&bump, source) else {
-                continue;
-            };
-            for import in module.imports() {
-                if let alder_source::ModuleRoot::Package { author, package } =
-                    import.path.value.root
-                {
-                    imported.insert((author.value.to_owned(), package.value.to_owned()));
-                }
-            }
-        }
-
         let mut result = BuildDependencies {
             module_packages: self.module_packages(modules),
             module_paths: self.module_paths(modules)?,
             ..BuildDependencies::default()
         };
-        let mut loaded = std::collections::BTreeSet::new();
+        let member_configs = |project: &Project, modules: &[Url]| {
+            project
+                .members
+                .iter()
+                .map(|member| {
+                    let owned = modules
+                        .iter()
+                        .filter(|uri| {
+                            uri.to_file_path()
+                                .ok()
+                                .and_then(|path| {
+                                    project
+                                        .source_owner(&path)
+                                        .map(|(owner, _)| owner.root == member.root)
+                                })
+                                .unwrap_or(false)
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    (member.root.clone(), member.config.clone(), owned)
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut pending = std::collections::VecDeque::from([(
+            self.root.clone(),
+            member_configs(self, modules),
+            include_test,
+        )]);
+        let mut loaded = BTreeMap::new();
         for member in &self.members {
-            let mut dependencies = match &member.config {
-                Config::Application(config) => config.dependencies.clone(),
-                Config::Package(config) => config.dependencies.clone(),
-                Config::Workspace(_) => BTreeMap::new(),
-            };
-            if include_test {
-                match &member.config {
-                    Config::Application(config) => {
-                        dependencies.extend(config.test_dependencies.clone())
-                    }
-                    Config::Package(config) => {
-                        dependencies.extend(config.test_dependencies.clone())
-                    }
-                    Config::Workspace(_) => {}
-                }
+            if let OwnedPackageId::Named { author, project } = member.package_id() {
+                loaded.insert((author, project), member.root.clone());
             }
-            for (name, dependency) in dependencies {
-                let key = (name.author().to_owned(), name.project().to_owned());
-                if !imported.contains(&key) || !loaded.insert(key.clone()) {
-                    continue;
+        }
+        while let Some((project_root, members, include_test)) = pending.pop_front() {
+            for (member_root, member_config, modules) in members {
+                let mut imported = std::collections::BTreeSet::new();
+                for uri in &modules {
+                    let source = db.source(uri).await?;
+                    let bump = bumpalo::Bump::new();
+                    let source = bump.alloc_str(source);
+                    let Ok(module) = alder_parse::parse_module(&bump, source) else {
+                        continue;
+                    };
+                    for import in module.imports() {
+                        if let alder_source::ModuleRoot::Package { author, package } =
+                            import.path.value.root
+                        {
+                            imported.insert((author.value.to_owned(), package.value.to_owned()));
+                        }
+                    }
                 }
-                let package = OwnedPackageId::Named {
-                    author: key.0,
-                    project: key.1,
+
+                let mut dependencies = match &member_config {
+                    Config::Application(config) => config.dependencies.clone(),
+                    Config::Package(config) => config.dependencies.clone(),
+                    Config::Workspace(_) => BTreeMap::new(),
                 };
-                let root = match dependency {
-                    Dependency::Source(DependencySource::Path(path)) => member.root.join(path.path),
-                    Dependency::Source(DependencySource::Workspace(_)) => continue,
-                    Dependency::Constraint(_) | Dependency::Source(DependencySource::Git(_)) => {
-                        self.root
+                if include_test {
+                    match &member_config {
+                        Config::Application(config) => {
+                            dependencies.extend(config.test_dependencies.clone())
+                        }
+                        Config::Package(config) => {
+                            dependencies.extend(config.test_dependencies.clone())
+                        }
+                        Config::Workspace(_) => {}
+                    }
+                }
+                for (name, dependency) in dependencies {
+                    let key = (name.author().to_owned(), name.project().to_owned());
+                    if !imported.contains(&key) {
+                        continue;
+                    }
+                    let package = OwnedPackageId::Named {
+                        author: key.0.clone(),
+                        project: key.1.clone(),
+                    };
+                    let root = match dependency {
+                        Dependency::Source(DependencySource::Path(path)) => {
+                            member_root.join(path.path)
+                        }
+                        Dependency::Source(DependencySource::Workspace(_)) => continue,
+                        Dependency::Constraint(_)
+                        | Dependency::Source(DependencySource::Git(_)) => project_root
                             .join(".alder")
                             .join("dependencies")
                             .join(name.author())
-                            .join(name.project())
+                            .join(name.project()),
+                    };
+                    let root = root
+                        .canonicalize()
+                        .map_err(|source| DriverError::ReadError {
+                            path: root.clone(),
+                            source,
+                        })?;
+                    if let Some(previous) = loaded.get(&key) {
+                        if previous != &root {
+                            let mut roots = [previous.clone(), root];
+                            roots.sort();
+                            return Err(DriverError::DuplicateDependencyPackage {
+                                name: format!("{}/{}", key.0, key.1),
+                                first: roots[0].clone(),
+                                second: roots[1].clone(),
+                            });
+                        }
+                        continue;
                     }
-                };
-                if root.join("alder.jsonc").is_file() {
-                    let dependency_project = Project::load(&root).await?;
-                    let dependency_modules = dependency_project.discover_modules(db).await?;
-                    let declared_package = dependency_project
-                        .members
-                        .first()
-                        .map(ProjectMember::package_id);
-                    if declared_package.as_ref() != Some(&package) {
+                    loaded.insert(key, root.clone());
+                    if root.join("alder.jsonc").is_file() {
+                        let dependency_project = Project::load(&root).await?;
+                        let dependency_modules = dependency_project.discover_modules(db).await?;
+                        let declared_package = dependency_project
+                            .members
+                            .first()
+                            .map(ProjectMember::package_id);
+                        if declared_package.as_ref() != Some(&package) {
+                            return Err(DriverError::IncompatibleInterface {
+                                reason: "path dependency declares a different package identity"
+                                    .to_owned(),
+                            });
+                        }
+                        result.module_packages.extend(
+                            dependency_modules
+                                .iter()
+                                .cloned()
+                                .map(|module| (module, package.clone())),
+                        );
+                        result
+                            .module_paths
+                            .extend(dependency_project.module_paths(&dependency_modules)?);
+                        pending.push_back((
+                            dependency_project.root.clone(),
+                            member_configs(&dependency_project, &dependency_modules),
+                            false,
+                        ));
+                        result.source_modules.extend(dependency_modules);
+                        // Saved headers may describe deleted modules or impls, even
+                        // when their format and internal fingerprints are valid.
+                        // The current source build owns this package's semantics.
+                        continue;
+                    }
+                    let cache = InterfaceCache::new(&root);
+                    let index = cache.load_package_index_checked(&package)?;
+                    if index.package != package {
                         return Err(DriverError::IncompatibleInterface {
-                            reason: "path dependency declares a different package identity"
+                            reason: "dependency instance index has the wrong package identity"
                                 .to_owned(),
                         });
                     }
-                    result.module_packages.extend(
-                        dependency_modules
-                            .iter()
-                            .cloned()
-                            .map(|module| (module, package.clone())),
-                    );
-                    result
-                        .module_paths
-                        .extend(dependency_project.module_paths(&dependency_modules)?);
-                    result.source_modules.extend(dependency_modules);
-                    // Saved headers may describe deleted modules or impls, even
-                    // when their format and internal fingerprints are valid.
-                    // The current source build owns this package's semantics.
-                    continue;
-                }
-                let cache = InterfaceCache::new(&root);
-                let index = cache.load_package_index_checked(&package)?;
-                if index.package != package {
-                    return Err(DriverError::IncompatibleInterface {
-                        reason: "dependency instance index has the wrong package identity"
-                            .to_owned(),
-                    });
-                }
-                for module in &index.modules {
-                    let interface = cache.load_interface(module)?;
-                    if interface.module != *module {
-                        return Err(DriverError::IncompatibleInterface {
-                            reason: "dependency interface has the wrong module identity".to_owned(),
-                        });
+                    for module in &index.modules {
+                        let interface = cache.load_interface(module)?;
+                        if interface.module != *module {
+                            return Err(DriverError::IncompatibleInterface {
+                                reason: "dependency interface has the wrong module identity"
+                                    .to_owned(),
+                            });
+                        }
+                        result.interfaces.push(interface);
                     }
-                    result.interfaces.push(interface);
+                    result.package_instance_indexes.push(index);
                 }
-                result.package_instance_indexes.push(index);
             }
         }
         Ok(result)
@@ -457,6 +518,68 @@ mod tests {
     use super::*;
     use crate::interface::{InterfaceFile, OwnedModuleId, PackageInstanceIndexFile};
     use crate::source::InMemorySource;
+
+    #[tokio::test]
+    async fn workspace_imports_do_not_activate_sibling_dependencies() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-member-imports-{}-{nonce}",
+            std::process::id()
+        ));
+        for directory in ["a/src", "b/src", "widgets/src"] {
+            std::fs::create_dir_all(root.join(directory)).unwrap();
+        }
+        for (path, source) in [
+            ("alder.jsonc", r#"{"type":"workspace","members":["a","b"]}"#),
+            (
+                "a/alder.jsonc",
+                indoc::indoc! {r#"
+                { "type": "application", "target": "standalone",
+                  "dependencies": { "vendor/widgets": { "path": "../widgets" } } }
+            "#},
+            ),
+            (
+                "b/alder.jsonc",
+                indoc::indoc! {r#"
+                { "type": "application", "target": "standalone",
+                  "dependencies": { "vendor/widgets": { "path": "../unused-missing" } } }
+            "#},
+            ),
+            (
+                "widgets/alder.jsonc",
+                indoc::indoc! {r#"
+                { "type": "package", "name": "vendor/widgets", "version": "0.1.0",
+                  "summary": "Member import fixture", "license": "MIT", "target": "standalone" }
+            "#},
+            ),
+            (
+                "a/src/main.ald",
+                indoc::indoc! {r#"
+                import @vendor/widgets/api
+                pub fn answer() Number { api.answer() }
+            "#},
+            ),
+            ("b/src/main.ald", "pub fn answer() Number { 0 }"),
+            ("widgets/src/api.ald", "pub fn answer() Number { 42 }"),
+        ] {
+            std::fs::write(root.join(path), source).unwrap();
+        }
+        let mut project = Project::load(&root).await.unwrap();
+        for _ in 0..2 {
+            let mut db = Database::new(crate::source::FileSystemSource::new());
+            let modules = project.discover_modules(&db).await.unwrap();
+            let dependencies = project
+                .build_dependencies(&mut db, &modules, false)
+                .await
+                .expect("member a's import must not activate member b's unused dependency");
+            assert_eq!(dependencies.source_modules.len(), 1);
+            project.members.reverse();
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[tokio::test]
     async fn workspace_applications_keep_separate_modules_and_interfaces() {

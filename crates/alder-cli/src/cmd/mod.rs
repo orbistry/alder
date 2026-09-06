@@ -362,6 +362,149 @@ mod tests {
         .unwrap();
         assert_eq!(exit, 0);
         assert!(!root.join("widgets/.alder").exists());
+        std::fs::create_dir_all(root.join("core/src")).unwrap();
+        for (path, source) in [
+            (
+                "widgets/alder.jsonc",
+                indoc::indoc! {r#"
+                    { "type": "package", "name": "vendor/widgets",
+                      "version": "0.1.0", "summary": "Transitive dependency fixture",
+                      "license": "MIT", "target": "standalone",
+                      "dependencies": { "vendor/core": { "path": "../core" } } }
+                "#},
+            ),
+            (
+                "core/alder.jsonc",
+                indoc::indoc! {r#"
+                    { "type": "package", "name": "vendor/core",
+                      "version": "0.1.0", "summary": "Transitive dependency leaf",
+                      "license": "MIT", "target": "standalone" }
+                "#},
+            ),
+            (
+                "core/src/api.ald",
+                "pub fn label() String { \"cold token\" }",
+            ),
+            (
+                "widgets/src/instances.ald",
+                indoc::indoc! {r#"
+                    import ~/api.{ Token, Display }
+                    import @vendor/core/api.{ label }
+                    impl Display[Token] {
+                        fn display(value: Token) String { label() }
+                    }
+                "#},
+            ),
+        ] {
+            std::fs::write(root.join(path), source).unwrap();
+        }
+        let compiled = super::build::compile_ephemeral(&root, BuildMode::Build)
+            .await
+            .expect("dependency imports must use the dependency's own configuration");
+        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+            .await
+            .unwrap();
+        let exit = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            alder_runtime::execute(bundle, Vec::new()),
+        )
+        .await
+        .expect("transitive dependency execution timed out")
+        .unwrap();
+        assert_eq!(exit, 0);
+        std::fs::create_dir_all(root.join("other-core/src")).unwrap();
+        std::fs::copy(
+            root.join("core/alder.jsonc"),
+            root.join("other-core/alder.jsonc"),
+        )
+        .unwrap();
+        std::fs::copy(
+            root.join("core/src/api.ald"),
+            root.join("other-core/src/api.ald"),
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("alder.jsonc"),
+            indoc::indoc! {r#"
+                { "type": "application", "target": "standalone",
+                  "dependencies": {
+                    "vendor/widgets": { "path": "widgets" },
+                    "vendor/core": { "path": "other-core" }
+                  } }
+            "#},
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("src/main.ald"),
+            indoc::indoc! {r#"
+                import @vendor/widgets/api.{ Token, display }
+                import @vendor/core/api.{ label }
+                pub fn main() { assert(display(Token::Token) == label()) }
+            "#},
+        )
+        .unwrap();
+        let error = super::build::compile_ephemeral(&root, BuildMode::Build)
+            .await
+            .err()
+            .expect("two dependency roots cannot share one package identity");
+        let rendered = error.to_string();
+        for directory in ["core", "other-core"] {
+            let path = root.join(directory).canonicalize().unwrap();
+            assert!(
+                rendered.contains(path.to_string_lossy().as_ref()),
+                "{rendered}"
+            );
+        }
+        std::fs::write(
+            root.join("alder.jsonc"),
+            indoc::indoc! {r#"
+                { "type": "application", "target": "standalone",
+                  "dependencies": {
+                    "vendor/widgets": { "path": "widgets" },
+                    "vendor/core": { "path": "core/../core" }
+                  } }
+            "#},
+        )
+        .unwrap();
+        let compiled = super::build::compile_ephemeral(&root, BuildMode::Build)
+            .await
+            .expect("equivalent paths to one dependency root must coalesce");
+        assert_eq!(
+            compiled
+                .result
+                .artifacts
+                .values()
+                .filter(|artifact| artifact.module_id == "alder://pkg/vendor/core/api.mjs")
+                .count(),
+            1
+        );
+        std::fs::write(
+            root.join("core/alder.jsonc"),
+            indoc::indoc! {r#"
+                { "type": "package", "name": "vendor/core",
+                  "version": "0.1.0", "summary": "Cyclic dependency fixture",
+                  "license": "MIT", "target": "standalone",
+                  "dependencies": { "vendor/widgets": { "path": "../widgets" } } }
+            "#},
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("core/src/api.ald"),
+            indoc::indoc! {r#"
+                import @vendor/widgets/instances
+                pub fn label() String { "cold token" }
+            "#},
+        )
+        .unwrap();
+        let error = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            super::build::compile_ephemeral(&root, BuildMode::Build),
+        )
+        .await
+        .expect("cyclic dependency discovery must terminate")
+        .err()
+        .expect("a cross-package module import cycle must be rejected");
+        assert!(error.to_string().contains("import cycle"), "{error:?}");
         std::fs::remove_dir_all(root).unwrap();
     }
 
