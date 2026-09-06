@@ -24,13 +24,42 @@ pub enum Cmd {
 
 impl Cmd {
     pub async fn exec(self) -> miette::Result<()> {
-        match self {
-            Cmd::Build(args) => args.exec().await,
-            Cmd::Check(args) => args.exec().await,
-            Cmd::Fmt(args) => args.exec().await,
+        self.exec_with(crate::reporting::Output::default()).await
+    }
+
+    pub async fn exec_with(self, output: crate::reporting::Output) -> miette::Result<()> {
+        output.begin();
+        let operation = match &self {
+            Cmd::Build(_) => "build",
+            Cmd::Check(_) => "check",
+            Cmd::Fmt(_) => "fmt",
+            Cmd::Lsp(_) => "lsp",
+            Cmd::Run(_) => "run",
+            Cmd::Test(_) => "test",
+        };
+        let started = std::time::Instant::now();
+        let result = match self {
+            Cmd::Build(args) => args.exec_with(&output).await,
+            Cmd::Check(args) => args.exec_with(&output).await,
+            Cmd::Fmt(args) => args.exec_with(&output).await,
             Cmd::Lsp(args) => lsp::exec(args).await,
-            Cmd::Run(args) => args.exec().await,
-            Cmd::Test(args) => args.exec().await,
+            Cmd::Run(args) => args.exec_with(&output).await,
+            Cmd::Test(args) => args.exec_with(&output).await,
+        };
+        match result {
+            Ok(()) => {
+                if matches!(operation, "build" | "check") {
+                    output.finish(operation, started.elapsed());
+                }
+                Ok(())
+            }
+            Err(error) => {
+                if !output.failure_reported() {
+                    output.diagnostic(&error);
+                    output.failure(operation, started.elapsed());
+                }
+                Err(error)
+            }
         }
     }
 }

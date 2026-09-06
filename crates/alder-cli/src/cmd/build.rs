@@ -4,7 +4,7 @@ use alder_bundle::EntryKind;
 use alder_config::{Config, Target};
 use alder_driver::{
     BuildMode, BuildResult, Database, FileSystemSource, InterfaceCache, Project,
-    build_graph_with_dependencies, build_with_dependencies,
+    build_graph_with_dependencies, build_with_reporter,
 };
 use miette::{IntoDiagnostic, Result, miette};
 use tokio::sync::Mutex;
@@ -21,22 +21,31 @@ pub struct Args {
 
 impl Args {
     pub async fn exec(self) -> Result<()> {
-        let compiled = compile(&self.path, BuildMode::Build).await?;
+        super::Cmd::Build(self).exec().await
+    }
+
+    pub(super) async fn exec_with(self, output: &crate::reporting::Output) -> Result<()> {
+        let compiled = compile_reported(&self.path, BuildMode::Build, output).await?;
         let kind = match compiled.target {
             Target::Standalone => EntryKind::Standalone,
             Target::Cloudflare => EntryKind::Cloudflare,
         };
+        output.stage("bundling");
+        output.status("Bundling", crate::reporting::display_path(&compiled.root));
         let bundle = bundle(&compiled, kind).await?;
-        let output = if self.output.is_absolute() {
+        output.stage("build");
+        let artifact = if self.output.is_absolute() {
             self.output
         } else {
             compiled.root.join(self.output)
         };
-        if let Some(parent) = output.parent() {
+        if let Some(parent) = artifact.parent() {
             tokio::fs::create_dir_all(parent).await.into_diagnostic()?;
         }
-        tokio::fs::write(&output, bundle).await.into_diagnostic()?;
-        eprintln!("Built {}", output.display());
+        tokio::fs::write(&artifact, bundle)
+            .await
+            .into_diagnostic()?;
+        output.status("Built", crate::reporting::display_path(&artifact));
         Ok(())
     }
 }
@@ -47,18 +56,35 @@ pub(super) struct Compiled {
     pub result: BuildResult,
 }
 
+#[cfg(test)]
 pub(super) async fn compile(path: &PathBuf, mode: BuildMode) -> Result<Compiled> {
-    compile_inner(path, mode, true).await
+    compile_inner(path, mode, true, &crate::reporting::Output::silent()).await
+}
+
+pub(super) async fn compile_reported(
+    path: &PathBuf,
+    mode: BuildMode,
+    output: &crate::reporting::Output,
+) -> Result<Compiled> {
+    output.stage("compilation");
+    compile_inner(path, mode, true, output).await
 }
 
 #[cfg(test)]
 pub(super) async fn compile_ephemeral(path: &PathBuf, mode: BuildMode) -> Result<Compiled> {
-    compile_inner(path, mode, false).await
+    compile_inner(path, mode, false, &crate::reporting::Output::silent()).await
 }
 
-async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result<Compiled> {
+async fn compile_inner(
+    path: &PathBuf,
+    mode: BuildMode,
+    persist: bool,
+    output: &crate::reporting::Output,
+) -> Result<Compiled> {
     let project = Project::load(path).await.into_diagnostic()?;
     let target = project_target(&project.config)?;
+    output.project("Compiling", &project);
+    output.detail("Discovering", "source modules");
     let db = Arc::new(Mutex::new(Database::new(FileSystemSource::new())));
     let mut modules = project
         .discover_modules(&*db.lock().await)
@@ -67,6 +93,7 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
     if modules.is_empty() {
         return Err(miette!("no Alder source files found"));
     }
+    output.detail("Resolving", "dependencies");
     let dependencies = project
         .build_dependencies(&mut *db.lock().await, &modules, mode == BuildMode::Test)
         .await
@@ -77,16 +104,31 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
     let graph = build_graph_with_dependencies(db.clone(), &modules, &dependencies)
         .await
         .into_diagnostic()?;
-    let result = build_with_dependencies(db, &graph, mode, dependencies).await;
+    let result =
+        build_with_reporter(db, &graph, mode, dependencies, Arc::new(output.clone())).await;
+    report_diagnostics(&project.root, &result, output)?;
+    if persist {
+        persist_semantic_artifacts(&project.root, &result)?;
+    }
+    Ok(Compiled {
+        root: project.root,
+        target,
+        result,
+    })
+}
+
+pub(super) fn report_diagnostics(
+    root: &std::path::Path,
+    result: &BuildResult,
+    output: &crate::reporting::Output,
+) -> Result<()> {
+    output.record(result);
     for warning in &result.warnings {
-        eprintln!(
-            "{:?}",
-            miette::Report::new(
-                warning
-                    .clone()
-                    .map_source_names(&diagnostic_path_names(&project.root))
-            )
-        );
+        output.diagnostic(&miette::Report::new(
+            warning
+                .clone()
+                .map_source_names(&diagnostic_path_names(root)),
+        ));
     }
     if !result.is_success() {
         let mut errors = result
@@ -107,17 +149,10 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
         };
         let primary = errors.fold(primary, |primary, related| primary.with_related(related));
         return Err(miette::Report::new(
-            primary.map_source_names(&diagnostic_path_names(&project.root)),
+            primary.map_source_names(&diagnostic_path_names(root)),
         ));
     }
-    if persist {
-        persist_semantic_artifacts(&project.root, &result)?;
-    }
-    Ok(Compiled {
-        root: project.root,
-        target,
-        result,
-    })
+    Ok(())
 }
 
 pub(super) fn persist_semantic_artifacts(

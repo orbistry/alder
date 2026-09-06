@@ -41,6 +41,10 @@ pub fn proxy_guard() -> Result<bool> {
 /// Walk up from cwd looking for `alder.jsonc`. If the project requires a different
 /// compiler version, exec the correct binary (downloading it first if needed).
 pub async fn maybe_proxy() -> Result<()> {
+    maybe_proxy_with(&crate::reporting::Output::default()).await
+}
+
+pub async fn maybe_proxy_with(output: &crate::reporting::Output) -> Result<()> {
     let cwd = std::env::current_dir().into_diagnostic()?;
 
     let config_path = match find_config(&cwd) {
@@ -51,19 +55,29 @@ pub async fn maybe_proxy() -> Result<()> {
     let config = alder_config::parse_file(&config_path).into_diagnostic()?;
 
     let required = match config.compiler() {
-        Some(v) if v != crate::VERSION => v,
+        Some(v) => v,
         _ => return Ok(()),
     };
 
+    output.detail(
+        "Selecting",
+        format!(
+            "alder {required} from {}",
+            crate::reporting::display_path(&config_path)
+        ),
+    );
+
+    if required == crate::VERSION {
+        return Ok(());
+    }
     let cache_dir = cached_binary_dir(required);
     let binary = cached_binary_path(required);
-
     if binary.exists() {
-        exec_cached_binary(&binary, required);
+        return exec_cached_binary(&binary, required);
     }
 
-    crate::download::download_version(required, &cache_dir).await?;
-    exec_cached_binary(&binary, required);
+    crate::download::download_version(required, &cache_dir, output).await?;
+    exec_cached_binary(&binary, required)
 }
 
 /// Search for `alder.jsonc` by walking up from `start`.
@@ -104,30 +118,26 @@ fn cached_binary_path(version: &str) -> PathBuf {
 ///
 /// `version` is passed via [`PROXY_ENV_VAR`] so the child knows it was
 /// proxied and refuses to proxy again.
-fn exec_cached_binary(binary: &std::path::Path, version: &str) -> ! {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+fn exec_cached_binary(binary: &std::path::Path, version: &str) -> Result<()> {
+    let args = std::env::args_os().skip(1);
 
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         let err = std::process::Command::new(binary)
-            .args(&args)
+            .args(args)
             .env(PROXY_ENV_VAR, version)
             .exec();
-        eprintln!("Failed to exec cached alder binary: {err}");
-        std::process::exit(1);
+        Err(miette!("Failed to exec cached alder binary: {err}"))
     }
 
     #[cfg(not(unix))]
     {
         let status = std::process::Command::new(binary)
-            .args(&args)
+            .args(args)
             .env(PROXY_ENV_VAR, version)
             .status()
-            .unwrap_or_else(|e| {
-                eprintln!("Failed to run cached alder binary: {e}");
-                std::process::exit(1);
-            });
+            .into_diagnostic()?;
         std::process::exit(status.code().unwrap_or(1));
     }
 }

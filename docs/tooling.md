@@ -25,6 +25,48 @@ A single `alder` binary (crate `alder-cli`) that embeds V8 via
 Compiler version proxying stays: `"compiler": "X.Y.Z"` in `alder.jsonc`
 makes the binary exec the matching cached version.
 
+### Current CLI output
+
+The implemented `check`, `build`, `run`, `test`, and `fmt` commands use static,
+aligned statuses on stderr. Default output identifies projects and meaningful
+work; `--verbose` (`-v`) adds module, phase, file, and compiler-selection details.
+`--quiet` (`-q`) suppresses routine statuses and successful summaries, but retains
+warnings, errors, and failed test results. Quiet wins if both flags are supplied.
+These flags and `--color auto|always|never` can appear before or after the
+subcommand. Arguments following `run --` belong to the program, not the CLI.
+
+```text
+    Checking async (tests/e2e/async)
+    Finished check in 0.18s · 2 modules
+
+   Compiling api (apps/api)
+    Bundling apps/api
+       Built apps/api/dist/main.mjs
+    Finished build in 1.24s
+```
+
+Times are elapsed wall-clock seconds. Failure summaries follow detailed source
+diagnostics and count actual primary diagnostics, not blocked modules or related
+source annotations. `run` and `test` finish their build before showing `Running`
+or `Testing`; compilation, bundling, and runtime failures are distinguished.
+The test runner supplies actual executed counts through a separate runtime
+callback, so its stderr result summary appears once (including zero-test runs).
+User-program stdout/stderr, including output within tests, are never filtered by
+verbosity or color settings. LSP stdout remains exclusively protocol traffic.
+
+`fmt` reports actual changes; `fmt --check` reports correctness without writing.
+Workspace checks identify each member and report aggregate module counts. Other
+commands still require an appropriate member project; no new workspace execution
+or compiler-version resolution behavior is implied.
+
+Automatic color respects nonempty `NO_COLOR` and disables color when stderr is
+redirected or `TERM=dumb`. Explicit `always`/`never` overrides automatic color.
+Statuses and source diagnostics share this policy; source hyperlinks retain
+their independent terminal-support policy. Cached compiler selection is silent
+unless verbose; downloads and completed installations are reported only when
+performed. The launcher forwards reporting flags unchanged, so older selected
+compiler versions must themselves support those options.
+
 ## Dev server
 
 - `cloudflare` target: a vendored miniflare shipped as compiler support

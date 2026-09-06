@@ -1695,19 +1695,27 @@ export function $registerTest(moduleName, name, run) {
     tests.push({ moduleName, name, run });
 }
 
-export async function $runTests(report = console.log) {
+export async function $runTests(report = null) {
+    const emit = (event, message) => {
+        if (report) report(message);
+        else if (!globalThis.__alderHost?.reportTest?.(event)) console.log(message);
+    };
     let failed = 0;
     for (const test of tests) {
         try {
             const result = await $runMain(test.run());
             if (result?.$ === "Err") throw result._0;
-            report(`pass ${test.moduleName} — ${test.name}`);
+            emit({ kind: "passed", module: test.moduleName, name: test.name },
+                `pass ${test.moduleName} — ${test.name}`);
         } catch (error) {
             failed += 1;
-            report(`fail ${test.moduleName} — ${test.name}\n  ${describe(error)}`);
+            const message = describe(error);
+            emit({ kind: "failed", module: test.moduleName, name: test.name, message },
+                `fail ${test.moduleName} — ${test.name}\n  ${message}`);
         }
     }
-    report(`\n${tests.length - failed} passed; ${failed} failed`);
+    emit({ kind: "finished", passed: tests.length - failed, failed },
+        `\n${tests.length - failed} passed; ${failed} failed`);
     return failed;
 }
 

@@ -33,6 +33,23 @@ Two compiled lower-level APIs must not be confused with this path:
   driver compilation uses `emit_solved_module`; unsolved emission tests alone
   cannot establish trait-call correctness.
 
+## Progress reporting boundary
+
+`alder_driver::build_with_reporter` accepts a presentation-independent
+`progress::Reporter` via `Arc`. Events identify semantic phases and actual module
+body-compilation starts, including unsuccessful compilation attempts. They are
+available regardless of terminal verbosity and may arrive from a blocking worker;
+callbacks must be thread-safe and return promptly. `build_with_dependencies`
+remains the silent compatibility entry point used by editor and embedding callers.
+Diagnostics remain structured in `BuildResult`, not embedded in progress events.
+
+The CLI's `reporting::Output` owns styling, anstream stderr output, injected
+writers, elapsed summaries, and verbosity. Proxy, formatting, bundling, and
+program launch statuses use this renderer directly. The runtime separately offers
+`execute_tests`/`TestEvent` for actual test results without intercepting console
+streams. No editor progress notifications, JSON backend, or browser/WASM backend
+is implemented by these seams.
+
 ## Unlinked Elm-port files
 
 The driver's compiled `ModuleMeta`, `InterfaceCache::start_build`, and

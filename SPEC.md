@@ -173,6 +173,11 @@ are kept through the redesign and adapted incrementally.
 **CLI (`crates/alder-cli/`):**
 
 - `alder check [PATH]` - Type check a Alder project
+- [x] Static Cargo-style reporting across check/build/run/test/fmt and compiler
+  proxying, global verbosity/color options, optional semantic driver progress,
+  injected CLI writers, and structured runtime test results (see
+  `plans/cli-reporting.md`). Source diagnostics and program/LSP streams remain
+  separate from progress.
 
 **Reference:** `polarity/lang/driver/`, `elm/builder/src/Build.hs`
 

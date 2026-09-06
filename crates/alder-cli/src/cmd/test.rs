@@ -13,12 +13,33 @@ pub struct Args {
 
 impl Args {
     pub async fn exec(self) -> Result<()> {
-        let compiled = super::build::compile(&self.path, BuildMode::Test).await?;
+        super::Cmd::Test(self).exec().await
+    }
+
+    pub(super) async fn exec_with(self, output: &crate::reporting::Output) -> Result<()> {
+        let started = std::time::Instant::now();
+        let compiled = super::build::compile_reported(&self.path, BuildMode::Test, output).await?;
+        output.stage("bundling");
+        output.status("Bundling", crate::reporting::display_path(&compiled.root));
         let bundle = super::build::bundle(&compiled, EntryKind::Test).await?;
-        let code = alder_runtime::execute(bundle, Vec::new())
-            .await
-            .map_err(|error| miette!(error.to_string()))?;
+        output.finish("test build", started.elapsed());
+        output.stage("test execution");
+        output.status("Testing", crate::reporting::display_path(&compiled.root));
+        let failures = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let failed = failures.clone();
+        let reporter = output.clone();
+        let test_started = std::time::Instant::now();
+        let code = alder_runtime::execute_tests(bundle, move |event| {
+            if reporter.test_event(event, test_started.elapsed()) {
+                failed.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        })
+        .await
+        .map_err(|error| miette!(error.to_string()))?;
         if code != 0 {
+            if failures.load(std::sync::atomic::Ordering::Relaxed) {
+                output.mark_failure_reported();
+            }
             return Err(miette!("tests failed"));
         }
         Ok(())

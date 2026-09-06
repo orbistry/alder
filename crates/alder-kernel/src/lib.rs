@@ -2029,6 +2029,51 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn test_runner_emits_actual_structured_results_without_text_fallback() {
+        let harness = indoc::indoc! {r#"
+            console.log = () => { throw new Error("unexpected text report"); };
+            $registerTest("probe", "pass", () => {});
+            $registerTest("probe", "fail", () => ({ $: "Err", _0: "failure" }));
+            $registerTest("probe", "async fail", () => $task(function* () {
+                yield* $tryPromise(() => Promise.resolve());
+                throw new Error("async failure");
+            }));
+            $assert(await $runTests() === 2);
+        "#};
+        let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let received = events.clone();
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            alder_runtime::execute_tests(code, move |event| received.borrow_mut().push(event))
+                .await
+                .unwrap(),
+            0
+        );
+        let events = events.borrow();
+        assert_eq!(events.len(), 4);
+        assert_eq!(
+            events[0],
+            alder_runtime::TestEvent::Passed {
+                module: "probe".into(),
+                name: "pass".into()
+            }
+        );
+        assert!(
+            matches!(&events[1], alder_runtime::TestEvent::Failed { name, message, .. } if name == "fail" && message.contains("failure"))
+        );
+        assert!(
+            matches!(&events[2], alder_runtime::TestEvent::Failed { name, message, .. } if name == "async fail" && message.contains("async failure"))
+        );
+        assert_eq!(
+            events[3],
+            alder_runtime::TestEvent::Finished {
+                passed: 1,
+                failed: 2
+            }
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn large_string_hash_preserves_the_utf8_byte_stream() {
         let harness = indoc::indoc! {r#"
             const value = "a😀".repeat(50000);

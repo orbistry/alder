@@ -3,10 +3,13 @@ use std::path::PathBuf;
 use futures::StreamExt;
 use miette::{IntoDiagnostic, Result, miette};
 
-pub async fn download_version(version: &str, dest_dir: &std::path::Path) -> Result<()> {
-    eprintln!("Downloading alder compiler {version}...");
-
+pub async fn download_version(
+    version: &str,
+    dest_dir: &std::path::Path,
+    output: &crate::reporting::Output,
+) -> Result<()> {
     let target = platform_target()?;
+    output.status("Downloading", format!("alder {version} ({target})"));
     let tag = format!("alder-cli-v{version}");
 
     let octocrab = octocrab::instance();
@@ -42,15 +45,31 @@ pub async fn download_version(version: &str, dest_dir: &std::path::Path) -> Resu
         body.extend_from_slice(&chunk);
     }
 
+    install_archive(version, dest_dir, ext, &body, output)
+}
+
+fn install_archive(
+    version: &str,
+    dest_dir: &std::path::Path,
+    ext: &str,
+    body: &[u8],
+    output: &crate::reporting::Output,
+) -> Result<()> {
     std::fs::create_dir_all(dest_dir).into_diagnostic()?;
 
     if ext == "tar.xz" {
-        extract_tar_xz(&body, dest_dir)?;
+        extract_tar_xz(body, dest_dir)?;
     } else {
-        extract_zip(&body, dest_dir)?;
+        extract_zip(body, dest_dir)?;
     }
 
-    eprintln!("Installed alder {version} to {}", dest_dir.display());
+    output.status(
+        "Installed",
+        format!(
+            "alder {version} ({})",
+            crate::reporting::display_path(dest_dir)
+        ),
+    );
     Ok(())
 }
 
@@ -110,5 +129,58 @@ fn platform_target() -> Result<&'static str> {
         ("linux", "x86_64") => Ok("x86_64-unknown-linux-gnu"),
         ("windows", "x86_64") => Ok("x86_64-pc-windows-msvc"),
         (os, arch) => Err(miette!("Unsupported platform: {os}/{arch}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::reporting::{Options, Output, tests::Buffer};
+
+    #[test]
+    fn installation_status_requires_success_and_obeys_quiet_without_network() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-reporting-download-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let encoder = xz2::write::XzEncoder::new(Vec::new(), 1);
+        let mut archive = tar::Builder::new(encoder);
+        let mut header = tar::Header::new_gnu();
+        header.set_size(6);
+        header.set_mode(0o755);
+        header.set_cksum();
+        let binary_name = if cfg!(windows) { "alder.exe" } else { "alder" };
+        archive
+            .append_data(&mut header, binary_name, b"binary".as_slice())
+            .unwrap();
+        let body = archive.into_inner().unwrap().finish().unwrap();
+        for quiet in [false, true] {
+            let buffer = Buffer::default();
+            let output = Output::new(
+                buffer.clone(),
+                Options {
+                    quiet,
+                    ..Options::default()
+                },
+                false,
+            );
+            let dest = root.join(if quiet { "quiet" } else { "normal" });
+            assert!(
+                install_archive("1.0.0", &dest, "tar.xz", b"invalid archive", &output).is_err()
+            );
+            assert!(
+                buffer.text().is_empty(),
+                "must not claim a failed installation succeeded"
+            );
+            install_archive("1.0.0", &dest, "tar.xz", &body, &output).unwrap();
+            assert_eq!(buffer.text().contains("Installed"), !quiet);
+            assert_eq!(std::fs::read(dest.join(binary_name)).unwrap(), b"binary");
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

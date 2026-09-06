@@ -17,11 +17,21 @@ pub struct Args {
 
 impl Args {
     pub async fn exec(self) -> Result<()> {
-        let compiled = super::build::compile(&self.path, BuildMode::Build).await?;
+        super::Cmd::Run(self).exec().await
+    }
+
+    pub(super) async fn exec_with(self, output: &crate::reporting::Output) -> Result<()> {
+        let started = std::time::Instant::now();
+        let compiled = super::build::compile_reported(&self.path, BuildMode::Build, output).await?;
         if compiled.target != Target::Standalone {
             return Err(miette!("alder run requires target: standalone"));
         }
+        output.stage("bundling");
+        output.status("Bundling", crate::reporting::display_path(&compiled.root));
         let bundle = super::build::bundle(&compiled, EntryKind::Standalone).await?;
+        output.finish("build", started.elapsed());
+        output.stage("runtime");
+        output.status("Running", crate::reporting::display_path(&compiled.root));
         let code = alder_runtime::execute(bundle, self.args)
             .await
             .map_err(|error| miette!(error.to_string()))?;

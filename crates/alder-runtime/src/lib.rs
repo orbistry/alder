@@ -9,6 +9,37 @@ use deno_permissions::{PermissionsContainer, RuntimePermissionDescriptorParser};
 struct HostState {
     args: Vec<String>,
     exit_code: i32,
+    test_reporter: Option<Box<dyn Fn(TestEvent)>>,
+}
+
+/// Results from the test runner, separate from the program's console streams.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TestEvent {
+    Passed {
+        module: String,
+        name: String,
+    },
+    Failed {
+        module: String,
+        name: String,
+        message: String,
+    },
+    Finished {
+        passed: usize,
+        failed: usize,
+    },
+}
+
+#[op2]
+fn op_alder_test_report(state: &mut OpState, #[serde] event: TestEvent) -> bool {
+    let host = state.borrow::<Rc<RefCell<HostState>>>().borrow();
+    if let Some(report) = &host.test_reporter {
+        report(event);
+        true
+    } else {
+        false
+    }
 }
 
 #[op2(fast)]
@@ -55,7 +86,7 @@ deno_core::extension!(
         deno_websocket,
         deno_http
     ],
-    ops = [op_alder_print, op_alder_args, op_alder_exit, op_alder_sleep],
+    ops = [op_alder_print, op_alder_args, op_alder_exit, op_alder_sleep, op_alder_test_report],
     esm_entry_point = "ext:alder_host/bootstrap.js",
     esm = [dir "js", "bootstrap.js"],
 );
@@ -79,6 +110,7 @@ Object.defineProperty(globalThis, "__alderHost", {
     value: Object.freeze({
         args: core.ops.op_alder_args(),
         exit: (code) => core.ops.op_alder_exit(code),
+        reportTest: (event) => core.ops.op_alder_test_report(event),
     }),
     enumerable: false,
     configurable: false,
@@ -87,11 +119,31 @@ Object.defineProperty(globalThis, "__alderHost", {
 "#;
 
 pub async fn execute(bundle: String, args: Vec<String>) -> Result<i32, deno_core::error::AnyError> {
+    execute_inner(bundle, args, None).await
+}
+
+/// Execute a test bundle with structured results. User stdout/stderr are unchanged.
+pub async fn execute_tests(
+    bundle: String,
+    report: impl Fn(TestEvent) + 'static,
+) -> Result<i32, deno_core::error::AnyError> {
+    execute_inner(bundle, Vec::new(), Some(Box::new(report))).await
+}
+
+async fn execute_inner(
+    bundle: String,
+    args: Vec<String>,
+    test_reporter: Option<Box<dyn Fn(TestEvent)>>,
+) -> Result<i32, deno_core::error::AnyError> {
     // Workspace consumers may enable more than one rustls provider through
     // unrelated dependencies. Select the provider used by Deno's pinned TLS
     // stack explicitly so fetch never relies on feature inference.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-    let state = Rc::new(RefCell::new(HostState { args, exit_code: 0 }));
+    let state = Rc::new(RefCell::new(HostState {
+        args,
+        exit_code: 0,
+        test_reporter,
+    }));
     let host_state = state.clone();
     let mut runtime = JsRuntime::new(RuntimeOptions {
         extensions: vec![
@@ -142,6 +194,27 @@ mod tests {
         let code =
             "globalThis.__alderHost.exit(__alderHost.args.length); export default 0;".to_owned();
         assert_eq!(execute(code, vec!["one".to_owned()]).await.unwrap(), 1);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn structured_test_reporting_is_opt_in_and_preserves_exit_status() {
+        let code = "const handled = __alderHost.reportTest({kind: 'finished', passed: 2, failed: 1}); __alderHost.exit(handled ? 7 : 3);".to_owned();
+        assert_eq!(execute(code.clone(), Vec::new()).await.unwrap(), 3);
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let received = events.clone();
+        assert_eq!(
+            execute_tests(code, move |event| received.borrow_mut().push(event))
+                .await
+                .unwrap(),
+            7
+        );
+        assert_eq!(
+            *events.borrow(),
+            vec![TestEvent::Finished {
+                passed: 2,
+                failed: 1
+            }]
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]

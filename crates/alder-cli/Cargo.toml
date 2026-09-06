@@ -16,8 +16,9 @@ name = "alder"
 path = "src/main.rs"
 
 [dependencies]
+anstream = "1"
+anstyle = "1"
 clap.workspace = true
-color-print.workspace = true
 dirs.workspace = true
 futures.workspace = true
 miette.workspace = true

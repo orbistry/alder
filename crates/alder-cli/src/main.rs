@@ -1,6 +1,21 @@
 use miette::IntoDiagnostic;
 
-fn main() -> miette::Result<()> {
+fn main() -> std::process::ExitCode {
+    let output = alder_cli::reporting::Output::stderr(alder_cli::reporting::Options::from_startup(
+        std::env::args_os().skip(1),
+    ));
+    let started = std::time::Instant::now();
+    match startup(&output) {
+        Ok(status) => status,
+        Err(error) => {
+            output.diagnostic(&error);
+            output.failure("compiler selection", started.elapsed());
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
+fn startup(output: &alder_cli::reporting::Output) -> miette::Result<std::process::ExitCode> {
     // The guard mutates the environment, which is only sound while the
     // process is single-threaded — so it runs before the runtime starts.
     let proxied = alder_cli::proxy::proxy_guard()?;
@@ -13,9 +28,14 @@ fn main() -> miette::Result<()> {
         .into_diagnostic()?
         .block_on(async {
             if !proxied {
-                alder_cli::proxy::maybe_proxy().await?;
+                alder_cli::proxy::maybe_proxy_with(output).await?;
             }
 
-            alder_cli::Cli::default().exec().await
+            // Command dispatch already renders diagnostics and its summary.
+            Ok(if alder_cli::Cli::default().exec().await.is_ok() {
+                std::process::ExitCode::SUCCESS
+            } else {
+                std::process::ExitCode::FAILURE
+            })
         })
 }

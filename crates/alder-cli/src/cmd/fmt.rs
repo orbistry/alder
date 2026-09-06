@@ -14,9 +14,15 @@ pub struct Args {
 
 impl Args {
     pub async fn exec(self) -> Result<()> {
+        super::Cmd::Fmt(self).exec().await
+    }
+
+    pub(super) async fn exec_with(self, output: &crate::reporting::Output) -> Result<()> {
         let files = alder_files(&self.path)?;
+        let total = files.len();
         let mut changed = Vec::new();
         for path in files {
+            output.detail("Checking", crate::reporting::display_path(&path));
             let source = tokio::fs::read_to_string(&path).await.into_diagnostic()?;
             let formatted = alder_fmt::format_source(&source)
                 .map_err(|error| miette!("{}: {error}", path.display()))?;
@@ -39,8 +45,23 @@ impl Args {
         if !self.check {
             for (path, formatted) in &changed {
                 tokio::fs::write(path, formatted).await.into_diagnostic()?;
+                output.detail("Formatted", crate::reporting::display_path(path));
             }
-            eprintln!("Formatted {} file(s).", changed.len());
+            output.status(
+                "Formatted",
+                format!(
+                    "{} changed · {total} checked",
+                    crate::reporting::quantity(changed.len(), "file")
+                ),
+            );
+        } else {
+            output.status(
+                "Finished",
+                format!(
+                    "format check · {} correct",
+                    crate::reporting::quantity(total, "file")
+                ),
+            );
         }
         Ok(())
     }

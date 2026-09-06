@@ -52,6 +52,7 @@ pub mod database;
 pub mod error;
 pub mod graph;
 pub mod interface;
+pub mod progress;
 pub mod project;
 mod report;
 pub mod source;
@@ -59,7 +60,7 @@ pub mod source;
 // Re-export main types
 pub use compile::{
     BuildDependencies, BuildMode, BuildResult, ModuleResult, build_graph_with_dependencies,
-    build_with_dependencies,
+    build_with_dependencies, build_with_reporter,
 };
 pub use database::Database;
 pub use error::DriverError;

@@ -8,6 +8,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
+serde = { workspace = true, features = ["derive"] }
 deno_core = "=0.403.0"
 deno_crypto = "=0.264.0"
 deno_fetch = "=0.274.0"

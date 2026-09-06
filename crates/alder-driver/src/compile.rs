@@ -28,6 +28,7 @@ use crate::graph::DepGraph;
 use crate::interface::{
     InterfaceFile, OwnedImplHeader, OwnedModuleId, OwnedPackageId, PackageInstanceIndexFile,
 };
+use crate::progress::{Phase, Progress, Reporter, Silent};
 
 /// Result of compiling a single module.
 #[derive(Debug)]
@@ -186,12 +187,26 @@ pub async fn build_with_dependencies(
     mode: BuildMode,
     dependencies: BuildDependencies,
 ) -> BuildResult {
+    build_with_reporter(db, graph, mode, dependencies, Arc::new(Silent)).await
+}
+
+/// Build with semantic progress; the ordinary entry point remains silent.
+pub async fn build_with_reporter(
+    db: Arc<Mutex<Database>>,
+    graph: &DepGraph,
+    mode: BuildMode,
+    dependencies: BuildDependencies,
+    reporter: Arc<dyn Reporter>,
+) -> BuildResult {
+    reporter.report(Progress::Phase(Phase::FetchingSources));
     let modules: Vec<&Url> = graph.levels().into_iter().flatten().collect();
     let sources = fetch_sources(&db, &modules).await;
 
-    tokio::task::spawn_blocking(move || build_sync(sources, mode, dependencies))
-        .await
-        .expect("compile task panicked")
+    tokio::task::spawn_blocking(move || {
+        build_sync_reported(sources, mode, dependencies, &*reporter)
+    })
+    .await
+    .expect("compile task panicked")
 }
 
 /// Discover every canonical package header, then compile all bodies against
@@ -202,10 +217,20 @@ pub async fn build_with_dependencies(
 ///
 /// Type checking is inherently dependency-ordered, so within-build
 /// parallelism is limited to source fetching for now.
+#[cfg(test)]
 fn build_sync(
     sources: Vec<(Url, Result<String, String>)>,
     mode: BuildMode,
     dependencies: BuildDependencies,
+) -> BuildResult {
+    build_sync_reported(sources, mode, dependencies, &Silent)
+}
+
+fn build_sync_reported(
+    sources: Vec<(Url, Result<String, String>)>,
+    mode: BuildMode,
+    dependencies: BuildDependencies,
+    reporter: &dyn Reporter,
 ) -> BuildResult {
     let identities = match source_identities(sources.iter().map(|(uri, _)| uri), &dependencies) {
         Ok(identities) => identities,
@@ -251,6 +276,7 @@ fn build_sync(
     let total = sources.len();
     let mut solved_interfaces = vec![false; total];
 
+    reporter.report(Progress::Phase(Phase::DiscoveringInterfaces));
     loop {
         let mut progress = false;
         for index in 0..total {
@@ -291,6 +317,7 @@ fn build_sync(
     // Reject an incoherent source package before compiling bodies against its
     // frozen registry. Otherwise each module's solver repeats the same foreign
     // errors against its own source, and missing inferred interfaces cascade.
+    reporter.report(Progress::Phase(Phase::ValidatingPackages));
     let registry_module = store.alloc(alder_ast::Module {
         id: ModuleId {
             package: PackageId::Builtin,
@@ -352,6 +379,7 @@ fn build_sync(
             .iter()
             .map(|(uri, source)| {
                 let result = if owners.contains(uri) {
+                    reporter.report(Progress::ModuleStarted { uri: uri.clone() });
                     compile_module(
                         uri,
                         source,
@@ -424,11 +452,13 @@ fn build_sync(
     let mut all_warnings: Vec<Diagnostic> = Vec::new();
     let mut artifacts = HashMap::new();
     let mut interface_files = Vec::new();
+    reporter.report(Progress::Phase(Phase::CompilingModules));
     for (uri, source) in &sources {
         if blocked.contains(uri) {
             results.insert(uri.clone(), ModuleResult::Blocked);
             continue;
         }
+        reporter.report(Progress::ModuleStarted { uri: uri.clone() });
         let (output, discovered) = compile_module(
             uri,
             source,
@@ -1041,6 +1071,35 @@ macro_rules! assert_parser_diagnostic_snapshot {
 mod tests {
     use super::*;
     use crate::source::InMemorySource;
+
+    #[test]
+    fn progress_is_optional_and_reports_actual_body_compilation_once() {
+        let uri = Url::parse("file:///app/src/main.ald").unwrap();
+        let sources = vec![(uri.clone(), Ok("pub fn main() { 42 }".to_owned()))];
+        let dependencies = fixture_dependencies([&uri], BuildDependencies::default());
+        let events = std::sync::Mutex::new(Vec::new());
+        let recorder = |event| events.lock().unwrap().push(event);
+        let reported = build_sync_reported(
+            sources.clone(),
+            BuildMode::Check,
+            dependencies.clone(),
+            &recorder,
+        );
+        let silent = build_sync(sources, BuildMode::Check, dependencies);
+        assert!(reported.is_success());
+        assert_eq!(reported.total, silent.total);
+        assert_eq!(reported.success, silent.success);
+        assert_eq!(reported.warnings.len(), silent.warnings.len());
+        assert_eq!(
+            *events.lock().unwrap(),
+            vec![
+                Progress::Phase(Phase::DiscoveringInterfaces),
+                Progress::Phase(Phase::ValidatingPackages),
+                Progress::Phase(Phase::CompilingModules),
+                Progress::ModuleStarted { uri },
+            ]
+        );
+    }
 
     /// Source-only fixtures have one explicit `src` boundary. Tests of other
     /// layouts supply their own paths. This convenience is not a driver API:

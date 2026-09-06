@@ -6,13 +6,14 @@ pub mod cmd;
 mod download;
 /// Compiler version proxy logic.
 pub mod proxy;
+/// Terminal presentation and optional compiler progress adapter.
+pub mod reporting;
 
 pub use cli::Cli;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub const BANNER: &str = color_print::cstr!(
-    r#"
+pub const BANNER: &str = r#"
       ___           ___           ___           ___
      /\  \         /\  \         /\  \         /\__\
     /::\  \       /::\  \       /::\  \       /:/  /
@@ -25,9 +26,8 @@ pub const BANNER: &str = color_print::cstr!(
     \:\__\         /:/  /       \::/  /        /:/  /
      \/__/         \/__/         \/__/         \/__/
 
- The <green><bold>Alder</bold></green> programming language.
+ The Alder programming language.
 
- <magenta>repo:</magenta> <blue><italic><dim>https://github.com/orbistry/alder</dim></italic></blue>
- <magenta>docs:</magenta> <blue><italic><dim>https://github.com/orbistry/alder</dim></italic></blue>
- <magenta>chat:</magenta> <blue><italic><dim>https://discord.gg/3qQGrKT3eE</dim></italic></blue>"#
-);
+ repo: https://github.com/orbistry/alder
+ docs: https://github.com/orbistry/alder
+ chat: https://discord.gg/3qQGrKT3eE"#;
