@@ -62,7 +62,8 @@ users.find(id)
   with `.`. They are not first-class record values. Prelude modules are the
   exception to the spelling convention: built-ins such as `Array`, `Http`,
   and `Fiber` are bound with capitalized names (`Array.map`, `Http.get`,
-  `Fiber.all`). `::` is only for enum constructors and trait paths.
+  `Fiber.all`). Qualified type and trait paths and enum constructors use `::`
+  (for example, the builtin configuration type `Fiber::MapOptions`).
 - Re-exports are public imports:
 
 ```alder
@@ -125,6 +126,15 @@ let block = x -> {
   errors and `Task`). A record return type is parenthesized so its opening
   `{` is not mistaken for the function body.
 - The last expression of a block is its value. `return` exits early.
+- `name?: T` on a parameter is shorthand for `name: Option[T]`. A trailing
+  consecutive suffix of Option parameters may be omitted; omitted arguments
+  become `None`. Earlier Option parameters remain required when followed by a
+  non-Option parameter. Function-type annotations use ordinary Option types.
+- Supplied arguments prefer a direct type match, otherwise adding the fewest
+  `Some` layers needed. The same rule applies to newly written record fields,
+  including fields around spreads. Expected field types flow through explicit
+  `Some` construction, fresh arrays, blocks, and branches. This does not convert existing
+  mutable payloads or implicitly wrap an ordinary function's returned value.
 - `value |> function(args...)` inserts `value` as the first argument.
   Partial application uses `_` placeholders: `add(1, _)` and
   `Array.map(_, double)` each become a lambda with one parameter per `_`,
@@ -142,7 +152,7 @@ arrays, records, tuples, maps, sets, or tasks are not generalized at that
 binding. This prevents one shared object from being used at incompatible types;
 it does not change JavaScript-style aliasing. Top-level bindings assigned anywhere
 in the module, including inside nested functions, remain monomorphic. This is
-based on resolved binding identity, not the presence of `mut`: a never-assigned
+based on resolved binding identity: a never-assigned
 function binding can generalize. The analysis conservatively includes writes in
 unreachable code. Local block lets remain monomorphic.
 
@@ -199,6 +209,12 @@ constructor needs its `{` on the same line as the path
 otherwise bind or resolve a name. In `match` patterns it compares against
 a binding instead of introducing one (Elixir's pin); in `query { }` blocks
 it injects a host value as a bound parameter (see `data.md`).
+Pins resolve names in the scope before the arm's pattern introduces bindings.
+For `(value, ^value)`, the pin uses the enclosing `value`, while the arm's guard
+and body see the newly matched `value`. With no enclosing binding, the pin is
+an unknown-name error; reordering pattern fields does not change this rule.
+Match-pattern permission does not extend to lets or function parameters inside
+the arm's guard or body. A nested match has its own match-pattern permission.
 
 ```alder
 match input {
@@ -287,17 +303,20 @@ match u.nickname {
 }
 ```
 
-- `field?: T` declares an optional field. Construction may omit it; reading
-  it yields `Option[T]`. Callers never write `Some(...)` for props.
-  Assignment to the field stores a `T`, just like construction; it does not
-  take the `Option[T]` returned by a read. Access through an optional parent
-  requires handling that parent's `Option` first.
+- `field?: T` is shorthand for `field: Option[T]`. Fresh contextual construction
+  may omit it, supplying `None`, or supply a `T`, which is wrapped in `Some`.
+  An already matching `Option[T]` is stored directly. Reads and assignments use
+  the actual `Option[T]` type; assignment does not implicitly wrap a payload.
+  Access through an optional parent requires handling that parent's `Option` first.
   Destructuring reads fields by the same rule: `let { field } = record`
   binds `Option[T]` for `field?: T`, including record-shaped enum payloads.
+  Omission and explicit outer `None` are equal; `Some(())` and `Some(None)` remain
+  distinct from `None`. Structural operations visit every declared field using
+  its Option capability. JSON decoding supplies `None` for a missing Option
+  field; encoding uses that field's Option codec.
 - `{ ..r, x: 1 }` is record update. `r.x` is access, `t.0` tuple index.
-  Spreads copy present properties: an absent optional property leaves an earlier
-  value intact. Surviving alternatives must have compatible payload types; a
-  later required property replaces all earlier values for that field.
+  Spreads copy properties in source order. A later field replaces an earlier
+  value even when it contains `None`; there is no absence-based fallback.
 - `type Name[a] = ...` declares an alias.
 
 ### Traits
@@ -348,6 +367,13 @@ pub fn main() {
 }
 ```
 
+The builtin `Iterator` trait is implemented by `ArrayIterator[a]`, created with
+`Array.iter(values)`. `next(iterator)` returns `Some(value)` and advances that
+cursor, or returns `None` permanently after exhaustion. Separate iterators have
+independent cursors; aliases of one iterator share progress. Advancing does not
+remove source elements. Iteration is live: unread replacements and appends are
+visible until exhaustion, and returned objects retain their shared identity.
+
 - Bounds live in `where` clauses: `where a: Show + Eq, k: Hash`. Traits
   may constrain their own parameters the same way
   (`trait Ord[a] where a: Eq`), and impls too
@@ -360,8 +386,8 @@ pub fn main() {
   defines the trait or the type.
 - There is no method-call sugar. `show(user)` or `user |> show`, never
   `user.show()`. `.` is for modules, record fields, and tuple indices.
-- `Eq` is derived automatically for every type whose parts are `Eq`;
-  `Show`, `Ord`, `Hash`, and `Json` use compiler-backed `#[derive(...)]`
+- Enums receive automatic `Eq` when their payloads support it;
+  enum `Show`, `Ord`, `Hash`, and `Json` use compiler-backed `#[derive(...)]`
   attributes in M3, replaced by macros in M5 without changing user code.
   Arithmetic is the `Num` trait (`Number`, `BigInt`); comparisons use
   `Ord.compare(left, right) Ordering`, where `Ordering` has `Less`, `Equal`,
@@ -385,14 +411,14 @@ fn find(id: Id) Result[User] {                 // error inferred: [:not_found(Id
     }
 }
 
-fn load(id: Id) Result[Profile] {              // inferred: [:not_found(Id) | :timeout | r]
+async fn load(id: Id) Result[Profile] {        // inferred: [:not_found(Id) | :timeout | r]
     let user = find(id)?          // rows merge through ?
     let prefs = fetchPrefs(user).await?
     Ok({ user, prefs })
 }
 
-fn loadStrict(id: Id) Result[Profile, [:not_found(Id) | :timeout]] {
-    load(id)                       // explicit, closed row
+async fn loadStrict(id: Id) Result[Profile, [:not_found(Id) | :timeout]] {
+    load(id).await                 // explicit, closed row
 }
 
 match load(id) {
@@ -421,6 +447,18 @@ fn check(token: String) Result[Session, AuthError]
 - `:tag` outside a `Result` error position is a type error. Tags are not a
   general polymorphic-variant feature.
 - A closed `error` group is matched exhaustively. An open row requires `_`.
+- Closed error rows support `Show` when every payload supports `Show`, without
+  a derive annotation on a named group. Equivalent groups and literal rows
+  format identically and respect custom payload implementations. This is a
+  selected structural capability, not automatic support for every trait.
+- Closed error rows similarly support `Json` when every payload has a codec.
+  Equivalent named groups and literal rows share the same tagged JSON format;
+  custom payload codecs are honored for both encoding and decoding.
+- Closed error rows support `Eq` and `Hash` conditional on payload capabilities.
+  Hashing uses the active tag and payloads, not group names, declaration order,
+  or other possible tags in the row. Widening a row preserves a value's hash.
+  Named groups cannot own custom implementations or derive annotations;
+  error rows do not have an automatic `Ord` instance.
 - A named group is only a name for a closed row. `?` on a
   `Result[a, AuthError]` inside a function with an open error row flattens
   the group's tags into that row; callers can match `:expired` directly.
@@ -448,6 +486,26 @@ async fn profiles() {
     Fiber.all([profile(1), profile(2)]).await
 }
 ```
+
+For bounded traversal, use `Fiber.map(values, callback, options?)` with a
+task-returning callback. Omitting options runs sequentially; a record such as
+`{ concurrency: 8 }` bounds active callbacks, including their scope cleanup.
+The configuration type is `Fiber::MapOptions`. Configuration and a shallow copy
+of input membership are read at each execution; payload objects remain shared.
+Collected results retain input order.
+
+```alder
+async fn profiles(ids: Array[Id]) Array[Result[Profile]] {
+    ids |> Fiber.map(id -> async { profile(id).await }, { concurrency: 8 }).await
+}
+```
+
+`map` collects returned `Result` values without cancelling successful siblings.
+Use `tryMap` to stop on the first observed `Err`, cancel active work, and wait
+for cleanup before returning `Result[Array[a], e]`. `forEach` instead requires
+unit-returning tasks and allocates no result array; `tryForEach` requires
+`Result[(), e]` task results and returns `Result[(), e]`. Invalid concurrency
+bounds fail at execution as defects, not recoverable Alder errors.
 
 - `Task` is a visible type. A plain function may return an existing task
   (`fn load(id: Id) Task[Result[User]]`); that annotation does not authorize
@@ -515,12 +573,12 @@ async fn main() {
 - Providers are resolved lexically through the call graph and, in the web
   runtime, through the render tree, so SSR gets per-request isolation.
 - Tests swap providers with `provide Db = FakeDb.new() { ... }`.
-- **Open (M2):** `provide … { }` is a statement in the M1 parser, so a
-  block ending in it has no value. `web.md`'s `handle` hook ends its body
-  with `provide Session = session { resolve(event).await }` and expects
-  that to be the function's `Task[Response]`. M2 either promotes
-  `provide` to an expression whose value is its body's value, or `handle`
-  writes an explicit `return` / tail.
+- `provide … { }` is currently a statement, not a value-producing expression.
+  To return a value from its body, use an explicit `return` belonging to the
+  enclosing function or async block. Await still requires an explicit async
+  boundary. Provider requirement checking and the web integration described
+  above remain future milestone work; the current runtime context mechanism
+  does not establish those compile-time guarantees.
 
 ## Numbers, strings, collections
 
@@ -682,7 +740,9 @@ pub component Counter(props: { start?: Number, label: String }) {
   compiler tracks reads of them in expressions and markup (Svelte 5 rune
   style) and memoizes derived values. Plain `let` bindings that do not
   read state are not reactive.
-- `??` unwraps an `Option` with a default.
+- `??` unwraps exactly one `Option` layer with a default: `Option[a] ?? a`
+  produces `a`. The left operand is evaluated once; the default is evaluated
+  only for `None`. `Some(())` and `Some(None)` are present values.
 
 ## Attributes and macros
 
@@ -733,8 +793,10 @@ tests {
     }
 
     test "finds a user" {
-        provide Db = fakeDb() {
-            assert find(1).await == Ok(ada)
+        async {
+            provide Db = fakeDb() {
+                assert find(1).await == Ok(ada)
+            }
         }
     }
 }

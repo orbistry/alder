@@ -355,8 +355,10 @@ runner executes returned tasks through the same root runner; the test itself
 does not implicitly authorize await. Broader explicit-async validation remains
 tracked in `plans/async-concurrency-hardening.md`.
 
-Task-producing functions lower to plain JavaScript functions which return a
-fresh lazy `$task(function* () { ... })`. `.await` lowers to `yield* task`.
+Explicit async functions lower to plain JavaScript functions which return a
+fresh lazy `$task(function* () { ... })`; async blocks construct the same task
+representation. Ordinary functions returning an existing Task do not acquire
+another wrapper. `.await` lowers to `yield* task`.
 Task iteration yields one internal `Call` operation rather than delegating
 directly into the task body. The fiber owns the body iterator and an explicit
 stack of suspended caller iterators. Call entry pushes a caller; normal child
@@ -417,6 +419,11 @@ operation continues, its late fulfillment is ignored, and its late rejection
 remains observed to prevent unhandled-rejection noise. Unknown conventions are
 diagnostics.
 
+The internal rejection mapper is also skipped once interruption invalidates
+the waiter. Ignoring only its mapped result would still permit foreign mapper
+side effects after cancellation, so the bridge checks waiter ownership before
+invoking it.
+
 ### Fiber ABI and lifecycle
 
 The generated-code ABI is deliberately small: `$task`, `$tryPromise`,
@@ -461,12 +468,51 @@ Pending parent interruption under an uninterruptible mask remains pending even
 when a traversal finishes with Err. Per-item provider context does not leak to
 the next item on the same worker.
 
+Public `Fiber.map`, `forEach`, `tryMap`, and `tryForEach` take
+`(values, callback, options?: MapOptions)`. `Fiber::MapOptions` is the structural
+alias `{ concurrency?: Number }`. Omission, `None`, or an empty record selects
+sequential execution. For example:
+
+```alder
+urls |> Fiber.map(url -> async { fetch(url).await }, { concurrency: 8 }).await
+```
+
+The maintained kernel adapters unwrap optional options and read configuration
+once per task execution, not at task construction. Reusing a task therefore
+observes later mutations to its configuration record. Invalid bounds are
+RangeError defects, never clamped values or typed errors. The internal normalized
+limit accepts positive Infinity, exposed as the Number value `Fiber.unbounded`:
+`{ concurrency: Fiber.unbounded }`. This removes the configured worker limit,
+not structured ownership, cancellation, cleanup, or scheduler fairness. It may
+start one operation per input and should be selected deliberately for large inputs.
+`forEach` requires a unit-completing task callback, and `tryForEach` requires
+`Task[Result[(), e]]`; neither silently discards arbitrary successful values.
+
+Scope cancellation also waits for the child's terminal exit before delivering
+interruption to the caller's suspended generator. Suspension cancellation hooks
+may return a cleanup Promise; the interrupted fiber remains suspended until it
+settles, then resumes through the scheduler. This preserves inside-out cleanup
+even when a caller catches interruption or releases a resource in `finally`.
+Repeated interruption cannot start a second cleanup. A cleanup-hook exception
+is delivered through the generator's throw path rather than stranding it.
+The suspension installs its cancellation hook before invoking registration code.
+If registration reentrantly requests interruption, result delivery is disabled
+immediately and interruption waits for registration to supply its cleanup hook.
+The Promise adapter retains its abort hook even if that registration then throws
+or returns a malformed value. Late fulfillment/rejection cannot overwrite the
+pending interruption, and abort is delivered exactly once.
+`all` and `race` use the same cancellation barrier for all owned children,
+including when a failure or winner has been selected but cleanup is still
+pending. Selecting an exit does not mean that cleanup has completed.
+
 If constructing an all/race child fails, previously constructed children are
 already owned by the parent. They are interrupted before being scheduled, so
 their generator bodies do not start, but they still reach terminal exits and
 detach from the parent. The combinator waits for those exits before delivering
 the original construction failure, including when the parent catches it and
 continues. This prevents parent scope closure from waiting on unstarted fibers.
+If the parent is interrupted during this construction-failure cleanup, it still
+joins the created children before interruption reaches its caller frames.
 
 Interruption is cooperative. It is checked at yield and suspension boundaries.
 Suspended operations detach their observer or waiter; abort-aware Promise
@@ -495,6 +541,15 @@ without later sibling mutation leaks; compile-time provider checking remains
 the separate unfinished M4 context wave.
 
 ### Effect v4 reference and divergences
+
+The semaphore kernel adds one internal SemaphoreAcquire operation. Its request
+record is created inside the wrapper's try/finally before suspension. Granting
+records permit ownership before scheduling the waiter; interruption before
+resumption therefore still reaches cleanup with the ownership intact. Waiting
+cancellation removes the FIFO entry, and release is idempotent. Protected work
+runs in an owned scope so its children and finalizers finish before permits
+return. Source-level exposure and remaining acceptance are tracked in
+`plans/async-concurrency-hardening.md`.
 
 The runtime invariants were studied against Effect v4 at commit
 `bd393d63c19bdd0ab212d95576cec89051c8501c` (package version

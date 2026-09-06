@@ -1,8 +1,9 @@
 # Independent record overlay implementation
 
 Status: transport, deferred inference, partial-field exposure, and several
-contract checks are implemented and tested. Full constraint entailment and
-cycle acceptance remain unfinished. This is part of requirement
+contract checks are implemented and tested. The three joint-audit criteria below
+now have source-path reviews and regression evidence. Final integrated compiler
+acceptance and clean committed-tree gates remain open. This is part of requirement
 8 of compiler hardening, not a new language milestone or a waived limitation.
 
 ## Reproductions
@@ -33,28 +34,129 @@ provide Alder's ordered two-input overlay operation.
 ## Required invariant
 
 Preserve an ordered relationship between every operand and the resulting
-record, independently of when input tails become known. A later required field
-replaces earlier payloads; an optional field preserves the earlier fallback
-when absent. Fields not overwritten remain present. Known absence, possible
-absence, and required presence are distinct. The recent optional/open-overlap
-regressions remain required, including final overrides that discard otherwise
-incompatible intermediate alternatives.
+record, independently of when input tails become known. Every declared field
+exists with its ordinary type; optional shorthand means Option. A later field
+replaces earlier values even when it contains None. Fields not overwritten
+remain present. Fresh contextual defaults are earlier operands, never fallback
+branches in field reads. Preserve final overrides that discard otherwise
+incompatible intermediate types. This supersedes historical presence/fallback
+descriptions in the original investigation log below.
 
 ## Implementation direction to validate
 
+### Recursive universal field-contract follow-up
+
+`recursive_overlay_cannot_prove_a_universal_field_from_its_result_obligation`
+rejects a Number promise when a recursive merge feeds its result back into the
+left parameter and an independent universal right row may overwrite `value`.
+The diagnostic is specifically GenericSpecialization. The positive test
+`recursive_overlay_preserves_a_final_field_with_a_shared_universal_tail` writes
+Number after each merge and preserves a shared residual tail, accepting a String
+input field that is always overwritten before the recursive call.
+
+The initial positive fixture was not a valid universal contract: placing the
+overwrite after the recursive operation did not prevent the operation itself
+from feeding a changed payload into its monomorphic recursive parameter. Moving
+the overwrite inside still required compatible row shapes: an independent right
+tail could add fields absent from the declared left tail. The final fixture
+uses matching known fields and a shared universal tail. No production defect
+was established or fixed by those rejected fixtures. Both final tests pass and
+preserve the distinction between an overwritten value and a recursive parameter
+contract. They supplement, rather than close, the general cyclic review.
+
+### Mutual-recursion follow-up
+
+Two focused solver tests extend the single-function recursive cases to an
+even/odd mutually recursive SCC. An empty overwrite cannot hide incompatible
+recursive payload growth: it rejects with InfiniteType or a payload mismatch.
+A required `nested` overwrite accepts independent Number and String calls.
+Both tests pass without a production change. The first positive fixture used
+a Bool seed in the String recurrence and correctly failed; it now uses a String
+seed, preserving the recursive parameter's existing type contract.
+
+This is mutual-SCC inference coverage, not stored-interface/runtime evidence for
+these new cases and not a proof of general symbolic/cyclic entailment. Those
+remaining obligations are unchanged.
+
+Stored/runtime follow-up now supplies the missing boundaries for these specific
+cases. `stored_mutual_overlays_preserve_recursive_payload_requirements`
+serializes and drops the producer, then reloads it independently for valid and
+invalid consumers. Independent Number/String calls succeed; the empty-overwrite
+consumer fails without publishing an interface or artifact. Its reviewed
+colorless snapshot embeds the actual consumer source and labels the imported
+call, not the producer. The `record_options` CLI fixture imports
+`mutual_overlays.ald` and executes both entry functions at zero and several
+recursive steps. Its dedicated CLI integration test passes. No production
+change was needed; general symbolic/cyclic entailment remains open.
+
+### Trait method contract boundary
+
+Two new solver regressions exercise deferred overlays across trait schemes.
+Both a default method and an override reject returning `merge(left, right).value`
+as Number when the independently universal right row may contain a String
+`value`. Rejection is specifically GenericSpecialization, not an incidental
+parse or missing-instance error. The positive counterpart adds a guaranteed
+final Number overwrite and accepts both default and overridden methods with
+independently instantiated extra fields and incompatible discarded payloads.
+Both tests pass without a production change. They close this specific
+trait-method promise check; arbitrary symbolic/cyclic entailment is not inferred
+from these results, and stored/runtime counterparts remain separate evidence.
+
+Stored/runtime follow-up: the new driver test
+`stored_trait_overlay_methods_preserve_independent_row_arguments` serializes
+and drops the producer, then checks default/override calls through a fresh
+consumer with independent extra fields and discarded overwrite payloads.
+The traits fixture's `overlay_contracts.ald` executes both method dictionaries
+from its importing main module, with Number and String markers and different
+row instantiations, and checks both input records remain unchanged. The fresh
+packaged CLI at `/tmp/alder-package-current.xhI60N/debug/alder` runs this expanded
+fixture successfully from `/tmp`; the stored-interface test also passes.
+These supply the corresponding positive stored/runtime evidence without a
+production change. They do not claim general symbolic/cyclic entailment.
+
+### Identity and recursive-instantiation probes
+
+New source-level negative probes reject contradictory reads from an input and
+its shallow-copy result, including repeated input spreads and surrounding empty
+spreads. Recursive-instantiation probes pair an empty overwrite (which cannot
+break recursive payload growth) with a guaranteed `nested: Number` overwrite
+(which can). The initial positive fixture incorrectly supplied a Number where
+the recursive parameter already required a record; it was corrected to a
+consistent initial parameter shape, not by changing compiler behavior.
+
+A serialized/dropped producer interface is tested with fresh positive and
+negative consumers. Reviewing the first negative diagnostic exposed an unrelated
+missing `marker` field, so that fixture now uses an empty overwrite to target
+the recursive payload constraint. Imported CLI cases exercise the positive
+Number and String instantiations with zero and several recursive steps.
+The refined negative reports Number versus `{ nested: Number }` at the imported
+consumer's call, rather than an unrelated missing field. Its colorless snapshot
+contains the actual consumer source. All 459 solver integration tests, 14 solver
+unit tests, 184 driver tests, and 15 CLI tests pass, including associated
+doctests and the new execution cases. Strict workspace Clippy, formatting, and
+whitespace checks pass with no pending snapshots. These probes do not establish
+general symbolic/cyclic entailment or change the implementation.
+
+The first broad validation attempt encountered stale compiler artifacts after
+the isolated Hash checkpoint shared the worktree target directory. Worktree
+types were confirmed present; affected compiler-crate build artifacts were
+cleared and validation passed after rebuilding. Future isolated source exports must use a distinct
+target directory, not the worktree's target.
+
 Transport checkpoint (uncommitted): `Annotation.record_overlays` stores ordered
 operand types, a result type, and a source region. Arena copying and owned
-dehydration/hydration preserve the relation. Owned interface format is now 4.
+dehydration/hydration preserve the relation. The initial wire format was 4;
+the current format is 6 after tuple-shape and ordinary Option-field migration.
 The transport regression now obtains metadata from an inferred generic merge,
 serializes it, destroys the hydration arena, copies it to a new arena, and
 verifies exact round-trip equality. Reversing operand order
 changes the semantic fingerprint. Workspace checking and strict Clippy pass.
-Inference now emits overlays for multiple open operands, selects their connected
+Inference emits overlays whenever any operand remains open, selects their connected
 variables during generalization (alongside error-row relations), preserves them
 in free-variable accounting, instantiates them with the scheme's replacement
 map, and publishes/hydrates them through annotations. A fixed-point pass solves
-overlays once all operand shapes are closed, using the existing optional/final-
-overwrite rules. The original 207 solver tests passed before adding the new
+overlays once all operand shapes are closed, using ordinary rightmost-overwrite
+rules. The original 207 solver tests passed before adding the new
 negative contract test below. Strict Clippy passes. Do not commit or present
 this initial integration as a completed fix.
 
@@ -102,9 +204,9 @@ Before choosing the final representation, account for all these boundaries:
    If annotations gain a new constraint field, audit every constructor, copy,
    free-variable traversal, replacement, trait scheme comparison, and
    serialization path. Version the wire format when its representation changes.
-6. Optional-field codegen depends on solved read-site presence. Do not finalize
-   those sites before overlay solving; avoid a generic function changing its
-   runtime representation according to a caller-only specialization.
+6. Field reads use the stored type directly. Constructor defaults and contextual
+   lifting metadata must agree with overlay solving; a generic function cannot
+   change its runtime representation according to a caller-only specialization.
 7. Termination and occurs checks must cover overlay cycles. Diagnostics from
    imported constraints must label the current consumer's source, not stale
    producer regions.
@@ -116,6 +218,265 @@ semantics. Their directed set-inclusion solver cannot simply be reused for
 ordered property replacement.
 
 ## Acceptance work
+
+### Joint-audit criteria
+
+Keep these distinct when assessing completion; passing a recursive example
+alone does not discharge all three:
+
+1. **Transport/retention reviewed:** unresolved inferred relations must remain
+   attached to their connected scheme
+   variables and be instantiated together, including monomorphic local aliases
+   and captured state. A concrete consumer must not silently drop an unsatisfied
+   relation when it becomes executable.
+2. **Reviewed:** declared universal promises must follow from the declared input shapes, not
+   from fields introduced as obligations on an opaque intermediate result.
+   Current normalization deliberately does not treat opaque cyclic producer
+   fields as overwrite evidence.
+3. **Reviewed:** cyclic relations must terminate and retain payload/type relationships.
+   The solver's cycle-aware expansion and existing single/mutual recursive
+   tests are evidence; the source review below distinguishes a valid
+   deferred relation from an unchecked contradictory equation.
+
+These restate the existing inference, contract, and occurs-check requirements;
+they do not add a requirement for a general theorem prover or waive any
+previously identified gap. The existing transport, source, stored-interface,
+and runtime regressions should be used as evidence for their actual boundaries,
+not repeatedly described as missing coverage.
+
+### Universal and cycle source review at 21b4510 plus the integrated worktree
+
+The acceptance review distinguishes constraint retention from proving a declared
+promise. `check_universal_overlay_fields` follows ordered producer operands,
+checks expected fields right-to-left, and rejects an unconstrained universal tail
+before treating a possibly overwritten earlier field as evidence. Expected
+universal result tails are also checked against independent operand universals.
+Known selected payloads go through `check_value`; final generic-contract checks
+reject specialization, identification, and escape after the joint solving loop.
+This covers ordinary and trait method contracts through the same registered
+universal-variable path, rather than a separate unchecked trait shortcut.
+
+Normalization preserves input order, removes only shadowed contributions, and
+does not use open cyclic producer fields to discard earlier closed writes.
+Active-path producer indices stop cyclic expansion, while the visited set avoids
+re-expanding a shared DAG. Cyclic result comparisons use the original ordered
+inputs rather than assuming associativity proves equality of arbitrary fixed
+points. The bounded-expansion unit test and the recursive universal regressions
+exercise these distinct paths; the latter include a valid shared-tail overwrite
+and an invalid independent-tail promise.
+
+There is no blanket rejection of an open recursive relation. It remains a
+constraint, as reviewed under criterion 1. Guaranteed selected fields are checked
+against the result by `expose_overlay_fields`; once inputs close, the entire
+ordered merge is checked before removing the relation. Those equalities reach
+`bind` and its structural occurs check, including record fields and row tails.
+`unify_records` also rejects unequal residual fields on an already-shared tail.
+Thus stopping graph expansion is not itself acceptance of a cyclic payload
+equality. The solver repeats when a relation is discharged, a field is exposed,
+or substitution bindings increase, not merely when fresh variables are allocated.
+
+The inspected regression matrix includes single and mutual recursive payload
+growth, overwrites that break that growth, independent concrete instantiations,
+opaque/universal field promises, default/overridden trait methods, and serialized
+producer/consumer boundaries. Fresh runs pass 48 overlay integration tests and
+the bounded-expansion unit test, plus all 31 stored-driver selections. The stored
+recursive negative cases assert failure without interfaces/artifacts and snapshot
+the consumer's source; positive runtime boundaries are recorded above.
+
+This concludes the three specified overlay audit criteria with implementation
+reasoning and finite regression evidence, not a theorem of complete constraint
+satisfiability, general compiler soundness, or whole-goal release approval.
+Historical statements below that those reviews were still pending describe
+earlier checkpoints. Broader generic/evidence integration and final validation
+must still use the eventual committed source tree.
+
+### Retention audit at 21b4510 plus the integrated worktree
+
+Criterion 1 is supported by a source-path audit, not just the presence of scheme
+metadata. `solve_record_overlays` removes a relation only after closed operands
+are merged and checked against its result; open relations remain in the pending
+set. `generalize_global` selects connected relations to a fixed point, including
+otherwise hidden intermediate variables. It subtracts protected environment
+variables only after collecting that component, or clears quantification for a
+restricted binding. `scheme_free_vars` includes operands and results.
+
+`instantiate_scheme` applies the function type's replacement map to every
+operand/result and keeps unquantified variables shared. Annotation export uses
+one name map; annotation import uses one variable map. Both set the deferred
+constraint's diagnostic region to the consumer reference on instantiation.
+Owned conversion, hydration, and arena copying preserve operand order and the
+result, rather than reconstructing a relation from the visible function type.
+
+Inspected permanent tests include higher-order forwarding, composed-result
+rejection, independently instantiated global aliases, monomorphic local factory
+closures, captured mutable arrays, and stored generic/associative consumers.
+The stored generic test destroys the producer, copies through another arena,
+accepts independent calls, and rejects a concrete wrong overwrite without
+publishing an interface or artifact. The metadata test additionally checks exact
+round-trip equality and operand-order-sensitive fingerprints.
+
+Fresh runs pass: 46 solver integration tests selected by `overlay` plus its one
+unit test, 11 selected by `independent_open_spreads`, all 31 driver tests selected
+by `stored_`, and the separate metadata storage/arena-copy test. These selections
+overlap other requirements and are not counts of distinct retention properties.
+No implementation or snapshot changes were needed. This closes the retention
+review; it does not establish universal entailment or the consistency of every
+retained cyclic equation, which remain criteria 2 and 3.
+
+### Guaranteed fields on open input records
+
+Reproduced another contradictory contract after the closed-field fixes:
+`padded(left, right: { r | x: Number })` returning `{ ..left,
+x: "discarded", ..right }` was treated differently from `{ ..left, ..right }`.
+A generic caller could promise Number and String for their same inherited
+`value`. The regression was accepted before the fix, then correctly rejected.
+
+Right-to-left normalization now also records known fields on acyclic expanded
+open input leaves as guaranteed overwrites. It keeps those open records intact
+and removes only shadowed earlier closed fields. Cyclic opaque producer fields
+may be obligations rather than established input facts, so they are not used
+as overwrite proof. This does not resolve general cyclic entailment.
+
+The stored-interface regression rejects the same contradiction after producer
+serialization/destruction; its reviewed colorless snapshot labels the second
+consumer call, with actual source embedded. Positive solver and cross-module
+CLI tests cover an Option-typed guaranteed field containing None, preservation
+of unrelated fields, right-hand overwrites of other fields, and exactly-once
+evaluation of the discarded initializer. This changes only type normalization;
+codegen remains untouched. Final package evidence predates this solver change.
+
+Validation: all 456 solver integration tests, 14 solver unit tests, 183 driver
+tests, 14 CLI tests, associated doctests, formatting, and strict all-target/
+all-feature Clippy passed. Whitespace checks are clean; no pending snapshots.
+
+### Shadowed closed fields across open operands
+
+Reproduced a further contradictory generic contract: `{ ..left,
+..{ x: "discarded" }, ..right, x: 0 }` and `{ ..left, ..right, x: 0 }`
+could independently promise Number and String for the same inherited `value`.
+The original attempt with two explicit `x` declarations correctly failed
+canonicalization; the valid spread-literal reproduction reached inference and
+was incorrectly accepted before the fix.
+
+Normalization now removes earlier closed fields guaranteed overwritten by a
+later closed field, walking right-to-left before adjacent closed grouping.
+Unknown operands remain intact; other fields of partially shadowed closed
+records remain intact. This changes only constraint comparison, not runtime
+initializers. The solver negative regression passes with all 14 unit and 452
+integration tests. Stored-interface positive/negative coverage includes a
+partially shadowed record and an intervening open overwrite; CLI coverage
+checks final payloads and exactly-once source-order side effects. All 177 driver
+tests, 14 CLI tests, associated doctests, and strict all-target/all-feature
+Clippy passed after the change; formatting and whitespace checks also passed.
+The subsequent full `cargo test --quiet` run exited 0, including all 54 kernel
+tests and workspace doctests (two documented ignored doctests). No pending
+snapshots were found.
+Broader entailment/cycle acceptance
+and final-tree packaging remain outstanding.
+
+Adjacent-closed grouping defect: an unused inferred function could require
+Number from `split(record).value` and String from `grouped(record).value`, where
+split appends `x: 0, y: true` and grouped spreads `{ x: 0, y: true }`. Neither
+changes value, but leaf lists retained two closed operands versus one combined
+operand, so equality failed to connect the contradictory result constraints.
+The new regression failed with successful solving before the fix.
+
+Expanded acyclic operand lists now merge adjacent closed records using ordinary
+right-biased field insertion. They never merge across an open operand, and
+cyclic equality still uses the conservative direct-input comparison. This is
+type normalization only; runtime evaluation/copying is unchanged. The negative
+passes after the fix; paired positives preserve rightmost heterogeneous writes
+and unknown-row barriers. All 451 solver integration tests and 14 unit tests
+pass. A cross-module CLI fixture compares both groupings and checks inherited
+and overwritten values. A stored-interface consumer rejects the contradiction
+without artifacts/interfaces; its reviewed colorless snapshot labels the local
+second call and contains the actual Alder source.
+
+This resolves a concrete entailment gap, not general cyclic entailment. The
+previous package checkpoint predates this production change and must be
+refreshed before final delivery. All 176 driver tests, 14 CLI tests, and their
+doctests pass. Strict workspace Clippy, formatting, and whitespace-aware diff
+checks pass; no pending snapshots remain. Added a closed-overlay-normalization
+changeset. The full workspace test run predates this production change.
+
+Empty-input normalization finding: inferred padded/plain merges were allowed
+to demand Number/String from the same final field because closed empty operands
+made their normalized lists different. A permanent negative reproduced this.
+Expansion now removes only closed empty records, the overlay identity. Open
+rows with no known fields are retained, since they can contribute arbitrary
+overwrites. The negative and a positive public generic padded-merge test pass;
+the positive instantiates previously unknown middle/right rows with Number and
+String overrides. Runtime expressions are still evaluated and copied in source
+order; this is type-level normalization only. Full symbolic/cycle entailment
+remains separate required work.
+Validation: 291/292 solver integration tests pass, with only the known tuple
+projection failure; both solver unit tests, all 121 driver tests, strict
+workspace Clippy, formatting, and diff checks pass. No snapshots changed.
+
+Repeated-input normalization finding: an unused inferred function required
+Number from `{ ..left, ..right, ..left }` and String from
+`{ ..right, ..left }`. It was accepted because normalized leaf operand lists
+still retained the earlier left occurrence. Expansion now retains only the
+rightmost occurrence of each identical input shape; earlier duplicates add no
+field-type/presence alternative beyond that occurrence. The negative regression
+now rejects. A paired positive verifies `{ ..left, ..right, ..left }` and
+`{ ..right, ..left, ..right }` still produce distinct Number/String results.
+Both tests and the bounded graph-expansion unit tests pass. The solver-wide run
+passes 289/290 tests, failing only the known tuple regression. This extends
+acyclic overlay equivalence, not general cycle solving or a codegen optimization:
+runtime source evaluation order and actual copying are unchanged.
+
+Associative constraint finding: a new unused inferred function computed
+`{ ..{ ..left, ..middle }, ..right }` and `{ ..left, ..{ ..middle, ..right } }`,
+then required the first value field to be Number and the second String. The
+compiler accepted and published both contradictory overlay constraints because
+result equality compared only immediate operand lists. The solver now compares
+expanded ordered leaf operands for acyclic overlay graphs, identifying those
+equivalent results before generalization. Expansion reports opaque cycles;
+cyclic comparisons retain the prior direct-input equality check rather than
+assuming arbitrary recursive equations have the same solution. The negative
+regression now rejects. A paired positive checks independent Number/String
+instantiations and rightmost overrides under both parenthesizations. This does
+not discharge general cycle entailment or the remaining interface/CLI gates.
+Validation: both new regressions and all 119 driver tests pass; strict workspace
+Clippy and formatting pass. The solver-wide run after the negative fix passed
+282/283 tests, failing only the already tracked tuple-projection regression.
+No snapshot changes were needed for this overlay fix.
+Follow-up acceptance: added a colorless driver snapshot with actual Alder source
+for the contradiction. Its label identifies the conflicting overlay, although
+showing both field-annotation origins remains a diagnostic improvement. A third
+solver regression preserves different final Number/String writes rather than
+equating every similar composition. The records CLI fixture now imports a
+generic function returning both parenthesizations and attempts independent
+Number/String calls. This actual CLI run initially FAILED: associated_merges was rejected
+with UnresolvedSharedExport, despite the equivalent local inference positive.
+The executable fixture exposed late overlay-result unification allocating fresh
+residual row tails after SCC generalization. Solve overlay equalities before
+computing that SCC's free variables and quantified schemes. The CLI fixture now
+passes, as does an isolated public-function regression with no local calls to
+incidentally trigger solving. All four focused overlay tests and 120 driver
+tests pass; the solver-wide run before adding the isolated export test passed
+284/285 tests, failing only the known tuple regression. General symbolic/cyclic
+entailment and broader release acceptance remain unfinished.
+Generalization safety follow-up: paired regressions reject re-instantiating a
+captured shared array through either associated result after a Number writer,
+while accepting independent Number/String factories allocating their arrays
+inside the function. All six focused associative-overlay tests pass. The actual
+records CLI fixture also mutates one associated result and reads through the
+other, then checks a separate differently typed invocation leaves the first
+array unchanged. CLI execution, all 14 formatter tests, and strict workspace
+Clippy pass. These probes preserve shallow alias semantics; they are not proof
+of all late-constraint or mutable-interface cases.
+Stored-interface follow-up: serialized an inferred public function returning
+both parenthesizations, destroyed the producer interface, and built fresh
+consumers from the deserialized interface only. Independent Number/String calls
+pass. A generic consumer requiring Number and String from the two equivalent
+result fields rejects without publishing an artifact or interface. Reviewed the
+new colorless snapshot: it retains actual Alder source and labels the consumer's
+return contract, not a producer location. This complements the existing arena-
+destruction/copy and CLI tests; broad cyclic entailment remains open.
+Validation after this probe: all 121 driver tests, strict workspace Clippy,
+formatting, and diff checks pass. No pending snapshot files remain.
 
 The entries below record successive investigations, not independent claims of
 current failures. Later fixes supersede the earlier reproduction state. The

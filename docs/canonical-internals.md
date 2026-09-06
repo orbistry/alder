@@ -22,14 +22,15 @@ constraint generation, unification, and error presentation.
   `path/mod.ald`. If both exist, resolution fails as ambiguous. The root is
   `src/mod.ald`.
 - Canonical locals have compiler-assigned IDs. Their source spelling remains
-  for diagnostics and code generation. An assignment root is already resolved
-  and carries its mutability.
+  for diagnostics and code generation. An assignment root is already resolved;
+  canonicalization checks whether the referenced declaration is assignable.
+  Ordinary let and parameter bindings have no mutation-permission flag.
 - Canonical functions are n-ary, including zero-argument functions. Tuples
   have arbitrary arity. Neither is encoded using Elm's binary/three-element
   representation.
 - Record and error rows are distinct variants at every compiler layer.
-  Optional record fields retain presence metadata and are not rewritten as
-  `Option[T]`.
+  Optional record-field shorthand is rewritten as ordinary `Option[T]`;
+  canonical fields have no separate presence metadata.
 - `provide Path = value { body }` is an expression. The source parser must move
   it from `Stmt` to `Expr` before expression canonicalization lands.
 - `for` and `while` have type `()`. A `loop` has a fresh result unified with
@@ -607,14 +608,10 @@ pub enum Type<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RowExtension<'a> { Closed, Open(&'a str) }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FieldPresence { Required, Optional }
-
 #[derive(Clone, Copy, Debug)]
 pub struct RecordTypeField<'a> {
     pub index: u16,
     pub name: &'a str,
-    pub presence: FieldPresence,
     pub typ: Node<'a, Type<'a>>,
 }
 
@@ -636,37 +633,28 @@ Entries are name-sorted for deterministic solver and interface behavior; the
 `index` preserves source/runtime order. Error tag arity is preserved rather
 than collapsed to a tuple.
 
-Inference mirrors the distinction:
+The active solver mirrors the distinction (relevant `Ty` variants):
 
 ```rust
-pub enum FlatType<'a> {
-    App(ModuleId<'a>, &'a str, Vec<Variable>),
-    Fn(Vec<Variable>, Variable),
-    Tuple(Vec<Variable>),
-    EmptyRecord,
-    Record(BTreeMap<&'a str, InferField>, Variable),
-    EmptyErrorRow,
-    ErrorRow(BTreeMap<&'a str, Vec<Variable>>, Variable),
+enum Ty<'a> {
+    // Other type variants omitted.
+    Record(BTreeMap<&'a str, Ty<'a>>, Option<Box<Ty<'a>>>),
+    RecordRow(Box<Ty<'a>>),
+    ErrorRow {
+        tags: BTreeMap<&'a str, Vec<Ty<'a>>>,
+        tail: Option<Box<Ty<'a>>>,
+    },
 }
-
-pub struct InferField { pub presence: FieldPresence, pub typ: Variable }
 ```
 
-Ordinary type equality requires equal field presence. Compatibility with an
-expected record is asymmetric and uses a dedicated `RecordSubsumes`
-constraint:
-
-- an expected required field requires an actual required field;
-- an expected optional field accepts a required field, an optional field, or
-  absence;
-- payload types of fields present on both sides unify;
-- reading a required field yields `T`; reading an optional field yields
-  `Option[T]`;
-- a field explicitly written or updated becomes required, even if it was
-  optional in a spread base.
-
-This prevents an optional actual from satisfying a required consumer while
-allowing a concrete record to satisfy an optional-props signature.
+Every declared record field exists and its stored type participates in ordinary
+row unification. Reading or matching a field returns that type directly.
+Contextual fresh construction can supply None for omitted Option fields and
+lift supplied payloads; ordinary unification does not convert existing aliases.
+Assignment requires the actual field type. Spread selects the rightmost field,
+including a None value, and unresolved tails retain explicit overlay constraints.
+See `plans/optional-arguments-hardening.md` for construction cases still under
+implementation; no separate presence-based subsumption constraint is used.
 
 The M2 primitive universe is `Number`, `BigInt`, `String`, `Bool`, `Array`,
 `Map`, `Set`, `Task`, `Option`, `Result`, unit, tuples, records, and error rows.
@@ -977,7 +965,7 @@ test groups, and comptime blocks never appear.
 
 `alder-driver` owns `InterfaceFile`, an owned deterministic DTO using `String`
 and `Vec`. It includes a schema version, compiler version, structured module
-ID, normalized solved type schemes (including row kind and field presence),
+ID, normalized solved type schemes (including row kind and field types),
 aliases, complete enum payloads, traits, error groups, opaque types, module
 re-exports, and origin identity. Encoding and hydration are explicit deep
 conversions:
@@ -1035,13 +1023,13 @@ The nested enums must cover at least:
 - duplicate definitions in every namespace, duplicate params/pattern
   bindings/fields/variants/tags, constructor arity and field errors, type
   arity, and unbound/unused type variables;
-- assignment to immutable/imported bindings, invalid assignment targets,
+- replacement of imported names or named function declarations, invalid assignment targets,
   `break` or `continue` outside loops, `return` outside functions,
   expression pin outside query, pattern pin outside match, and placeholder
   outside an immediate call argument;
 - invalid extern placement/arguments/body/signature, unavailable macro calls
-  and comptime, unavailable derives, and M2's explicit-task-return rule for
-  `.await`;
+  and comptime, unavailable derives, and `.await` outside an explicit
+  `async fn` or `async {}` body;
 - fixed-operator non-associative conflicts and all deferred structural name
   errors.
 

@@ -78,10 +78,12 @@ Later `else if` condition prefixes stay inside the preceding `else`. A loop in
 value position uses a labeled `for (;;)`, and `break value` assigns its result
 temporary before breaking. A bare break produces `undefined`.
 
-At a function boundary, emit the block directly and `return` its tail. An
-`Await` outside nested lambdas marks the function task-producing. Such a
-function remains a plain JavaScript declaration whose body returns a lazy
-`$task(function* () { ... })`; it is not emitted as a native `async` function.
+At an ordinary function boundary, emit the block directly and `return` its tail.
+An explicit `async fn` instead returns a lazy `$task(function* () { ... })`,
+including when its body has no awaits. An `async { ... }` expression constructs
+the same task form with its own control-flow boundary. Neither form is emitted
+as a native JavaScript `async` function. A plain function returning an existing
+Task does not gain another wrapper or permission to await.
 
 ## 3. Stable runtime ABI
 
@@ -116,24 +118,69 @@ the ABI in production as well as development.
 safe and boxes null or an existing option box:
 
 ```js
-const $OPTION_BOX = "$alder$Some";
+const optionBoxes = new WeakSet();
 function optionSome(value) {
-  return value === null || value?.$ === $OPTION_BOX
-    ? { $: $OPTION_BOX, _0: value }
-    : value;
+  if (value === null || optionBoxes.has(value)) {
+    const box = { $: "Some", _0: value };
+    optionBoxes.add(box);
+    return box;
+  }
+  return value;
 }
 function optionPayload(value) {
-  return value?.$ === $OPTION_BOX ? value._0 : value;
+  return optionBoxes.has(value) ? value._0 : value;
 }
 ```
 
 This distinguishes arbitrarily deep `Some(Some(None))`, including through
 polymorphic code. Matching `None` checks `=== null`; matching `Some` checks
 `!== null` then calls `optionPayload`.
+Box identity comes from the WeakSet, not a user-visible tag string, so ordinary
+enum/record payloads resembling a Some box are not accidentally unwrapped.
 
 Structural equality is a kernel helper. It recursively compares arrays, plain
 records, tagged values, options, and results, tracks visited object pairs, and
 uses identity for functions and opaque values.
+
+Dictionary-based derived equality carries a canonical nominal type name and
+tracks active object pairs within that nominal domain for one synchronous
+comparison. Revisiting a pair closes a cycle; payload dictionaries still run,
+so even comparing an object to itself does not bypass NaN or custom equality.
+Erased Option layers are unwrapped normally, not pair-memoized. Active entries
+are removed on return or throw; later mutations never reuse a cached result.
+This cycle guard does not make arbitrarily deep acyclic comparisons stack-safe.
+
+Trait dictionary construction precedes source value initializers. Local
+implementations are emitted in a deterministic dependency order derived from
+their solved superclass evidence, including dictionary factory arguments.
+Factory superclass dependencies participate as well, since initialization can
+invoke a factory. Method bodies remain lazy closures and do not impose eager
+initialization edges. Source value initializers retain their relative order;
+this does not resolve arbitrary forward references between source values.
+
+Closed error-row Show evidence carries canonical tag names and one checked Show
+dictionary per payload. The backend constructs variant descriptors directly as
+Oxc AST nodes and calls `$showDerived`; it does not choose a dictionary by the
+name or declaration order of an error group. Missing payload Show capabilities
+are solver errors, not a fallback to generic runtime formatting.
+The shared structural evidence path also supports Json, emitting encode/decode
+methods with per-payload codecs for `$jsonEncodeDerived`/`$jsonDecodeDerived`.
+It does not select a nominal group codec or infer capabilities from runtime data.
+Container and structural Json methods share a descriptor-producing closure, so
+nested payload evidence is emitted once rather than duplicated into both methods.
+The closure remains lazy to preserve recursive dictionary initialization; this
+shares generated code, not a cached runtime descriptor.
+Container Hash dictionaries use the same lazy-descriptor mechanism. Their Eq
+superclass projects each child dictionary's `$super0` after evaluating the shared
+thunk once, rather than emitting the entire nested Hash evidence again. This
+preserves checked equality dispatch and prevents exponential nesting growth.
+Closed error-row Hash uses the same shared payload evidence. `$hashErrorRow`
+hashes the active tag, its payload count, and selected child hashes; unlike
+nominal enum hashing, it includes neither a type name nor a variant index.
+Adding other possible tags therefore cannot change an existing value's hash.
+Its Eq superclass projects the same payload dictionaries. The Effect v4 Hash
+contract was revisited at the commit pinned in `docs/effects-internals.md`;
+no code was copied, and Alder retains its own 64-bit byte-stream protocol.
 
 ## 4. Names, modules, and emission order
 
@@ -183,30 +230,32 @@ canonicalized into lambdas, so a placeholder explicitly selects another pipe
 position. The left value is evaluated before the callee and existing arguments.
 `??` preserves short-circuit RHS lifting.
 
-`Try` evaluates its `Result` once, returns an `Err` unchanged from the current
-function, and otherwise yields `_0`. `Await` emits `yield*` inside the
+`Try` evaluates its input once. For Result it returns an `Err` unchanged from
+the current boundary and otherwise yields `_0`; for Option it returns `None`
+or unwraps one Some layer using the centralized Option representation.
+`Await` emits `yield*` inside the
 enclosing task generator. Task iteration yields a scheduler `Call` operation;
 the runtime maintains explicit caller frames, so this syntax does not imply
 unbounded native generator delegation. No new codegen helper or child fiber
 is needed for sequential awaits. `state(x)` is identity in M2.
 
-Optional record reads use solved per-region evidence and emit
-`$optionalField(record, fieldName)`. The helper tests property presence rather
-than payload truthiness/nullability, returning None for absence and Some of the
-payload otherwise. This preserves nested Options and evaluates the record once.
-Required field reads remain direct member access.
-The same solved set uses field-name regions for record patterns, including
-enum record payloads. Optional pattern steps call the helper in both matching
-and binding; they do not extract the raw payload as a required value.
+All record reads and record-pattern projections use direct member access,
+including enum record payloads. Optional declaration shorthand has already
+become an ordinary Option type; reads never add another Some layer. Contextual
+record construction records omitted Option fields by construction region and
+emits their None values explicitly. Enum record constructors use the same
+contextual field checking and default metadata. Nested Some(None) stays distinct
+from outer None through the normal Option representation, not property presence.
 
 `provide` pushes the value under its canonical provider key, executes the body
 inside `try/finally`, and pops in `finally`, which remains correct across await.
 `use` reads that key. M4 may change provider validation/storage without changing
 generated keys.
 
-Markup, styles, and queries call kernel constructors in M2. Their canonical
-structure remains intact for later specialized lowering. Macro calls and
-`comptime` are rejected before codegen.
+Build/Test lowering rejects markup, styles, and queries until their respective
+milestones; it does not emit placeholder kernel calls. Their parsed/canonical
+structure remains available for checking. Source macro calls and `comptime`
+are rejected before codegen.
 
 ## 6. Match decisions
 
@@ -216,11 +265,32 @@ primitive literal, and array exact/minimum length). The algorithm:
 
 1. evaluates the scrutinee once;
 2. expands alternative arm patterns into consecutive decisions sharing one arm;
-3. records local/alias bindings as extraction paths;
-4. evaluates pin operands once in source order;
-5. installs bindings before a guard;
+3. captures each reached extraction path's value, after its parent shape checks;
+4. evaluates reached pin operands once in source order, after capturing their
+   subject value, short-circuiting after a failed enclosing shape or preceding
+   subpattern;
+5. installs bindings from captured values before a guard, never rereading a
+   path that a later pin may have mutated;
 6. continues to the next decision when a pattern or guard fails;
 7. assigns/emits the selected arm body.
+
+All alternatives in an arm bind the same names to shared canonical local IDs.
+The solver requires corresponding payload types to agree, including aliases
+and array-rest bindings, so any successful alternative can safely supply the
+shared guard and body. Pins still refer to the enclosing pre-pattern scope.
+
+Captures are ordinary references, not deep copies: a bound object preserves its
+identity. Array-rest patterns capture their shallow slice when reached, before
+later sibling pins run. Each alternative owns fresh captures; a failed guard
+retries the next alternative against the then-current scrutinee. Captures remain
+live across suspension inside a pin. No extraction runs before the enclosing
+shape permits it. See `pattern-capture-hardening.md` for the mutation regression.
+
+Guard retry is per alternative, not per arm: `(x, _) | (_, x) if check(x)`
+tries the first binding, and if its guard is false, tries the second binding
+and guard. A failed pattern does not run its guard; a successful guard stops
+the chain. The CLI pattern fixture verifies these rules with recorded effects,
+including a guard that suspends and resumes before returning false.
 
 An Elm-style pattern-matrix optimizer may later group decisions into switches;
 that is a performance optimization rather than part of match semantics.
@@ -229,6 +299,13 @@ Array rest bindings use `slice(prefix_len)`. Pins use structural equality unless
 known primitive. Runtime fallthrough calls `matchFailure(module, region, value)`;
 later exhaustiveness analysis should make it unreachable. Guard failure must
 retain a continuation, not merely select an arm index.
+
+Refutable patterns at binding sites (top-level/local lets, named and lambda
+parameters, and for bindings) use the same decision logic before extracting
+payloads. Failure calls the same source-located matchFailure path; the binding
+source is evaluated once. Irrefutable bindings retain direct extraction. Async
+parameter checks live inside task execution, preserving lazy task creation and
+normal scope cleanup on failure.
 
 ## 7. Externs
 

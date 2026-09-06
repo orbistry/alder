@@ -140,7 +140,7 @@ are kept through the redesign and adapted incrementally.
 
 **Architecture Decisions:**
 
-- **Async model:** Inferred lazy `Task` functions on a target-neutral
+- **Async model:** Explicit lazy `async fn` and `async { ... }` on a target-neutral
   generator/fiber kernel; postfix `.await` and structured concurrency
 - **FileSource trait:** In driver crate with implementations:
   - `FileSystemSource` (native, `#[cfg(not(wasm32))]`)
@@ -263,6 +263,7 @@ then, by design.
 - [x] Adapt `alder-can` to namespaced constructors, `pub` visibility, statements, assignment
 - [x] `alder-codegen`: JS emission for the core language; decide enum/record representation
 - [x] Prelude and stdlib skeleton: `Option`, `Result`, `Array`, `String`, `Number`, `BigInt`, `Map`
+- [x] `Array.iter` creates independent live `ArrayIterator[a]` cursors; `Iterator` advances the cursor without consuming source elements and stays exhausted after None.
 - [x] JS kernel skeleton and `extern` binding
 - [x] Embed `deno_core` plus the web-standard extension crates in `alder-cli`; `alder run` for the `standalone` target
 - [x] `Cli` module (raw `args()`; the `Args`/`Subcommand` derives land with M5)
@@ -276,16 +277,30 @@ then, by design.
 - [x] Type-class constraints in `alder-constrain`/`alder-solve` (argument zero is the coherence subject; colon bounds are unary)
 - [x] Higher-kinded type parameters
 - [x] Dictionary-passing codegen with static resolution where possible
-- [x] Compiler-backed derive surface (`Show`, `Eq`, `Ord`, `Hash`, `Json`; macro implementation replaces it in M5)
+- [x] Compiler-backed enum derive surface (`Show`, `Eq`, `Ord`, `Hash`, `Json`; macro implementation replaces it in M5); error rows use selected conditional structural capabilities, not nominal derives
 - [x] Orphan rule checking in `alder-can`
 
 ### M4: Errors and async
 
+- [ ] Harden Result's error argument to require rows/groups consistently;
+  add Option `?` propagation without implicit Option/Result conversion
+  (approved decisions in `plans/hardening-language-decisions.md`)
+- [ ] Trailing optional function parameters (`param?: Type`), with omission
+  represented as None and ordinary Option function types; supplied arguments
+  prefer direct matches, otherwise recursively lift with Some at call and
+  record-initialization boundaries (see approved hardening decisions)
 - [x] Row-typed `:tag` errors in `Result`'s error position, `?` row merging, inferred rows for `Result[a]`
 - [x] `error` groups and their unification with open rows
 - [x] Exhaustiveness on closed groups, `_` requirement on open rows
-- [x] Inferred `Task` from `.await`; generator codegen; Promise extern lifting;
+- [x] Explicit lazy async functions and blocks; generator codegen; Promise extern lifting;
   fiber scheduler, scopes, interruption, and structured concurrency in the kernel
+- [ ] Ref/SynchronizedRef, cancellation-safe semaphore, and bounded Fiber traversal
+  (hardening acceptance tracked in `plans/async-concurrency-hardening.md`)
+
+  - [x] Public map/forEach/tryMap/tryForEach with optional MapOptions,
+    execution-time bounds validation, and CLI coverage for defaults and Result behavior
+  - [x] Expose `Fiber.unbounded` as the explicit concurrency-limit value
+  - [ ] Complete remaining traversal integration/release acceptance gates
 - [ ] `provide`/`use` context resolution and compile-time provider checking
 
 ### M5: Macros and comptime

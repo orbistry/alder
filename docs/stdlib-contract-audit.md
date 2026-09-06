@@ -1,14 +1,14 @@
 # Stdlib declaration/runtime audit
 
-Status: active. The Array Iterator progress defect remains unresolved pending
-the API decision recorded in `plans/array-iterator-hardening.md`. This document
-does not close the stdlib audit or the final compiler release gates.
+Status: the Array iterator progress defect is fixed, as recorded in
+`plans/array-iterator-hardening.md`. Final integrated compiler release gates
+remain open; the inventory alone is not a proof of runtime correctness.
 
 ## Inventory and linking
 
 The workspace contains 16 builtin value modules plus `Traits.ald`. A read-only
 inventory compared all 17 files byte-for-byte with `alder-can/stdlib`, checked
-all 50 `#[extern("alder:kernel", ...)]` targets against kernel exports, and checked
+all 51 `#[extern("alder:kernel", ...)]` targets against kernel exports, and checked
 their exported-name mappings in the bundle facades. All match. `Fiber.unbounded`
 is the separate typed Number constant backed by `$fiberUnbounded = Infinity`.
 The canonicalizer's permanent packaged-source/signature tests cover the copies
@@ -30,7 +30,7 @@ production Alder output still arrives as directly constructed Oxc ASTs.
 | Json | Module encode/decode carry a leading selected Json dictionary and delegate to it. Primitive validation, envelopes, custom/container/derived codecs, Option defaults and structural errors are mapped in `json-hardening.md`, `option-operation-acceptance.md`, and `cyclic-values.md`. No unchecked JSON.parse public bypass remains. |
 | Task, Fiber | Declarations return lazy Task values with the documented result layers. Traversals use the public options-record adapters, not the numeric internal adapters. Optional omission becomes None; the unbounded constant is a concurrency value. Lifecycle, callbacks, cancellation, fairness and result shapes are mapped in `async-hardening-acceptance.md`. |
 | Ref, SynchronizedRef, Semaphore | Callback argument/result order matches the declarations: modify returns the first tuple component and stores the second. Ref callbacks are synchronous; synchronized callbacks return Tasks. Set/update return unit. Lazy allocation, aliasing, commit/cleanup behavior and permit validation have kernel and compiled tests mapped in the async acceptance document. |
-| Traits | Canonical source headers and bootstrap parity enter ordinary instance selection. Primitive/container/structural payload evidence, higher-kinded adapters and their superclass slots remain part of the wider dictionary/codegen audit. The current Iterator[Array] intrinsic does not advance and is not accepted as complete. |
+| Traits | Canonical source headers and bootstrap parity enter ordinary instance selection. Primitive/container/structural payload evidence, higher-kinded adapters and their superclass slots remain part of the wider dictionary/codegen audit. `Array.iter` creates independent live cursors for `Iterator[ArrayIterator[a]]`; bounded kernel and imported CLI checks verify progress, permanent exhaustion, aliases, live mutation, and Option/unit payloads. |
 
 The new scalar kernel test checks successful/failed parses, exact BigInt values,
 Unicode text, same/different object identity, heterogeneous primitives, signed

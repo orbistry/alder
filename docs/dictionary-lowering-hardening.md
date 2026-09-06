@@ -112,8 +112,8 @@ use current return-type syntax. The dedicated CLI regression and strict Clippy
 pass, as do the full workspace tests/doctests (194 driver, 70 kernel, 17 CLI,
 68 codegen, 465 inference). No pending snapshots remain.
 
-The imported-default and initialization changes are currently uncommitted in the
-integrated hardening worktree. Final packaging and clean-tree gates remain open.
+The imported-default and initialization changes are committed in the cross-layer
+integration `556a21c`. Final packaging and clean-tree gates remain open.
 
 The selection and dictionary-size reconciliation above supersedes the earlier
 open follow-up. Final integrated validation is recorded in the main plan;

@@ -7,6 +7,12 @@ Loops consume their own break and continue exits. Literal Boolean conditions
 are understood; other conditions conservatively admit both branches. Calls and
 deferred DSL constructs conservatively admit normal continuation.
 
+Pattern flow distinguishes matching, rejection, and pin-expression exits.
+Each alternative applies the arm guard with its own bindings: a false guard
+retries the next alternative, not just the next arm. Guard exits stop that
+path, while pattern rejection skips the guard. Both structural summaries and
+solver reachability use this same per-alternative guard transition.
+
 The active solver checks every inferred body with normal fallthrough against
 the function result. A block that cannot continue produces a fresh unconstrained
 value type for expression composition: there is no runtime value to constrain.
@@ -42,7 +48,12 @@ unconditional exit, inside `if false`, in a skipped Boolean operand, or behind
 a literal false guard does not determine a live loop's result. The structural
 flow summary also excludes these exits when deciding whether a loop diverges.
 Unknown Boolean values remain conservative. Unreachable code is still inferred
-and subject to ordinary type checks. Further unreachable-path constraints
+and subject to ordinary type checks. Aggregate elements, record fields and
+spreads, tag payloads, template interpolations, and index expressions carry
+reachability forward in evaluation order, including contextually checked
+initializers. Assignment indices precede later indices and the assigned value.
+An exit in an earlier operand prevents later break payloads from joining the
+enclosing loop result. Further unreachable-path constraints
 (including pattern selection and general expression evaluation order) remain
 in the hardening acceptance matrix. No interprocedural termination analysis
 is claimed.

@@ -32,7 +32,7 @@ M2a:
 - `alder check` type-checks a multi-module `standalone` project written
   in the new syntax, including `~/` imports, `mod.ald` indexes, `pub`
   visibility, enums with namespaced constructors, records with optional
-  fields, `let mut`, loops, `match`, lambdas with `_` placeholders, and
+  fields, writable `let` bindings, loops, `match`, lambdas with `_` placeholders, and
   reports Elm-quality errors for name resolution and type mismatches.
 - Every docs example that is a full module canonicalizes; those using
   traits, error rows, `.await`, `use`/`provide`, markup, queries, styles,
@@ -57,8 +57,8 @@ These are already in the docs; do not reopen them.
 
 - Runtime semantics: `Number` is a JS double, `BigInt` is JS bigint,
   `Array` is a mutable JS array, `Option[a]` compiles to `a | null` with
-  nested options boxed, records are plain objects, `mut` is a binding
-  permission with JS aliasing.
+  nested options boxed, and records are plain objects. Ordinary lets and
+  parameters are writable with JS aliasing; assignment preserves their types.
 - `provide Path = expr { ... }` becomes an **expression** whose value is
   its block's tail (parser change: `Stmt::Provide` → `Expr::Provide`,
   parsed by `primary` at the `provide` keyword; `docs/web.md`'s `handle`
@@ -162,7 +162,7 @@ Run a design panel (see `plans/README.md`) producing
   sibling `path.ald` indexes, `as`, `.{ }`, `.*`, `pub import`.
 - The error type for canonicalization (port and extend
   `Reporting/Error/Canonicalize.hs`): unknown names with suggestions,
-  ambiguous imports, non-`pub` access, assignment to immutable binding,
+  ambiguous imports, non-`pub` access, replacement of a non-assignable declaration,
   `break`/`continue` outside loops, `return` outside functions, duplicate
   definitions, unqualified constructor outside `match`, placeholder
   outside call, `^` outside query, and the deferred-construct notices.
@@ -177,7 +177,7 @@ Run a design panel (see `plans/README.md`) producing
 - `alder-can/items`: fn, let, type alias, enum, trait/impl recording,
   error groups, opaque declarations for table/schema/component/test/macro.
 - `alder-can/expression` and `statement`: precedence resolution, `_`
-  placeholder desugaring to lambdas, block scoping, `mut` and assignment
+  placeholder desugaring to lambdas, block scoping, assignment-target
   checks, loop labels, `?` and `.await` nodes, `provide` as expression.
 - `alder-can/pattern`: namespaced constructors, `match`-arm
   unqualified constructors, `^` pins, array rest patterns, optional-field
@@ -261,7 +261,7 @@ Design panel producing `docs/codegen-internals.md`:
 
 - End-to-end tests: a `tests/e2e/` directory of small `standalone`
   projects (hello world, enums and match, records with optional fields,
-  loops and `mut`, externs to `node:`-free web APIs like `fetch` against a
+  loops and assignment, externs to `node:`-free web APIs like `fetch` against a
   local `deno_http` server) run through `alder build` and `alder run`
   with expected stdout.
 - Every docs example that is a full `standalone` module compiles and,

@@ -55,7 +55,7 @@ Workers and the same app running self-hosted on `standalone`.
 ## Settled decisions
 
 - Svelte 5 runes model: compile-time dependency tracking, components run
-  once, `state(x)` bound to `let mut`.
+  once, `state(x)` bound to an ordinary writable `let`.
 - JSX-shaped typed markup with `@` directives (TSRX rules: statements in
   directive bodies are setup and do not render).
 - SvelteKit file conventions exactly (`+page.ald`, `+page.server.ald`,

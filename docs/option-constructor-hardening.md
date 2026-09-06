@@ -3,6 +3,14 @@
 Status: built-in registration, representation-aware lowering, and guarded
 refutable binding implemented; broader pattern/pin audit remains open.
 
+Current checkpoint validation: all 63 codegen tests and doctests pass, as do
+the CLI's ten refutable-binding failure cases and success/cleanup mode, the
+standalone e2e fixtures, formatting, and strict workspace Clippy. Five source-
+aware codegen snapshots were reviewed. The previous full workspace run covers
+this same production source; selective staging did not change its behavior.
+Elm's decision-tree match-before-extraction structure was rechecked as a
+reference; Alder retains its ordered effectful-pin semantics and direct Oxc ASTs.
+
 Match-pattern permission is now explicit in canonicalization, rather than a
 depth counter surrounding whole arms. A reproduced nested let pin was accepted
 outside an actual match pattern; it now reports `PinOutsideMatch`. The same
@@ -118,6 +126,78 @@ the current tests do not claim general static exhaustiveness.
 
 The recursive/cyclic value-operation audit remains open; this checkpoint does
 not establish those laws.
+
+## Nested recursive dictionary evidence
+
+The current audit reproduced an undefined `$self` reference for a monomorphic
+`Node` enum with an `Array[Node]` field. Direct recursive field evidence was
+rewritten to the emitted dictionary name, but recursion inside container or
+structural evidence fell back to the generic factory's `$self` identifier.
+Eq, Show, and Hash were all affected, including acyclic values.
+
+Derived-field lowering now scopes the emitted self-dictionary name through
+the entire recursive evidence walk and restores the previous context afterward.
+Generic factories retain their `$self` binding; ordinary trait method lowering
+keeps its existing default. A codegen regression first failed on the free
+identifier and now passes. The compiled `hash_equality` fixture executes Eq,
+Show, and Hash through `Array[Option[Node]]`, including distinct equal trees and
+an unequal tree. This is direct AST lowering, not source substitution.
+
+Validation: all 68 codegen, 184 driver, and 16 CLI tests plus associated
+doctests pass. Strict workspace Clippy, formatting, and whitespace checks pass.
+The new codegen fix and changeset remain uncommitted; this validation does not
+include a successful cyclic-equality case.
+
+### Cyclic derived equality
+
+After the dictionary-reference fix, this valid program reproduced a separate
+stack overflow before the active-pair fix below:
+
+```alder
+#[derive(Eq)]
+enum Node { Link(Array[Node]) }
+
+pub fn main() {
+    let children: Array[Node] = []
+    let node = Node::Link(children)
+    Array.push(children, node)
+    assert node == node
+}
+```
+
+The actual CLI reproduction is `/tmp/alder-cycle-probe.iJC3Iw`; it now exits
+successfully. Equality had looped through `$equalDerived` and the array payload
+dictionary without detecting an active comparison pair.
+
+Derived Eq calls now carry their canonical nominal type name. During one
+synchronous comparison, the kernel tracks active left/right pairs by nominal
+name. Revisiting an active nominal pair closes that recursive comparison;
+other fields still run their selected dictionaries. Returning or throwing
+removes the pair, and exiting the outer comparison clears the session. There
+is no object-identity success shortcut or cross-call result cache.
+
+Erased Option/container pairs are deliberately not guarded: the same runtime
+pair can occur at different nested Option layers before reaching a payload.
+Kernel tests verify distinct equal cycles, symmetric unequal cycles, NaN
+inequality even for the same object, mutation between comparisons, cleanup
+after a throwing payload dictionary, and distinct nominal comparison domains.
+Compiled CLI cases cover cyclic Array/Option payloads and independently
+instantiated generic cycles with Number and String payloads. The twelve affected
+codegen snapshots now include canonical nominal names in derived Eq calls;
+the recursive Chain snapshot retains its emitted dictionary reference.
+
+This adds cycle detection, not a trampoline for arbitrary-depth acyclic values.
+Mutually recursive generic Left/Right graphs now have actual CLI coverage for
+Number/String payloads, symmetric equality/inequality, and graph mutation after
+a successful comparison. Hash/Show/JSON/Ord cycle behavior is now implemented;
+see `docs/cyclic-values.md` for the approved marker/error policy and verification.
+No scheduler or Effect protocol changes are involved;
+the pinned runtime reference was rechecked for scope and no code was adapted.
+
+Validation after the active-pair change: all 60 kernel, 16 CLI, 68 codegen,
+and 184 driver tests and associated doctests pass. Strict workspace Clippy,
+formatting, and whitespace checks pass. The compiler/kernel ABI change and
+its changeset are uncommitted and require fresh release packaging.
 
 Nested pin short-circuiting: pattern tests previously concatenated all nested
 prefix statements before evaluating their combined Boolean test. This ran pin

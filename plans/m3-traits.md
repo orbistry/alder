@@ -127,8 +127,8 @@ static resolution wherever the type is known.
    Cost model: when both sides have a known primitive type (`Number`,
    `String`, `Bool`, `BigInt`, unit variants) the codegen emits `===`
    directly; known records and enums call their generated `eq_T`; only
-   polymorphic code pays a dictionary indirection. Cycles built with
-   `mut` are the user's responsibility, as in Rust. **Arithmetic
+   polymorphic code pays a dictionary indirection. Cyclic values introduced
+   through mutation or externs need separate cycle-handling guarantees. **Arithmetic
    operators are methods of a `Num` trait with instances for `Number` and
    `BigInt`; comparisons are `Ord`.**
 2. Coherence beyond orphans. **Overlapping impls are an error; no
@@ -168,8 +168,9 @@ Design panel producing `docs/traits-internals.md`:
   parameters and arguments after solving (a separate elaborated form or
   annotations on nodes; the panel decides).
 - Codegen rules for dictionaries and static resolution.
-- Built-in derive implementations as a compiler pass over enums and error
-  groups; closed records use structural Eq because Alder record aliases are
+- Built-in derive implementations as a compiler pass over enums; error groups
+  use selected conditional structural capabilities, not nominal derives.
+  Closed records use structural Eq because Alder record aliases are
   transparent, not nominal declarations.
 - File ownership.
 

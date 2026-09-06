@@ -1,5 +1,12 @@
 # Trait internals
 
+Builtin ordering includes Unit (always Equal) and `Option[a]` conditional on
+`a: Ord`. None sorts before Some; two Some values compare through the payload's
+dictionary after unboxing exactly one Option layer. Nested Options therefore
+preserve outer None versus Some(None), and custom payload ordering is honored.
+The Option Ord dictionary exposes an Eq superclass derived from the payload Ord
+dictionary's Eq superclass. This does not imply Ord for structural error rows.
+
 This document is the implementation contract for M3. It fixes the shared
 representations and phase boundaries for Alder traits, higher-kinded type
 parameters, associated types, derives, operator dispatch, and JavaScript
@@ -44,9 +51,10 @@ introduce first-class rank-N polymorphism.
 
 This follows Elm's distinction between inferred variables and checked generic
 contracts, using explicit post-solve obligations instead of Elm's union-find
-rigid descriptors/rank pools. The broader hardening audit, including bounds,
-scoped lambda annotations, and mutation restrictions, remains in
-`plans/compiler-hardening.md`.
+rigid descriptors/rank pools. Current implementation and regression evidence,
+including serialized generic methods and executed cross-module calls, is mapped
+in `docs/generic-contract-hardening.md`. The broader joint-constraint and mutation
+audit remains in `plans/compiler-hardening.md`.
 
 ## Semantic boundaries
 
@@ -531,10 +539,23 @@ signature/default-presence changes also change the interface fingerprint.
 The dependency resolver loads `PackageInstanceIndexFile` once when any module
 from that package is imported. Saving validates that every listed impl belongs
 to a listed module and exposes only externally nameable identities.
-For path dependencies, the project resolver reads the referenced package's
-validated `.alder` artifacts, hydrates every interface named by its index, and
-adds the complete index to the frozen database even when the defining instance
-module was not imported directly. Source modules carry their declared package
+For dependencies with an `alder.jsonc` source project, the resolver discovers
+and compiles the current source modules without loading their saved interfaces
+or instance indexes. Otherwise a deleted implementation could remain selectable
+from an internally valid but stale index. Discovery follows a queue of source
+projects, scanning each dependency's imports against its own manifest and
+resolving relative dependency paths from that manifest's member root. Dependency
+imports are grouped by the same most-specific source owner used for canonical
+module identity, so one workspace member's imports do not activate a sibling's
+unused dependency declarations. Dependency
+test-only declarations are not enabled merely because the app is being tested.
+Loaded package identities retain their canonical filesystem roots, including
+named workspace members. Repeated references to one root coalesce; different
+roots claiming the same package are rejected with both paths in sorted order.
+Interface-only dependencies load
+validated `.alder` artifacts and hydrate every interface named by the complete
+package index, including instance modules not imported directly.
+Source modules carry their declared package
 identity, and `~/` imports retain that identity rather than becoming application
 imports. Duplicate interface/index paths converge by stable `ImplId`.
 Successful driver builds return deterministic owned interface files and one
@@ -574,8 +595,17 @@ blocks for trait defaults and impl methods. Each header is copied immediately
 to the build arena, even when full body canonicalization or solving fails.
 Provisional successful solves contribute inferred public value schemes needed
 to discover downstream headers. Once no header or solved interface changes,
-the driver recompiles every module against that identical frozen closure and
-runs coherence before body canonicalization can mask a package error.
+the driver validates that identical frozen closure before the final body pass.
+It reports source-owned coherence errors in each defining module and retains
+dependency-only errors in `BuildResult.diagnostics`, with canonical module names
+and no fabricated source spans. It marks the remaining modules `Blocked`. No
+checked interfaces, package indexes, or artifacts are published from that build.
+This prevents foreign coherence errors and missing inferred interfaces from
+cascading into misleading diagnostics in unrelated files. Successful builds
+still perform the normal full solver validation; coherence is not disabled.
+Overlaps across source modules label only the local implementation and name the
+other module in the hint. See `docs/coherence-diagnostics-hardening.md` for the
+stored-index regression and remaining adversarial diagnostic coverage.
 
 Header defaults carry only `has_default` and a deterministic symbol. The
 default body is canonicalized later with ordinary local IDs and combined with
@@ -1453,13 +1483,13 @@ lexical trait with the same spelling. Trait parameters are instantiated first
 in a method scheme; method-only variables follow in first-occurrence order.
 
 `#[derive(Show, Eq, Ord, Hash, Json)]` accepts enums (including record-payload
-variants) and error groups. Alder currently has transparent record aliases, not
+variants). Error groups are structural row aliases and do not own derived
+implementations. Alder currently has transparent record aliases, not
 nominal record declarations, so aliases cannot coherently own Show/Ord/Hash/Json
-instances. M3 rejects Show, Ord, Hash, and Json derives on aliases, and rejects
+instances. M3 rejects derives on aliases, and rejects
 all derives on functions and opaque/table/schema types. Closed record aliases
 inherit the same structural Eq as their expanded
-anonymous row. `#[derive(Eq)]` on one is an idempotent assertion and creates no
-impl. `docs/language.md` is corrected to use an enum derive example;
+anonymous row without a derive annotation. `docs/language.md` uses an enum derive example;
 a future nominal-record declaration may become an additional derive target.
 
 Attribute arguments must be trait paths. Canonical qualified or unqualified
@@ -1489,8 +1519,10 @@ that initialize Eq superclass slots. References used only inside dictionary
 method bodies remain lazy, which permits recursive and later-declared field
 instances without a JavaScript temporal-dead-zone access.
 
-Eq is synthesized without an attribute for enums and error groups whose field
-obligations succeed. Closed tuples and anonymous closed records (including
+Eq is synthesized without an attribute for enums whose field obligations
+succeed. Closed error rows resolve Eq, Show, Hash, and Json structurally at use
+sites, conditional on the corresponding payload capabilities. They have no
+automatic Ord. Closed tuples and anonymous closed records (including
 transparent aliases of them) use structural Eq rules at the use site; open rows
 have no Eq because unknown fields cannot be ignored. Array, Option, Result, and
 unit use builtin impls. Recursive Eq uses the assumed current instance.
@@ -1507,7 +1539,10 @@ Derived behavior is fixed:
   and other Unicode scalars render literally. It does not depend on lost source
   spelling.
 - Ord orders enum variants by declaration index, then payloads
-  lexicographically; records use source field order.
+  lexicographically; records use source field order. For optional record
+  fields, the selected Option dictionary orders None before Some and delegates
+  Some payloads to their selected dictionary. Every declared field participates;
+  optional shorthand does not introduce separate field-presence metadata.
 - Hash returns unsigned 64-bit FNV-1a encoded as `BigInt`, with offset
   `14695981039346656037`, prime `1099511628211`, and masking modulo `2^64`
   after each byte. Primitive streams begin with fixed tags: unit `00`, Bool
@@ -1519,8 +1554,13 @@ Derived behavior is fixed:
   then magnitude bytes. A parent feeds each child hash as eight little-endian
   bytes preceded by its field/index marker; enum streams also include the
   length-prefixed UTF-8 canonical type name and declaration variant index.
+  Derived record payloads hash every declared field through its selected
+  dictionary, retaining declaration indices. An Option field containing None
+  uses the Option hash dictionary, which does not invoke its child dictionary;
+  Some(None) and Some(()) retain their respective nested payloads.
 - Json encodes record-payload variants as JSON objects in source field order.
-  An optional field whose value is `None` is omitted. Enums encode as
+  Every declared field is encoded through its selected dictionary, including
+  Option fields containing None and fields containing unit. Enums encode as
   `{ "tag": "Variant", "fields": [...] }`; record-payload variants use an
   additional `"value"` object instead of `"fields"`. Decoding requires that
   exact shape and returns a path-qualified string error.
@@ -1756,7 +1796,7 @@ Granular success and error snapshots are required alongside runtime tests.
 | Nested resolution | `Show[Array[Option[a]]]` and nested missing chain |
 | Coherence | cross-module/package orphan and overlap tests, reordered modules |
 | Defaults | omitted method, mutual/default recursion, static specialization |
-| Derives | runtime behavior for all five on enums/error groups; recursive enum; implicit/explicit Eq dedupe; invalid alias/duplicate/overlap cases |
+| Derives | runtime behavior for all five on enums; recursive enum; implicit/explicit Eq dedupe; invalid alias/duplicate/overlap cases; conditional structural error-row capabilities without nominal dictionaries |
 | Operators | every Eq/Ord/Num operator, primitive snapshots, generic dispatch |
 | Equality | record helper, open-row/function rejection, pin evidence, nested Option, `Some(1) == Some(1)` runtime |
 | First-class constrained fn | callback closure captures dictionary |

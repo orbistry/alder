@@ -215,13 +215,20 @@ unbounded configuration choice or whole-runtime correctness proof.
 The four traversal worker implementations and optional-options adapters exist,
 with kernel, stored-interface, and CLI coverage for ordered collection, typed
 fail-fast behavior, parent cancellation, and cleanup joins. The public named
-unbounded configuration still needs the user's spelling decision. Record
+unbounded configuration is now approved and implemented as the Number value
+`Fiber.unbounded`, used inside `{ concurrency: Fiber.unbounded }`. A compiled
+CLI regression failed with unknown-name before implementation and now gates
+three callbacks until all have started, then checks ordered results. The same
+fixture exercises all four public traversal APIs with this value. The kernel
+options regression uses the exported value and verifies peak concurrency of
+three for every traversal adapter; canonicalization checks its monomorphic
+Number annotation. Record
 semantics are now settled: optional shorthand is an ordinary Option field,
 with omission equivalent to None. The traversal options adapter now consumes
 ordinary Option values; the record-options CLI fixture executes both omitted
 and explicit None concurrency configurations with the sequential default.
-The named unbounded configuration still prevents claiming full public API
-delivery.
+The public value, built-in annotation lookup, and bundle export are delivered;
+final packaged verification must include these new source changes.
 
 Final joint compiler/evidence review, documentation/changeset reconciliation,
 coherent commits, and clean-tree package verification remain goal-wide gates.
