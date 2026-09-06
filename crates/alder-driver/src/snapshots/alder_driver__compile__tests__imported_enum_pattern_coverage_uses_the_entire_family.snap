@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/colors.{ Color }\npub fn channel(value: Color) Number {\n    match value { Color::Red => 0, Color::Green => 1 }\n}\n"
+---
+alder::type::non_exhaustive_match
+
+  × this match does not cover every possible value
+   ╭─[/app/src/main.ald:3:5]
+ 2 │ pub fn channel(value: Color) Number {
+ 3 │     match value { Color::Red => 0, Color::Green => 1 }
+   ·     ─────────────────────────┬────────────────────────
+   ·                              ╰── uncovered patterns include Blue
+ 4 │ }
+   ╰────
+  help: add the missing cases or a fallback arm; guarded patterns and pins do
+        not guarantee coverage

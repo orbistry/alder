@@ -318,6 +318,7 @@ dependencies = [
  "bumpalo",
  "indoc",
  "insta",
+ "num-bigint",
 ]
 
 [[package]]

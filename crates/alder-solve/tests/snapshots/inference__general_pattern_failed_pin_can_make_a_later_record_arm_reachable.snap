@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn render(value: { flag: Bool }) Number {\n    match value {\n        { flag: true } => 0,\n        { flag: ^{\n            value.flag = true\n            true\n        } } => 1,\n        { flag: true } => 2,\n        _ => 3,\n    }\n}\n"
+---
+render: fn({ flag: Bool }) Number

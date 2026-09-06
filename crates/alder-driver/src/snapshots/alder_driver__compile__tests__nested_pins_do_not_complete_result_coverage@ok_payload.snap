@@ -2,14 +2,15 @@
 source: crates/alder-driver/src/compile.rs
 description: "pub fn inspect(value: Result[Number, [:failed]], expected: Number) Number {\n    match value { Ok(^expected) => 0, Err(_) => 1 }\n}\n"
 ---
-alder::type::non_exhaustive_error_match
+alder::type::non_exhaustive_match
 
-  × this match does not cover every Result
+  × this match does not cover every possible value
    ╭─[/app/src/main.ald:2:5]
  1 │ pub fn inspect(value: Result[Number, [:failed]], expected: Number) Number {
  2 │     match value { Ok(^expected) => 0, Err(_) => 1 }
    ·     ───────────────────────┬───────────────────────
-   ·                            ╰── missing Ok
+   ·                            ╰── uncovered patterns include Ok(_)
  3 │ }
    ╰────
-  help: add an arm for each missing Result case
+  help: add the missing cases or a fallback arm; guarded patterns and pins do
+        not guarantee coverage

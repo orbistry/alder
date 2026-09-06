@@ -1,0 +1,24 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn unwrap(Some(value): Option[Number]) Number { value }\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 11,
+            },
+            end: Position {
+                line: 1,
+                column: 22,
+            },
+        },
+        kind: RefutableBindingPattern {
+            missing: [
+                "None",
+            ],
+        },
+        expectation: None,
+    },
+]

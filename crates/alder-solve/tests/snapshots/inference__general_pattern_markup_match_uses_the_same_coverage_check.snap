@@ -1,22 +1,22 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "fn render(value: Result[Number]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) => message,\n    }\n}\n"
+description: "fn render(value: Bool) {\n    <div>@match value { true => <span>yes</span> }</div>\n}\n"
 ---
 [
     Error {
         region: Region {
             start: Position {
                 line: 2,
-                column: 5,
+                column: 10,
             },
             end: Position {
-                line: 5,
-                column: 6,
+                line: 2,
+                column: 51,
             },
         },
         kind: NonExhaustiveMatch {
             missing: [
-                "Err(_)",
+                "false",
             ],
         },
         expectation: None,

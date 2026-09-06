@@ -79,7 +79,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn refutable_bindings_fail_before_exposing_invalid_payloads() {
+    async fn explicit_pattern_failures_preserve_effect_order_and_cleanup() {
         let compiled =
             super::build::compile_ephemeral(&fixture("pattern_bindings"), BuildMode::Build)
                 .await
@@ -107,10 +107,7 @@ mod tests {
             .expect("failed binding execution must finish")
             .expect_err("a failed binding must not execute its continuation");
             let message = error.to_string();
-            assert!(
-                message.contains("Non-exhaustive match at alder://"),
-                "{argument}: {message}"
-            );
+            assert!(message.contains("Missing payload"), "{argument}: {message}");
         }
         assert_eq!(
             tokio::time::timeout(
@@ -122,6 +119,52 @@ mod tests {
             .unwrap(),
             0
         );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn refutable_patterns_are_rejected_before_artifacts_are_written() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-pattern-errors-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(
+            root.join("alder.jsonc"),
+            r#"{ "type": "application", "target": "standalone" }"#,
+        )
+        .unwrap();
+        for source in [
+            "fn read(Some(value): Option[Number]) Number { value }",
+            "let Some(value) = Some(1)",
+            "fn read(input: Option[Number]) Number {\nlet Some(value) = input\nvalue\n}",
+            "let read = (Some(value): Option[Number]) -> value",
+            "fn visit(values: Array[Option[Number]]) { for Some(value) in values { Io.print(value) } }",
+            "async fn read(Some(value): Option[Number]) Number { value }",
+            "fn read(value: Option[Number]) Number { match value { Some(number) => number } }",
+        ] {
+            std::fs::write(
+                root.join("src/main.ald"),
+                format!("{source}\npub fn main() {{ 0 }}"),
+            )
+            .unwrap();
+            let error = super::build::compile(&root, BuildMode::Build)
+                .await
+                .err()
+                .expect("a partial pattern must fail compilation");
+            let message = error.to_string();
+            assert!(
+                message.contains("this binding pattern can fail")
+                    || message.contains("this match does not cover every possible value"),
+                "{source}: {message}"
+            );
+            assert!(!root.join(".alder").exists());
+            assert!(!root.join("dist").exists());
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[tokio::test(flavor = "current_thread")]

@@ -1191,8 +1191,7 @@ struct CallSite<'a> {
 
 #[derive(Clone)]
 struct MatchSite<'a> {
-    scrutinee: Ty<'a>,
-    arms: &'a [alder_ast::MatchArm<'a>],
+    arms: Vec<(&'a [alder_ast::Node<'a, Pattern<'a>>], bool)>,
     region: Region,
 }
 
@@ -1240,47 +1239,6 @@ impl OptionLift<'_> {
 enum OptionLiftSite {
     Argument(UseId, usize),
     Field(Region),
-}
-
-#[derive(Default)]
-struct ErrorCoverage<'a> {
-    all: bool,
-    ok: bool,
-    all_errors: bool,
-    tags: BTreeSet<&'a str>,
-}
-
-fn collect_error_coverage<'a>(pattern: &'a Located<Pattern<'a>>, coverage: &mut ErrorCoverage<'a>) {
-    // A pin can reject (or exit before reaching) its arm, including when it is
-    // nested under a Result constructor or an error-tag payload.
-    if contains_pattern_pin(pattern) {
-        return;
-    }
-    match &pattern.value {
-        Pattern::Anything | Pattern::Bind(_) => coverage.all = true,
-        Pattern::Alias { pattern, .. } => collect_error_coverage(pattern, coverage),
-        Pattern::Tag { name, .. } => {
-            coverage.tags.insert(name.value);
-        }
-        Pattern::Constructor { constructor, args }
-            if constructor.name.enum_.module.package == PackageId::Builtin
-                && constructor.name.enum_.name == "Result" =>
-        {
-            match constructor.name.variant {
-                "Ok" => coverage.ok = true,
-                "Err" => {
-                    if let Some(error) = args.first() {
-                        match &error.value {
-                            Pattern::Anything | Pattern::Bind(_) => coverage.all_errors = true,
-                            _ => collect_error_coverage(error, coverage),
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        _ => {}
-    }
 }
 
 fn contains_pattern_pin(pattern: &Located<Pattern<'_>>) -> bool {
@@ -1411,6 +1369,8 @@ struct Infer<'a, 'db> {
     inferred_error_rows: Vec<Ty<'a>>,
     error_row_joins: Vec<(Ty<'a>, Ty<'a>, Ty<'a>)>,
     match_sites: Vec<MatchSite<'a>>,
+    binding_patterns: Vec<&'a Located<Pattern<'a>>>,
+    pattern_types: BTreeMap<Region, Ty<'a>>,
     tag_sites: Vec<Region>,
     legal_tag_sites: Vec<Region>,
     requirement_seeds: BTreeMap<UseId, RequirementSeed<'a>>,
@@ -1877,6 +1837,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             inferred_error_rows: Vec::new(),
             error_row_joins: Vec::new(),
             match_sites: Vec::new(),
+            binding_patterns: Vec::new(),
+            pattern_types: BTreeMap::new(),
             tag_sites: Vec::new(),
             legal_tag_sites: Vec::new(),
             requirement_seeds: requirement_seeds
@@ -2057,7 +2019,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         // Contract rigidity is final: no subsequent pass may introduce type
         // equalities or unsolved error unions after these promises are checked.
         self.check_generic_contracts()?;
-        self.check_error_matches()?;
+        self.check_patterns()?;
         self.check_error_tag_placement()?;
 
         let mut annotations = BTreeMap::new();
@@ -3624,6 +3586,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         expected: Ty<'a>,
         top_level: bool,
     ) -> Result<(), Error> {
+        self.binding_patterns.push(pattern);
         self.infer_pattern_with_return(env, pattern, expected, top_level, None)
     }
 
@@ -3664,6 +3627,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         top_level: bool,
         return_type: Option<Ty<'a>>,
     ) -> Result<(), Error> {
+        self.pattern_types.insert(pattern.region, expected.clone());
         let mut reachable = true;
         match &pattern.value {
             Pattern::Anything => {}
@@ -5135,10 +5099,23 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             Child::Match { scrutinee, arms } => {
                 let typ = self.infer_expr(env, scrutinee, return_type.clone())?;
+                self.match_sites.push(MatchSite {
+                    arms: arms
+                        .iter()
+                        .map(|arm| (arm.patterns, arm.guard.is_some()))
+                        .collect(),
+                    region: child.region,
+                });
                 for arm in *arms {
                     let mut local = env.clone();
                     for pattern in arm.patterns {
-                        self.infer_pattern(&mut local, pattern, typ.clone(), false)?;
+                        self.infer_pattern_with_return(
+                            &mut local,
+                            pattern,
+                            typ.clone(),
+                            false,
+                            return_type.clone(),
+                        )?;
                     }
                     if let Some(guard) = arm.guard {
                         let guard_type = self.infer_expr(&local, guard, return_type.clone())?;
@@ -6371,52 +6348,258 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
     }
 
-    fn check_error_matches(&mut self) -> Result<(), Error> {
+    fn check_patterns(&mut self) -> Result<(), Error> {
+        use crate::pattern_matrix::{Pattern as P, missing, useful};
         let sites = std::mem::take(&mut self.match_sites);
         for site in sites {
-            let Some((_, errors)) = self.result_parts(site.scrutinee) else {
-                continue;
-            };
-            let (tags, open) = match self.prune(errors) {
-                Ty::ErrorRow { tags, tail } => (tags, tail.is_some()),
-                Ty::Var(id) if self.variable_kinds[id] == VariableKind::ErrorRow => {
-                    (BTreeMap::new(), true)
+            let mut matrix: Vec<Vec<P>> = Vec::new();
+            let mut covering = Vec::new();
+            for (patterns, guarded) in site.arms {
+                for pattern in patterns {
+                    let pinned = contains_pattern_pin(pattern);
+                    if (guarded || pinned) && useful(&matrix, &[P::Any]) {
+                        for index in (0..matrix.len()).rev() {
+                            if !matrix[index].iter().all(P::stable_after_effects) {
+                                matrix.remove(index);
+                                covering.remove(index);
+                            }
+                        }
+                    }
+                    let row = vec![self.coverage_pattern(pattern)];
+                    if !useful(&matrix, &row) {
+                        // Keep only the earlier rows needed to prove coverage,
+                        // so the diagnostic does not blame unrelated arms.
+                        let mut proof = matrix.clone();
+                        for index in (0..proof.len()).rev() {
+                            let candidate = proof.remove(index);
+                            if useful(&proof, &row) {
+                                proof.insert(index, candidate);
+                            } else {
+                                covering.remove(index);
+                            }
+                        }
+                        return Err(Error {
+                            expectation: None,
+                            region: pattern.region,
+                            kind: ErrorKind::RedundantPattern { covering },
+                        });
+                    }
+                    if !guarded && !pinned {
+                        matrix.push(row);
+                        covering.push(pattern.region);
+                    }
                 }
-                _ => continue,
-            };
-            let mut coverage = ErrorCoverage::default();
-            for arm in site.arms {
-                if arm.guard.is_some() {
-                    continue;
-                }
-                for pattern in arm.patterns {
-                    collect_error_coverage(pattern, &mut coverage);
-                }
             }
-            if coverage.all {
-                continue;
-            }
-            let mut missing = Vec::new();
-            if !coverage.ok {
-                missing.push("Ok".to_owned());
-            }
-            if !coverage.all_errors {
-                missing.extend(
-                    tags.keys()
-                        .filter(|tag| !coverage.tags.contains(**tag))
-                        .map(|tag| format!(":{tag}")),
-                );
-            }
-            let open = open && !coverage.all_errors;
-            if !missing.is_empty() || open {
+            if useful(&matrix, &[P::Any]) {
                 return Err(Error {
                     expectation: None,
                     region: site.region,
-                    kind: ErrorKind::NonExhaustiveErrorMatch { missing, open },
+                    kind: ErrorKind::NonExhaustiveMatch {
+                        missing: missing(&matrix, 1, 4)
+                            .iter()
+                            .map(|row| row[0].render())
+                            .collect(),
+                    },
+                });
+            }
+        }
+        for pattern in std::mem::take(&mut self.binding_patterns) {
+            let rows = if contains_pattern_pin(pattern) {
+                vec![]
+            } else {
+                vec![vec![self.coverage_pattern(pattern)]]
+            };
+            if useful(&rows, &[P::Any]) {
+                return Err(Error {
+                    expectation: None,
+                    region: pattern.region,
+                    kind: ErrorKind::RefutableBindingPattern {
+                        missing: missing(&rows, 1, 4)
+                            .iter()
+                            .map(|row| row[0].render())
+                            .collect(),
+                    },
                 });
             }
         }
         Ok(())
+    }
+
+    fn coverage_pattern(
+        &mut self,
+        pattern: &'a Located<Pattern<'a>>,
+    ) -> crate::pattern_matrix::Pattern {
+        use crate::pattern_matrix::Pattern as P;
+        let constructor = |key: String, alternatives, arguments| P::Constructor {
+            key,
+            alternatives,
+            arguments,
+        };
+        match &pattern.value {
+            Pattern::Anything | Pattern::Bind(_) | Pattern::Pin { .. } => P::Any,
+            Pattern::Alias { pattern, .. } => self.coverage_pattern(pattern),
+            Pattern::Bool(value) => constructor(
+                value.to_string(),
+                Some(vec![("false".into(), 0), ("true".into(), 0)]),
+                vec![],
+            ),
+            Pattern::Unit => constructor("()".into(), Some(vec![("()".into(), 0)]), vec![]),
+            Pattern::Number { value, .. } => constructor(
+                if *value == 0.0 {
+                    "0".into()
+                } else {
+                    value.to_string()
+                },
+                None,
+                vec![],
+            ),
+            Pattern::BigInt(value) => {
+                let (negative, digits) = value
+                    .strip_prefix('-')
+                    .map_or((false, *value), |digits| (true, digits));
+                let (radix, digits) = digits
+                    .strip_prefix("0x")
+                    .or_else(|| digits.strip_prefix("0X"))
+                    .map_or((10, digits), |digits| (16, digits));
+                let mut value = num_bigint::BigInt::parse_bytes(digits.as_bytes(), radix)
+                    .expect("parsed bigint pattern");
+                if negative {
+                    value = -value;
+                }
+                constructor(format!("{value}n"), None, vec![])
+            }
+            Pattern::Str(value) => constructor(format!("{value:?}"), None, vec![]),
+            Pattern::Constructor {
+                constructor: ctor,
+                args,
+            } => constructor(
+                Self::coverage_variant(ctor.name.variant, ctor.payload).0,
+                Some(self.coverage_variants(*ctor, pattern.region)),
+                args.iter().map(|p| self.coverage_pattern(p)).collect(),
+            ),
+            Pattern::ConstructorRecord {
+                constructor: ctor,
+                fields,
+                ..
+            } => {
+                let alder_ast::VariantPayload::Record(declared) = ctor.payload else {
+                    unreachable!("record constructor payload")
+                };
+                let args = declared
+                    .iter()
+                    .map(|field| {
+                        fields
+                            .iter()
+                            .find(|p| p.name.value == field.name)
+                            .map_or(P::Any, |p| self.coverage_pattern(p.pattern))
+                    })
+                    .collect();
+                constructor(
+                    Self::coverage_variant(ctor.name.variant, ctor.payload).0,
+                    Some(self.coverage_variants(*ctor, pattern.region)),
+                    args,
+                )
+            }
+            Pattern::Tag { name, args, .. } => {
+                let typ = self.pattern_types[&pattern.region].clone();
+                let alternatives = match self.prune(typ) {
+                    Ty::ErrorRow { tags, tail: None } => Some(
+                        tags.iter()
+                            .map(|(name, args)| (format!(":{name}"), args.len()))
+                            .collect(),
+                    ),
+                    _ => None,
+                };
+                constructor(
+                    format!(":{}", name.value),
+                    alternatives,
+                    args.iter().map(|p| self.coverage_pattern(p)).collect(),
+                )
+            }
+            Pattern::Tuple(elements) => constructor(
+                "#tuple".into(),
+                Some(vec![("#tuple".into(), elements.len())]),
+                elements.iter().map(|p| self.coverage_pattern(p)).collect(),
+            ),
+            Pattern::Array { elements, rest } => {
+                let family = Some(vec![("#nil".into(), 0), ("#cons".into(), 2)]);
+                let mut tail = if rest.is_some() {
+                    P::Any
+                } else {
+                    constructor("#nil".into(), family.clone(), vec![])
+                };
+                for element in elements.iter().rev() {
+                    tail = constructor(
+                        "#cons".into(),
+                        family.clone(),
+                        vec![self.coverage_pattern(element), tail],
+                    );
+                }
+                tail
+            }
+            Pattern::Record { fields, .. } => {
+                let typ = self.pattern_types[&pattern.region].clone();
+                let Ty::Record(declared, _) = self.prune(typ) else {
+                    unreachable!("inferred record pattern")
+                };
+                let args = declared
+                    .keys()
+                    .map(|name| {
+                        fields
+                            .iter()
+                            .find(|p| p.name.value == *name)
+                            .map_or(P::Any, |p| self.coverage_pattern(p.pattern))
+                    })
+                    .collect();
+                let key = format!(
+                    "#record:{}",
+                    declared.keys().copied().collect::<Vec<_>>().join(",")
+                );
+                constructor(key.clone(), Some(vec![(key, declared.len())]), args)
+            }
+        }
+    }
+
+    fn coverage_variant(name: &str, payload: alder_ast::VariantPayload<'_>) -> (String, usize) {
+        match payload {
+            alder_ast::VariantPayload::Unit => (name.to_owned(), 0),
+            alder_ast::VariantPayload::Tuple(args) => (name.to_owned(), args.len()),
+            alder_ast::VariantPayload::Record(fields) => (
+                format!(
+                    "{name}#{}",
+                    fields.iter().map(|f| f.name).collect::<Vec<_>>().join(",")
+                ),
+                fields.len(),
+            ),
+        }
+    }
+
+    fn coverage_variants(
+        &mut self,
+        ctor: alder_ast::ConstructorRef<'a>,
+        region: Region,
+    ) -> Vec<(String, usize)> {
+        if ctor.name.enum_.module.package == PackageId::Builtin {
+            match ctor.name.enum_.name {
+                "Option" => return vec![("None".into(), 0), ("Some".into(), 1)],
+                "Result" => {
+                    let typ = self.pattern_types[&region].clone();
+                    if let Some((_, errors)) = self.result_parts(typ)
+                        && matches!(self.prune(errors), Ty::ErrorRow { tags, tail: None } if tags.is_empty())
+                    {
+                        return vec![("Ok".into(), 1)];
+                    }
+                    return vec![("Ok".into(), 1), ("Err".into(), 1)];
+                }
+                _ => {}
+            }
+        }
+        self.database
+            .enum_variants(ctor.name.enum_)
+            .expect("canonical enum has registered variants")
+            .iter()
+            .map(|v| Self::coverage_variant(v.name.variant, v.payload))
+            .collect()
     }
 
     fn check_error_tag_placement(&self) -> Result<(), Error> {
@@ -6936,8 +7119,10 @@ impl<'a, 'db> Infer<'a, 'db> {
             Expr::Match { scrutinee, arms } => {
                 let scrutinee_type = self.infer_expr(env, scrutinee, return_type.clone())?;
                 self.match_sites.push(MatchSite {
-                    scrutinee: scrutinee_type.clone(),
-                    arms,
+                    arms: arms
+                        .iter()
+                        .map(|arm| (arm.patterns, arm.guard.is_some()))
+                        .collect(),
                     region,
                 });
                 let mut result = self.fresh();

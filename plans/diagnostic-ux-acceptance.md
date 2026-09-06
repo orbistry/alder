@@ -2,13 +2,13 @@
 
 This is the current requirement-by-requirement review, not a completion claim.
 The historical baseline and implementation checkpoints remain in
-[diagnostic-ux.md](diagnostic-ux.md). General pattern policy and final handoff
-remain outstanding. Tests below are source-driven unless
+[diagnostic-ux.md](diagnostic-ux.md). General pattern policy is resolved and
+implemented; final committed handoff remains. Tests below are source-driven unless
 explicitly described otherwise.
 
 ## Active path and reference boundary
 
-`alder-solve/src/lib.rs` declares `inference`, `option_levels` and `traits` and
+`alder-solve/src/lib.rs` declares `inference`, `option_levels`, `pattern_matrix` and `traits` and
 exports `inference::solve`. The driver calls that solver after canonicalization
 and constraint generation, renders returned errors, and creates the solved
 interface/codegen output only after success. The inactive Elm-port files do not
@@ -110,28 +110,39 @@ new policy. It has not been adopted. A future opt-in annotation/code action woul
 need faithful syntax for generic bounds, rows and associated equalities, rather
 than copying diagnostic display text. No such feature is claimed implemented.
 
-## 5. Pattern policy: decision still required
+## 5. Pattern policy: resolved and implemented
 
-The detailed family matrix is in the pattern-policy checkpoint in
-`diagnostic-ux.md`. Ordinary enums/Option, tuples, arrays/rest, records and
-refutable bindings do not have Elm's general recursive coverage/usefulness pass.
-Result has outer constructor/error-tag coverage and open-row catch-all checks.
-Guards and nested pins do not count as unconditional coverage; alternatives and
-fallbacks are covered by source tests, including an effectful pin.
+The user approved uniform exhaustiveness and redundancy checking using Elm's
+Maranget-based approach, including irrefutable bindings and parameters.
+`docs/language.md` records the rule. `Infer::check_patterns` now calls the shared
+constructor-specializing matrix after type solving; the narrow Result collector
+has been removed.
 
-Language documentation does not settle general partial/refutable matching or
-redundancy policy, including restricted payload patterns inside Result arms.
-Existing acceptance has been preserved except the explicitly requested nested-pin
-correction. A user decision is needed before imposing broader rejection or a new
-blanket warning. This is unresolved policy, not verified full pattern parity.
+| Family / boundary | Implementation and source evidence |
+| --- | --- |
+| Enum/Option/Result payloads | Finite constructor families from local and imported metadata; missing nested Bool/literal payloads, restricted `Ok(0)`, recursive Tree and empty error-row controls |
+| Tuples and records | Aligned product columns check combinations, not only individual fields; ordinary and constructor-record payload snapshots |
+| Arrays/rest | Analysis-only nil/cons encoding checks exact lengths and unbounded prefixes; missing one-element and nested Bool payload witnesses |
+| Alternatives and redundancy | Source-order usefulness with a reduced set of covering locations; duplicate alternatives, numeric signed zero and equivalent large decimal/hex BigInts |
+| Parameters/destructuring/iteration | Irrefutability checks, including async/lambda/top-level rejection through the CLI; single-constructor/product/rest controls |
+| Guards/pins and mutation | No unconditional coverage; mutable field/tuple/array refinements are forgotten across potentially effectful failures. Runtime fixture checks later arms becoming reachable, alternative guard retries, pin capture/evaluation and async cleanup |
+| Markup match | Same inference adapter, with a positive exhaustive control; this does not implement markup code generation or later milestones |
+| Recovery and delivery | Three independent pattern errors with no artifacts/interfaces; imported and serialized-interface enum tests; CLI Check/Build/Test and unsaved editor correction/clearing |
+
+Witnesses are bounded to four representative missing patterns, not an exhaustive
+enumeration. `_` denotes remaining possibilities for open/infinite spaces.
+Guards/pins are not evaluated or proven pure, so effects involving mutable
+structures can require a fallback even when a human could prove the guard pure.
+This conservative analysis is intentional; accepted code retains its effects.
 
 ## 6. User experience and delivery
 
-Seven real CLI/editor subprocess tests cover source-order error delivery,
+Eight real CLI/editor subprocess tests cover source-order error delivery,
 dependency cascade suppression, warnings with effects retained, unsaved source,
 stale versions, dependency invalidation, save/watched-file rechecks, UTF-16 ranges,
 document closing and clearing diagnostics. The new statement test checks multiple
 errors from one function in Check/Build/Test and clears them after an unsaved fix.
+The pattern test adds missing/redundant source diagnostics and unsaved clearing.
 Colorless snapshots and NO_COLOR assertions do not disable normal CLI color.
 
 Positive controls, cross-module/stored-interface cases and adversarial
@@ -143,19 +154,19 @@ No runtime source maps, M5–M10 or provider checking are part of this work.
 
 - Implementation and source evidence above have been inspected, including limits.
 - Formatting, strict all-target/all-feature Clippy, full workspace tests,
-  snapshot-reference checks and all seven CLI/editor tests passed for this tree
-  (253 driver tests; no pending/unreferenced snapshots; two existing ignored
+  snapshot-reference checks and all eight CLI/editor tests passed for this tree
+  (256 driver tests, 491 inference tests; no pending/unreferenced snapshots; two existing ignored
   doctests).
 - All 17 crates passed fresh extracted-archive verification using
-  `/tmp/alder-final-diagnostic-package.GhOMC0`. Behavioral checks on that binary
-  confirm the nested-pin rejection and contract-safe hint; a positive fallback
-  executes an effectful pin exactly once and returns the fallback result. Failed
-  projects retain only source/configuration files. Reusing the earlier package
-  directory retained stale same-version dependencies despite Cargo success, so
-  that cached run is explicitly excluded from the evidence.
+  `/tmp/alder-pattern-package.yQxOg9`. Outside the checkout, that packaged binary
+  reports three independent pattern errors in Check and Build (both exit 1)
+  and leaves only source/configuration files. A valid mutable-record/failed-guard
+  match executes the newly reachable arm, prints `42` and exits 0. Fresh targets
+  avoid the stale same-version dependency artifacts identified in the historical
+  package checkpoint.
 - Sampo changesets accompany behavior changes; work remains on `diagnostic-ux`
   without merge or push.
-- Pattern policy must be resolved before marking its matrix row complete.
+- Pattern policy is resolved and the family matrix above is implemented and tested.
 - Final handoff must identify current commits, validated gates and deliberate
   limitations, and leave a clean committed branch. This review does not mark the
   whole goal complete while those remaining gates are open.

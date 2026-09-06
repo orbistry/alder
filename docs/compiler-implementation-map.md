@@ -13,7 +13,9 @@ feed interface construction. Build/Test modes then call
 `alder_codegen::emit_solved_module`; Check mode does not emit an artifact.
 
 The active core inference implementation is `alder-solve/src/inference.rs`, with
-trait/coherence support in `traits.rs`. It does not use the old rank-based
+trait/coherence support in `traits.rs` and constructor-specializing pattern
+coverage/usefulness in `pattern_matrix.rs`. Inference checks all matches and
+binding sites after solving, before publishing annotations. It does not use the old rank-based
 union-find solver files listed below. The active constrain crate consists of
 its `lib.rs` contract and `requirements.rs` traversal, not an Elm constraint tree.
 

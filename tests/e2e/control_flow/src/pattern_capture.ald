@@ -35,6 +35,7 @@ pub fn run() {
             alias.value = value + 1
             value
         }
+        _ => 0
     }
     assert(captured == 42)
     assert(original.value == 43)

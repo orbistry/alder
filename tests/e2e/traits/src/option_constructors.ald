@@ -9,7 +9,7 @@ pub fn verify() {
     assert(match nested { Some(None) => true, _ => false })
     let unit: Option[()] = Some(())
     assert(match unit { Some(()) => true, None => false })
-    let Some(payload) = present
+    let payload = match present { Some(value) => value, None => 0 }
     assert(payload == 42)
     let qualified: Option[Number] = Option::Some(7)
     assert(qualified == Some(7))

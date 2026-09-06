@@ -14,11 +14,10 @@ description: "error Failure {\n    :invalid(String),\n    :missing\n}\n\nfn rend
                 column: 6,
             },
         },
-        kind: NonExhaustiveErrorMatch {
+        kind: NonExhaustiveMatch {
             missing: [
-                ":missing",
+                "Err(:missing)",
             ],
-            open: false,
         },
         expectation: None,
     },

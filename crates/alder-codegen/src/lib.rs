@@ -328,7 +328,9 @@ mod tests {
 
     #[test]
     fn refutable_let_checks_before_extracting_payload() {
-        assert_solved_emit_snapshot! {r#"
+        // The checker rejects this source. Exercise the emitter directly to
+        // retain its defensive runtime check for callers of the raw AST API.
+        assert_emit_snapshot! {r#"
             pub fn read(value: Option[Number]) Number {
                 let Some(number) = value
                 number

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "fn render(value: Result[Number]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) => message,\n    }\n}\n"
+description: "fn unwrap(value: Option[Number]) Number {\n    match value { Some(number) => number }\n}\n"
 ---
 [
     Error {
@@ -10,13 +10,13 @@ description: "fn render(value: Result[Number]) String {\n    match value {\n    
                 column: 5,
             },
             end: Position {
-                line: 5,
-                column: 6,
+                line: 2,
+                column: 43,
             },
         },
         kind: NonExhaustiveMatch {
             missing: [
-                "Err(_)",
+                "None",
             ],
         },
         expectation: None,

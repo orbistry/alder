@@ -1,0 +1,42 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn partial(value: Option[Bool]) Number {\n    match value { Some(true) => 0, None => 1 }\n}\npub fn binding(value: Array[Number]) Number {\n    let [first] = value\n    first\n}\npub fn redundant(value: Bool) Number {\n    match value { true => 0, false => 1, _ => 2 }\n}\npub fn independent() Number { 42 }\n"
+---
+alder::type::non_exhaustive_match
+
+  × this match does not cover every possible value
+   ╭─[/app/src/main.ald:2:5]
+ 1 │ pub fn partial(value: Option[Bool]) Number {
+ 2 │     match value { Some(true) => 0, None => 1 }
+   ·     ─────────────────────┬────────────────────
+   ·                          ╰── uncovered patterns include Some(false)
+ 3 │ }
+   ╰────
+  help: add the missing cases or a fallback arm; guarded patterns and pins do
+        not guarantee coverage
+alder::type::refutable_binding_pattern
+
+  × this binding pattern can fail
+   ╭─[/app/src/main.ald:5:9]
+ 4 │ pub fn binding(value: Array[Number]) Number {
+ 5 │     let [first] = value
+   ·         ───┬───
+   ·            ╰── this pattern does not cover []
+ 6 │     first
+   ╰────
+  help: bind the value to a name, then use an exhaustive match to handle its
+        cases
+alder::type::redundant_pattern
+
+  × this pattern is already covered
+    ╭─[/app/src/main.ald:9:42]
+  8 │ pub fn redundant(value: Bool) Number {
+  9 │     match value { true => 0, false => 1, _ => 2 }
+    ·                   ──┬─       ──┬──       ┬
+    ·                     │          │         ╰── earlier patterns already handle every value this can match
+    ·                     │          ╰── earlier coverage
+    ·                     ╰── earlier coverage
+ 10 │ }
+    ╰────
+  help: remove this pattern or put the more specific case before the covering
+        patterns

@@ -89,6 +89,7 @@ pub struct TraitDatabase<'a> {
     traits: BTreeMap<TraitId<'a>, TraitHeader<'a>>,
     instances: BTreeMap<TraitId<'a>, Vec<InstanceHeader<'a>>>,
     error_groups: BTreeMap<QualifiedName<'a>, &'a [ErrorTagType<'a>]>,
+    enum_variants: BTreeMap<QualifiedName<'a>, &'a [alder_ast::Variant<'a>]>,
 }
 
 #[derive(Clone, Debug)]
@@ -168,6 +169,7 @@ impl<'a> TraitDatabase<'a> {
             traits: BTreeMap::new(),
             instances: BTreeMap::new(),
             error_groups: BTreeMap::new(),
+            enum_variants: BTreeMap::new(),
         };
         let builtins = alder_can::builtin_trait_interface(bump);
         database.insert_interface(&builtins);
@@ -192,6 +194,9 @@ impl<'a> TraitDatabase<'a> {
                 ItemKind::ErrorGroup(group) => {
                     database.error_groups.insert(group.name, group.tags);
                 }
+                ItemKind::Enum(enum_) => {
+                    database.enum_variants.insert(enum_.name, enum_.variants);
+                }
                 _ => {}
             }
         }
@@ -203,6 +208,9 @@ impl<'a> TraitDatabase<'a> {
     }
 
     fn insert_interface(&mut self, interface: &Interface<'a>) {
+        for enum_ in interface.enums {
+            self.enum_variants.insert(enum_.reference, enum_.variants);
+        }
         for typ in interface.types {
             if let PublicTypeBody::ErrorGroup(tags) = typ.body {
                 self.error_groups.insert(typ.reference, tags);
@@ -246,6 +254,13 @@ impl<'a> TraitDatabase<'a> {
 
     pub fn error_group(&self, name: QualifiedName<'a>) -> Option<&'a [ErrorTagType<'a>]> {
         self.error_groups.get(&name).copied()
+    }
+
+    pub(crate) fn enum_variants(
+        &self,
+        name: QualifiedName<'a>,
+    ) -> Option<&'a [alder_ast::Variant<'a>]> {
+        self.enum_variants.get(&name).copied()
     }
 
     pub fn validate(&self, bump: &'a Bump) -> Vec<CoherenceError<'a>> {

@@ -1,15 +1,15 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "pub fn alternatives(input: Option[Number]) {\n    match input { Some(value) | Some(value) => 0, None => 1 }\n}\npub fn guards(input: Option[Number]) {\n    match input { Some(value) if value > 0 => 1, _ => 0 }\n}\npub fn pins(input: Number, expected: Number) {\n    match input { ^expected => 1, _ => 0 }\n}\npub fn captures(input: Number) { () -> input }\npub fn rest(input: Array[Number]) {\n    match input { [first, ..rest] => first, _ => 0 }\n}\npub fn alias(input: Option[Number]) {\n    match input { Some(value) as whole => value, None => 0 }\n}\npub fn used_alternatives(input: Option[Number]) {\n    match input { Some(value) | Some(value) => value, None => 0 }\n}\ntrait Signature[a] { fn method(value: a) Number }\n"
+description: "pub fn alternatives(input: Option[(Number, Bool)]) {\n    match input { Some((value, true)) | Some((value, false)) => 0, None => 1 }\n}\npub fn guards(input: Option[Number]) {\n    match input { Some(value) if value > 0 => 1, _ => 0 }\n}\npub fn pins(input: Number, expected: Number) {\n    match input { ^expected => 1, _ => 0 }\n}\npub fn captures(input: Number) { () -> input }\npub fn rest(input: Array[Number]) {\n    match input { [first, ..rest] => first, _ => 0 }\n}\npub fn alias(input: Option[Number]) {\n    match input { Some(value) as whole => value, None => 0 }\n}\npub fn used_alternatives(input: Option[(Number, Bool)]) {\n    match input { Some((value, true)) | Some((value, false)) => value, None => 0 }\n}\ntrait Signature[a] { fn method(value: a) Number }\n"
 ---
 alder::warning::unused_binding
 
   ⚠ unused binding `value`
-   ╭─[/app/src/main.ald:2:24]
- 1 │ pub fn alternatives(input: Option[Number]) {
- 2 │     match input { Some(value) | Some(value) => 0, None => 1 }
-   ·                        ──┬──
-   ·                          ╰── not used
+   ╭─[/app/src/main.ald:2:25]
+ 1 │ pub fn alternatives(input: Option[(Number, Bool)]) {
+ 2 │     match input { Some((value, true)) | Some((value, false)) => 0, None => 1 }
+   ·                         ──┬──
+   ·                           ╰── not used
  3 │ }
    ╰────
   help: if this binding is intentionally unused, discard it with `_`; keep any

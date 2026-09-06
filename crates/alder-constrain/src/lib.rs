@@ -324,9 +324,14 @@ pub enum ErrorKind {
     UnresolvedSharedExport {
         name: String,
     },
-    NonExhaustiveErrorMatch {
+    NonExhaustiveMatch {
         missing: Vec<String>,
-        open: bool,
+    },
+    RefutableBindingPattern {
+        missing: Vec<String>,
+    },
+    RedundantPattern {
+        covering: Vec<Region>,
     },
     ImpossibleErrorPattern {
         tag: String,

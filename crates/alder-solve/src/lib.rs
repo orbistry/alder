@@ -2,6 +2,7 @@
 
 mod inference;
 mod option_levels;
+mod pattern_matrix;
 mod traits;
 
 use std::collections::{BTreeMap, BTreeSet};

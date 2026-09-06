@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "enum Tree { Leaf, Branch(Tree, Tree) }\nfn render(value: Tree) Number {\n    match value { Leaf => 0, Branch(Leaf, _) => 1, Branch(Branch(_, _), _) => 2 }\n}\n"
+---
+render: fn(Tree) Number

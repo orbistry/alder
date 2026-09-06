@@ -1,0 +1,9 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "enum Wrapper { Wrap(Number) }\nfn unwrap(Wrapper::Wrap(value): Wrapper) Number { value }\nfn fields({ a, b }: { a: Number, b: Number }) Number { a + b }\nfn tuple((a, b): (Number, Number)) Number { a + b }\nfn success(value: Result[Number, []]) Number { match value { Ok(number) => number } }\nfn array(value: Array[Number]) Number {\n    let [..items] = value\n    0\n}\n"
+---
+array: fn(Array[Number]) Number
+fields: fn({ a: Number, b: Number }) Number
+success: fn(Result[Number, []]) Number
+tuple: fn((Number, Number)) Number
+unwrap: fn(Wrapper) Number

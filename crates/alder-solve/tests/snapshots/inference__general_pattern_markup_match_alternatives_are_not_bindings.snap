@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn render(value: Bool) {\n    <div>@match value { true => <span>yes</span>, false => <span>no</span> }</div>\n}\n"
+---
+render: fn(Bool) Html

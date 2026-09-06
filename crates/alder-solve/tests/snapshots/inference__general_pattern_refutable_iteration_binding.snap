@@ -1,0 +1,24 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn visit(values: Array[Option[Number]]) () {\n    for Some(value) in values { () }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 9,
+            },
+            end: Position {
+                line: 2,
+                column: 20,
+            },
+        },
+        kind: RefutableBindingPattern {
+            missing: [
+                "None",
+            ],
+        },
+        expectation: None,
+    },
+]

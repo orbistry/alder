@@ -1,12 +1,12 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "error Failure {\n    :invalid(String)\n}\n\nfn render(value: Result[Number, Failure]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) if message == \"special\" => message,\n    }\n}\n"
+description: "fn render(value: { flag: Bool }) Number {\n    match value {\n        { flag: true } => 0,\n        _ if {\n            value.flag = true\n            false\n        } => 1,\n        { flag: false } => 2,\n    }\n}\n"
 ---
 [
     Error {
         region: Region {
             start: Position {
-                line: 6,
+                line: 2,
                 column: 5,
             },
             end: Position {
@@ -16,7 +16,7 @@ description: "error Failure {\n    :invalid(String)\n}\n\nfn render(value: Resul
         },
         kind: NonExhaustiveMatch {
             missing: [
-                "Err(_)",
+                "{ flag: true }",
             ],
         },
         expectation: None,

@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets/state.{ State }\npub fn render(value: State) Number {\n    match value { State::Ready(true) => 0, State::Waiting => 1 }\n}\n"
+---
+alder::type::non_exhaustive_match
+
+  × this match does not cover every possible value
+   ╭─[/app/src/main.ald:3:5]
+ 2 │ pub fn render(value: State) Number {
+ 3 │     match value { State::Ready(true) => 0, State::Waiting => 1 }
+   ·     ──────────────────────────────┬─────────────────────────────
+   ·                                   ╰── uncovered patterns include Ready(false)
+ 4 │ }
+   ╰────
+  help: add the missing cases or a fallback arm; guarded patterns and pins do
+        not guarantee coverage

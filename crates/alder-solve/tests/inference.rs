@@ -3418,7 +3418,7 @@ fn recursive_error_union_preserves_an_external_open_source() {
     let errors = infer(&Bump::new(), source).unwrap_err();
     assert!(matches!(
         &errors[0].kind,
-        ErrorKind::NonExhaustiveErrorMatch { open: true, .. }
+        ErrorKind::NonExhaustiveMatch { missing } if missing == &["Err(_)".to_owned()]
     ));
 }
 
@@ -8386,6 +8386,252 @@ fn repeated_tag_payloads_must_have_the_same_arity() {
             } else {
                 Err(:invalid("text", 1))
             }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_missing_option_case() {
+    assert_inference_error_snapshot! {r#"
+        fn unwrap(value: Option[Number]) Number {
+            match value { Some(number) => number }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_missing_enum_case() {
+    assert_inference_error_snapshot! {r#"
+        enum Color { Red, Green, Blue }
+        fn channel(value: Color) Number {
+            match value { Red => 0, Green => 1 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_restricted_result_payload() {
+    assert_inference_error_snapshot! {r#"
+        error Failure { :missing }
+        fn render(value: Result[Number, Failure]) Number {
+            match value { Ok(0) => 0, Err(:missing) => 1 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_missing_tuple_combination() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: (Bool, Bool)) Number {
+            match value { (true, _) => 0, (_, true) => 1 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_missing_array_length() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: Array[Number]) Number {
+            match value { [] => 0, [_, _, ..] => 2 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_refutable_parameter() {
+    assert_inference_error_snapshot! {r#"
+        fn unwrap(Some(value): Option[Number]) Number { value }
+    "#};
+}
+
+#[test]
+fn general_pattern_refutable_binding() {
+    assert_inference_error_snapshot! {r#"
+        fn unwrap(value: Option[Number]) Number {
+            let Some(number) = value
+            number
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_redundant_arm() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: Option[Number]) Number {
+            match value { Some(_) => 0, None => 1, Some(0) => 2 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_complete_controls() {
+    assert_inference_snapshot! {r#"
+        fn option(value: Option[Bool]) Number {
+            match value { Some(true) => 0, Some(false) => 1, None => 2 }
+        }
+        fn tuple(value: (Bool, Bool)) Number {
+            match value { (true, _) => 0, (false, true) => 1, (false, false) => 2 }
+        }
+        fn array(value: Array[Number]) Number {
+            match value { [] => 0, [_, ..] => 1 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_missing_record_combination() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: { a: Bool, b: Bool }) Number {
+            match value { { a: true, .. } => 0, { b: true, .. } => 1 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_missing_record_constructor_payload() {
+    assert_inference_error_snapshot! {r#"
+        enum State { Ready { active: Bool }, Waiting }
+        fn render(value: State) Number {
+            match value { Ready { active: true } => 0, Waiting => 1 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_missing_array_payload() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: Array[Bool]) Number {
+            match value { [] => 0, [true, ..] => 1 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_guard_does_not_complete_boolean_coverage() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: Bool, guard: Bool) Number {
+            match value { true if guard => 0, false => 1 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_pin_does_not_complete_nested_coverage() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: Option[Bool], pinned: Bool) Number {
+            match value { Some(^pinned) => 0, None => 1 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_redundant_alternative() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: Bool) Number {
+            match value { true | false | true => 0 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_equivalent_number_literals_are_redundant() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: Number) Number {
+            match value { -0 => 0, 0 => 1, _ => 2 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_equivalent_bigint_literals_are_redundant() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: BigInt) Number {
+            match value { 0x10000000000000000n => 0, 18446744073709551616n => 1, _ => 2 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_refutable_iteration_binding() {
+    assert_inference_error_snapshot! {r#"
+        fn visit(values: Array[Option[Number]]) () {
+            for Some(value) in values { () }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_recursive_enum_terminates() {
+    assert_inference_snapshot! {r#"
+        enum Tree { Leaf, Branch(Tree, Tree) }
+        fn render(value: Tree) Number {
+            match value { Leaf => 0, Branch(Leaf, _) => 1, Branch(Branch(_, _), _) => 2 }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_failed_guard_can_invalidate_earlier_record_coverage() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: { flag: Bool }) Number {
+            match value {
+                { flag: true } => 0,
+                _ if {
+                    value.flag = true
+                    false
+                } => 1,
+                { flag: false } => 2,
+            }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_failed_pin_can_make_a_later_record_arm_reachable() {
+    assert_inference_snapshot! {r#"
+        fn render(value: { flag: Bool }) Number {
+            match value {
+                { flag: true } => 0,
+                { flag: ^{
+                    value.flag = true
+                    true
+                } } => 1,
+                { flag: true } => 2,
+                _ => 3,
+            }
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_irrefutable_product_and_empty_error_row_controls() {
+    assert_inference_snapshot! {r#"
+        enum Wrapper { Wrap(Number) }
+        fn unwrap(Wrapper::Wrap(value): Wrapper) Number { value }
+        fn fields({ a, b }: { a: Number, b: Number }) Number { a + b }
+        fn tuple((a, b): (Number, Number)) Number { a + b }
+        fn success(value: Result[Number, []]) Number { match value { Ok(number) => number } }
+        fn array(value: Array[Number]) Number {
+            let [..items] = value
+            0
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_markup_match_uses_the_same_coverage_check() {
+    assert_inference_error_snapshot! {r#"
+        fn render(value: Bool) {
+            <div>@match value { true => <span>yes</span> }</div>
+        }
+    "#};
+}
+
+#[test]
+fn general_pattern_markup_match_alternatives_are_not_bindings() {
+    assert_inference_snapshot! {r#"
+        fn render(value: Bool) {
+            <div>@match value { true => <span>yes</span>, false => <span>no</span> }</div>
         }
     "#};
 }

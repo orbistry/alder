@@ -1,22 +1,22 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "fn render(value: Result[Number]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) => message,\n    }\n}\n"
+description: "enum State { Ready { active: Bool }, Waiting }\nfn render(value: State) Number {\n    match value { Ready { active: true } => 0, Waiting => 1 }\n}\n"
 ---
 [
     Error {
         region: Region {
             start: Position {
-                line: 2,
+                line: 3,
                 column: 5,
             },
             end: Position {
-                line: 5,
-                column: 6,
+                line: 3,
+                column: 62,
             },
         },
         kind: NonExhaustiveMatch {
             missing: [
-                "Err(_)",
+                "Ready { active: false }",
             ],
         },
         expectation: None,

@@ -1357,21 +1357,38 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
                 "each call may choose a different type, but the captured value has one shared type across calls. Check the captured value and the operation that ties it to this signature; an annotation cannot make shared storage independently polymorphic",
             );
         }
-        ErrorKind::NonExhaustiveErrorMatch { missing, open } => {
-            let label = if missing.is_empty() {
-                "this open error row may contain more tags".to_owned()
-            } else {
-                format!("missing {}", missing.join(", "))
-            };
-            let help = if *open {
-                "add `Err(_)` to handle every remaining error tag"
-            } else {
-                "add an arm for each missing Result case"
-            };
-            return Diagnostic::error(source, "this match does not cover every Result")
-                .with_code("alder::type::non_exhaustive_error_match")
-                .with_primary_label(error.region, label)
-                .with_help(help);
+        ErrorKind::NonExhaustiveMatch { missing } => {
+            return Diagnostic::error(source, "this match does not cover every possible value")
+                .with_code("alder::type::non_exhaustive_match")
+                .with_primary_label(error.region, format!("uncovered patterns include {}", missing.join(", ")))
+                .with_help("add the missing cases or a fallback arm; guarded patterns and pins do not guarantee coverage");
+        }
+        ErrorKind::RefutableBindingPattern { missing } => {
+            return Diagnostic::error(source, "this binding pattern can fail")
+                .with_code("alder::type::refutable_binding_pattern")
+                .with_primary_label(
+                    error.region,
+                    format!("this pattern does not cover {}", missing.join(", ")),
+                )
+                .with_help(
+                    "bind the value to a name, then use an exhaustive match to handle its cases",
+                );
+        }
+        ErrorKind::RedundantPattern { covering } => {
+            if covering.is_empty() {
+                return Diagnostic::error(source, "this pattern cannot match a value of this type")
+                    .with_code("alder::type::redundant_pattern")
+                    .with_primary_label(error.region, "this case is impossible")
+                    .with_help("remove this impossible case");
+            }
+            let mut diagnostic = Diagnostic::error(source, "this pattern is already covered")
+                .with_code("alder::type::redundant_pattern")
+                .with_primary_label(error.region, "earlier patterns already handle every value this can match")
+                .with_help("remove this pattern or put the more specific case before the covering patterns");
+            for region in covering.iter().take(4) {
+                diagnostic = diagnostic.with_secondary_label(*region, "earlier coverage");
+            }
+            return diagnostic;
         }
         ErrorKind::ImpossibleErrorPattern { tag } => {
             return Diagnostic::error(
@@ -1439,7 +1456,9 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             "return_mismatch",
             "return value does not match the function result".to_owned(),
         ),
-        ErrorKind::NonExhaustiveErrorMatch { .. }
+        ErrorKind::NonExhaustiveMatch { .. }
+        | ErrorKind::RefutableBindingPattern { .. }
+        | ErrorKind::RedundantPattern { .. }
         | ErrorKind::InvalidResultErrorType { .. }
         | ErrorKind::RecursiveErrorGroup { .. }
         | ErrorKind::TupleIndexOutOfBounds { .. }

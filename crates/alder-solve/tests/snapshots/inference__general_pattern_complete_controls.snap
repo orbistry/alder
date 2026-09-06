@@ -1,0 +1,7 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn option(value: Option[Bool]) Number {\n    match value { Some(true) => 0, Some(false) => 1, None => 2 }\n}\nfn tuple(value: (Bool, Bool)) Number {\n    match value { (true, _) => 0, (false, true) => 1, (false, false) => 2 }\n}\nfn array(value: Array[Number]) Number {\n    match value { [] => 0, [_, ..] => 1 }\n}\n"
+---
+array: fn(Array[Number]) Number
+option: fn(Option[Bool]) Number
+tuple: fn((Bool, Bool)) Number

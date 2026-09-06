@@ -254,7 +254,11 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
     preserving re-exports and verifying CLI delivery without removing effects
   - [x] Warn on unused module value bindings with conservative reachability,
     initializer-effect preservation, and CLI/editor delivery tests
-- [ ] Reconcile general pattern and inferred-annotation diagnostic policy
+- [x] Reconcile general pattern and inferred-annotation diagnostic policy
+  - [x] Resolve general pattern policy: uniform exhaustiveness, irrefutable
+    bindings/parameters and redundant-pattern errors using Maranget-style checking
+  - [x] Implement and verify the general checker, including recursive payloads,
+    arrays/rest, records, alternatives, guards, pins and open error rows
   - [x] Exclude nested pins, including effectful payload pins, from unconditional
     Result coverage; preserve fallback and alternative coverage
 - [x] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing

@@ -203,6 +203,31 @@ parameters) are separated by their commas and may share a line. A record
 constructor needs its `{` on the same line as the path
 (`Shape::Rect { width: 1 }`); a `{` on the next line starts a block.
 
+### Pattern completeness
+
+Pattern matching must be exhaustive. This applies uniformly to enums,
+`Option`, `Result`, error rows, tuples, records and arrays, including nested
+payloads. Function parameters, local destructuring and iteration bindings must
+be irrefutable for their input type. Use an exhaustive `match` to handle a
+refutable pattern explicitly.
+
+Redundant match alternatives and arms are compile errors. Coverage is checked
+in source order. Guards and pins are not unconditional coverage, even when a
+guard appears constant or a pin appears equal to a literal. Pins may have
+effects; checking must not evaluate them or remove their evaluation. Open error
+rows require a catch-all for unknown tags; covering only known tags is not
+exhaustive. Matching an outer constructor does not cover payload values excluded
+by a nested pattern: `Ok(0)` does not cover `Ok(1)`.
+
+A failed guard or pin can mutate the scrutinee through an alias. The checker
+therefore forgets earlier coverage that depends on mutable record fields, tuple
+slots or array contents/length at those steps. Use a fallback after effectful
+checks when such coverage is needed. Primitive values and enum identities remain
+stable; guards and pins are never evaluated by the checker.
+
+This policy was approved during diagnostic-UX work; implementation and acceptance
+evidence are tracked in `plans/diagnostic-ux.md`.
+
 ### Pinning
 
 `^` means "use the existing value here" wherever a position would

@@ -9,6 +9,33 @@ active compiler, CLI, and editor. No runtime source maps, provider checking,
 later-milestone implementation, merge, or push. This is an acceptance matrix,
 not a claim that historical Elm-port modules are active.
 
+## Pattern policy resolution (2026-09-06)
+
+The user approved uniform exhaustiveness and redundant-pattern checking based
+on Elm's Maranget algorithm. The policy question below is historical, not an
+active blocker. This includes rejecting refutable parameters, destructuring and
+iteration bindings. Result must use the same recursive machinery, with open
+error rows represented as an open constructor space. No blanket inferred-type
+annotation warning was approved.
+
+Implementation sequence and acceptance requirements:
+
+1. Reproduce missing Option/enum coverage, restricted Result payloads, tuple
+   combinations, array lengths, refutable bindings/parameters and redundant arms
+   through real source-to-solver snapshot tests, with exhaustive positive controls.
+2. Port usefulness/specialization and missing-pattern witnesses, adapting typed
+   constructor families, record field alignment and array prefix/rest patterns.
+   Preserve recursive-type termination and bounded diagnostic output.
+3. Replace the Result-only collector; check every match and irrefutability site
+   after solving. Guards/pins never contribute unconditional coverage; preserve
+   effectful evaluation semantics. Source-order redundancy includes alternatives.
+4. Integrate owned diagnostic data, miette reports, recovery and artifact gates;
+   test nested payloads, imported interfaces, actual CLI/editor delivery and
+   stale diagnostic clearing. Update older partial-pattern fixtures explicitly
+   rather than exempting tests or weakening the checker.
+5. Rerun the full completion gates, reconcile this matrix and acceptance review,
+   add a Sampo changeset and commit the completed work on `diagnostic-ux`.
+
 ## Baseline parity matrix
 
 | Area | Elm reference behavior | Active Alder baseline | Classification / acceptance evidence still required |
@@ -30,7 +57,7 @@ not a claim that historical Elm-port modules are active.
 ### Current acceptance audit (not final completion)
 
 The baseline table above is historical. The acceptance review reconciles current
-source evidence, deliberate differences and unresolved policy as follows.
+source evidence, deliberate differences and resolved policy as follows.
 
 | Requirement | Verified current evidence | Deliberate limit / remaining decision |
 | --- | --- | --- |
@@ -40,9 +67,9 @@ source evidence, deliberate differences and unresolved policy as follows.
 | Type comparisons | Structured core/trait comparisons, dense variables and import/re-export localization; nested structures and stored interfaces tested | Expanded aliases retain annotation origins; source-synonym reconstruction is not implemented |
 | Actionable explanations | Field candidates/differences, arity, infinite equations, generic restrictions and trait-contract hints; impossible-pattern advice corrected | Reviewed against source evidence in acceptance review §3; no promise that changing a contract merely silences an error |
 | Generated warnings | Actual canonical binding/import analysis; shadowing, alternatives, pins, exports, initializer effects and module-root tests | No blanket missing-annotation warning has been adopted; inferred-signature suggestions assessed separately |
-| CLI/editor delivery | Seven passing subprocess tests: warnings/effects, dependency cascades, ordering, statement recovery, unsaved edits, stale versions, UTF-16, saved dependencies and clearing | No outstanding delivery change identified by the acceptance review |
-| Pattern diagnostics | Active `check_error_matches` handles Result error rows; ordinary refutable matches remain accepted | General coverage/redundancy policy requested, not resolved; no new acceptance rule or blanket warning may be inferred from Elm |
-| Validation/artifacts | Current full tests, strict Clippy and snapshot references pass; fresh 17-crate archive verification and packaged behavioral smoke checks pass | Final policy resolution and final handoff remain required; cached same-version package runs are not current-tree evidence |
+| CLI/editor delivery | Eight passing subprocess tests: warnings/effects, dependency cascades, ordering, statement/pattern errors, unsaved edits, stale versions, UTF-16, saved dependencies and clearing | No outstanding delivery change identified by the acceptance review |
+| Pattern diagnostics | Approved uniform policy implemented by `check_patterns` and `pattern_matrix`; enums, payloads, products, arrays/rest, binding sites and redundant alternatives tested | Guards/pins do not supply coverage; mutable refinements are conservatively invalidated across their effects; no blanket missing-annotation warning |
+| Validation/artifacts | Current full tests, strict Clippy, snapshot references and fresh 17-crate archive verification pass; packaged negative/positive checks verify actual behavior | Final committed handoff remains; cached same-version package runs are not current-tree evidence |
 
 ### Implementation sequence
 
@@ -928,7 +955,7 @@ packaged Run executed mutation and primitive Show, printing `42` and `true` and
 exiting 0. Its first fixture attempted unavailable tuple Show; using the separate
 primitive instances corrected the fixture without changing compiler semantics.
 
-## Pattern-policy audit and nested-pin correction
+## Pattern-policy audit and nested-pin correction (historical)
 
 `docs/language.md` explicitly requires exhaustive closed error-group matching and
 a catch-all for open rows. It specifies pin scoping but does not settle general

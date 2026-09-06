@@ -2504,8 +2504,8 @@ mod tests {
     #[test]
     fn unused_locals_share_alternatives_and_count_pins_guards_and_captures() {
         let source = indoc::indoc! {r#"
-            pub fn alternatives(input: Option[Number]) {
-                match input { Some(value) | Some(value) => 0, None => 1 }
+            pub fn alternatives(input: Option[(Number, Bool)]) {
+                match input { Some((value, true)) | Some((value, false)) => 0, None => 1 }
             }
             pub fn guards(input: Option[Number]) {
                 match input { Some(value) if value > 0 => 1, _ => 0 }
@@ -2520,8 +2520,8 @@ mod tests {
             pub fn alias(input: Option[Number]) {
                 match input { Some(value) as whole => value, None => 0 }
             }
-            pub fn used_alternatives(input: Option[Number]) {
-                match input { Some(value) | Some(value) => value, None => 0 }
+            pub fn used_alternatives(input: Option[(Number, Bool)]) {
+                match input { Some((value, true)) | Some((value, false)) => value, None => 0 }
             }
             trait Signature[a] { fn method(value: a) Number }
         "#};
@@ -2539,7 +2539,10 @@ mod tests {
         assert_rendered_diagnostics_snapshot!(source, &result.warnings);
 
         let corrected = source
-            .replace("Some(value) | Some(value) => 0", "Some(_) | Some(_) => 0")
+            .replace(
+                "Some((value, true)) | Some((value, false)) => 0",
+                "Some((_, true)) | Some((_, false)) => 0",
+            )
             .replace("..rest", "..")
             .replace(" as whole", "");
         let result = build_fixture_sync(
@@ -3454,6 +3457,130 @@ mod tests {
     }
 
     #[test]
+    fn pattern_errors_recover_independent_declarations_without_publishing_artifacts() {
+        let source = indoc::indoc! {r#"
+            pub fn partial(value: Option[Bool]) Number {
+                match value { Some(true) => 0, None => 1 }
+            }
+            pub fn binding(value: Array[Number]) Number {
+                let [first] = value
+                first
+            }
+            pub fn redundant(value: Bool) Number {
+                match value { true => 0, false => 1, _ => 2 }
+            }
+            pub fn independent() Number { 42 }
+        "#};
+        let uri = url("app/src/main.ald");
+        for mode in [BuildMode::Check, BuildMode::Build] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                mode,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("pattern failures must prevent publication: {result:?}");
+            };
+            assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+            assert!(result.artifacts.is_empty());
+            assert!(result.interfaces.is_empty());
+            assert!(result.package_instance_indexes.is_empty());
+            if matches!(mode, BuildMode::Check) {
+                assert_rendered_diagnostics_snapshot!(source, diagnostics);
+            }
+        }
+        let valid = source
+            .replace("Some(true)", "Some(_)")
+            .replace(
+                "let [first] = value",
+                "let first = match value { [first, ..] => first, [] => 0 }",
+            )
+            .replace(", _ => 2", "");
+        let result = build_fixture_sync(
+            vec![(uri, Ok(valid))],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert!(result.is_success(), "{result:?}");
+        assert_eq!(result.artifacts.len(), 1);
+    }
+
+    #[test]
+    fn imported_enum_pattern_coverage_uses_the_entire_family() {
+        let source = indoc::indoc! {r#"
+            import ~/colors.{ Color }
+            pub fn channel(value: Color) Number {
+                match value { Color::Red => 0, Color::Green => 1 }
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let library = "pub enum Color { Red, Green, Blue }";
+        let result = build_fixture_sync(
+            vec![
+                (uri.clone(), Ok(source.to_owned())),
+                (url("app/src/colors.ald"), Ok(library.to_owned())),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("the imported Blue variant is missing: {result:?}");
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = source.replace("Color::Green => 1", "Color::Green => 1, Color::Blue => 2");
+        let result = build_fixture_sync(
+            vec![
+                (uri, Ok(valid)),
+                (url("app/src/colors.ald"), Ok(library.to_owned())),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(result.is_success(), "{result:?}");
+    }
+
+    #[test]
+    fn stored_enum_pattern_coverage_preserves_nested_payloads() {
+        let producer =
+            dependency_interface("pub enum State { Ready(Bool), Waiting }", &["state"], &[]);
+        let bytes = bincode::serialize(&producer).unwrap();
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets/state.{ State }
+            pub fn render(value: State) Number {
+                match value { State::Ready(true) => 0, State::Waiting => 1 }
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("stored enum payload patterns must be exhaustive: {result:?}");
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let result = build_fixture_sync(
+            vec![(
+                uri,
+                Ok(source.replace("State::Ready(true)", "State::Ready(_)")),
+            )],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{result:?}");
+    }
+
+    #[test]
     fn impossible_error_pattern_advice_preserves_the_declared_contract() {
         let source = indoc::indoc! {r#"
             trait Read[a] {
@@ -3483,7 +3610,12 @@ mod tests {
         assert!(!help.contains("add the tag"), "{help}");
         assert_rendered_diagnostics_snapshot!(source, diagnostics);
         let result = build_fixture_sync(
-            vec![(uri.clone(), Ok(source.replace(":other", ":failed")))],
+            vec![(
+                uri.clone(),
+                Ok(source
+                    .replace(":other", ":failed")
+                    .replace(", Err(_) => 1", "")),
+            )],
             BuildMode::Check,
             BuildDependencies::default(),
         );
@@ -3545,7 +3677,7 @@ mod tests {
             assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
             assert_eq!(
                 diagnostics[0].message(),
-                "this match does not cover every Result"
+                "this match does not cover every possible value"
             );
             assert!(result.interfaces.is_empty());
             assert!(result.artifacts.is_empty());

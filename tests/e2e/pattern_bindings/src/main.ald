@@ -67,16 +67,21 @@ async fn verify_alternative_guard_order() {
 #[extern("./probe.js", "runChecked")]
 fn run_checked(task: Task[Number], cleanup: Array[Number], expected_count: Number) Task[Bool]
 
-fn parameter(Some(value): Option[Number]) Number { value }
+#[extern("./probe.js", "missingPayload")]
+fn missing_payload() Number
 
-let Some(top_value) = if Cli.args()[0] == "top" { None } else { Some(1) }
+fn parameter(input: Option[Number]) Number {
+    match input { Some(value) => value, None => missing_payload() }
+}
+
+let top_value = parameter(if Cli.args()[0] == "top" { None } else { Some(1) })
 
 fn counted(counter: Array[Number]) Option[Number] {
     Array.push(counter, 1)
     Some(42)
 }
 
-async fn async_parameter(Some(value): Option[Number]) Number { value }
+async fn async_parameter(input: Option[Number]) Number { parameter(input) }
 
 fn verify_pin_scope() {
     let value = 7
@@ -139,32 +144,74 @@ fn pin_value(events: Array[Number], value: Number) Number {
     value
 }
 
+fn verify_failed_checks_can_mutate_later_patterns() {
+    let guarded = { flag: false }
+    let guard_selected = match guarded {
+        { flag: true } => 0,
+        _ if {
+            guarded.flag = true
+            false
+        } => 1,
+        { flag: true } => 2,
+        _ => 3,
+    }
+    assert(guard_selected == 2)
+    let pinned = { flag: false }
+    let pin_selected = match pinned {
+        { flag: true } => 0,
+        { flag: ^{
+            pinned.flag = true
+            true
+        } } => 1,
+        { flag: true } => 2,
+        _ => 3,
+    }
+    assert(pin_selected == 2)
+    let items = [0]
+    let array_selected = match items {
+        [_, _] => 0,
+        _ if {
+            Array.push(items, 1)
+            false
+        } => 1,
+        [_, _] => 2,
+        _ => 3,
+    }
+    assert(array_selected == 2)
+}
+
 pub async fn main() {
     assert(top_value == 1)
     let args = Cli.args()
     let mode = args[0]
     if mode == "let" {
         let absent: Option[Number] = None
-        let Some(value) = absent
+        let value = parameter(absent)
         Io.print(value)
     } else if mode == "parameter" {
         Io.print(parameter(None))
     } else if mode == "lambda" {
-        let read = (Some(value): Option[Number]) -> value
+        let read = (input: Option[Number]) -> parameter(input)
         Io.print(read(None))
     } else if mode == "loop" {
         let values: Array[Option[Number]] = [None]
-        for Some(value) in values { Io.print(value) }
+        for input in values { Io.print(parameter(input)) }
     } else if mode == "enum" {
-        let Payload::NumberValue(number) = Payload::TextValue("wrong")
+        let number = match Payload::TextValue("wrong") {
+            NumberValue(number) => number,
+            TextValue(_) => missing_payload(),
+        }
         Io.print(number)
     } else if mode == "array" {
         let values: Array[Number] = []
-        let [value] = values
+        let value = match values { [value] => value, _ => missing_payload() }
         Io.print(value)
     } else if mode == "nested" {
         let absent: Option[Number] = None
-        let (Some(value) as whole, _) = (absent, ())
+        let value = match (absent, ()) {
+            (Some(value) as whole, _) => value,
+            _ => missing_payload(),
+        }
         Io.print(value)
     } else if mode == "async_parameter" {
         let work = async_parameter(None)
@@ -173,7 +220,7 @@ pub async fn main() {
     } else if mode == "async_body" {
         let absent: Option[Number] = None
         let work = async {
-            let Some(value) = absent
+            let value = parameter(absent)
             value
         }
         Io.print(work.await)
@@ -188,22 +235,25 @@ pub async fn main() {
         assert(captured() == 4)
         verify_pin_scope()
         verify_unmatched_patterns_skip_pins()
+        verify_failed_checks_can_mutate_later_patterns()
         verify_suspending_pin_short_circuit().await
         verify_alternative_guard_order().await
         let unstarted = async_parameter(None)
         assert(Ref.same(unstarted, unstarted))
         assert(parameter(Some(42)) == 42)
-        let Some(value) = Some(7)
+        let value = parameter(Some(7))
         assert(value == 7)
         let counter = []
-        let Some(result) as whole = counted(counter)
-        assert(result == 42 && whole == Some(42) && Array.length(counter) == 1)
+        assert(match counted(counter) {
+            Some(result) as whole => result == 42 && whole == Some(42) && Array.length(counter) == 1,
+            None => false,
+        })
         assert(async_parameter(Some(3)).await == 3)
         let cleanup = []
         let broken = async {
             Fiber.addFinalizer(async { Array.push(cleanup, 99) }).await
             let absent: Option[Number] = None
-            let Some(number) = absent
+            let number = parameter(absent)
             number
         }
         assert(run_checked(broken, cleanup, 1).await)

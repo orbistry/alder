@@ -1,0 +1,33 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn render(value: Option[Number]) Number {\n    match value { Some(_) => 0, None => 1, Some(0) => 2 }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 44,
+            },
+            end: Position {
+                line: 2,
+                column: 51,
+            },
+        },
+        kind: RedundantPattern {
+            covering: [
+                Region {
+                    start: Position {
+                        line: 2,
+                        column: 19,
+                    },
+                    end: Position {
+                        line: 2,
+                        column: 26,
+                    },
+                },
+            ],
+        },
+        expectation: None,
+    },
+]

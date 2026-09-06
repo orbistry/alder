@@ -473,3 +473,62 @@ fn cli_and_editor_deliver_statement_recovery_and_clear_it() {
     );
     assert_eq!(editor.diagnostics(2), json!([]));
 }
+
+#[test]
+fn cli_and_editor_deliver_pattern_errors_and_clear_them() {
+    let project = Project::new();
+    let source = indoc::indoc! {r#"
+        pub fn partial(value: Option[Bool]) Number {
+            match value { Some(true) => 0, None => 1 }
+        }
+        pub fn redundant(value: Bool) Number {
+            match value { true => 0, false => 1, _ => 2 }
+        }
+        pub fn main() { 0 }
+    "#};
+    project.source("main.ald", source);
+    for command in ["check", "build", "test"] {
+        let output = project.run(command);
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(!output.status.success(), "{command}: {stderr}");
+        assert!(
+            stderr.contains("uncovered patterns include Some(false)"),
+            "{stderr}"
+        );
+        assert!(
+            stderr.contains("this pattern is already covered"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains('\u{1b}'), "{stderr}");
+        assert!(!project.0.join(".alder").exists());
+        assert!(!project.0.join("dist").exists());
+    }
+    let uri = url::Url::from_file_path(project.0.canonicalize().unwrap().join("src/main.ald"))
+        .unwrap()
+        .to_string();
+    let mut editor = Editor::new(&project);
+    editor.send(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}));
+    let initialized = editor.receive(|message| message["id"] == 1);
+    assert!(initialized["error"].is_null(), "{initialized}");
+    editor.send(json!({"jsonrpc":"2.0","method":"initialized","params":{}}));
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{
+            "uri":uri,"languageId":"alder","version":1,"text":source
+        }}}),
+    );
+    let errors = editor.diagnostics(1);
+    assert_eq!(errors.as_array().unwrap().len(), 2, "{errors}");
+    assert_eq!(errors[0]["range"]["start"]["line"], 1);
+    assert_eq!(errors[1]["range"]["start"]["line"], 4);
+    assert_eq!(errors[0]["code"], "alder::type::non_exhaustive_match");
+    assert_eq!(errors[1]["code"], "alder::type::redundant_pattern");
+    let valid = source
+        .replace("Some(true)", "Some(_)")
+        .replace(", _ => 2", "");
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+            "textDocument":{"uri":uri,"version":2}, "contentChanges":[{"text":valid}]
+        }}),
+    );
+    assert_eq!(editor.diagnostics(2), json!([]));
+}
