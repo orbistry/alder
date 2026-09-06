@@ -1,5 +1,16 @@
 # alder-kernel
 
+## 0.4.1 — 2026-09-06
+
+### Patch changes
+
+- [52f2954](https://github.com/orbistry/alder/commit/52f29549f4881d0c493332ee8549df1adcf1fbbe) Add consistent Cargo-style CLI statuses, global quiet/verbose/color options,
+  elapsed summaries, accurate diagnostic counts, and compiler proxy reporting.
+  Expose optional semantic driver progress and an injected CLI renderer while
+  preserving source diagnostics, hyperlinks, and program/LSP streams. Add opt-in
+  structured runtime test results so CLI test summaries use actual executed counts
+  on stderr without intercepting user output or duplicating failure summaries. — Thanks @rvcas!
+
 ## 0.4.0 — 2026-09-06
 
 ### Minor changes

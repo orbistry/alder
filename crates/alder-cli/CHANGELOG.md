@@ -1,5 +1,33 @@
 # alder-cli
 
+## 0.4.0 — 2026-09-06
+
+### Minor changes
+
+- [52f2954](https://github.com/orbistry/alder/commit/52f29549f4881d0c493332ee8549df1adcf1fbbe) Add consistent Cargo-style CLI statuses, global quiet/verbose/color options,
+  elapsed summaries, accurate diagnostic counts, and compiler proxy reporting.
+  Expose optional semantic driver progress and an injected CLI renderer while
+  preserving source diagnostics, hyperlinks, and program/LSP streams. Add opt-in
+  structured runtime test results so CLI test summaries use actual executed counts
+  on stderr without intercepting user output or duplicating failure summaries. — Thanks @rvcas!
+
+### Patch changes
+
+- [5adcd76](https://github.com/orbistry/alder/commit/5adcd76c4e07726d71ba42a6566fe3901c1a6df6) Report independent statement type errors within a function using isolated retries, suppressing invalid local dependencies and delivering the results to CLI and editor consumers. — Thanks @rvcas!
+- [166922e](https://github.com/orbistry/alder/commit/166922ed53cd591e6b647fc6d03e168961b8d8dc) Display compiler errors and warnings with project-relative source paths in the
+  CLI, including related and bundler diagnostics, without changing editor file
+  identities or diagnostic locations. Supported terminals receive explicit absolute
+  file hyperlinks behind the short labels so navigation does not depend on the
+  shell's working directory. — Thanks @rvcas!
+- [6590795](https://github.com/orbistry/alder/commit/65907955dca4efc84622b5e72219274763826e95) Generate unused import-binding warnings through resolved source lookups, respecting
+  aliases, shadowing, type and trait uses, and public re-exports. Preserve initializer
+  effects and source-order diagnostic delivery in check, build, and test commands. — Thanks @rvcas!
+- [2802ca8](https://github.com/orbistry/alder/commit/2802ca86466b50ca2ad33a300c1b452220a4df7b) Publish real compiler errors and warnings for versioned unsaved documents,
+  recheck dependents, and clear stale editor diagnostics. Preserve UTF-16 source
+  ranges and secondary requirement locations. Fix incomplete stdio responses by
+  using the native Tokio language-server transport. — Thanks @rvcas!
+- Updated dependencies: alder-bundle@0.3.1, alder-driver@0.5.0, alder-fmt@0.2.2, alder-language-server@0.2.0, alder-runtime@0.3.0
+
 ## 0.3.0 — 2026-09-06
 
 ### Minor changes

@@ -1,5 +1,28 @@
 # alder-constrain
 
+## 0.5.0 — 2026-09-06
+
+### Minor changes
+
+- [8cb8b18](https://github.com/orbistry/alder/commit/8cb8b181878b325ebd12585d03f7b0172d8c7ef1) Check pattern exhaustiveness and redundancy uniformly across enums, Option,
+  Result, nested payloads, tuples, records and array prefixes. Reject refutable
+  bindings and parameters at compile time, report uncovered patterns and covering
+  source locations, and preserve effectful guard and pin behavior. — Thanks @rvcas!
+- [8dc960c](https://github.com/orbistry/alder/commit/8dc960c1cfd21d9fce64470714dae904d8f2d2b8) Retain available record fields in missing-field diagnostics and offer conservative, unambiguous typo suggestions. — Thanks @rvcas!
+- [30635be](https://github.com/orbistry/alder/commit/30635be9554d9419a6fae026b0a01f88be6726b2) Retain structured recursive type equations for occurs-check failures and explain
+  why structural cycles cannot have finite types. Use shared readable variable
+  names and preserve call, branch and array-element diagnostic context. — Thanks @rvcas!
+- [ea12495](https://github.com/orbistry/alder/commit/ea1249529f95314799f5241bc725bc9d7541a65d) Preserve owned nominal identities in diagnostic types and render consumer import names, re-export aliases, or explicit module/package provenance instead of ambiguous short names. — Thanks @rvcas!
+- [db5af22](https://github.com/orbistry/alder/commit/db5af22dcae75be7c815d00a3a329fb2a5578d48) Preserve structured mismatch types until diagnostic rendering, including distinct generic variables and open record/error rows. — Thanks @rvcas!
+- [5567bf1](https://github.com/orbistry/alder/commit/5567bf17dd7b016c2cc1f6b108f5db863f887a64) Retain structured generic restrictions and explain concrete specialization, independent-variable equality, open-row restrictions, and shared-storage escape without speculative signature changes. — Thanks @rvcas!
+- [b0bb65b](https://github.com/orbistry/alder/commit/b0bb65bf4f36b5fde164fe8b8ae0f6cb6472db1d) Preserve structured record comparisons and distinguish missing from unexpected fields, including conservative typo suggestions and enclosing nested-record shapes. — Thanks @rvcas!
+- [875607f](https://github.com/orbistry/alder/commit/875607f62375e37441f8a9522e97b8955fa443ef) Explain immediate type expectations with contextual source labels and originating annotations, and report call arity with argument counts. — Thanks @rvcas!
+
+### Patch changes
+
+- [52732c2](https://github.com/orbistry/alder/commit/52732c2173f38376da3372582de0347b8105a3ac) Preserve structured types in missing-return, invalid Result error-kind, and associated-equality diagnostics so nested types use resolved import names at reporting time. — Thanks @rvcas!
+- [00451d1](https://github.com/orbistry/alder/commit/00451d103570fbec7a31237cb86d2fbc01a0b1d0) Label the earlier local requirement when associated-type equalities conflict. — Thanks @rvcas!
+
 ## 0.4.0 — 2026-09-06
 
 ### Minor changes
