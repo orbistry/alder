@@ -1,0 +1,17 @@
+fn merge(left, right) { { ..left, ..right } }
+
+pub trait OverlayRead[a] {
+    fn overlay_read(marker: a, left: { r | value: Number }, right: { s | other: Bool }) Number {
+        let result = { ..merge(left, right), value: 42 }
+        result.value
+    }
+}
+
+impl OverlayRead[Number] {}
+
+impl OverlayRead[String] {
+    fn overlay_read(marker: String, left: { r | value: Number }, right: { s | other: Bool }) Number {
+        let result = { ..merge(left, right), value: 7 }
+        result.value
+    }
+}

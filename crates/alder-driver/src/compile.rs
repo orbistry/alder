@@ -1147,6 +1147,51 @@ mod tests {
     }
 
     #[test]
+    fn stored_trait_overlay_methods_preserve_independent_row_arguments() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                fn merge(left, right) { { ..left, ..right } }
+                pub trait Read[a] {
+                    fn read(marker: a, left: { r | value: Number }, right: { s | other: Bool }) Number {
+                        let result = { ..merge(left, right), value: 42 }
+                        result.value
+                    }
+                }
+                impl Read[Number] {}
+                impl Read[String] {
+                    fn read(marker: String, left: { r | value: Number }, right: { s | other: Bool }) Number {
+                        let result = { ..merge(left, right), value: 7 }
+                        result.value
+                    }
+                }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ read }
+            pub fn main() (Number, Number) {
+                (
+                    read(0, { value: 0, extra: true }, { value: "discarded", other: false }),
+                    read("marker", { value: 1, extra: "text" }, { value: false, other: true }),
+                )
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+    }
+
+    #[test]
     fn stored_async_contracts_preserve_layers_and_captured_state() {
         let producer = dependency_interface(
             indoc::indoc! {r#"

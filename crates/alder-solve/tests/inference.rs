@@ -1296,6 +1296,75 @@ fn independent_open_spreads_cannot_strengthen_a_declared_universal_contract() {
 }
 
 #[test]
+fn trait_overlay_contracts_reject_unknown_right_hand_overwrites() {
+    for source in [
+        indoc! {r#"
+            fn merge(left, right) { { ..left, ..right } }
+            trait Read[a] {
+                fn read(marker: a, left: { r | value: Number }, right: { s | other: Bool }) Number {
+                    merge(left, right).value
+                }
+            }
+            impl Read[Number] {}
+        "#},
+        indoc! {r#"
+            fn merge(left, right) { { ..left, ..right } }
+            trait Read[a] {
+                fn read(marker: a, left: { r | value: Number }, right: { s | other: Bool }) Number
+            }
+            impl Read[Number] {
+                fn read(marker: Number, left: { r | value: Number }, right: { s | other: Bool }) Number {
+                    merge(left, right).value
+                }
+            }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source)
+            .expect_err("the universal right row may overwrite value with a String");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                alder_solve::SolveError::Core(Error {
+                    kind: ErrorKind::GenericSpecialization { .. },
+                    ..
+                })
+            )),
+            "{source}\n{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn trait_overlay_contracts_accept_a_guaranteed_final_overwrite() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        trait Read[a] {
+            fn read(marker: a, left: { r | value: Number }, right: { s | other: Bool }) Number {
+                let result = { ..merge(left, right), value: 42 }
+                result.value
+            }
+        }
+        impl Read[Number] {}
+        impl Read[String] {
+            fn read(marker: String, left: { r | value: Number }, right: { s | other: Bool }) Number {
+                let result = { ..merge(left, right), value: 7 }
+                result.value
+            }
+        }
+        fn run() (Number, Number) {
+            (
+                read(0, { value: 0, extra: true }, { value: "overwritten", other: false }),
+                read("marker", { value: 0, extra: "text" }, { value: false, other: true }),
+            )
+        }
+    "#};
+    let bump = Bump::new();
+    let result = solve_input(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
 fn independent_open_spreads_preserve_disjoint_fields() {
     let source = indoc! {r#"
         fn merge(left, right) { { ..left, ..right } }
