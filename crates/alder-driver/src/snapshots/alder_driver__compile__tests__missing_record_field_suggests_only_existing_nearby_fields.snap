@@ -1,0 +1,36 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn typo(record: { username: String, age: Number }) { record.usernme }\nfn absent(record: { age: Number }) { record.address }\nfn ambiguous(record: { cat: Number, cot: Number }) { record.cut }\npub fn valid(record: { username: String }) { record.username }\n"
+---
+alder::type::missing_field
+
+  × record has no field `usernme`
+   ╭─[/app/src/main.ald:1:61]
+ 1 │ fn typo(record: { username: String, age: Number }) { record.usernme }
+   ·                                                             ───┬───
+   ·                                                                ╰── this field is not present in the record
+ 2 │ fn absent(record: { age: Number }) { record.address }
+   ╰────
+  help: did you mean `username`? available fields: `age`, `username`
+alder::type::missing_field
+
+  × record has no field `address`
+   ╭─[/app/src/main.ald:2:45]
+ 1 │ fn typo(record: { username: String, age: Number }) { record.usernme }
+ 2 │ fn absent(record: { age: Number }) { record.address }
+   ·                                             ───┬───
+   ·                                                ╰── this field is not present in the record
+ 3 │ fn ambiguous(record: { cat: Number, cot: Number }) { record.cut }
+   ╰────
+  help: available fields: `age`
+alder::type::missing_field
+
+  × record has no field `cut`
+   ╭─[/app/src/main.ald:3:61]
+ 2 │ fn absent(record: { age: Number }) { record.address }
+ 3 │ fn ambiguous(record: { cat: Number, cot: Number }) { record.cut }
+   ·                                                             ─┬─
+   ·                                                              ╰── this field is not present in the record
+ 4 │ pub fn valid(record: { username: String }) { record.username }
+   ╰────
+  help: available fields: `cat`, `cot`

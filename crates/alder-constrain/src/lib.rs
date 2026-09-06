@@ -188,6 +188,7 @@ pub enum ErrorKind {
     },
     MissingField {
         field: String,
+        available: Vec<String>,
     },
     TupleIndexOutOfBounds {
         index: u32,

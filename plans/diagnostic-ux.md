@@ -139,3 +139,19 @@ Checkpoint validation: full `cargo test --quiet` passed (208 driver, 467 inferen
 Formatting and strict all-target/all-feature Clippy passed. Changed source and
 inference snapshots were reviewed and accepted; final snapshot-reference and
 package verification remain part of the overall acceptance gate.
+
+## Record-field candidates checkpoint
+
+Missing-field errors retain the actual keys of the record lacking that field,
+both for projection and structural unification. Rendering lists up to eight
+available keys and suggests only a uniquely closest existing name within a
+small edit distance. Ties and unrelated names receive no guessed correction.
+No hint recommends removing a field or deleting an initializer's effects.
+The source fixture `missing_record_field_suggests_only_existing_nearby_fields`
+failed before the change and now covers a clear typo, an unrelated missing name,
+a tied candidate pair, a valid access, and source-ordered independent errors.
+Whole-record missing/extra-field comparisons and their direction still need
+work; a list of available keys is not full structural comparison parity.
+
+Validation: full workspace tests passed (209 driver tests), as did formatting
+and strict all-target/all-feature Clippy. The new source snapshot was reviewed.

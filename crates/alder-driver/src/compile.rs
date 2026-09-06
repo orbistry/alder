@@ -1207,6 +1207,30 @@ mod tests {
     }
 
     #[test]
+    fn missing_record_field_suggests_only_existing_nearby_fields() {
+        let source = indoc::indoc! {r#"
+            fn typo(record: { username: String, age: Number }) { record.usernme }
+            fn absent(record: { age: Number }) { record.address }
+            fn ambiguous(record: { cat: Number, cot: Number }) { record.cut }
+            pub fn valid(record: { username: String }) { record.username }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid accesses must fail");
+        };
+        assert_eq!(diagnostics.len(), 3);
+        assert!(format!("{:?}", diagnostics[0]).contains("did you mean `username`"));
+        assert!(!format!("{:?}", diagnostics[1]).contains("did you mean"));
+        assert!(!format!("{:?}", diagnostics[2]).contains("did you mean"));
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
     fn independent_type_errors_accumulate_without_publishing() {
         let source = indoc::indoc! {r#"
             fn first() Number { "wrong" }

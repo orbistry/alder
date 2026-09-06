@@ -4481,6 +4481,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     region,
                     kind: ErrorKind::MissingField {
                         field: field.to_owned(),
+                        available: fields.keys().map(|name| (*name).to_owned()).collect(),
                     },
                 }),
             },
@@ -7068,6 +7069,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         region,
                         kind: ErrorKind::MissingField {
                             field: (*name).to_owned(),
+                            available: right.keys().map(|name| (*name).to_owned()).collect(),
                         },
                     });
                 }
@@ -7081,6 +7083,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     region,
                     kind: ErrorKind::MissingField {
                         field: (*name).to_owned(),
+                        available: left.keys().map(|name| (*name).to_owned()).collect(),
                     },
                 });
             }

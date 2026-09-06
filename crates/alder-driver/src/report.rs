@@ -1350,7 +1350,7 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             "arity",
             format!("wrong number of arguments: expected {expected}, found {actual}"),
         ),
-        ErrorKind::MissingField { field } => {
+        ErrorKind::MissingField { field, .. } => {
             ("missing_field", format!("record has no field `{field}`"))
         }
         ErrorKind::AssocTypeMismatch {
@@ -1422,7 +1422,10 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
                 }
             }
         })
-        .unwrap_or_else(|| "these types are incompatible".to_owned());
+        .unwrap_or_else(|| match error.kind {
+            ErrorKind::MissingField { .. } => "this field is not present in the record".to_owned(),
+            _ => "these types are incompatible".to_owned(),
+        });
     let mut diagnostic = Diagnostic::error(source, message)
         .with_code(format!("alder::type::{code}"))
         .with_primary_label(error.region, label);
@@ -1440,7 +1443,56 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
         };
         diagnostic = diagnostic.with_secondary_label(origin, label);
     }
+    if let ErrorKind::MissingField { field, available } = &error.kind {
+        let fields = available
+            .iter()
+            .take(8)
+            .map(|name| format!("`{name}`"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let listing = if available.is_empty() {
+            "this record has no fields".to_owned()
+        } else {
+            format!(
+                "available fields: {fields}{}",
+                if available.len() > 8 { ", …" } else { "" }
+            )
+        };
+        let candidate = nearest_field(field, available);
+        diagnostic = diagnostic.with_help(match candidate {
+            Some(candidate) => format!("did you mean `{candidate}`? {listing}"),
+            None => listing,
+        });
+    }
     diagnostic
+}
+
+/// Suggest only a uniquely closest existing field, never a fabricated name.
+fn nearest_field<'a>(field: &str, available: &'a [String]) -> Option<&'a str> {
+    let mut ranked = available
+        .iter()
+        .map(|candidate| {
+            let chars = candidate.chars().collect::<Vec<_>>();
+            let mut row = (0..=chars.len()).collect::<Vec<_>>();
+            for (index, character) in field.chars().enumerate() {
+                let mut diagonal = row[0];
+                row[0] = index + 1;
+                for (column, other) in chars.iter().enumerate() {
+                    let previous = row[column + 1];
+                    row[column + 1] = (row[column] + 1)
+                        .min(previous + 1)
+                        .min(diagonal + usize::from(character != *other));
+                    diagonal = previous;
+                }
+            }
+            (row[chars.len()], candidate.as_str())
+        })
+        .collect::<Vec<_>>();
+    ranked.sort_unstable();
+    let (distance, candidate) = *ranked.first()?;
+    let limit = if field.chars().count() <= 3 { 1 } else { 2 };
+    (distance <= limit && ranked.get(1).is_none_or(|(next, _)| *next > distance))
+        .then_some(candidate)
 }
 
 fn trait_error(source: Source, module: &Module<'_>, error: &SolveTraitError<'_>) -> Diagnostic {
