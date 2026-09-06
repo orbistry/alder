@@ -8,6 +8,17 @@ Design lives in [`docs/`](docs/). The draft grammar and the roadmap live in
 
 ## Development
 
+Runnable examples live in [`tests/e2e/`](tests/e2e/) alongside their assertions.
+For example:
+
+```sh
+cargo run --bin alder -- run tests/e2e/hello
+cargo run --bin alder -- run tests/e2e/pipes
+cargo run --bin alder -- run tests/e2e/explicit_async
+```
+
+Run the development checks with:
+
 ```sh
 cargo fmt --all
 cargo clippy --all-targets --all-features -- -D warnings

@@ -136,6 +136,7 @@ mod tests {
     async fn standalone_e2e_projects_execute() {
         for name in [
             "hello",
+            "pipes",
             "enums",
             "loops",
             "modules",
