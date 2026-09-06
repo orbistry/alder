@@ -1,9 +1,19 @@
 # Current hardening verification
 
 Current status: compiler/runtime integration is committed in `556a21c`.
+Clean-branch package verification at `d9e7699` passes all 17 crates, all four
+examples, all 17 integration fixtures with expected exits, and all original
+counterexamples. See the newest section of `release-packaging-hardening.md`.
+The reference audit found parser/report test binaries embedding an older
+temporary checkout path; their build artifacts were cleared for a fresh
+snapshot-reference run. `cargo insta test --check --unreferenced reject --
+--quiet` then passed (session 6089): all tests/doctests pass, no unreferenced
+snapshots, and no snapshots to review. No source or snapshots were deleted.
+Formatting and strict Clippy passed again (session 21565). Final acceptance
+reconciliation is still open.
 The latest full workspace pass before that commit includes 72 codegen, 199
 driver, 72 kernel, 17 CLI, and 467 inference tests, plus strict Clippy and
-formatting. Fresh committed-code tests and package verification are being run;
+formatting. Fresh committed-code tests and package verification now pass;
 the older package results below are not final release evidence. Contract audits
 are reconciled; final acceptance and clean-tree gates remain open.
 

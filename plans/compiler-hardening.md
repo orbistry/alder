@@ -2240,12 +2240,26 @@ and packaging/clean commits/the broader acceptance audit remain open.
   snapshot files. Optional patterns and other record-row acceptance work remain
   open.
 
-- [ ] Re-run every original reproduction against the final compiler.
+- [x] Re-run every original reproduction against the final compiler.
+  Packaged CLI at `d9e7699`: expected rejection diagnostics for generic/array/
+  return/duplicate probes; success for records, loops, nested Option, local
+  externs, 20,000 awaits, and template payload before/after a real formatting
+  edit. Extracted-kernel timer probe passes. See release-packaging-hardening.
 - [ ] Adversarial review of alternate forms and cross-feature interactions.
-- [ ] `cargo fmt --all` and strict all-target/all-feature Clippy.
-- [ ] Full `cargo test`, snapshots reviewed, no pending/stale artifacts.
-- [ ] Actual CLI build/run/test, affected examples, runtime bounded regressions.
-- [ ] Release package verification for affected crates.
+- [x] `cargo fmt --all` and strict all-target/all-feature Clippy.
+  Refreshed after rebuilding parser/report binaries; session 21565 exits 0.
+- [x] Full `cargo test`, snapshots reviewed, no pending/stale artifacts.
+  `cargo insta test --check --unreferenced reject -- --quiet` exits 0 in session
+  6089 after clearing stale parser/report build artifacts with embedded temporary
+  checkout paths. All tests/doctests pass, with no unreferenced or pending
+  snapshots. No source/snapshot deletion was needed.
+- [x] Actual CLI build/run/test, affected examples, runtime bounded regressions.
+  Packaged CLI runs all four examples and 17 integration projects from fresh
+  source/config-only copies, with 45-second subprocess bounds and expected
+  failing test-mode exit. The full kernel suite covers fairness and cleanup.
+- [x] Release package verification for affected crates.
+  Clean-tree, offline workspace packaging verifies all 17 crates without
+  `--allow-dirty`; 1,517 extracted source/stdlib/kernel files match exactly.
 - [ ] SPEC/design docs reflect behavior; per-crate Sampo changesets.
 - [ ] Clean committed branch; final requirement-by-requirement evidence audit.
 

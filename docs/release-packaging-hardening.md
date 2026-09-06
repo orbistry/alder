@@ -1,5 +1,40 @@
 # Release packaging verification
 
+## Clean committed integration d9e7699
+
+`cargo package --workspace --exclude stub --offline --target-dir
+/tmp/alder-package-final.2pZUi9` completed successfully (session 7151). No
+`--allow-dirty` was used. All 17 publishable crates verified; all 1,517 extracted
+source/stdlib/kernel files match the checkout. Cargo.lock SHA-256 remains
+`454f3c8f1a6956c18765d79d0ff62fcc5706776b1b0eafaba783491f2e1d9f0e`.
+
+The packaged executable `/tmp/alder-package-final.2pZUi9/debug/alder` ran from
+`/tmp` against source/config-only copies in `/tmp/alder-final-fixtures.utf4Nu`.
+Each subprocess had a 45-second timeout. Session 56010 completed successfully:
+
+- All four examples pass: async, hello, pipes, traits.
+- All 17 integration projects have their expected exits: async, control_flow,
+  docs_traits, enums, errors, explicit_async, externs, hash_equality, hello,
+  loops, modules, pattern_bindings, record_options, records, traits, and the
+  two test-mode fixtures. The intentional failure fixture exits 1 after three
+  failures and a later asynchronous success; the normal test suite exits 0.
+- Original trait specialization, shared-array aliasing, missing return, and
+  duplicate-module probes reject with their specific diagnostics, including
+  both conflicting module paths. Records, loop results, nested Options, local
+  externs, and 20,000-deep awaits execute successfully. Probe copies use the
+  already-approved current async/mutation syntax, not removed syntax.
+- The formatter preserves the original three-space template line and length-13
+  assertion. An initial no-op pass was followed by deliberately unindenting the
+  assertion: formatting reported one changed file, execution passed, and the
+  next `fmt --check` passed. This exercises a real formatting edit.
+- The original Node fairness probe against the extracted kernel prints
+  `timer ran during 10000 fulfilled Promise awaits: true`.
+
+This is local host package verification, not a claim that Windows CI or remote
+release automation has run. Final requirement reconciliation remains separate.
+
+## Historical package checkpoints
+
 Current compiler/runtime integration: `556a21c`. The following completed package
 checkpoints predate the final integration, including Fiber.unbounded, imported
 defaults, pattern captures, ArrayIterator, and Coalesce fixes. They are historical
