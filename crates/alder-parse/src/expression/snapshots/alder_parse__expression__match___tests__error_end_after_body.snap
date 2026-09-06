@@ -4,8 +4,20 @@ description: "match x { 1 => a ) }"
 ---
 Match(
     End(
-        1,
-        18,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 9,
+            },
+            boundary: Position {
+                line: 1,
+                column: 17,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 18,
+            },
+        },
     ),
     1,
     1,

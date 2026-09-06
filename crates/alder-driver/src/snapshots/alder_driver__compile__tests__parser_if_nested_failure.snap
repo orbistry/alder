@@ -4,13 +4,13 @@ description: "let value = if true {\n    [read(1 2)]\n}\n"
 ---
 alder::syntax
 
-  × I was expecting a comma or the end of this function call
+  × I was expecting `,` or `)` after this call argument
    ╭─[/project/src/main.ald:2:13]
  1 │ let value = if true {
  2 │     [read(1 2)]
    ·          ┬  ┬
    ·          │  ╰── expected `,` or `)`
-   ·          ╰── this argument list starts here
+   ·          ╰── this `(` opens here
  3 │ }
    ╰────
   help: separate arguments with commas and close the call with `)`

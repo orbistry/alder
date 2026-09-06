@@ -4,10 +4,10 @@ description: "type X = (a, b"
 ---
 alder::syntax
 
-  × I was expecting another tuple type or `)` at the end of the file
+  × I was expecting `,` or `)` after this tuple entry at the end of the file
    ╭─[/project/src/main.ald:1:15]
  1 │ type X = (a, b
    ·          ┬
-   ·          ╰── this tuple type starts here
+   ·          ╰── this `(` opens here
    ╰────
   help: separate tuple entries with commas and close the type with `)`

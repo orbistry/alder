@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
         self.word1(b'<', error::Markup::Name)?;
         let name = self.element_name()?;
         self.chomp();
-        let (attrs, self_closing) = self.attrs()?;
+        let (attrs, self_closing) = self.attrs(open)?;
         let children = if self_closing {
             &[][..]
         } else {
@@ -152,6 +152,7 @@ impl<'a> Parser<'a> {
             return Err(error::Markup::FragmentUnclosed(open.line, open.column));
         }
         // `children` stopped at `</`.
+        let opening = self.get_position();
         self.advance_by(2);
         // `</name>` closing a fragment: say which name, not just "expected `>`".
         let name_start = self.pos;
@@ -165,17 +166,19 @@ impl<'a> Parser<'a> {
             });
         }
         self.chomp();
-        self.word1(b'>', error::Markup::CloseEnd)?;
+        self.word_end(b'>', opening, error::Markup::CloseEnd)?;
         Ok(children)
     }
 
     /// Attributes up to and including `>` or `/>`; the bool is `self_closing`.
     /// Code mode: whitespace and comments between attributes are chomped.
-    pub(crate) fn attrs(&mut self) -> Result<(&'a [Attr<'a>], bool), error::Markup<'a>> {
+    pub(crate) fn attrs(
+        &mut self,
+        opening: alder_region::Position,
+    ) -> Result<(&'a [Attr<'a>], bool), error::Markup<'a>> {
         let mut attrs = BumpVec::new_in(self.bump);
         loop {
             self.chomp();
-            let (row, col) = self.position();
             match self.peek() {
                 Some(b'>') => {
                     self.advance();
@@ -192,7 +195,7 @@ impl<'a> Parser<'a> {
                     )?;
                     attrs.push(attr);
                 }
-                _ => return Err(error::Markup::TagEnd(row, col)),
+                _ => return Err(error::Markup::TagEnd(self.expected_end(opening))),
             }
         }
     }
@@ -218,6 +221,7 @@ impl<'a> Parser<'a> {
                 AttrValue::Str(self.located(start, text))
             }
             Some(b'{') => {
+                let opening = self.get_position();
                 self.advance();
                 self.chomp();
                 let expr = self.specialize(
@@ -225,7 +229,7 @@ impl<'a> Parser<'a> {
                     |p| p.with_record_ctor(true, |p| p.expression()),
                 )?;
                 // `expression()` chomped.
-                self.word1(b'}', error::Attr::ExprEnd)?;
+                self.word_end(b'}', opening, error::Attr::ExprEnd)?;
                 AttrValue::Expr(expr)
             }
             _ => {
@@ -324,7 +328,7 @@ impl<'a> Parser<'a> {
             }
             Some(b'{') => {
                 self.advance();
-                let expr = self.hole()?;
+                let expr = self.hole(start)?;
                 Ok(Some(self.add_end(start, Child::Hole(expr))))
             }
             Some(b'}') => Err(error::Child::StrayBrace(row, col)),
@@ -337,7 +341,10 @@ impl<'a> Parser<'a> {
 
     /// After `{`: whitespace, the expression, whitespace, `}`. The hole
     /// clears `no_record_ctor` like any bracket (§2.3).
-    fn hole(&mut self) -> Result<&'a Located<Expr<'a>>, error::Child<'a>> {
+    fn hole(
+        &mut self,
+        opening: alder_region::Position,
+    ) -> Result<&'a Located<Expr<'a>>, error::Child<'a>> {
         self.chomp();
         if self.peek() == Some(b'}') {
             let (row, col) = self.position();
@@ -348,7 +355,7 @@ impl<'a> Parser<'a> {
             |p| p.with_record_ctor(true, |p| p.expression()),
         )?;
         // `expression()` chomped.
-        self.word1(b'}', error::Child::HoleEnd)?;
+        self.word_end(b'}', opening, error::Child::HoleEnd)?;
         Ok(expr)
     }
 
@@ -399,6 +406,7 @@ impl<'a> Parser<'a> {
     /// than a `CloseName`. Whitespace (and comments) may precede the `>`,
     /// as in an open tag; `CloseEnd` is reported after them.
     fn closing_tag(&mut self, name: Located<ElementName<'a>>) -> Result<(), error::Markup<'a>> {
+        let opening = self.get_position();
         self.word2(b'<', b'/', error::Markup::CloseName)?;
         let name_start = self.pos;
         let (row, col) = self.position();
@@ -415,7 +423,7 @@ impl<'a> Parser<'a> {
             });
         }
         self.chomp();
-        self.word1(b'>', error::Markup::CloseEnd)
+        self.word_end(b'>', opening, error::Markup::CloseEnd)
     }
 
     /// After `</`: the raw text of the name there, `None` (nothing

@@ -4,11 +4,11 @@ description: let Some(first second) = value
 ---
 alder::syntax
 
-  × I was expecting a comma or the end of this constructor pattern
+  × I was expecting `,` or `)` after this constructor argument
    ╭─[/project/src/main.ald:1:16]
  1 │ let Some(first second) = value
-   ·     ┬          ┬
-   ·     │          ╰── expected `,` or `)`
-   ·     ╰── this constructor pattern starts here
+   ·         ┬      ┬
+   ·         │      ╰── expected `,` or `)`
+   ·         ╰── this `(` opens here
    ╰────
   help: separate constructor arguments with commas and close them with `)`

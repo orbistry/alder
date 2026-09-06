@@ -7,7 +7,7 @@ alder::syntax
   × I was expecting `>` after this closing tag's name
    ╭─[/project/src/main.ald:1:24]
  1 │ let value = <div></div x>
-   ·             ┬          ┬
-   ·             │          ╰── expected `>`
-   ·             ╰── this markup starts here
+   ·                  ┬     ┬
+   ·                  │     ╰── expected `>`
+   ·                  ╰── this `<` opens here
    ╰────

@@ -50,6 +50,7 @@ pub(crate) struct ParserState {
     col: Col,
     comments_len: usize,
     verbatim_len: usize,
+    trivia_boundary: Option<(usize, Position)>,
 }
 
 /// Parser for Alder source code.
@@ -80,6 +81,8 @@ pub struct Parser<'a> {
     /// restoring the byte cursor so speculative parses cannot duplicate comments.
     comments: BumpVec<'a, Comment<'a>>,
     verbatim: BumpVec<'a, (usize, usize)>,
+    /// End of the most recent trivia run and the token boundary preceding it.
+    trivia_boundary: Option<(usize, Position)>,
 }
 
 /// Entry point used by the driver and by tests.
@@ -119,6 +122,7 @@ impl<'a> Parser<'a> {
             depth: 0,
             comments: BumpVec::new_in(bump),
             verbatim: BumpVec::new_in(bump),
+            trivia_boundary: None,
         }
     }
 
@@ -172,6 +176,7 @@ impl<'a> Parser<'a> {
             col: self.col,
             comments_len: self.comments.len(),
             verbatim_len: self.verbatim.len(),
+            trivia_boundary: self.trivia_boundary,
         }
     }
 
@@ -183,6 +188,38 @@ impl<'a> Parser<'a> {
         self.col = state.col;
         self.comments.truncate(state.comments_len);
         self.verbatim.truncate(state.verbatim_len);
+        self.trivia_boundary = state.trivia_boundary;
+    }
+
+    /// Retain both the insertion boundary and the actual detection position.
+    pub(crate) fn token_boundary(&self) -> Position {
+        self.trivia_boundary
+            .filter(|(end, _)| *end == self.pos)
+            .map_or(self.get_position(), |(_, boundary)| boundary)
+    }
+
+    pub(crate) fn expected_end(&self, opening: Position) -> error::ExpectedEnd {
+        let unexpected = self.get_position();
+        let boundary = self.token_boundary();
+        error::ExpectedEnd {
+            opening,
+            boundary,
+            unexpected,
+        }
+    }
+
+    fn word_end<E>(
+        &mut self,
+        byte: u8,
+        opening: Position,
+        to_error: impl FnOnce(error::ExpectedEnd) -> E,
+    ) -> Result<(), E> {
+        if self.peek() == Some(byte) {
+            self.advance();
+            Ok(())
+        } else {
+            Err(to_error(self.expected_end(opening)))
+        }
     }
 
     /// Inline `Located` spanning `start`..current (for names and other Copy leaves).

@@ -51,8 +51,9 @@ impl<'a> Parser<'a> {
                         )
                     },
                     |p| {
+                        let opening = p.get_position();
                         p.advance();
-                        p.pattern_record_fields()
+                        p.pattern_record_fields(opening)
                     },
                 )?;
                 Ok(self.add_end(start, Pattern::CtorRecord { path, fields, rest }))
@@ -84,6 +85,7 @@ impl<'a> Parser<'a> {
     /// as SPEC's `variant` has no zero-type tuple form either, so `Foo()`
     /// is `Arg(Start)` at `)`. Consumes the closing `)` and nothing after it.
     fn pattern_ctor_args(&mut self) -> Result<&'a [&'a Located<Pattern<'a>>], PCtor<'a>> {
+        let opening = self.get_position();
         self.advance();
         self.chomp();
         let mut args = BumpVec::new_in(self.bump);
@@ -107,8 +109,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(PCtor::End(row, col));
+                    return Err(PCtor::End(self.expected_end(opening)));
                 }
             }
         }

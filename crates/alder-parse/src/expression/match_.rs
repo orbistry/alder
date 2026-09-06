@@ -59,14 +59,18 @@ impl<'a> Parser<'a> {
         )?;
         // `expression()` chomped; an Elm-style `of` lands on `Match::Open`
         // here, where the renderer can spot it.
+        let opening = self.get_position();
         self.word1(b'{', error::Match::Open)?;
         self.chomp();
-        let arms = self.with_record_ctor(true, |p| p.match_arms())?;
+        let arms = self.with_record_ctor(true, |p| p.match_arms(opening))?;
         Ok(Expr::Match { scrutinee, arms })
     }
 
     /// Arms until the closing `}` (consumed).
-    fn match_arms(&mut self) -> Result<&'a [MatchArm<'a>], error::Match<'a>> {
+    fn match_arms(
+        &mut self,
+        opening: alder_region::Position,
+    ) -> Result<&'a [MatchArm<'a>], error::Match<'a>> {
         let mut arms = BumpVec::new_in(self.bump);
         // After `{` or `,` an arm (or `}`) is required; after a comma-less
         // body anything that is not a pattern start is `Match::End`.
@@ -82,7 +86,7 @@ impl<'a> Parser<'a> {
                 Err(error::Arm::Pattern(error::Pattern::Start(..), r, c))
                     if !expect_arm && (r, c) == (row, col) =>
                 {
-                    return Err(error::Match::End(r, c));
+                    return Err(error::Match::End(self.expected_end(opening)));
                 }
                 Err(e) => return Err(error::Match::Arm(self.alloc(e), row, col)),
             }

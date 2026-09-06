@@ -4,8 +4,20 @@ description: "xs[0"
 ---
 Index(
     End(
-        1,
-        5,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 3,
+            },
+            boundary: Position {
+                line: 1,
+                column: 5,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 5,
+            },
+        },
     ),
     1,
     3,

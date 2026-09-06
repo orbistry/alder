@@ -4,8 +4,20 @@ description: "tests {\n    test \"a\" {}\n"
 ---
 Tests(
     End(
-        3,
-        1,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 7,
+            },
+            boundary: Position {
+                line: 2,
+                column: 16,
+            },
+            unexpected: Position {
+                line: 3,
+                column: 1,
+            },
+        },
     ),
     1,
     1,

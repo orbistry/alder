@@ -119,8 +119,9 @@ impl<'a> Parser<'a> {
             Some(b'{') => self.specialize(
                 |bump, e, row, col| error::Type::Record(bump.alloc(e), row, col),
                 |p| {
+                    let opening = p.get_position();
                     p.advance(); // `{`
-                    let (fields, ext) = p.field_types()?;
+                    let (fields, ext) = p.field_types(opening)?;
                     Ok(p.add_end(start, Type::Record { fields, ext }))
                 },
             ),
@@ -155,6 +156,7 @@ impl<'a> Parser<'a> {
 
     /// At `[`: `[T, U]`. Consumes through the `]`; does not chomp.
     pub(crate) fn type_args(&mut self) -> Result<&'a [&'a Located<Type<'a>>], TArgs<'a>> {
+        let opening = self.get_position();
         self.advance(); // `[`
         self.chomp();
         if self.peek() == Some(b']') {
@@ -182,8 +184,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(TArgs::End(row, col));
+                    return Err(TArgs::End(self.expected_end(opening)));
                 }
             }
         }
@@ -200,6 +201,7 @@ impl<'a> Parser<'a> {
         let saved = self.save_state();
         self.chomp();
         if self.peek() == Some(b'(') && !self.newline_since(name.region.end) {
+            let opening = self.get_position();
             self.advance();
             self.chomp();
             loop {
@@ -222,8 +224,7 @@ impl<'a> Parser<'a> {
                         break;
                     }
                     _ => {
-                        let (row, col) = self.position();
-                        return Err(error::TagVariant::ArgEnd(row, col));
+                        return Err(error::TagVariant::ArgEnd(self.expected_end(opening)));
                     }
                 }
             }
@@ -241,6 +242,7 @@ impl<'a> Parser<'a> {
     /// Consumes through the `}`; does not chomp afterwards.
     pub(crate) fn field_types(
         &mut self,
+        opening: alder_region::Position,
     ) -> Result<(&'a [FieldType<'a>], Option<Name<'a>>), TRecord<'a>> {
         self.chomp();
         let mut fields = BumpVec::new_in(self.bump);
@@ -287,8 +289,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(TRecord::End(row, col));
+                    return Err(TRecord::End(self.expected_end(opening)));
                 }
             }
         }
@@ -325,6 +326,7 @@ impl<'a> Parser<'a> {
     fn type_fn(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TFn<'a>> {
         self.advance_by(2); // `fn` (peeked by the caller)
         self.chomp();
+        let opening = self.get_position();
         self.word1(b'(', TFn::Open)?;
         self.chomp();
         let mut params = BumpVec::new_in(self.bump);
@@ -351,8 +353,7 @@ impl<'a> Parser<'a> {
                         break;
                     }
                     _ => {
-                        let (row, col) = self.position();
-                        return Err(TFn::ParamEnd(row, col));
+                        return Err(TFn::ParamEnd(self.expected_end(opening)));
                     }
                 }
             }
@@ -376,6 +377,7 @@ impl<'a> Parser<'a> {
     /// At `(`: `()`, `(T)` (returned as `T` re-spanned over the parentheses,
     /// §10.43), or `(T, U, …)`.
     fn type_tuple(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TTuple<'a>> {
+        let opening = self.get_position();
         self.advance(); // `(`
         self.chomp();
         if self.peek() == Some(b')') {
@@ -400,8 +402,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(TTuple::End(row, col));
+                    return Err(TTuple::End(self.expected_end(opening)));
                 }
             }
         }
@@ -429,6 +430,7 @@ impl<'a> Parser<'a> {
     /// At `[`: `[:tag(T) | :tag | r]`. Also `[]` (closed, empty) and `[r]`
     /// (a bare row variable).
     fn type_error_row(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, TErrorRow<'a>> {
+        let opening = self.get_position();
         self.advance(); // `[`
         self.chomp();
         let mut tags = BumpVec::new_in(self.bump);
@@ -441,7 +443,7 @@ impl<'a> Parser<'a> {
                 if self.peek_lower() {
                     ext = Some(self.located_lower(TErrorRow::Ext)?);
                     self.chomp();
-                    self.word1(b']', TErrorRow::End)?;
+                    self.word_end(b']', opening, TErrorRow::ExtEnd)?;
                     break;
                 }
                 if self.peek() != Some(b':') {
@@ -471,8 +473,7 @@ impl<'a> Parser<'a> {
                         break;
                     }
                     _ => {
-                        let (row, col) = self.position();
-                        return Err(TErrorRow::End(row, col));
+                        return Err(TErrorRow::End(self.expected_end(opening)));
                     }
                 }
             }

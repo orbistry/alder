@@ -4,11 +4,11 @@ description: "let values = [1 2]"
 ---
 alder::syntax
 
-  × I was expecting a comma or the end of this array
+  × I was expecting `,` or `]` after this array entry
    ╭─[/project/src/main.ald:1:17]
  1 │ let values = [1 2]
    ·              ┬  ┬
    ·              │  ╰── expected `,` or `]`
-   ·              ╰── this array starts here
+   ·              ╰── this `[` opens here
    ╰────
   help: separate array entries with commas and close the array with `]`

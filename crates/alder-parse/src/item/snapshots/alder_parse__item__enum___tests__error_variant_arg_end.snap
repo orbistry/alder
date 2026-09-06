@@ -3,6 +3,18 @@ source: crates/alder-parse/src/item/enum_.rs
 description: "enum Shape { Circle(Number Number) }"
 ---
 VariantArgEnd(
-    1,
-    28,
+    ExpectedEnd {
+        opening: Position {
+            line: 1,
+            column: 20,
+        },
+        boundary: Position {
+            line: 1,
+            column: 27,
+        },
+        unexpected: Position {
+            line: 1,
+            column: 28,
+        },
+    },
 )

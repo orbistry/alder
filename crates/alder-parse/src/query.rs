@@ -32,7 +32,7 @@
 //! `ClauseOrder(clause)` at it. That covers both `where` after `orderBy`
 //! (`ClauseOrder(Where)`) and `limit 1 limit 2` (`ClauseOrder(Limit)`).
 //! After `insert` / `update` / `delete` a stray clause word is a plain
-//! `Query::End`: those verbs have no clause list to be out of order in.
+//! `Query::OperationEnd`: those verbs have no clause list to be out of order in.
 //!
 //! See docs/parser-internals.md §5.17.
 // OWNER: query.rs (Wave 3)
@@ -61,6 +61,7 @@ impl<'a> Parser<'a> {
     /// region ends past it; nothing is chomped afterwards (`primary` rule).
     fn query_block(&mut self) -> Result<&'a Query<'a>, error::Query<'a>> {
         self.chomp();
+        let opening = self.get_position();
         self.word1(b'{', error::Query::Open)?;
         let query = self.query_body()?;
         self.chomp();
@@ -74,7 +75,12 @@ impl<'a> Parser<'a> {
         if let (Query::Select(_), Some(clause)) = (query, self.peek_clause()) {
             return Err(error::Query::ClauseOrder(clause, row, col));
         }
-        Err(error::Query::End(row, col))
+        let end = self.expected_end(opening);
+        Err(if matches!(query, Query::Select(_)) {
+            error::Query::End(end)
+        } else {
+            error::Query::OperationEnd(end)
+        })
     }
 
     /// Verb dispatch on the word after `{`; each verb's parser starts after
@@ -194,6 +200,7 @@ impl<'a> Parser<'a> {
                 Ok(Projection::Star(Region::new(start, self.get_position())))
             }
             Some(b'{') => {
+                let opening = self.get_position();
                 self.advance();
                 let mut fields = BumpVec::new_in(self.bump);
                 loop {
@@ -217,8 +224,7 @@ impl<'a> Parser<'a> {
                             break;
                         }
                         _ => {
-                            let (row, col) = self.position();
-                            return Err(error::Select::ProjectionEnd(row, col));
+                            return Err(error::Select::ProjectionEnd(self.expected_end(opening)));
                         }
                     }
                 }
@@ -357,8 +363,9 @@ impl<'a> Parser<'a> {
         let set = self.specialize(
             |bump, e, row, col| error::Update::Record(bump.alloc(e), row, col),
             |p| {
+                let opening = p.get_position();
                 p.advance();
-                p.record_fields()
+                p.record_fields(opening)
             },
         )?;
         let where_ = self.optional_where(error::Update::Where)?;

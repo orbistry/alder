@@ -142,6 +142,7 @@ pub(super) fn constraint_end(constraint: &Constraint<'_>) -> Position {
 impl<'a> Parser<'a> {
     /// At `(`; shared by lambda/component. Consumes through the `)`.
     pub(crate) fn params(&mut self) -> Result<&'a [Param<'a>], error::Params<'a>> {
+        let opening = self.get_position();
         self.word1(b'(', error::Params::Open)?;
         self.chomp();
         let mut params = BumpVec::new_in(self.bump);
@@ -163,8 +164,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Params::End(row, col));
+                    return Err(error::Params::End(self.expected_end(opening)));
                 }
             }
         }

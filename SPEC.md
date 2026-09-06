@@ -277,6 +277,11 @@ inventory are recorded in `docs/parser-diagnostic-parity.md`.
 
 - [x] Complete Elm-quality rendered parser diagnostics across all active syntax
   families, including source context, repair advice, and CLI/editor verification
+- [x] Retain pre-trivia delimiter boundaries transactionally and distinguish
+  insertion locations from detection locations across syntax families; see
+  `plans/parser-boundary-locations.md` (no grammar/layout change)
+- [x] Label exact owning delimiters, suppress irrelevant detection labels, and
+  make separator/closer wording match each delimiter parser state
 
 New parser for the grammar below (`crates/alder-parse` over
 `crates/alder-source`), with snapshot tests per construct. Done; the

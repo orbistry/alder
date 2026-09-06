@@ -7,9 +7,9 @@ alder::syntax
   × I was expecting another declaration or the end of this tests block
    ╭─[/project/src/main.ald:1:23]
  1 │ tests { let value = 1 42 }
-   · ┬                     ┬
-   · │                     ╰── expected a declaration or `}`
-   · ╰── this tests block starts here
+   ·       ┬               ┬
+   ·       │               ╰── expected a declaration or `}`
+   ·       ╰── this `{` opens here
    ╰────
   help: put declarations such as `test`, `fn`, or `let` on separate lines and
         close the block with `}`

@@ -4,8 +4,20 @@ description: "error E { :a(Number Number) }"
 ---
 Tag(
     ArgEnd(
-        1,
-        21,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 13,
+            },
+            boundary: Position {
+                line: 1,
+                column: 20,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 21,
+            },
+        },
     ),
     1,
     11,

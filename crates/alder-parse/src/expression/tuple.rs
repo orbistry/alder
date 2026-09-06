@@ -34,6 +34,7 @@ impl<'a> Parser<'a> {
 
     /// At `(`: through the closing `)`, which is consumed.
     fn tuple_body(&mut self, start: Position) -> Result<&'a Located<Expr<'a>>, error::Tuple<'a>> {
+        let opening = self.get_position();
         self.advance();
         self.chomp();
         if self.peek() == Some(b')') {
@@ -58,8 +59,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Tuple::End(row, col));
+                    return Err(error::Tuple::End(self.expected_end(opening)));
                 }
             }
         }

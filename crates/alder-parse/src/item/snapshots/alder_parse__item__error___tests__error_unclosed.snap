@@ -3,6 +3,18 @@ source: crates/alder-parse/src/item/error_.rs
 description: "error E { :a, :b"
 ---
 End(
-    1,
-    17,
+    ExpectedEnd {
+        opening: Position {
+            line: 1,
+            column: 9,
+        },
+        boundary: Position {
+            line: 1,
+            column: 17,
+        },
+        unexpected: Position {
+            line: 1,
+            column: 17,
+        },
+    },
 )

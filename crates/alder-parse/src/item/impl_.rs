@@ -38,6 +38,7 @@ impl<'a> Parser<'a> {
         self.chomp();
         let trait_ = self.path(error::Impl::Trait, error::Impl::PathMember)?;
         self.chomp();
+        let opening = self.get_position();
         self.word1(b'[', error::Impl::Open)?;
         self.chomp();
         let mut args = BumpVec::new_in(self.bump);
@@ -61,8 +62,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Impl::ArgEnd(row, col));
+                    return Err(error::Impl::ArgEnd(self.expected_end(opening)));
                 }
             }
         }

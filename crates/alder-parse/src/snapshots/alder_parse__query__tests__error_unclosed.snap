@@ -4,8 +4,20 @@ description: "query { select * from users"
 ---
 Query(
     End(
-        1,
-        28,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 7,
+            },
+            boundary: Position {
+                line: 1,
+                column: 28,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 28,
+            },
+        },
     ),
     1,
     1,

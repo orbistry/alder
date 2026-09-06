@@ -5,8 +5,20 @@ description: "[:not_found(Id]"
 ErrorRow(
     Tag(
         ArgEnd(
-            1,
-            15,
+            ExpectedEnd {
+                opening: Position {
+                    line: 1,
+                    column: 12,
+                },
+                boundary: Position {
+                    line: 1,
+                    column: 15,
+                },
+                unexpected: Position {
+                    line: 1,
+                    column: 15,
+                },
+            },
         ),
         1,
         2,

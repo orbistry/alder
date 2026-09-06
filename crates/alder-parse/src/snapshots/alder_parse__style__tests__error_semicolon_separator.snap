@@ -4,8 +4,20 @@ description: "style { padding: 16px; color: red }"
 ---
 Style(
     End(
-        1,
-        22,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 7,
+            },
+            boundary: Position {
+                line: 1,
+                column: 22,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 22,
+            },
+        },
     ),
     1,
     1,

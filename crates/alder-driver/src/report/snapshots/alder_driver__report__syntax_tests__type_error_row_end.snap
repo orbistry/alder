@@ -4,11 +4,10 @@ description: "type X = [:timeout"
 ---
 alder::syntax
 
-  × I was expecting another error tag or the end of this row at the end of
-  │ the file
+  × I was expecting `|` or `]` after this error tag at the end of the file
    ╭─[/project/src/main.ald:1:19]
  1 │ type X = [:timeout
    ·          ┬
-   ·          ╰── this error row starts here
+   ·          ╰── this `[` opens here
    ╰────
   help: separate error tags with `|` and close the row with `]`

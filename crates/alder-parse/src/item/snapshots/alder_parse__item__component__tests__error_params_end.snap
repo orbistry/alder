@@ -4,8 +4,20 @@ description: "component App(a b) {}"
 ---
 Params(
     End(
-        1,
-        17,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 14,
+            },
+            boundary: Position {
+                line: 1,
+                column: 16,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 17,
+            },
+        },
     ),
     1,
     14,

@@ -31,12 +31,16 @@ use crate::{Parser, error};
 impl<'a> Parser<'a> {
     /// At `(`; accepts `_` placeholders as whole arguments. Consumes the `)`.
     pub(crate) fn call_args(&mut self) -> Result<&'a [&'a Located<Expr<'a>>], error::Call<'a>> {
+        let opening = self.get_position();
         self.advance();
         self.chomp();
-        self.with_record_ctor(true, |p| p.call_args_body())
+        self.with_record_ctor(true, |p| p.call_args_body(opening))
     }
 
-    fn call_args_body(&mut self) -> Result<&'a [&'a Located<Expr<'a>>], error::Call<'a>> {
+    fn call_args_body(
+        &mut self,
+        opening: alder_region::Position,
+    ) -> Result<&'a [&'a Located<Expr<'a>>], error::Call<'a>> {
         let mut args = BumpVec::new_in(self.bump);
         loop {
             if self.peek() == Some(b')') {
@@ -61,8 +65,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Call::End(row, col));
+                    return Err(error::Call::End(self.expected_end(opening)));
                 }
             }
         }
@@ -93,13 +96,14 @@ impl<'a> Parser<'a> {
         &mut self,
         target: &'a Located<Expr<'a>>,
     ) -> Result<&'a Located<Expr<'a>>, error::Index<'a>> {
+        let opening = self.get_position();
         self.advance();
         self.chomp();
         let index = self.specialize(
             |bump, e, row, col| error::Index::Expr(bump.alloc(e), row, col),
             |p| p.with_record_ctor(true, |p| p.expression()),
         )?;
-        self.word1(b']', error::Index::End)?;
+        self.word_end(b']', opening, error::Index::End)?;
         Ok(self.expr_at(
             target.region.start,
             self.get_position(),

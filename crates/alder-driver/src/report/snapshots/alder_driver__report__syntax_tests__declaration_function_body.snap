@@ -9,5 +9,5 @@ alder::syntax
    ╭─[/project/src/main.ald:1:12]
  1 │ fn work() {
    ·           ┬
-   ·           ╰── this function body starts here
+   ·           ╰── this `{` opens here
    ╰────

@@ -27,15 +27,19 @@ impl<'a> Parser<'a> {
         let fields = self.specialize(
             |bump, e, row, col| error::Expr::Record(bump.alloc(e), row, col),
             |p| {
+                let opening = p.get_position();
                 p.advance();
-                p.with_record_ctor(true, |p| p.record_fields())
+                p.with_record_ctor(true, |p| p.record_fields(opening))
             },
         )?;
         Ok(self.add_end(start, Expr::Record(fields)))
     }
 
     /// After `{`; also RecordCtor and query `set`. Consumes the closing `}`.
-    pub(crate) fn record_fields(&mut self) -> Result<&'a [RecordField<'a>], error::Record<'a>> {
+    pub(crate) fn record_fields(
+        &mut self,
+        opening: alder_region::Position,
+    ) -> Result<&'a [RecordField<'a>], error::Record<'a>> {
         self.chomp();
         let mut fields = BumpVec::new_in(self.bump);
         loop {
@@ -84,8 +88,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Record::End(row, col));
+                    return Err(error::Record::End(self.expected_end(opening)));
                 }
             }
         }

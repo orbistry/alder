@@ -4,8 +4,20 @@ description: "style { \":hover\": { color: red }"
 ---
 Style(
     End(
-        1,
-        33,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 7,
+            },
+            boundary: Position {
+                line: 1,
+                column: 33,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 33,
+            },
+        },
     ),
     1,
     1,

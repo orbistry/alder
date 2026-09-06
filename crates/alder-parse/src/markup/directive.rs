@@ -22,8 +22,8 @@
 //! `@`; the wrapping `Child::If` / `For` / `Match` at the `@` too;
 //! `ElseBranchStart` after `@else`; `DirFor::In` / `Key` where the word was
 //! expected; `BareText` at the body start; `ChildBlock::Open` where `{` was
-//! expected; `ChildBlock::Item` at the failing item; `ChildBlock::End` at
-//! EOF.
+//! expected; `ChildBlock::Item` at the failing item; `ChildBlock::End` retains
+//! the pre-trivia boundary and EOF detection position.
 // OWNER: markup/directive.rs (Wave 3)
 
 use alder_region::{Located, Position, Region};
@@ -181,14 +181,18 @@ impl<'a> Parser<'a> {
             |p| p.with_record_ctor(false, |p| p.expression()),
         )?;
         // `expression()` chomped.
+        let opening = self.get_position();
         self.word1(b'{', error::DirMatch::Open)?;
         self.chomp();
-        let arms = self.with_record_ctor(true, |p| p.child_match_arms())?;
+        let arms = self.with_record_ctor(true, |p| p.child_match_arms(opening))?;
         Ok(self.child_at(start, self.get_position(), Child::Match { scrutinee, arms }))
     }
 
     /// Arms until the closing `}` (consumed). Mirrors `match_arms`.
-    fn child_match_arms(&mut self) -> Result<&'a [ChildMatchArm<'a>], error::DirMatch<'a>> {
+    fn child_match_arms(
+        &mut self,
+        opening: alder_region::Position,
+    ) -> Result<&'a [ChildMatchArm<'a>], error::DirMatch<'a>> {
         let mut arms = BumpVec::new_in(self.bump);
         // After `{` or `,` an arm (or `}`) is required; after a comma-less
         // body anything that is not a pattern start is `DirMatch::End`.
@@ -204,7 +208,7 @@ impl<'a> Parser<'a> {
                 Err(error::DirMatch::Pattern(error::Pattern::Start(..), r, c))
                     if !expect_arm && (r, c) == (row, col) =>
                 {
-                    return Err(error::DirMatch::End(r, c));
+                    return Err(error::DirMatch::End(self.expected_end(opening)));
                 }
                 Err(e) => return Err(e),
             }
@@ -272,10 +276,11 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<&'a Located<ChildBlock<'a>>, error::ChildBlock<'a>> {
         let start = self.get_position();
+        let opening = self.get_position();
         self.word1(b'{', error::ChildBlock::Open)?;
         // Brackets reset the record-constructor restriction (§2.3): a
         // `let x = Shape::Rect { … }` inside the block is a constructor.
-        let items = self.with_record_ctor(true, |p| p.child_items())?;
+        let items = self.with_record_ctor(true, |p| p.child_items(opening))?;
         Ok(self.add_end(start, ChildBlock { items }))
     }
 
@@ -284,7 +289,10 @@ impl<'a> Parser<'a> {
     /// else (including that whitespace) is a child. This is the
     /// `children(Brace)` loop with the statement case added (its result is
     /// `ChildItem`s, which `children` cannot produce).
-    fn child_items(&mut self) -> Result<&'a [ChildItem<'a>], error::ChildBlock<'a>> {
+    fn child_items(
+        &mut self,
+        opening: alder_region::Position,
+    ) -> Result<&'a [ChildItem<'a>], error::ChildBlock<'a>> {
         let mut items = BumpVec::new_in(self.bump);
         loop {
             if self.at_item_stmt() {
@@ -303,7 +311,7 @@ impl<'a> Parser<'a> {
             if self.at_terminator(ChildTerminator::Brace) {
                 // EOF or `}`.
                 if self.is_eof() {
-                    return Err(error::ChildBlock::End(row, col));
+                    return Err(error::ChildBlock::End(self.expected_end(opening)));
                 }
                 self.advance();
                 return Ok(items.into_bump_slice());

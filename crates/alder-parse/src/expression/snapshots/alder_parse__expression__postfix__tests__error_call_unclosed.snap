@@ -4,8 +4,20 @@ description: "f(a, b"
 ---
 Call(
     End(
-        1,
-        7,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 2,
+            },
+            boundary: Position {
+                line: 1,
+                column: 7,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 7,
+            },
+        },
     ),
     1,
     2,

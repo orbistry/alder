@@ -4,8 +4,20 @@ description: "[1 2]"
 ---
 Array(
     End(
-        1,
-        4,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 1,
+            },
+            boundary: Position {
+                line: 1,
+                column: 3,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 4,
+            },
+        },
     ),
     1,
     1,

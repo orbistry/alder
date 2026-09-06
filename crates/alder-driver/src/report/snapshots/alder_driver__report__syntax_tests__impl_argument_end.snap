@@ -7,7 +7,7 @@ alder::syntax
   × I was expecting `,` or `]` after this trait argument
    ╭─[/project/src/main.ald:1:16]
  1 │ impl Show[User User] {}
-   · ┬              ┬
-   · │              ╰── expected `,` or `]`
-   · ╰── this impl declaration starts here
+   ·          ┬     ┬
+   ·          │     ╰── expected `,` or `]`
+   ·          ╰── this `[` opens here
    ╰────

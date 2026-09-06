@@ -9,7 +9,10 @@ pub fn parse(source: Source, error: &alder_parse::error::Module<'_>) -> Diagnost
     if let Some(width) = problem.width {
         primary.end.column = problem.column.saturating_add(width);
     }
-    if source.span(primary).offset() == source.text().len() {
+    let detection = problem
+        .detected
+        .map_or(primary, |pos| Region::new(pos, pos));
+    if source.span(detection).offset() == source.text().len() {
         problem.message.push_str(" at the end of the file");
     }
     let context = problem
@@ -42,6 +45,7 @@ fn syntax_region(source: &Source, row: u32, column: u32) -> Region {
 }
 
 struct SyntaxProblem {
+    detected: Option<Position>,
     width: Option<u32>,
     context: Option<(u32, u32, &'static str)>,
     message: String,
@@ -75,6 +79,7 @@ fn expected_problem(
 ) -> SyntaxProblem {
     SyntaxProblem {
         width: None,
+        detected: None,
         context: None,
         message: message.into(),
         row,
@@ -89,6 +94,61 @@ struct SyntaxReporter<'s> {
 }
 
 impl SyntaxReporter<'_> {
+    fn end_problem(
+        &self,
+        end: &alder_parse::error::ExpectedEnd,
+        message: impl Into<String>,
+        label: &'static str,
+        help: Option<String>,
+    ) -> SyntaxProblem {
+        self.locate_end(
+            end,
+            expected_problem(
+                message,
+                end.unexpected.line,
+                end.unexpected.column,
+                label,
+                help,
+            ),
+        )
+    }
+
+    fn locate_end(
+        &self,
+        end: &alder_parse::error::ExpectedEnd,
+        mut problem: SyntaxProblem,
+    ) -> SyntaxProblem {
+        let label = match self
+            .at(end.opening.line, end.opening.column)
+            .as_bytes()
+            .first()
+        {
+            Some(b'(') => "this `(` opens here",
+            Some(b'[') => "this `[` opens here",
+            Some(b'{') => "this `{` opens here",
+            Some(b'<') => "this `<` opens here",
+            _ => "this delimiter opens here",
+        };
+        problem.context = Some((end.opening.line, end.opening.column, label));
+        // A real wrong closer is useful evidence at the cursor. Otherwise a
+        // crossed newline must not blame the next declaration for punctuation
+        // missing after the preceding token. No indentation/keyword heuristics.
+        if end.boundary.line < end.unexpected.line
+            && !self
+                .at(end.unexpected.line, end.unexpected.column)
+                .starts_with("</")
+            && !self
+                .at(end.unexpected.line, end.unexpected.column)
+                .starts_with([')', ']', '}', '>'])
+        {
+            problem.row = end.boundary.line;
+            problem.column = end.boundary.column;
+            problem.width = Some(0);
+            problem.detected = Some(end.unexpected);
+        }
+        problem
+    }
+
     fn at(&self, row: u32, column: u32) -> &str {
         let position = Position::new(row, column);
         let offset = self.source.span(Region::new(position, position)).offset();
@@ -108,6 +168,7 @@ impl SyntaxReporter<'_> {
             Module::Item(error, ..) => self.item_problem(error),
             Module::SameLine(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "module items must be separated by a line break".to_owned(),
                 row: *row,
@@ -150,6 +211,7 @@ impl SyntaxReporter<'_> {
             ),
             Item::Semicolon(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "module items are separated by line breaks, not semicolons".to_owned(),
                 row: *row,
@@ -242,6 +304,7 @@ impl SyntaxReporter<'_> {
         match error {
             Trait::Name(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting a trait name after `trait`".to_owned(),
                 row: *row,
@@ -255,6 +318,7 @@ impl SyntaxReporter<'_> {
             Trait::Where(error, ..) => self.where_problem(error),
             Trait::Open(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting `{` to start this trait body".to_owned(),
                 row: *row,
@@ -264,6 +328,7 @@ impl SyntaxReporter<'_> {
             },
             Trait::Item(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting a trait method, associated type, or `}`".to_owned(),
                 row: *row,
@@ -273,6 +338,7 @@ impl SyntaxReporter<'_> {
             },
             Trait::SameLine(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "trait items must be separated by a line break".to_owned(),
                 row: *row,
@@ -282,6 +348,7 @@ impl SyntaxReporter<'_> {
             },
             Trait::Semicolon(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "trait items are separated by line breaks, not semicolons".to_owned(),
                 row: *row,
@@ -291,6 +358,7 @@ impl SyntaxReporter<'_> {
             },
             Trait::AssocType(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting an associated type name after `type`".to_owned(),
                 row: *row,
@@ -300,6 +368,7 @@ impl SyntaxReporter<'_> {
             },
             Trait::AssocTypeHasBody(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "associated types are declared without a value in traits".to_owned(),
                 row: *row,
@@ -318,6 +387,7 @@ impl SyntaxReporter<'_> {
         match error {
             Impl::Trait(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting a trait name after `impl`".to_owned(),
                 row: *row,
@@ -327,6 +397,7 @@ impl SyntaxReporter<'_> {
             },
             Impl::PathMember(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting a trait name after `::`".to_owned(),
                 row: *row,
@@ -336,6 +407,7 @@ impl SyntaxReporter<'_> {
             },
             Impl::Open(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting `[` after the trait name".to_owned(),
                 row: *row,
@@ -344,18 +416,23 @@ impl SyntaxReporter<'_> {
                 help: Some("the subject type goes in brackets, as in `impl Show[User]`".to_owned()),
             },
             Impl::Arg(error, ..) => self.type_problem(error),
-            Impl::ArgEnd(row, column) => SyntaxProblem {
-                width: None,
-                context: None,
-                message: "I was expecting `,` or `]` after this trait argument".to_owned(),
-                row: *row,
-                column: *column,
-                label: "expected `,` or `]`",
-                help: None,
-            },
+            Impl::ArgEnd(end) => self.locate_end(
+                end,
+                SyntaxProblem {
+                    width: None,
+                    detected: None,
+                    context: None,
+                    message: "I was expecting `,` or `]` after this trait argument".to_owned(),
+                    row: end.unexpected.line,
+                    column: end.unexpected.column,
+                    label: "expected `,` or `]`",
+                    help: None,
+                },
+            ),
             Impl::Where(error, ..) => self.where_problem(error),
             Impl::BodyOpen(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting `{` to start this impl body".to_owned(),
                 row: *row,
@@ -365,6 +442,7 @@ impl SyntaxReporter<'_> {
             },
             Impl::Item(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting an impl method, associated type, or `}`".to_owned(),
                 row: *row,
@@ -374,6 +452,7 @@ impl SyntaxReporter<'_> {
             },
             Impl::SameLine(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "impl items must be separated by a line break".to_owned(),
                 row: *row,
@@ -383,6 +462,7 @@ impl SyntaxReporter<'_> {
             },
             Impl::Semicolon(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "impl items are separated by line breaks, not semicolons".to_owned(),
                 row: *row,
@@ -392,6 +472,7 @@ impl SyntaxReporter<'_> {
             },
             Impl::AssocType(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting an associated type name after `type`".to_owned(),
                 row: *row,
@@ -401,6 +482,7 @@ impl SyntaxReporter<'_> {
             },
             Impl::AssocEquals(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting `=` after this associated type name".to_owned(),
                 row: *row,
@@ -424,6 +506,7 @@ impl SyntaxReporter<'_> {
         match error {
             TypeParams::Open(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: format!("I was expecting `[` after this {owner} name"),
                 row: *row,
@@ -433,6 +516,7 @@ impl SyntaxReporter<'_> {
             },
             TypeParams::Var(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: format!("I was expecting a type parameter in this {owner} declaration"),
                 row: *row,
@@ -440,17 +524,22 @@ impl SyntaxReporter<'_> {
                 label: "expected a lower-case name",
                 help: None,
             },
-            TypeParams::End(row, column) => SyntaxProblem {
-                width: None,
-                context: None,
-                message: "I was expecting `,` or `]` after this type parameter".to_owned(),
-                row: *row,
-                column: *column,
-                label: "expected `,` or `]`",
-                help: None,
-            },
+            TypeParams::End(end) => self.locate_end(
+                end,
+                SyntaxProblem {
+                    width: None,
+                    detected: None,
+                    context: None,
+                    message: "I was expecting `,` or `]` after this type parameter".to_owned(),
+                    row: end.unexpected.line,
+                    column: end.unexpected.column,
+                    label: "expected `,` or `]`",
+                    help: None,
+                },
+            ),
             TypeParams::Empty(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "type parameter lists cannot be empty".to_owned(),
                 row: *row,
@@ -466,6 +555,7 @@ impl SyntaxReporter<'_> {
         match error {
             Where::Var(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting a type variable after `where`".to_owned(),
                 row: *row,
@@ -475,6 +565,7 @@ impl SyntaxReporter<'_> {
             },
             Where::Colon(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting a trait bound or associated type equality".to_owned(),
                 row: *row,
@@ -484,6 +575,7 @@ impl SyntaxReporter<'_> {
             },
             Where::Bound(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting a trait name in this bound".to_owned(),
                 row: *row,
@@ -493,6 +585,7 @@ impl SyntaxReporter<'_> {
             },
             Where::AssocName(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting an associated type name after `.`".to_owned(),
                 row: *row,
@@ -502,6 +595,7 @@ impl SyntaxReporter<'_> {
             },
             Where::AssocEq(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "I was expecting `==` after this associated type".to_owned(),
                 row: *row,
@@ -520,6 +614,7 @@ impl SyntaxReporter<'_> {
                 "expected a type here", Some("types include names like `Number`, applications like `Array[Number]`, and type variables like `a`".to_owned())),
             Type::Reserved(keyword, row, column) => SyntaxProblem {
                 width: Some(keyword.as_str().len() as u32),
+                detected: None,
                 context: None,
                 message: format!("`{}` is reserved and cannot be used as a type", keyword.as_str()),
                 row: *row,
@@ -539,6 +634,7 @@ impl SyntaxReporter<'_> {
             Type::ErrorRow(error, row, column) => self.error_row_problem(error).in_context(*row, *column, "this error row starts here"),
             Type::TooDeep(row, column) => SyntaxProblem {
                 width: None,
+                detected: None,
                 context: None,
                 message: "this type is nested too deeply".to_owned(),
                 row: *row,
@@ -567,17 +663,15 @@ impl SyntaxReporter<'_> {
                 None,
             ),
             Attribute::Arg(error, ..) => self.expression_problem(error),
-            Attribute::ArgEnd(row, column) => expected_problem(
-                "I was expecting another attribute argument or the end of the argument list",
-                *row,
-                *column,
+            Attribute::ArgEnd(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this attribute argument",
                 "expected `,` or `)`",
                 None,
             ),
-            Attribute::End(row, column) => expected_problem(
+            Attribute::End(end) => self.end_problem(
+                end,
                 "this attribute is missing its closing bracket",
-                *row,
-                *column,
                 "expected `]`",
                 None,
             ),
@@ -626,10 +720,9 @@ impl SyntaxReporter<'_> {
                 "expected an alias",
                 None,
             ),
-            Import::NamesEnd(row, column) => expected_problem(
-                "I was expecting another imported name or the end of this list",
-                *row,
-                *column,
+            Import::NamesEnd(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `}` after this imported name",
                 "expected `,` or `}`",
                 None,
             ),
@@ -753,10 +846,9 @@ impl SyntaxReporter<'_> {
                 "expected `: Type`",
                 None,
             ),
-            Params::End(row, column) => expected_problem(
-                "I was expecting another parameter or the end of the parameter list",
-                *row,
-                *column,
+            Params::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this parameter",
                 "expected `,` or `)`",
                 None,
             ),
@@ -826,10 +918,9 @@ impl SyntaxReporter<'_> {
                 None,
             ),
             Enum::VariantArg(error, ..) => self.type_problem(error),
-            Enum::VariantArgEnd(row, column) => expected_problem(
-                "I was expecting another payload type or the end of this variant",
-                *row,
-                *column,
+            Enum::VariantArgEnd(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this variant payload type",
                 "expected `,` or `)`",
                 None,
             ),
@@ -845,10 +936,9 @@ impl SyntaxReporter<'_> {
                 "remove this record extension",
                 None,
             ),
-            Enum::End(row, column) => expected_problem(
-                "I was expecting another enum variant or the end of the enum",
-                *row,
-                *column,
+            Enum::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `}` after this enum variant",
                 "expected `,` or `}`",
                 None,
             ),
@@ -873,10 +963,9 @@ impl SyntaxReporter<'_> {
                 None,
             ),
             ErrorDecl::Tag(error, ..) => self.tag_variant_problem(error),
-            ErrorDecl::End(row, column) => expected_problem(
-                "I was expecting another error tag or the end of this group",
-                *row,
-                *column,
+            ErrorDecl::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `}` after this error tag",
                 "expected `,` or `}`",
                 None,
             ),
@@ -894,10 +983,9 @@ impl SyntaxReporter<'_> {
                 None,
             ),
             TagVariant::Arg(error, ..) => self.type_problem(error),
-            TagVariant::ArgEnd(row, column) => expected_problem(
-                "I was expecting another tag payload type or `)`",
-                *row,
-                *column,
+            TagVariant::ArgEnd(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this tag payload type",
                 "expected `,` or `)`",
                 None,
             ),
@@ -938,10 +1026,9 @@ impl SyntaxReporter<'_> {
                 "add a type argument or remove `[]`",
                 None,
             ),
-            TArgs::End(row, column) => expected_problem(
-                "I was expecting another type argument or the end of this list",
-                *row,
-                *column,
+            TArgs::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `]` after this type argument",
                 "expected `,` or `]`",
                 Some("separate type arguments with commas and close the list with `]`".to_owned()),
             ),
@@ -959,10 +1046,9 @@ impl SyntaxReporter<'_> {
                 None,
             ),
             TFn::Param(error, ..) | TFn::Ret(error, ..) => self.type_problem(error),
-            TFn::ParamEnd(row, column) => expected_problem(
-                "I was expecting another parameter type or `)`",
-                *row,
-                *column,
+            TFn::ParamEnd(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this parameter type",
                 "expected `,` or `)`",
                 Some("separate parameter types with commas and close the list with `)`".to_owned()),
             ),
@@ -973,10 +1059,9 @@ impl SyntaxReporter<'_> {
         use alder_parse::error::TTuple;
         match error {
             TTuple::Type(error, ..) => self.type_problem(error),
-            TTuple::End(row, column) => expected_problem(
-                "I was expecting another tuple type or `)`",
-                *row,
-                *column,
+            TTuple::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this tuple entry",
                 "expected `,` or `)`",
                 Some("separate tuple entries with commas and close the type with `)`".to_owned()),
             ),
@@ -1008,10 +1093,9 @@ impl SyntaxReporter<'_> {
                 "expected a field after `|`",
                 None,
             ),
-            TRecord::End(row, column) => expected_problem(
-                "I was expecting another record field or `}`",
-                *row,
-                *column,
+            TRecord::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `}` after this record field",
                 "expected `,` or `}`",
                 Some("separate record fields with commas and close the type with `}`".to_owned()),
             ),
@@ -1036,12 +1120,17 @@ impl SyntaxReporter<'_> {
                 "expected `:tag` or a row variable",
                 None,
             ),
-            TErrorRow::End(row, column) => expected_problem(
-                "I was expecting another error tag or the end of this row",
-                *row,
-                *column,
+            TErrorRow::End(end) => self.end_problem(
+                end,
+                "I was expecting `|` or `]` after this error tag",
                 "expected `|` or `]`",
                 Some("separate error tags with `|` and close the row with `]`".to_owned()),
+            ),
+            TErrorRow::ExtEnd(end) => self.end_problem(
+                end,
+                "I was expecting `]` after this error row extension",
+                "expected `]`",
+                Some("the extension variable must be the last entry in an error row".to_owned()),
             ),
         }
     }
@@ -1071,10 +1160,9 @@ impl SyntaxReporter<'_> {
                 "record syntax starts here",
                 Some("wrap the record in parentheses to use it as the block value".to_owned()),
             ),
-            Block::End(row, column) => expected_problem(
+            Block::End(end) => self.end_problem(
+                end,
                 "I was expecting another statement or the end of this block",
-                *row,
-                *column,
                 "expected a statement or `}`",
                 None,
             ),
@@ -1505,10 +1593,9 @@ impl SyntaxReporter<'_> {
                 *column,
                 "this record pattern starts here",
             ),
-            PCtor::End(row, column) => expected_problem(
-                "I was expecting a comma or the end of this constructor pattern",
-                *row,
-                *column,
+            PCtor::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this constructor argument",
                 "expected `,` or `)`",
                 Some(
                     "separate constructor arguments with commas and close them with `)`".to_owned(),
@@ -1521,10 +1608,9 @@ impl SyntaxReporter<'_> {
         use alder_parse::error::PTuple;
         match error {
             PTuple::Pattern(error, ..) => self.pattern_problem(error),
-            PTuple::End(row, column) => expected_problem(
-                "I was expecting a comma or the end of this parenthesized pattern",
-                *row,
-                *column,
+            PTuple::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this pattern",
                 "expected `,` or `)`",
                 Some(
                     "separate tuple patterns with commas and close the parentheses with `)`"
@@ -1555,10 +1641,9 @@ impl SyntaxReporter<'_> {
                         .to_owned(),
                 ),
             ),
-            PArray::End(row, column) => expected_problem(
-                "I was expecting a comma or the end of this array pattern",
-                *row,
-                *column,
+            PArray::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `]` after this array pattern entry",
                 "expected `,` or `]`",
                 Some(
                     "separate array patterns with commas, including before a `..rest` pattern"
@@ -1589,10 +1674,9 @@ impl SyntaxReporter<'_> {
                 "expected the end of the record pattern",
                 Some("write `{ name, .. }` to match named fields and ignore the others".to_owned()),
             ),
-            PRecord::End(row, column) => expected_problem(
-                "I was expecting a comma or the end of this record pattern",
-                *row,
-                *column,
+            PRecord::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `}` after this record pattern field",
                 "expected `,` or `}`",
                 Some("separate record patterns with commas, including before `..`".to_owned()),
             ),
@@ -1637,10 +1721,9 @@ impl SyntaxReporter<'_> {
                 self.arm_problem(error)
                     .in_context(*row, *column, "this match arm starts here")
             }
-            Match::End(row, column) => expected_problem(
+            Match::End(end) => self.end_problem(
+                end,
                 "I was expecting another match arm or the end of this match",
-                *row,
-                *column,
                 "expected `,`, a pattern, or `}`",
                 Some(
                     "write each arm as `pattern => expression` and close the match with `}`"
@@ -1695,10 +1778,9 @@ impl SyntaxReporter<'_> {
         use alder_parse::error::Index;
         match error {
             Index::Expr(error, ..) => self.expression_problem(error),
-            Index::End(row, column) => expected_problem(
+            Index::End(end) => self.end_problem(
+                end,
                 "I was expecting `]` after this index",
-                *row,
-                *column,
                 "expected `]`",
                 Some("write an index like `values[index]`".to_owned()),
             ),
@@ -1716,10 +1798,9 @@ impl SyntaxReporter<'_> {
                 Some("write a tagged value like `:missing` or `:failed(reason)`".to_owned()),
             ),
             Tag::Arg(error, ..) => self.expression_problem(error),
-            Tag::End(row, column) => expected_problem(
-                "I was expecting a comma or the end of this tag's arguments",
-                *row,
-                *column,
+            Tag::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this tag argument",
                 "expected `,` or `)`",
                 Some("separate tag arguments with commas and close them with `)`".to_owned()),
             ),
@@ -1737,10 +1818,9 @@ impl SyntaxReporter<'_> {
                 Some("write `state(initialValue)`".to_owned()),
             ),
             State::Expr(error, ..) => self.expression_problem(error),
-            State::End(row, column) => expected_problem(
+            State::End(end) => self.end_problem(
+                end,
                 "I was expecting `)` after this state's initial value",
-                *row,
-                *column,
                 "expected `)`",
                 Some("`state` takes one initial value, as in `state(0)`".to_owned()),
             ),
@@ -1751,10 +1831,9 @@ impl SyntaxReporter<'_> {
         use alder_parse::error::Array;
         match error {
             Array::Expr(error, ..) => self.expression_problem(error),
-            Array::End(row, column) => expected_problem(
-                "I was expecting a comma or the end of this array",
-                *row,
-                *column,
+            Array::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `]` after this array entry",
                 "expected `,` or `]`",
                 Some("separate array entries with commas and close the array with `]`".to_owned()),
             ),
@@ -1765,10 +1844,9 @@ impl SyntaxReporter<'_> {
         use alder_parse::error::Tuple;
         match error {
             Tuple::Expr(error, ..) => self.expression_problem(error),
-            Tuple::End(row, column) => expected_problem(
-                "I was expecting a comma or a closing parenthesis",
-                *row,
-                *column,
+            Tuple::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this parenthesized expression",
                 "expected `,` or `)`",
                 Some(
                     "separate tuple entries with commas and close the parentheses with `)`"
@@ -1789,10 +1867,9 @@ impl SyntaxReporter<'_> {
                 Some("write a field like `name: value` or a spread like `..other`".to_owned()),
             ),
             Record::Spread(error, ..) | Record::Expr(error, ..) => self.expression_problem(error),
-            Record::End(row, column) => expected_problem(
-                "I was expecting a comma or the end of this record",
-                *row,
-                *column,
+            Record::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `}` after this record field",
                 "expected `,` or `}`",
                 Some("separate record fields with commas and close the record with `}`".to_owned()),
             ),
@@ -1832,10 +1909,9 @@ impl SyntaxReporter<'_> {
         use alder_parse::error::Call;
         match error {
             Call::Arg(error, ..) => self.expression_problem(error),
-            Call::End(row, column) => expected_problem(
-                "I was expecting a comma or the end of this function call",
-                *row,
-                *column,
+            Call::End(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this call argument",
                 "expected `,` or `)`",
                 Some("separate arguments with commas and close the call with `)`".to_owned()),
             ),
@@ -1914,10 +1990,9 @@ impl SyntaxReporter<'_> {
                 *column,
                 "this attribute starts here",
             ),
-            Markup::TagEnd(row, column) => expected_problem(
+            Markup::TagEnd(end) => self.end_problem(
+                end,
                 "I was expecting an attribute or the end of this opening tag",
-                *row,
-                *column,
                 "expected an attribute, `>`, or `/>`",
                 None,
             ),
@@ -1970,10 +2045,9 @@ impl SyntaxReporter<'_> {
                 )
                 .covering(found.len() as u32)
             }
-            Markup::CloseEnd(row, column) => expected_problem(
+            Markup::CloseEnd(end) => self.end_problem(
+                end,
                 "I was expecting `>` after this closing tag's name",
-                *row,
-                *column,
                 "expected `>`",
                 None,
             ),
@@ -2014,10 +2088,9 @@ impl SyntaxReporter<'_> {
             ),
             Attr::String(error, row, column) => self.string_problem(error, *row, *column),
             Attr::Expr(error, ..) => self.expression_in(error, "a value for this markup attribute"),
-            Attr::ExprEnd(row, column) => expected_problem(
+            Attr::ExprEnd(end) => self.end_problem(
+                end,
                 "I was expecting `}` after this attribute expression",
-                *row,
-                *column,
                 "expected `}`",
                 None,
             ),
@@ -2030,7 +2103,7 @@ impl SyntaxReporter<'_> {
             Child::HoleEmpty(row, column) => expected_problem("this markup interpolation is empty", *row, *column,
                 "expected an expression before `}`", Some("put an expression inside `{ ... }`, or remove the empty interpolation".to_owned())),
             Child::Hole(error, ..) => self.expression_in(error, "an expression inside this markup interpolation"),
-            Child::HoleEnd(row, column) => expected_problem("I was expecting `}` after this markup expression", *row, *column, "expected `}`", None),
+            Child::HoleEnd(end) => self.end_problem(end, "I was expecting `}` after this markup expression",  "expected `}`", None),
             Child::StrayBrace(row, column) => expected_problem("this `}` is not closing a markup expression", *row, *column,
                 "unexpected `}`", Some("write `{\"}\"}` to display a literal closing brace".to_owned())),
             Child::Element(error, row, column) => {
@@ -2138,10 +2211,9 @@ impl SyntaxReporter<'_> {
                 Some("wrap text in a child block, like `Pattern => { text }`".to_owned()),
             ),
             DirMatch::Block(error, ..) => self.markup_block_problem(error),
-            DirMatch::End(row, column) => expected_problem(
+            DirMatch::End(end) => self.end_problem(
+                end,
                 "I was expecting another markup match arm or `}`",
-                *row,
-                *column,
                 "expected `,`, a pattern, or `}`",
                 None,
             ),
@@ -2159,10 +2231,9 @@ impl SyntaxReporter<'_> {
                 None,
             ),
             ChildBlock::Item(error, ..) => self.markup_child_problem(error),
-            ChildBlock::End(row, column) => expected_problem(
+            ChildBlock::End(end) => self.end_problem(
+                end,
                 "I was expecting `}` to close this markup child block",
-                *row,
-                *column,
                 "expected `}`",
                 None,
             ),
@@ -2196,9 +2267,9 @@ impl SyntaxReporter<'_> {
             Style::Dimension(error, row, column) => self.number_problem(error, *row, *column),
             Style::Nested(error, row, column) => self.style_problem(error)
                 .in_context(*row, *column, "this nested style block starts here"),
-            Style::End(row, column) => expected_problem(
+            Style::End(end) => self.end_problem(end,
                 "I was expecting another style property or the end of this style block",
-                *row, *column, "expected `,`, a property, a quoted selector, or `}`",
+                 "expected `,`, a property, a quoted selector, or `}`",
                 Some("write each entry as `property: value`; use commas or new lines, not CSS semicolons".to_owned()),
             ),
             Style::TooDeep(row, column) => expected_problem(
@@ -2235,10 +2306,14 @@ impl SyntaxReporter<'_> {
                 *row, *column, "this clause is repeated, out of order, or not allowed for this operation",
                 Some("select clauses follow `from`, joins, `where`, `groupBy`, `orderBy`, `limit`, `offset`; only joins may repeat. Update/delete allow one `where`; insert has no trailing clauses".to_owned()),
             ),
-            Query::End(row, column) => expected_problem(
+            Query::End(end) => self.end_problem(end,
                 "I was expecting an allowed query clause or `}`",
-                *row, *column, "unexpected input after the query operation",
+                 "expected an allowed query clause or `}`",
                 Some("close the query with `}` after its operation and any permitted clauses".to_owned()),
+            ),
+            Query::OperationEnd(end) => self.end_problem(end,
+                "I was expecting `}` after this query operation",
+                "expected `}`", None,
             ),
         }
     }
@@ -2258,10 +2333,9 @@ impl SyntaxReporter<'_> {
             Select::ProjectionExpr(error, ..) => {
                 self.expression_in(error, "an expression in this select projection")
             }
-            Select::ProjectionEnd(row, column) => expected_problem(
-                "I was expecting a comma or the end of this select projection",
-                *row,
-                *column,
+            Select::ProjectionEnd(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `}` after this selected expression",
                 "expected `,` or `}`",
                 Some("separate selected expressions with commas inside `{ ... }`".to_owned()),
             ),
@@ -2457,14 +2531,14 @@ impl SyntaxReporter<'_> {
                 Some("write each column as `name: builder`, for example `id: int()`".to_owned()),
             ),
             Table::Builder(error, ..) | Table::ModifierArg(error, ..) => self.expression_problem(error),
-            Table::ModifierArgEnd(row, column) => expected_problem(
-                "I was expecting a comma or the end of this column modifier's arguments",
-                *row, *column, "expected `,` or `)`",
+            Table::ModifierArgEnd(end) => self.end_problem(end,
+                "I was expecting `,` or `)` after this modifier argument",
+                 "expected `,` or `)`",
                 Some("separate modifier arguments with commas and close them with `)`".to_owned()),
             ),
-            Table::End(row, column) => expected_problem(
+            Table::End(end) => self.end_problem(end,
                 "I was expecting another column or the end of this table",
-                *row, *column, "expected a lower-case column name or `}`",
+                 "expected a lower-case column name or `}`",
                 Some("write each column as `name: builder` and close the table with `}`; columns do not use commas or semicolons".to_owned()),
             ),
         }
@@ -2509,14 +2583,14 @@ impl SyntaxReporter<'_> {
                 Some("write a rule like `min(1)` and separate multiple rules with commas".to_owned()),
             ),
             Schema::RuleArg(error, ..) => self.expression_problem(error),
-            Schema::RuleArgEnd(row, column) => expected_problem(
-                "I was expecting a comma or the end of this schema rule's arguments",
-                *row, *column, "expected `,` or `)`",
+            Schema::RuleArgEnd(end) => self.end_problem(end,
+                "I was expecting `,` or `)` after this rule argument",
+                 "expected `,` or `)`",
                 Some("separate rule arguments with commas and close them with `)`".to_owned()),
             ),
-            Schema::End(row, column) => expected_problem(
-                "I was expecting another schema item or the end of this schema",
-                *row, *column, "expected a field, `pick`, or `}`",
+            Schema::End(end) => self.end_problem(end,
+                "I was expecting a comma, another schema item, or `}`",
+                 "expected `,`, a field, `pick`, or `}`",
                 Some("rules and `pick` names need commas between them; each new field starts with `name:`".to_owned()),
             ),
         }
@@ -2550,9 +2624,9 @@ impl SyntaxReporter<'_> {
                 "declarations inside a tests block must be separated by line breaks",
                 *row, *column, "start this declaration on a new line", None,
             ),
-            Tests::End(row, column) => expected_problem(
+            Tests::End(end) => self.end_problem(end,
                 "I was expecting another declaration or the end of this tests block",
-                *row, *column, "expected a declaration or `}`",
+                 "expected a declaration or `}`",
                 Some("put declarations such as `test`, `fn`, or `let` on separate lines and close the block with `}`".to_owned()),
             ),
         }
@@ -2587,10 +2661,9 @@ impl SyntaxReporter<'_> {
                 ),
             ),
             Template::HoleExpr(error, ..) => self.expression_problem(error),
-            Template::HoleEnd(row, column) => expected_problem(
+            Template::HoleEnd(end) => self.end_problem(
+                end,
                 "I was expecting `}` to close this template interpolation",
-                *row,
-                *column,
                 "expected `}`",
                 Some(
                     "each `${` interpolation must end with `}` before the template text continues"
@@ -2618,9 +2691,9 @@ impl SyntaxReporter<'_> {
                 *row, *column, "expected a lower-case name",
                 Some("macro parameters are names separated by commas, as in `macro pair(left, right) { ... }`".to_owned()),
             ),
-            Macro::ParamEnd(row, column) => expected_problem(
-                "I was expecting a comma or the end of this macro's parameters",
-                *row, *column, "expected `,` or `)`", None,
+            Macro::ParamEnd(end) => self.end_problem(end,
+                "I was expecting `,` or `)` after this macro parameter",
+                 "expected `,` or `)`", None,
             ),
             Macro::Body(error, row, column) => self.raw_tokens_problem(error, *row, *column, true),
         }

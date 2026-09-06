@@ -51,13 +51,14 @@ impl<'a> Parser<'a> {
         if self.newline_since(end) {
             return Err(error::State::Open(end.line, end.column));
         }
+        let opening = self.get_position();
         self.word1(b'(', error::State::Open)?;
         self.chomp();
         let initial = self.specialize(
             |bump, e, row, col| error::State::Expr(bump.alloc(e), row, col),
             |p| p.with_record_ctor(true, |p| p.expression()),
         )?;
-        self.word1(b')', error::State::End)?;
+        self.word_end(b')', opening, error::State::End)?;
         Ok(initial)
     }
 

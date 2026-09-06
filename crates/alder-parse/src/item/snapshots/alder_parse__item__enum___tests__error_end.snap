@@ -3,6 +3,18 @@ source: crates/alder-parse/src/item/enum_.rs
 description: "enum Color { Red Green }"
 ---
 End(
-    1,
-    18,
+    ExpectedEnd {
+        opening: Position {
+            line: 1,
+            column: 12,
+        },
+        boundary: Position {
+            line: 1,
+            column: 17,
+        },
+        unexpected: Position {
+            line: 1,
+            column: 18,
+        },
+    },
 )

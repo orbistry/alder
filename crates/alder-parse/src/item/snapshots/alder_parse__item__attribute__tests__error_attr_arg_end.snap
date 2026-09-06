@@ -4,8 +4,20 @@ description: "#[derive(Show Eq)] type X"
 ---
 Attribute(
     ArgEnd(
-        1,
-        15,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 9,
+            },
+            boundary: Position {
+                line: 1,
+                column: 14,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 15,
+            },
+        },
     ),
     1,
     1,

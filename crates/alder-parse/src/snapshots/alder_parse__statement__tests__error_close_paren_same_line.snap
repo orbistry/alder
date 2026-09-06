@@ -3,6 +3,18 @@ source: crates/alder-parse/src/statement.rs
 description: "{ let x = 1 )"
 ---
 End(
-    1,
-    13,
+    ExpectedEnd {
+        opening: Position {
+            line: 1,
+            column: 1,
+        },
+        boundary: Position {
+            line: 1,
+            column: 12,
+        },
+        unexpected: Position {
+            line: 1,
+            column: 13,
+        },
+    },
 )

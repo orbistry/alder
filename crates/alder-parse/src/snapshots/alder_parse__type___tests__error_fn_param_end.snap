@@ -1,11 +1,23 @@
 ---
 source: crates/alder-parse/src/type_.rs
-description: fn(a b) -> c
+description: fn(a b) c
 ---
 Fn(
     ParamEnd(
-        1,
-        6,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 3,
+            },
+            boundary: Position {
+                line: 1,
+                column: 5,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 6,
+            },
+        },
     ),
     1,
     1,

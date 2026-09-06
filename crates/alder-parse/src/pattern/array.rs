@@ -22,6 +22,7 @@ impl<'a> Parser<'a> {
         &mut self,
         start: Position,
     ) -> Result<&'a Located<Pattern<'a>>, error::PArray<'a>> {
+        let opening = self.get_position();
         self.advance();
         self.chomp();
         let mut elements = BumpVec::new_in(self.bump);
@@ -67,8 +68,7 @@ impl<'a> Parser<'a> {
                             return Err(PArray::RestNotLast(row, col));
                         }
                         _ => {
-                            let (row, col) = self.position();
-                            return Err(PArray::End(row, col));
+                            return Err(PArray::End(self.expected_end(opening)));
                         }
                     }
                 }
@@ -88,8 +88,7 @@ impl<'a> Parser<'a> {
                             break;
                         }
                         _ => {
-                            let (row, col) = self.position();
-                            return Err(PArray::End(row, col));
+                            return Err(PArray::End(self.expected_end(opening)));
                         }
                     }
                 }

@@ -4,8 +4,20 @@ description: "tests { let x = 1 42 }"
 ---
 Tests(
     End(
-        1,
-        19,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 7,
+            },
+            boundary: Position {
+                line: 1,
+                column: 18,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 19,
+            },
+        },
     ),
     1,
     1,

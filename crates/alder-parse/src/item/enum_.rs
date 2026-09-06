@@ -43,6 +43,7 @@ impl<'a> Parser<'a> {
             &[]
         };
         self.chomp();
+        let opening = self.get_position();
         self.word1(b'{', error::Enum::Open)?;
         self.chomp();
         let mut variants = BumpVec::new_in(self.bump);
@@ -63,8 +64,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Enum::End(row, col));
+                    return Err(error::Enum::End(self.expected_end(opening)));
                 }
             }
         }
@@ -83,6 +83,7 @@ impl<'a> Parser<'a> {
         self.chomp();
         let payload = match self.peek() {
             Some(b'(') if !self.newline_since(name.region.end) => {
+                let opening = self.get_position();
                 self.advance();
                 self.chomp();
                 let mut args = BumpVec::new_in(self.bump);
@@ -106,8 +107,7 @@ impl<'a> Parser<'a> {
                             break;
                         }
                         _ => {
-                            let (row, col) = self.position();
-                            return Err(error::Enum::VariantArgEnd(row, col));
+                            return Err(error::Enum::VariantArgEnd(self.expected_end(opening)));
                         }
                     }
                 }
@@ -117,8 +117,9 @@ impl<'a> Parser<'a> {
                 let (fields, ext) = self.specialize(
                     |bump, e, row, col| error::Enum::VariantRecord(bump.alloc(e), row, col),
                     |p| {
+                        let opening = p.get_position();
                         p.advance(); // `{`
-                        p.field_types()
+                        p.field_types(opening)
                     },
                 )?;
                 if let Some(ext) = ext {

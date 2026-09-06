@@ -4,11 +4,11 @@ description: "schema User { name: min(1 2) }"
 ---
 alder::syntax
 
-  × I was expecting a comma or the end of this schema rule's arguments
+  × I was expecting `,` or `)` after this rule argument
    ╭─[/project/src/main.ald:1:27]
  1 │ schema User { name: min(1 2) }
-   · ┬                         ┬
-   · │                         ╰── expected `,` or `)`
-   · ╰── this schema declaration starts here
+   ·                        ┬  ┬
+   ·                        │  ╰── expected `,` or `)`
+   ·                        ╰── this `(` opens here
    ╰────
   help: separate rule arguments with commas and close them with `)`

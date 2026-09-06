@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let x = [1\n)"
+---
+alder::syntax
+
+  × I was expecting `,` or `]` after this array entry
+   ╭─[/project/src/main.ald:2:1]
+ 1 │ let x = [1
+   ·         ┬
+   ·         ╰── this `[` opens here
+ 2 │ )
+   · ┬
+   · ╰── expected `,` or `]`
+   ╰────
+  help: separate array entries with commas and close the array with `]`

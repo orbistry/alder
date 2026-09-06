@@ -4,11 +4,10 @@ description: "type X = Array[Number"
 ---
 alder::syntax
 
-  × I was expecting another type argument or the end of this list at the end
-  │ of the file
+  × I was expecting `,` or `]` after this type argument at the end of the file
    ╭─[/project/src/main.ald:1:22]
  1 │ type X = Array[Number
    ·               ┬
-   ·               ╰── this type argument list starts here
+   ·               ╰── this `[` opens here
    ╰────
   help: separate type arguments with commas and close the list with `]`

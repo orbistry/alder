@@ -13,7 +13,9 @@ use crate::Parser;
 impl<'a> Parser<'a> {
     /// Spaces, tabs, CR/LF and `//…` comments (including `///`, `//!`). Infallible.
     pub fn chomp(&mut self) {
+        let boundary = self.token_boundary();
         self.eat_spaces();
+        self.trivia_boundary = Some((self.pos, boundary));
     }
 
     /// Core loop: eat whitespace bytes and line comments until something else.
@@ -128,5 +130,25 @@ mod tests {
         assert_eq!(chomped("  foo"), (2, 1, 3));
         // A lone `/` is content, not a comment.
         assert_eq!(chomped(" / 2"), (1, 1, 2));
+    }
+
+    #[test]
+    fn boundary_survives_comments_repeated_chomp_and_backtracking() {
+        let bump = Bump::new();
+        let mut parser = Parser::new(&bump, b"x // comment\r\n  y\n z");
+        parser.advance();
+        parser.chomp();
+        parser.chomp();
+        assert_eq!(parser.token_boundary(), alder_region::Position::new(1, 2));
+        assert_eq!(parser.get_position(), alder_region::Position::new(2, 3));
+        let saved = parser.save_state();
+        parser.advance();
+        assert_eq!(parser.token_boundary(), alder_region::Position::new(2, 4));
+        parser.chomp();
+        parser.restore_state(saved);
+        assert_eq!(parser.token_boundary(), alder_region::Position::new(1, 2));
+        parser.advance();
+        parser.chomp();
+        assert_eq!(parser.token_boundary(), alder_region::Position::new(2, 4));
     }
 }

@@ -4,10 +4,10 @@ description: "macro value(one two) {}"
 ---
 alder::syntax
 
-  × I was expecting a comma or the end of this macro's parameters
+  × I was expecting `,` or `)` after this macro parameter
    ╭─[/project/src/main.ald:1:17]
  1 │ macro value(one two) {}
-   · ┬               ┬
-   · │               ╰── expected `,` or `)`
-   · ╰── this macro declaration starts here
+   ·            ┬    ┬
+   ·            │    ╰── expected `,` or `)`
+   ·            ╰── this `(` opens here
    ╰────

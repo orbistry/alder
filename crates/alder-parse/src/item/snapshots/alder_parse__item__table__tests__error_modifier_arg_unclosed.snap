@@ -3,6 +3,18 @@ source: crates/alder-parse/src/item/table.rs
 description: "table users { id: integer() default(now"
 ---
 ModifierArgEnd(
-    1,
-    40,
+    ExpectedEnd {
+        opening: Position {
+            line: 1,
+            column: 36,
+        },
+        boundary: Position {
+            line: 1,
+            column: 40,
+        },
+        unexpected: Position {
+            line: 1,
+            column: 40,
+        },
+    },
 )

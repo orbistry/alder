@@ -4,8 +4,20 @@ description: "fn add(a, b { a }"
 ---
 Params(
     End(
-        1,
-        13,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 7,
+            },
+            boundary: Position {
+                line: 1,
+                column: 12,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 13,
+            },
+        },
     ),
     1,
     7,

@@ -115,9 +115,9 @@ fn parser_diagnostics_preserve_cli_links_and_editor_context() {
         let link = format!("\x1b]8;;{uri}\x1b\\src/main.ald\x1b]8;;\x1b\\");
         assert!(stderr.contains(&link), "{command}: {stderr:?}");
         for message in [
-            "I was expecting a comma or the end of this array",
+            "I was expecting `,` or `]` after this array entry",
             "expected `,` or `]`",
-            "this array starts here",
+            "this `[` opens here",
             "separate array entries with commas",
         ] {
             assert!(stderr.contains(message), "{command}: {stderr}");
@@ -149,7 +149,7 @@ fn parser_diagnostics_preserve_cli_links_and_editor_context() {
     );
     assert_eq!(
         error["relatedInformation"][0]["message"],
-        "this array starts here"
+        "this `[` opens here"
     );
     assert_eq!(error["relatedInformation"][0]["location"]["uri"], uri);
     assert_eq!(
@@ -184,6 +184,73 @@ fn parser_diagnostics_preserve_cli_links_and_editor_context() {
         }}),
     );
     assert_eq!(editor.diagnostics(3), json!([]));
+}
+
+#[test]
+fn missing_delimiters_label_only_boundary_and_opener_in_cli_and_lsp() {
+    let project = Project::new();
+    let sources = [
+        (
+            "import ~/helper.{ delayed // keep\r\n\r\ntype Next = Int",
+            "{",
+        ),
+        ("let x = [\"😀\" // keep\r\n\r\ntype Next = Int", "["),
+        ("let x = f(\"😀\", g(1 // keep\r\n\r\ntype Next = Int", "g("),
+    ];
+    project.source("main.ald", sources[0].0);
+    let uri = url::Url::from_file_path(project.0.canonicalize().unwrap().join("src/main.ald"))
+        .unwrap()
+        .to_string();
+    for (source, _) in sources {
+        project.source("main.ald", source);
+        for command in ["check", "build", "test"] {
+            let output = project.run(command);
+            assert!(!output.status.success());
+            let stderr = String::from_utf8(output.stderr).unwrap();
+            assert!(stderr.contains("src/main.ald:1:"), "{command}: {stderr}");
+            assert!(
+                !stderr.contains("parsing stopped here"),
+                "{command}: {stderr}"
+            );
+            assert!(stderr.contains("expected `,` or"), "{command}: {stderr}");
+        }
+    }
+    let mut editor = Editor::new(&project);
+    editor.send(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}));
+    editor.receive(|message| message["id"] == 1);
+    editor.send(json!({"jsonrpc":"2.0","method":"initialized","params":{}}));
+    for (index, (source, marker)) in sources.iter().enumerate() {
+        let version = index + 1;
+        if index == 0 {
+            editor.send(
+                json!({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{
+                    "uri":uri,"languageId":"alder","version":version,"text":source
+                }}}),
+            );
+        } else {
+            editor.send(
+                json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+                    "textDocument":{"uri":uri,"version":version},"contentChanges":[{"text":source}]
+                }}),
+            );
+        }
+        let errors = editor.diagnostics(version as i32);
+        assert_eq!(errors.as_array().unwrap().len(), 1, "{errors}");
+        let column = source[..source.find(" //").unwrap()].encode_utf16().count();
+        assert_eq!(
+            errors[0]["range"],
+            json!({"start":{"line":0,"character":column},"end":{"line":0,"character":column}})
+        );
+        let related = errors[0]["relatedInformation"].as_array().unwrap();
+        assert!(related.iter().all(|info| info["location"]["uri"] == uri));
+        assert_eq!(related.len(), 1, "{errors}");
+        let opening_byte = source.find(marker).unwrap() + marker.len() - 1;
+        let opening = source[..opening_byte].encode_utf16().count();
+        assert_eq!(
+            related[0]["location"]["range"],
+            json!({"start":{"line":0,"character":opening},"end":{"line":0,"character":opening+1}})
+        );
+    }
 }
 
 impl Editor {

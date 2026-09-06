@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let x = [\"😀\" // trailing\r\n"
+---
+alder::syntax
+
+  × I was expecting `,` or `]` after this array entry at the end of the file
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ let x = ["😀" // trailing
+   ·         ┬    ▲
+   ·         │    ╰── expected `,` or `]`
+   ·         ╰── this `[` opens here
+   ╰────
+  help: separate array entries with commas and close the array with `]`

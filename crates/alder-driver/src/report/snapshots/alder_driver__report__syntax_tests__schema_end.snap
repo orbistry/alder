@@ -4,12 +4,12 @@ description: "schema User { pick email name }"
 ---
 alder::syntax
 
-  × I was expecting another schema item or the end of this schema
+  × I was expecting a comma, another schema item, or `}`
    ╭─[/project/src/main.ald:1:26]
  1 │ schema User { pick email name }
-   · ┬                        ┬
-   · │                        ╰── expected a field, `pick`, or `}`
-   · ╰── this schema declaration starts here
+   ·             ┬            ┬
+   ·             │            ╰── expected `,`, a field, `pick`, or `}`
+   ·             ╰── this `{` opens here
    ╰────
   help: rules and `pick` names need commas between them; each new field starts
         with `name:`

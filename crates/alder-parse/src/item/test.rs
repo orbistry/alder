@@ -38,9 +38,10 @@ impl<'a> Parser<'a> {
     /// After `tests`.
     pub(crate) fn tests_block(&mut self) -> Result<&'a [&'a Located<Item<'a>>], error::Tests<'a>> {
         self.chomp();
+        let opening = self.get_position();
         self.word1(b'{', error::Tests::Open)?;
         self.chomp();
-        self.items_until_close()
+        self.items_until_close(opening)
     }
 }
 

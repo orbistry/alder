@@ -4,10 +4,10 @@ description: "component App(a b) {}"
 ---
 alder::syntax
 
-  × I was expecting another parameter or the end of the parameter list
+  × I was expecting `,` or `)` after this parameter
    ╭─[/project/src/main.ald:1:17]
  1 │ component App(a b) {}
    ·              ┬  ┬
    ·              │  ╰── expected `,` or `)`
-   ·              ╰── this parameter list starts here
+   ·              ╰── this `(` opens here
    ╰────

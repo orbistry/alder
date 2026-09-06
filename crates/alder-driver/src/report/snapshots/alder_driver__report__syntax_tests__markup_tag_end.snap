@@ -9,5 +9,5 @@ alder::syntax
  1 │ let value = <div =>
    ·             ┬    ┬
    ·             │    ╰── expected an attribute, `>`, or `/>`
-   ·             ╰── this markup starts here
+   ·             ╰── this `<` opens here
    ╰────

@@ -7,7 +7,7 @@ alder::syntax
   × I was expecting `}` after this markup expression
    ╭─[/project/src/main.ald:1:19]
  1 │ let value = <p>{x y}</p>
-   ·             ┬     ┬
-   ·             │     ╰── expected `}`
-   ·             ╰── this markup starts here
+   ·                ┬  ┬
+   ·                │  ╰── expected `}`
+   ·                ╰── this `{` opens here
    ╰────

@@ -4,10 +4,10 @@ description: "error E { :a :b }"
 ---
 alder::syntax
 
-  × I was expecting another error tag or the end of this group
+  × I was expecting `,` or `}` after this error tag
    ╭─[/project/src/main.ald:1:14]
  1 │ error E { :a :b }
-   · ┬            ┬
-   · │            ╰── expected `,` or `}`
-   · ╰── this error declaration starts here
+   ·         ┬    ┬
+   ·         │    ╰── expected `,` or `}`
+   ·         ╰── this `{` opens here
    ╰────

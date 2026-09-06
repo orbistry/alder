@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let [x\n\ntype Next = Int"
+---
+alder::syntax
+
+  × I was expecting `,` or `]` after this array pattern entry
+   ╭─[/project/src/main.ald:1:7]
+ 1 │ let [x
+   ·     ┬ ▲
+   ·     │ ╰── expected `,` or `]`
+   ·     ╰── this `[` opens here
+ 2 │ 
+   ╰────
+  help: separate array patterns with commas, including before a `..rest`
+        pattern

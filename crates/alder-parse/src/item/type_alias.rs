@@ -71,6 +71,7 @@ impl<'a> Parser<'a> {
     /// Expects `[` (else TypeParams::Open); `type`/`enum` peek for `[` first, `trait` calls unconditionally.
     pub(crate) fn type_params(&mut self) -> Result<&'a [Name<'a>], error::TypeParams> {
         let (open_row, open_col) = self.position();
+        let opening = self.get_position();
         self.word1(b'[', error::TypeParams::Open)?;
         self.chomp();
         if self.peek() == Some(b']') {
@@ -94,8 +95,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::TypeParams::End(row, col));
+                    return Err(error::TypeParams::End(self.expected_end(opening)));
                 }
             }
         }

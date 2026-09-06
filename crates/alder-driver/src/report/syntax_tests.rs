@@ -19,6 +19,202 @@ fn parse_case(text: &str) -> (Diagnostic, String) {
     )
 }
 
+#[test]
+fn delimiter_boundaries_do_not_blame_following_lines() {
+    for prefix in [
+        "import ~/helper.{ delayed",
+        "import ~/helper.{ delayed as later",
+        "let x = [1",
+        "let x = (1, 2",
+        "let x = { a: 1",
+        "let x = f(1",
+        "let x = xs[1",
+        "let x = :some(1",
+        "fn f(x: Int",
+        "type X[a",
+        "type X = Array[Int",
+        "type X = (Int, String",
+        "type X = { a: Int",
+        "let [x",
+        "let (x, y",
+        "let { x",
+        "let Some(x",
+        "let x = state(0",
+        "#[derive(Show",
+        "#[derive(Show)",
+        "enum X { One(Int",
+        "enum X { One",
+        "error E { :one(Int",
+        "error E { :one",
+        "impl Show[Int",
+        "type X = fn(Int",
+        "type X = [:one",
+        "type X = [:one(Int",
+        "let x = `hello ${ 1",
+        "let x = <div class={1",
+        "let x = <div>{1",
+        "let x = <div></div",
+        "let x = query { select { a",
+        "let x = query { select * from users",
+        "schema X { x: min(1",
+        "macro x(a",
+    ] {
+        let source = format!("{prefix} // 😀 boundary\r\n\r\ntype Next = Int");
+        let diagnostic = parse_error(&source);
+        let labels: Vec<_> = diagnostic.labels().unwrap().collect();
+        let primary = labels.iter().find(|label| label.primary()).unwrap();
+        assert_eq!(primary.offset(), prefix.len(), "{source}: {diagnostic}");
+        assert_eq!(primary.len(), 0, "{source}");
+        assert_eq!(
+            labels.len(),
+            2,
+            "only the insertion and opener should be labeled: {source}"
+        );
+        let opener = labels.iter().find(|label| !label.primary()).unwrap();
+        assert_eq!(opener.len(), 1, "{source}");
+        assert!(
+            matches!(
+                source.as_bytes()[opener.offset()],
+                b'(' | b'[' | b'{' | b'<'
+            ),
+            "opener must be punctuation, not a keyword: {source}"
+        );
+        assert!(
+            labels.iter().all(|label| label.offset() <= prefix.len()),
+            "must not implicate the following declaration: {source}"
+        );
+    }
+}
+
+#[test]
+fn wrong_closers_stay_at_the_actual_token() {
+    for (prefix, closer) in [
+        ("import ~/helper.{ delayed", "]"),
+        ("let x = [1", ")"),
+        ("let x = f(1", "}"),
+        ("type X = Array[Int", ")"),
+    ] {
+        let source = format!("{prefix}\n{closer}");
+        let diagnostic = parse_error(&source);
+        let primary = diagnostic
+            .labels()
+            .unwrap()
+            .find(|label| label.primary())
+            .unwrap();
+        assert_eq!(primary.offset(), prefix.len() + 1, "{source}");
+        assert_eq!(primary.len(), 1, "{source}");
+    }
+}
+
+#[test]
+fn every_delimiter_end_labels_its_exact_opening_punctuation() {
+    // The marker identifies the owning opener, not simply the last bracket in
+    // the source. These 46 cases cover each shared delimiter-end variant.
+    for marked in [
+        "#[derive§(Show Eq)] type X",                      // Attribute::ArgEnd
+        "#§[derive(Show) type X",                          // Attribute::End
+        "import ~/x.§{ one as two\n\ntype X = Int",        // Import::NamesEnd
+        "fn f§(x: Array[Int] y: Int) {}",                  // Params::End
+        "type X§[a b] = a",                                // TypeParams::End
+        "enum X { A§(Array[Int] Int) }",                   // Enum::VariantArgEnd
+        "enum X §{ A(Int) B }",                            // Enum::End
+        "impl Show§[Array[Int] Int] {}",                   // Impl::ArgEnd
+        "error E §{ :a(Int) :b }",                         // ErrorDecl::End
+        "error E { :a§(Array[Int] Int) }",                 // TagVariant::ArgEnd
+        "table x { id: int() default§(f(1) 2) }",          // Table::ModifierArgEnd
+        "table x §{ id: int() ; }",                        // Table::End
+        "schema X { name: min§(f(1) 2) }",                 // Schema::RuleArgEnd
+        "schema X §{ pick email name }",                   // Schema::End
+        "macro x§(a b) {}",                                // Macro::ParamEnd
+        "tests §{\nfn f() { 0 }\n42",                      // Tests::End
+        "fn f() §{\nlet x = f(1)\n",                       // Block::End
+        "let x = `hello $§{ f(1) x`",                      // Template::HoleEnd
+        "let x = §[f(1), f(2)\ntype X = Int",              // Array::End
+        "let x = §(f(1), f(2)\ntype X = Int",              // Tuple::End
+        "let x = Thing §{ a: f(1)\ntype X = Int",          // Record::End
+        "let x = match x §{ A => f(1) )",                  // Match::End
+        "let x = f§(g(1)\ntype X = Int",                   // Call::End
+        "let x = xs§[f(1)\ntype X = Int",                  // Index::End
+        "let x = :a§(f(1)\ntype X = Int",                  // Tag::End
+        "let x = state§(f(1)\ntype X = Int",               // State::End
+        "let x = style §{ padding: 16px ; }",              // Style::End
+        "let x = query §{ select * from users on x }",     // Query::End
+        "let x = query { select §{ f(1) x } from users }", // Select::ProjectionEnd
+        "let x = §<div class={f(1)} =>",                   // Markup::TagEnd
+        "let x = <div>text§</div x>",                      // Markup::CloseEnd
+        "let x = <div class=§{f(1) x}>",                   // Attr::ExprEnd
+        "let x = <div>§{f(1) x}</div>",                    // Child::HoleEnd
+        "let x = <div>@match x §{ A => <b/> ) }</div>",    // DirMatch::End
+        "let x = <div>@if x §{<b/>",                       // ChildBlock::End
+        "let Some§((x, y) z) = value",                     // PCtor::End
+        "let §(Some(x), y z) = value",                     // PTuple::End
+        "let §[Some(x) y] = value",                        // PArray::End
+        "let Thing §{ x: Some(y) z } = value",             // PRecord::End
+        "type X = Array§[Array[Int] Int]",                 // TArgs::End
+        "type X = fn§(Array[Int] Int) Int",                // TFn::ParamEnd
+        "type X = §(Array[Int], Int Bool)",                // TTuple::End
+        "type X = §{ a: Array[Int] b: Int }",              // TRecord::End
+        "type X = §[:a(Array[Int]) :b]",                   // TErrorRow::End
+        "type X = §[:a | r :b]",                           // TErrorRow::ExtEnd
+        "let x = query §{ insert into users values ^rows where x }", // Query::OperationEnd
+    ] {
+        let opening = marked.find('§').unwrap();
+        let source = marked.replace('§', "");
+        let (diagnostic, error) = parse_case(&source);
+        assert!(
+            error.contains("ExpectedEnd {"),
+            "wrong failure: {source}: {error}"
+        );
+        let labels: Vec<_> = diagnostic.labels().unwrap().collect();
+        assert_eq!(labels.len(), 2, "{source}");
+        let context = labels.iter().find(|label| !label.primary()).unwrap();
+        assert_eq!(
+            (context.offset(), context.len()),
+            (opening, 1),
+            "{source}: {error}"
+        );
+        assert!(context.label().unwrap().contains("opens here"), "{source}");
+    }
+}
+
+#[test]
+fn closing_only_states_do_not_offer_invalid_continuations() {
+    let row = parse_error("type X = [:a | r\nnext");
+    assert!(
+        row.message()
+            .contains("expecting `]` after this error row extension")
+    );
+    assert!(!row.message().contains("`|`"));
+    for operation in [
+        "insert into users values ^rows",
+        "update users set { name: ^name }",
+        "delete from users",
+    ] {
+        let diagnostic = parse_error(&format!("let x = query {{ {operation}\nnext"));
+        assert!(
+            diagnostic
+                .message()
+                .contains("expecting `}` after this query operation"),
+            "{diagnostic}"
+        );
+        assert!(!diagnostic.message().contains("clause"));
+    }
+}
+
+#[test]
+fn valid_multiline_delimiters_and_comments_keep_parsing() {
+    for source in [
+        "import ~/helper.{ delayed // comment\n, other as later\n}\nlet x = 1",
+        "let x = [f(1 // argument\n, 2\n) // entry\n, (3, 4)\n]",
+        "type X[a // parameter\n, b] = { x: Array[a\n], y: fn(b\n) a\n}",
+        "fn f([x, ..xs] // pattern\n, { y }: Y\n) { [x, y]\n}",
+        "let x = <div class={f(1\n)}>{1\n}</div>",
+    ] {
+        let bump = Bump::new();
+        assert!(alder_parse::parse_module(&bump, source).is_ok(), "{source}");
+    }
+}
+
 macro_rules! syntax_case {
     ($name:ident, $source:literal, $variant:literal) => {
         #[test]
@@ -37,6 +233,50 @@ macro_rules! syntax_case {
         }
     };
 }
+
+syntax_case!(
+    boundary_import,
+    "import ~/helper.{ delayed\n\ntype Operation = Int",
+    "NamesEnd("
+);
+syntax_case!(
+    boundary_row_extension,
+    "type X = [:a | r\n\ntype Next = Int",
+    "ExtEnd("
+);
+syntax_case!(
+    boundary_query_operation,
+    "let x = query { insert into users values ^rows\n\ntype Next = Int",
+    "OperationEnd("
+);
+syntax_case!(
+    boundary_import_alias,
+    "import ~/helper.{ delayed as later // keep this comment\n\ntype Operation = Int",
+    "NamesEnd("
+);
+syntax_case!(
+    boundary_array,
+    "let x = [1\n\nfn next() { 0 }",
+    "Array(End("
+);
+syntax_case!(
+    boundary_nested_call,
+    "let x = [f(1\n\ntype Next = Int",
+    "Call(End("
+);
+syntax_case!(
+    boundary_type,
+    "type X = Array[Int\n\nfn next() { 0 }",
+    "Args(End("
+);
+syntax_case!(boundary_pattern, "let [x\n\ntype Next = Int", "Array(End(");
+syntax_case!(boundary_separator, "let x = [1\n    2]", "Array(End(");
+syntax_case!(boundary_wrong_closer, "let x = [1\n)", "Array(End(");
+syntax_case!(
+    boundary_eof_comment,
+    "let x = [\"😀\" // trailing\r\n",
+    "Array(End("
+);
 
 macro_rules! nesting_case {
     ($name:ident, $source:expr, $variant:literal) => {
@@ -1099,8 +1339,14 @@ fn crlf_eof_keeps_the_original_source_and_offset() {
         .unwrap()
         .find(|label| label.primary())
         .unwrap();
-    assert_eq!(primary.offset(), source.len());
+    assert_eq!(primary.offset(), source.find('1').unwrap() + 1);
     assert_eq!(primary.len(), 0);
+    assert!(
+        diagnostic
+            .labels()
+            .unwrap()
+            .all(|label| label.offset() < source.len())
+    );
     assert!(diagnostic.message().contains("end of the file"));
     assert_eq!(diagnostic.source().text(), source);
 }

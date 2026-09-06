@@ -4,11 +4,11 @@ description: "let value = (1, 2 3)"
 ---
 alder::syntax
 
-  × I was expecting a comma or a closing parenthesis
+  × I was expecting `,` or `)` after this parenthesized expression
    ╭─[/project/src/main.ald:1:19]
  1 │ let value = (1, 2 3)
    ·             ┬     ┬
    ·             │     ╰── expected `,` or `)`
-   ·             ╰── these parentheses start here
+   ·             ╰── this `(` opens here
    ╰────
   help: separate tuple entries with commas and close the parentheses with `)`

@@ -4,6 +4,15 @@ Status: completed and validated on `diagnostic-ux`, 2026-09-06. The acceptance c
 is `plans/parser-diagnostic-parity.md`; the earlier type/pattern-checking diagnostic
 goal did not establish parser-message parity.
 
+Follow-up: the initial audit missed cross-line delimiter-location quality despite
+covering the rendered variant families. `plans/parser-boundary-locations.md`
+records the shared boundary fix and its separate verification. The earlier
+completion status is not a claim that every possible malformed program was tested.
+That follow-up also records the presentation correction: delimiter errors carry
+and label actual opening punctuation; detection positions are internal evidence,
+not labels blaming otherwise valid following declarations. Separator messages
+name the required punctuation, with separate closing-only error-row/query states.
+
 ## Active boundary
 
 `alder-parse/src/lib.rs` declares the parser modules; `error.rs` supplies their
@@ -49,7 +58,7 @@ TArgs: Type, Empty, End
 TFn: Open, Param, ParamEnd, Ret
 TTuple: Type, End
 TRecord: Field, Colon, Type, ExtField, End
-TErrorRow: Start, Tag, Ext, End
+TErrorRow: Start, Tag, Ext, End, ExtEnd
 Number: End, Dot, Exponent, HexDigit, NoLeadingZero, BigIntFraction
 StringError: Endless, Newline, Escape
 BadOperator: Arrow, Bar, PlusPlus, DoubleColon, DotDot, PipeLeft, ComposeRight, ComposeLeft, Caret
@@ -191,7 +200,7 @@ to take comma or semicolon separators.
 
 ```text
 Style: Open, Key, KeyString, Colon, Value, Dimension, Nested, End, TooDeep
-Query: Open, Verb, Select, Insert, Update, Delete, ClauseOrder, End
+Query: Open, Verb, Select, Insert, Update, Delete, ClauseOrder, End, OperationEnd
 Select: Projection, ProjectionExpr, ProjectionEnd, From, Table, Join, Where, GroupBy, OrderBy, Limit, Offset
 TableRef: Name, Alias
 Join: Keyword, Table, On, Condition

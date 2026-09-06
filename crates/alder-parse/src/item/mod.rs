@@ -223,6 +223,7 @@ impl<'a> Parser<'a> {
     /// item* on the line (§10.38) and `42` is not one.
     pub(crate) fn items_until_close(
         &mut self,
+        opening: Position,
     ) -> Result<&'a [&'a Located<Item<'a>>], error::Tests<'a>> {
         let mut items: BumpVec<'a, &'a Located<Item<'a>>> = BumpVec::new_in(self.bump);
         let mut last_end: Option<Position> = None;
@@ -236,14 +237,14 @@ impl<'a> Parser<'a> {
                     self.advance();
                     break;
                 }
-                None => return Err(error::Tests::End(row, col)),
+                None => return Err(error::Tests::End(self.expected_end(opening))),
                 Some(b';') => {}
                 Some(_) => same_line = last_end.is_some_and(|end| !self.newline_since(end)),
             }
             let item = match self.item() {
                 // Not an item start at all (`)`, `42`, …): expected an item or `}`.
                 Err(error::Item::Start(r, c)) if (r, c) == (row, col) => {
-                    return Err(error::Tests::End(row, col));
+                    return Err(error::Tests::End(self.expected_end(opening)));
                 }
                 _ if same_line => return Err(error::Tests::SameLine(row, col)),
                 Err(e) => return Err(error::Tests::Item(self.alloc(e), row, col)),

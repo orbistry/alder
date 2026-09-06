@@ -43,7 +43,9 @@ impl<'a> Parser<'a> {
         if self.peek() != Some(b'#') || self.peek_at(1) != Some(b'[') {
             return Err(error::Attribute::Open(row, col));
         }
-        self.advance_by(2);
+        self.advance(); // `#`
+        let opening = self.get_position();
+        self.advance(); // `[`
         self.chomp();
         let name = self.located_lower(error::Attribute::Name)?;
         self.chomp();
@@ -52,7 +54,7 @@ impl<'a> Parser<'a> {
         } else {
             &[]
         };
-        self.word1(b']', error::Attribute::End)?;
+        self.word_end(b']', opening, error::Attribute::End)?;
         Ok(self.located(start, Attribute { name, args }))
     }
 
@@ -60,6 +62,7 @@ impl<'a> Parser<'a> {
     fn attribute_args(
         &mut self,
     ) -> Result<&'a [&'a Located<alder_source::Expr<'a>>], error::Attribute<'a>> {
+        let opening = self.get_position();
         self.advance();
         self.chomp();
         let mut args = BumpVec::new_in(self.bump);
@@ -82,8 +85,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Attribute::ArgEnd(row, col));
+                    return Err(error::Attribute::ArgEnd(self.expected_end(opening)));
                 }
             }
         }

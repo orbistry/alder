@@ -4,8 +4,20 @@ description: "<div></div x>"
 ---
 Markup(
     CloseEnd(
-        1,
-        12,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 6,
+            },
+            boundary: Position {
+                line: 1,
+                column: 11,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 12,
+            },
+        },
     ),
     1,
     1,

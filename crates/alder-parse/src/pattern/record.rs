@@ -20,6 +20,7 @@ impl<'a> Parser<'a> {
     /// After `{`. Consumes the closing `}` and nothing after it.
     pub(super) fn pattern_record_fields(
         &mut self,
+        opening: alder_region::Position,
     ) -> Result<(&'a [FieldPattern<'a>], Option<Region>), error::PRecord<'a>> {
         self.chomp();
         let mut fields = BumpVec::new_in(self.bump);
@@ -50,8 +51,7 @@ impl<'a> Parser<'a> {
                             return Err(PRecord::RestNotLast(row, col));
                         }
                         _ => {
-                            let (row, col) = self.position();
-                            return Err(PRecord::End(row, col));
+                            return Err(PRecord::End(self.expected_end(opening)));
                         }
                     }
                 }
@@ -79,8 +79,7 @@ impl<'a> Parser<'a> {
                             return Ok((fields.into_bump_slice(), None));
                         }
                         _ => {
-                            let (row, col) = self.position();
-                            return Err(PRecord::End(row, col));
+                            return Err(PRecord::End(self.expected_end(opening)));
                         }
                     }
                 }

@@ -4,11 +4,11 @@ description: "table users { id: int() default(1 2) }"
 ---
 alder::syntax
 
-  × I was expecting a comma or the end of this column modifier's arguments
+  × I was expecting `,` or `)` after this modifier argument
    ╭─[/project/src/main.ald:1:35]
  1 │ table users { id: int() default(1 2) }
-   · ┬                                 ┬
-   · │                                 ╰── expected `,` or `)`
-   · ╰── this table declaration starts here
+   ·                                ┬  ┬
+   ·                                │  ╰── expected `,` or `)`
+   ·                                ╰── this `(` opens here
    ╰────
   help: separate modifier arguments with commas and close them with `)`

@@ -4,10 +4,10 @@ description: "enum Shape { Circle(Number Number) }"
 ---
 alder::syntax
 
-  × I was expecting another payload type or the end of this variant
+  × I was expecting `,` or `)` after this variant payload type
    ╭─[/project/src/main.ald:1:28]
  1 │ enum Shape { Circle(Number Number) }
-   · ┬                          ┬
-   · │                          ╰── expected `,` or `)`
-   · ╰── this enum declaration starts here
+   ·                    ┬       ┬
+   ·                    │       ╰── expected `,` or `)`
+   ·                    ╰── this `(` opens here
    ╰────

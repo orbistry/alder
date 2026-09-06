@@ -2,8 +2,8 @@
 //!
 //! Elements are full expressions parsed with record constructors re-enabled
 //! (brackets reset the `no_record_ctor` restriction, §2.3). A trailing
-//! comma is accepted (§10.8); a missing separator is `Array::End` at the
-//! offending byte and a missing element (`[1,,2]`) is `Array::Expr(Start)`
+//! comma is accepted (§10.8); a missing separator is `Array::End` retaining
+//! both the pre-trivia boundary and offending byte. A missing element (`[1,,2]`) is `Array::Expr(Start)`
 //! at the stray comma.
 //!
 //! See docs/parser-internals.md §5.13.
@@ -30,6 +30,7 @@ impl<'a> Parser<'a> {
 
     /// At `[`: elements through the closing `]`, which is consumed.
     fn array_elements(&mut self) -> Result<&'a [&'a Located<Expr<'a>>], error::Array<'a>> {
+        let opening = self.get_position();
         self.advance();
         self.chomp();
         let mut elements = BumpVec::new_in(self.bump);
@@ -53,8 +54,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Array::End(row, col));
+                    return Err(error::Array::End(self.expected_end(opening)));
                 }
             }
         }

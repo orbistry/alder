@@ -7,8 +7,20 @@ Markup(
         If(
             Body(
                 End(
-                    1,
-                    20,
+                    ExpectedEnd {
+                        opening: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                        boundary: Position {
+                            line: 1,
+                            column: 20,
+                        },
+                        unexpected: Position {
+                            line: 1,
+                            column: 20,
+                        },
+                    },
                 ),
                 1,
                 10,

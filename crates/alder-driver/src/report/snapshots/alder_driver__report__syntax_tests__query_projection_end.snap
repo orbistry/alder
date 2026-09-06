@@ -4,11 +4,11 @@ description: "let value = query { select { a b } from users }"
 ---
 alder::syntax
 
-  × I was expecting a comma or the end of this select projection
+  × I was expecting `,` or `}` after this selected expression
    ╭─[/project/src/main.ald:1:32]
  1 │ let value = query { select { a b } from users }
-   ·                     ┬          ┬
-   ·                     │          ╰── expected `,` or `}`
-   ·                     ╰── this `select` starts here
+   ·                            ┬   ┬
+   ·                            │   ╰── expected `,` or `}`
+   ·                            ╰── this `{` opens here
    ╰────
   help: separate selected expressions with commas inside `{ ... }`

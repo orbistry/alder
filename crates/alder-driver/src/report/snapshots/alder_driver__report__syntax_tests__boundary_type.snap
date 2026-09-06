@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type X = Array[Int\n\nfn next() { 0 }"
+---
+alder::syntax
+
+  × I was expecting `,` or `]` after this type argument
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ type X = Array[Int
+   ·               ┬   ▲
+   ·               │   ╰── expected `,` or `]`
+   ·               ╰── this `[` opens here
+ 2 │ 
+   ╰────
+  help: separate type arguments with commas and close the list with `]`

@@ -4,8 +4,20 @@ description: Some(x
 ---
 Ctor(
     End(
-        1,
-        7,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 5,
+            },
+            boundary: Position {
+                line: 1,
+                column: 7,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 7,
+            },
+        },
     ),
     1,
     1,

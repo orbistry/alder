@@ -23,6 +23,7 @@ impl<'a> Parser<'a> {
         &mut self,
         start: Position,
     ) -> Result<&'a Located<Pattern<'a>>, error::PTuple<'a>> {
+        let opening = self.get_position();
         self.advance();
         self.chomp();
         if self.peek() == Some(b')') {
@@ -47,8 +48,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(PTuple::End(row, col));
+                    return Err(PTuple::End(self.expected_end(opening)));
                 }
             }
         }

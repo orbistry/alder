@@ -29,6 +29,7 @@ impl<'a> Parser<'a> {
         self.chomp();
         let name = self.located_upper(error::ErrorDecl::Name)?;
         self.chomp();
+        let opening = self.get_position();
         self.word1(b'{', error::ErrorDecl::Open)?;
         self.chomp();
         let mut tags = BumpVec::new_in(self.bump);
@@ -53,8 +54,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::ErrorDecl::End(row, col));
+                    return Err(error::ErrorDecl::End(self.expected_end(opening)));
                 }
             }
         }

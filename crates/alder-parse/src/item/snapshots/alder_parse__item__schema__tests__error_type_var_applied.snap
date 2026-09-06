@@ -3,6 +3,18 @@ source: crates/alder-parse/src/item/schema.rs
 description: "schema S { a: r[x], min(1) }"
 ---
 End(
-    1,
-    16,
+    ExpectedEnd {
+        opening: Position {
+            line: 1,
+            column: 10,
+        },
+        boundary: Position {
+            line: 1,
+            column: 16,
+        },
+        unexpected: Position {
+            line: 1,
+            column: 16,
+        },
+    },
 )

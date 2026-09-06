@@ -66,6 +66,7 @@ impl<'a> Parser<'a> {
     }
 
     fn style_entries(&mut self) -> Result<&'a Style<'a>, error::Style<'a>> {
+        let opening = self.get_position();
         self.word1(b'{', error::Style::Open)?;
         self.chomp();
         let mut entries = BumpVec::new_in(self.bump);
@@ -105,8 +106,7 @@ impl<'a> Parser<'a> {
                 Some(b'"') => {}
                 Some(b) if b.is_ascii_lowercase() => {}
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Style::End(row, col));
+                    return Err(error::Style::End(self.expected_end(opening)));
                 }
             }
         }

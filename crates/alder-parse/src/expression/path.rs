@@ -51,8 +51,9 @@ impl<'a> Parser<'a> {
         let fields = self.specialize(
             |bump, e, row, col| error::Expr::RecordCtor(bump.alloc(e), row, col),
             |p| {
+                let opening = p.get_position();
                 p.advance();
-                p.with_record_ctor(true, |p| p.record_fields())
+                p.with_record_ctor(true, |p| p.record_fields(opening))
             },
         )?;
         Ok(self.add_end(start, Expr::RecordCtor { path, fields }))

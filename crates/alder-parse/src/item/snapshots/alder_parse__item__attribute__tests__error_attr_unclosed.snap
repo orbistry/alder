@@ -4,8 +4,20 @@ description: "#[derive(Show) type X"
 ---
 Attribute(
     End(
-        1,
-        16,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 2,
+            },
+            boundary: Position {
+                line: 1,
+                column: 15,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 16,
+            },
+        },
     ),
     1,
     1,

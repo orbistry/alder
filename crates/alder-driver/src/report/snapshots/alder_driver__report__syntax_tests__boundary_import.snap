@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "import ~/helper.{ delayed\n\ntype Operation = Int"
+---
+alder::syntax
+
+  × I was expecting `,` or `}` after this imported name
+   ╭─[/project/src/main.ald:1:26]
+ 1 │ import ~/helper.{ delayed
+   ·                 ┬        ▲
+   ·                 │        ╰── expected `,` or `}`
+   ·                 ╰── this `{` opens here
+ 2 │ 
+   ╰────

@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type X = [:a | r\n\ntype Next = Int"
+---
+alder::syntax
+
+  × I was expecting `]` after this error row extension
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ type X = [:a | r
+   ·          ┬      ▲
+   ·          │      ╰── expected `]`
+   ·          ╰── this `[` opens here
+ 2 │ 
+   ╰────
+  help: the extension variable must be the last entry in an error row

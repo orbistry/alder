@@ -4,11 +4,11 @@ description: "comptime { read(1 2) }"
 ---
 alder::syntax
 
-  × I was expecting a comma or the end of this function call
+  × I was expecting `,` or `)` after this call argument
    ╭─[/project/src/main.ald:1:19]
  1 │ comptime { read(1 2) }
    ·                ┬  ┬
    ·                │  ╰── expected `,` or `)`
-   ·                ╰── this argument list starts here
+   ·                ╰── this `(` opens here
    ╰────
   help: separate arguments with commas and close the call with `)`

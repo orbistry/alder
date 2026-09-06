@@ -4,10 +4,10 @@ description: "enum Color { Red Green }"
 ---
 alder::syntax
 
-  × I was expecting another enum variant or the end of the enum
+  × I was expecting `,` or `}` after this enum variant
    ╭─[/project/src/main.ald:1:18]
  1 │ enum Color { Red Green }
-   · ┬                ┬
-   · │                ╰── expected `,` or `}`
-   · ╰── this enum declaration starts here
+   ·            ┬     ┬
+   ·            │     ╰── expected `,` or `}`
+   ·            ╰── this `{` opens here
    ╰────

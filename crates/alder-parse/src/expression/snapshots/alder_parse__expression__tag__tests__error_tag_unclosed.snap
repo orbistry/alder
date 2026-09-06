@@ -4,8 +4,20 @@ description: ":not_found(id"
 ---
 Tag(
     End(
-        1,
-        14,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 11,
+            },
+            boundary: Position {
+                line: 1,
+                column: 14,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 14,
+            },
+        },
     ),
     1,
     1,

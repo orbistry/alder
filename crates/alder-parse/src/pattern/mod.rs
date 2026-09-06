@@ -97,8 +97,9 @@ impl<'a> Parser<'a> {
                 let (fields, rest) = self.specialize(
                     |bump, e, row, col| error::Pattern::Record(bump.alloc(e), row, col),
                     |p| {
+                        let opening = p.get_position();
                         p.advance();
-                        p.pattern_record_fields()
+                        p.pattern_record_fields(opening)
                     },
                 )?;
                 Ok(self.add_end(start, Pattern::Record { fields, rest }))

@@ -31,6 +31,7 @@ impl<'a> Parser<'a> {
         self.chomp();
         let name = self.located_lower(error::Macro::Name)?;
         self.chomp();
+        let opening = self.get_position();
         self.word1(b'(', error::Macro::ParamsOpen)?;
         self.chomp();
         let mut params = BumpVec::new_in(self.bump);
@@ -51,8 +52,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Macro::ParamEnd(row, col));
+                    return Err(error::Macro::ParamEnd(self.expected_end(opening)));
                 }
             }
         }

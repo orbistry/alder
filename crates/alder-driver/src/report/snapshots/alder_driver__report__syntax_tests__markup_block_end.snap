@@ -8,6 +8,6 @@ alder::syntax
   │ file
    ╭─[/project/src/main.ald:1:31]
  1 │ let value = <p>@if x {<b>y</b>
-   ·                ┬
-   ·                ╰── this `@if` starts here
+   ·                      ┬
+   ·                      ╰── this `{` opens here
    ╰────

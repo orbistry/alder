@@ -4,8 +4,20 @@ description: "import @alder/http.{ get Request }"
 ---
 Import(
     NamesEnd(
-        1,
-        26,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 20,
+            },
+            boundary: Position {
+                line: 1,
+                column: 25,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 26,
+            },
+        },
     ),
     1,
     1,

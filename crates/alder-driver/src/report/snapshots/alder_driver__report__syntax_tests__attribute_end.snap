@@ -7,7 +7,7 @@ alder::syntax
   × this attribute is missing its closing bracket
    ╭─[/project/src/main.ald:1:16]
  1 │ #[derive(Show) type X
-   · ┬              ┬
-   · │              ╰── expected `]`
-   · ╰── this attribute sequence starts here
+   ·  ┬             ┬
+   ·  │             ╰── expected `]`
+   ·  ╰── this `[` opens here
    ╰────

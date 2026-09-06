@@ -7,7 +7,7 @@ alder::syntax
   × I was expecting another markup match arm or `}`
    ╭─[/project/src/main.ald:1:41]
  1 │ let value = <p>@match x { A => <b>a</b> ) }</p>
-   ·                ┬                        ┬
-   ·                │                        ╰── expected `,`, a pattern, or `}`
-   ·                ╰── this `@match` starts here
+   ·                         ┬               ┬
+   ·                         │               ╰── expected `,`, a pattern, or `}`
+   ·                         ╰── this `{` opens here
    ╰────

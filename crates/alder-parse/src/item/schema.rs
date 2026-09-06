@@ -29,7 +29,8 @@
 //! followed by `Schema::End` at `[`), so SPEC's `[ type ',' ]` must
 //! exclude type variables and their applications there. And after a
 //! finished item, a lowercase word that is neither `pick …` nor `name :`
-//! is `Schema::End` at the word (a rule or pick name missing its `,`),
+//! is `Schema::End` retaining the boundary and that word's position (a rule
+//! or pick name missing its `,`),
 //! not a field missing its `:`.
 //!
 //! `schema_decl` stops right after the closing `}` without chomping, so
@@ -57,6 +58,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        let opening = self.get_position();
         self.word1(b'{', error::Schema::Open)?;
         self.chomp();
         let mut items = BumpVec::new_in(self.bump);
@@ -77,8 +79,7 @@ impl<'a> Parser<'a> {
                         // lost its `,` (`min(3)\n max(10)`, `String min(1)`,
                         // `pick email name`): report it at the word, not as
                         // a missing `:` further on.
-                        let (row, col) = self.position();
-                        return Err(error::Schema::End(row, col));
+                        return Err(error::Schema::End(self.expected_end(opening)));
                     };
                     items.push(item);
                 }
@@ -87,7 +88,7 @@ impl<'a> Parser<'a> {
                     return Err(if items.is_empty() {
                         error::Schema::Item(row, col)
                     } else {
-                        error::Schema::End(row, col)
+                        error::Schema::End(self.expected_end(opening))
                     });
                 }
             }

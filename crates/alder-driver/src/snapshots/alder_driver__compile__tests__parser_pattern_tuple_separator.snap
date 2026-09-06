@@ -4,11 +4,11 @@ description: "let (first, second third) = value"
 ---
 alder::syntax
 
-  × I was expecting a comma or the end of this parenthesized pattern
+  × I was expecting `,` or `)` after this pattern
    ╭─[/project/src/main.ald:1:20]
  1 │ let (first, second third) = value
    ·     ┬              ┬
    ·     │              ╰── expected `,` or `)`
-   ·     ╰── these pattern parentheses start here
+   ·     ╰── this `(` opens here
    ╰────
   help: separate tuple patterns with commas and close the parentheses with `)`

@@ -8,8 +8,8 @@ alder::syntax
   │ end of the file
    ╭─[/project/src/main.ald:1:8]
  1 │ tests {
-   · ┬
-   · ╰── this tests block starts here
+   ·       ┬
+   ·       ╰── this `{` opens here
    ╰────
   help: put declarations such as `test`, `fn`, or `let` on separate lines and
         close the block with `}`

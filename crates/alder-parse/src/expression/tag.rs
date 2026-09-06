@@ -46,6 +46,7 @@ impl<'a> Parser<'a> {
     /// At `(`: `( [ expression { ',' expression } [','] ] )`. Consumes the
     /// closing `)` and nothing after it.
     fn tag_args(&mut self) -> Result<&'a [&'a Located<Expr<'a>>], error::Tag<'a>> {
+        let opening = self.get_position();
         self.advance();
         self.chomp();
         let mut args = BumpVec::new_in(self.bump);
@@ -73,8 +74,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Tag::End(row, col));
+                    return Err(error::Tag::End(self.expected_end(opening)));
                 }
             }
         }

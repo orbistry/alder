@@ -103,9 +103,10 @@ impl<'a> Parser<'a> {
                 Ok(ImportTail::All(Region::new(dot, self.get_position())))
             }
             Some(b'{') => {
+                let opening = self.get_position();
                 self.advance();
                 self.chomp();
-                Ok(ImportTail::Names(self.import_names()?))
+                Ok(ImportTail::Names(self.import_names(opening)?))
             }
             _ => {
                 let (row, col) = self.position();
@@ -115,7 +116,10 @@ impl<'a> Parser<'a> {
     }
 
     /// After `{`: `name [as alias]` list through `}`.
-    fn import_names(&mut self) -> Result<&'a [ImportName<'a>], error::Import<'a>> {
+    fn import_names(
+        &mut self,
+        opening: alder_region::Position,
+    ) -> Result<&'a [ImportName<'a>], error::Import<'a>> {
         let mut names = BumpVec::new_in(self.bump);
         loop {
             if self.peek() == Some(b'}') {
@@ -144,8 +148,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(error::Import::NamesEnd(row, col));
+                    return Err(error::Import::NamesEnd(self.expected_end(opening)));
                 }
             }
         }

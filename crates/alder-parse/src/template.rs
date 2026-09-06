@@ -50,8 +50,10 @@ impl<'a> Parser<'a> {
                 }
                 Some(b'$') if self.peek_at(1) == Some(b'{') => {
                     self.push_text(&mut parts, text_start, needs_cook);
-                    self.advance_by(2); // ${
-                    let hole = self.template_hole()?;
+                    self.advance(); // `$`
+                    let opening = self.get_position();
+                    self.advance(); // `{`
+                    let hole = self.template_hole(opening)?;
                     parts.push(TemplatePart::Expr(hole));
                     text_start = self.pos;
                     needs_cook = false;
@@ -120,7 +122,10 @@ impl<'a> Parser<'a> {
     /// After `${`: whitespace, the expression, whitespace, `}`.
     ///
     /// The hole clears `no_record_ctor` like any bracket (§2.3).
-    fn template_hole(&mut self) -> Result<&'a Located<Expr<'a>>, error::Template<'a>> {
+    fn template_hole(
+        &mut self,
+        opening: alder_region::Position,
+    ) -> Result<&'a Located<Expr<'a>>, error::Template<'a>> {
         self.chomp();
         if self.peek() == Some(b'}') {
             let (row, col) = self.position();
@@ -131,7 +136,7 @@ impl<'a> Parser<'a> {
             |p| p.with_record_ctor(true, |p| p.expression()),
         )?;
         self.chomp();
-        self.word1(b'}', error::Template::HoleEnd)?;
+        self.word_end(b'}', opening, error::Template::HoleEnd)?;
         Ok(expr)
     }
 }

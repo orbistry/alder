@@ -4,8 +4,20 @@ description: "macro f(a b) {}"
 ---
 Macro(
     ParamEnd(
-        1,
-        11,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 8,
+            },
+            boundary: Position {
+                line: 1,
+                column: 10,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 11,
+            },
+        },
     ),
     1,
     1,

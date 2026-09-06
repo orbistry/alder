@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let x = query { insert into users values ^rows\n\ntype Next = Int"
+---
+alder::syntax
+
+  × I was expecting `}` after this query operation
+   ╭─[/project/src/main.ald:1:47]
+ 1 │ let x = query { insert into users values ^rows
+   ·               ┬                               ▲
+   ·               │                               ╰── expected `}`
+   ·               ╰── this `{` opens here
+ 2 │ 
+   ╰────

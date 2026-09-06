@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let x = [f(1\n\ntype Next = Int"
+---
+alder::syntax
+
+  × I was expecting `,` or `)` after this call argument
+   ╭─[/project/src/main.ald:1:13]
+ 1 │ let x = [f(1
+   ·           ┬ ▲
+   ·           │ ╰── expected `,` or `)`
+   ·           ╰── this `(` opens here
+ 2 │ 
+   ╰────
+  help: separate arguments with commas and close the call with `)`

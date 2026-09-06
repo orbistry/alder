@@ -5,8 +5,20 @@ description: "query { select { a b } from users }"
 Query(
     Select(
         ProjectionEnd(
-            1,
-            20,
+            ExpectedEnd {
+                opening: Position {
+                    line: 1,
+                    column: 16,
+                },
+                boundary: Position {
+                    line: 1,
+                    column: 19,
+                },
+                unexpected: Position {
+                    line: 1,
+                    column: 20,
+                },
+            },
         ),
         1,
         9,

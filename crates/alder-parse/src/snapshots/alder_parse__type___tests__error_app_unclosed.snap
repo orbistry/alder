@@ -4,8 +4,20 @@ description: "Array[User"
 ---
 Args(
     End(
-        1,
-        11,
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 6,
+            },
+            boundary: Position {
+                line: 1,
+                column: 11,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 11,
+            },
+        },
     ),
     1,
     6,

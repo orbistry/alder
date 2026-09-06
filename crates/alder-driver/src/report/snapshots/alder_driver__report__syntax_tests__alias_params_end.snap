@@ -9,5 +9,5 @@ alder::syntax
  1 │ type Pair[a, b = (a, b)
    ·          ┬     ┬
    ·          │     ╰── expected `,` or `]`
-   ·          ╰── this type parameter list starts here
+   ·          ╰── this `[` opens here
    ╰────

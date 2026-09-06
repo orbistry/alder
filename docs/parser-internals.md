@@ -969,6 +969,14 @@ One enum per construct, nested through `&'a`, positions as trailing
 convention), leaf enums lifetime-free. `Keyword` and `SqlWord` (from
 `keyword.rs`) let messages name the misused word.
 
+Separator/closer leaves instead carry `ExpectedEnd { opening, boundary, unexpected }`,
+three inline `Position`s. `opening` is captured on the punctuation before it is
+consumed, `boundary` precedes skipped whitespace/comments, and `unexpected` is the
+detection cursor. Only the opener and primary location are labeled; detection
+remains internal evidence for EOF and mismatched-token classification.
+This does not change accepted syntax or
+replace nested entry/operand errors. See `plans/parser-boundary-locations.md`.
+
 ```rust
 //! Syntax error types for the Alder parser.
 //!
@@ -978,6 +986,13 @@ convention), leaf enums lifetime-free. `Keyword` and `SqlWord` (from
 
 use crate::keyword::{Keyword, SqlWord};
 use crate::{Col, Row};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExpectedEnd {
+    pub opening: Position,
+    pub boundary: Position,
+    pub unexpected: Position,
+}
 use alder_source::{AssignOp, BinOp};
 
 // ============================================================================
@@ -1035,9 +1050,9 @@ pub enum Attribute<'a> {
     Name(Row, Col),
     Arg(&'a Expr<'a>, Row, Col),
     /// Expected `,` or `)`.
-    ArgEnd(Row, Col),
+    ArgEnd(ExpectedEnd),
     /// Expected `]`.
-    End(Row, Col),
+    End(ExpectedEnd),
     /// Attribute followed by EOF or `}`.
     Dangling(Row, Col),
 }
@@ -1052,7 +1067,7 @@ pub enum Import<'a> {
     /// `as` inside `{ }` not followed by a name.
     NameAlias(Row, Col),
     /// Expected `,` or `}`.
-    NamesEnd(Row, Col),
+    NamesEnd(ExpectedEnd),
     /// `as` not followed by a lowercase name.
     Alias(Row, Col),
     /// `pub import @x/y` without `.{ … }` or `.*`.
@@ -1093,7 +1108,7 @@ pub enum Params<'a> {
     /// Type after `:`.
     Type(&'a Type<'a>, Row, Col),
     /// Expected `,` or `)`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1131,7 +1146,7 @@ pub enum TypeParams {
     Open(Row, Col),
     Var(Row, Col),
     /// Expected `,` or `]`.
-    End(Row, Col),
+    End(ExpectedEnd),
     /// `[]`
     Empty(Row, Col),
 }
@@ -1144,12 +1159,12 @@ pub enum Enum<'a> {
     /// Expected an uppercase variant name.
     Variant(Row, Col),
     VariantArg(&'a Type<'a>, Row, Col),
-    VariantArgEnd(Row, Col),
+    VariantArgEnd(ExpectedEnd),
     VariantRecord(&'a TRecord<'a>, Row, Col),
     /// `Rect { r | width: Number }` — record payloads take no extension. Position of `r`.
     VariantRecordExt(Row, Col),
     /// Expected `,` or `}`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1179,7 +1194,7 @@ pub enum Impl<'a> {
     /// Expected `[`.
     Open(Row, Col),
     Arg(&'a Type<'a>, Row, Col),
-    ArgEnd(Row, Col),
+    ArgEnd(ExpectedEnd),
     Where(&'a Where<'a>, Row, Col),
     BodyOpen(Row, Col),
     /// Expected `type`, `fn` or `}`.
@@ -1200,7 +1215,7 @@ pub enum ErrorDecl<'a> {
     Open(Row, Col),
     Tag(&'a TagVariant<'a>, Row, Col),
     /// Expected `,` or `}`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1208,7 +1223,7 @@ pub enum TagVariant<'a> {
     /// `:` not followed by a lowercase name.
     Name(Row, Col),
     Arg(&'a Type<'a>, Row, Col),
-    ArgEnd(Row, Col),
+    ArgEnd(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1227,8 +1242,8 @@ pub enum Table<'a> {
     Colon(Row, Col),
     Builder(&'a Expr<'a>, Row, Col),
     ModifierArg(&'a Expr<'a>, Row, Col),
-    ModifierArgEnd(Row, Col),
-    End(Row, Col),
+    ModifierArgEnd(ExpectedEnd),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1244,8 +1259,8 @@ pub enum Schema<'a> {
     Type(&'a Type<'a>, Row, Col),
     Rule(Row, Col),
     RuleArg(&'a Expr<'a>, Row, Col),
-    RuleArgEnd(Row, Col),
-    End(Row, Col),
+    RuleArgEnd(ExpectedEnd),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1254,7 +1269,7 @@ pub enum Macro {
     /// Expected `(` after the macro name.
     ParamsOpen(Row, Col),
     Param(Row, Col),
-    ParamEnd(Row, Col),
+    ParamEnd(ExpectedEnd),
     /// `{` expected, or raw body problem.
     Body(RawTokens, Row, Col),
 }
@@ -1273,7 +1288,7 @@ pub enum Tests<'a> {
     Item(&'a Item<'a>, Row, Col),
     /// A second item on the same line as the previous one (§2.1 rule 3).
     SameLine(Row, Col),
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 // ============================================================================
@@ -1289,7 +1304,7 @@ pub enum Block<'a> {
     /// `{ name: …` in block position — probably a record; wrap it in parentheses.
     LooksLikeRecord(Row, Col),
     /// Expected a statement or `}`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1398,21 +1413,21 @@ pub enum Template<'a> {
     HoleEmpty(Row, Col),
     HoleExpr(&'a Expr<'a>, Row, Col),
     /// `${ expr` not followed by `}`.
-    HoleEnd(Row, Col),
+    HoleEnd(ExpectedEnd),
 }
 
 #[derive(Debug)]
 pub enum Array<'a> {
     Expr(&'a Expr<'a>, Row, Col),
     /// Expected `,` or `]`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
 pub enum Tuple<'a> {
     Expr(&'a Expr<'a>, Row, Col),
     /// Expected `,` or `)`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1422,7 +1437,7 @@ pub enum Record<'a> {
     Spread(&'a Expr<'a>, Row, Col),
     Expr(&'a Expr<'a>, Row, Col),
     /// Expected `,` or `}`.
-    End(Row, Col),
+    End(ExpectedEnd),
     /// `{ x = 1 }` (Elm habit).
     EqualsNotColon(Row, Col),
 }
@@ -1458,7 +1473,7 @@ pub enum Match<'a> {
     Open(Row, Col),
     Arm(&'a Arm<'a>, Row, Col),
     /// Expected `,`, a pattern, or `}`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1475,14 +1490,14 @@ pub enum Arm<'a> {
 pub enum Call<'a> {
     Arg(&'a Expr<'a>, Row, Col),
     /// Expected `,` or `)`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
 pub enum Index<'a> {
     Expr(&'a Expr<'a>, Row, Col),
     /// Expected `]`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1490,7 +1505,7 @@ pub enum Tag<'a> {
     /// `:` not followed by a lowercase name.
     Name(Row, Col),
     Arg(&'a Expr<'a>, Row, Col),
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1498,7 +1513,7 @@ pub enum State<'a> {
     /// `state` not followed by `(`.
     Open(Row, Col),
     Expr(&'a Expr<'a>, Row, Col),
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1511,7 +1526,7 @@ pub enum Style<'a> {
     Dimension(Number, Row, Col),
     Nested(&'a Style<'a>, Row, Col),
     /// Expected `,` or `}`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1527,7 +1542,9 @@ pub enum Query<'a> {
     /// `limit`). Carries `Clause`, not `SqlWord`: `where` is a `Keyword`, not a SQL word.
     ClauseOrder(Clause, Row, Col),
     /// Expected a clause or `}`.
-    End(Row, Col),
+    End(ExpectedEnd),
+    /// Completed non-select operations can only be followed by `}`.
+    OperationEnd(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1535,7 +1552,7 @@ pub enum Select<'a> {
     /// Expected `{` or `*`.
     Projection(Row, Col),
     ProjectionExpr(&'a Expr<'a>, Row, Col),
-    ProjectionEnd(Row, Col),
+    ProjectionEnd(ExpectedEnd),
     From(Row, Col),
     Table(TableRef, Row, Col),
     Join(&'a Join<'a>, Row, Col),
@@ -1599,13 +1616,13 @@ pub enum Markup<'a> {
     Name(Row, Col),
     Attr(&'a Attr<'a>, Row, Col),
     /// Expected an attribute, `>` or `/>`.
-    TagEnd(Row, Col),
+    TagEnd(ExpectedEnd),
     Child(&'a Child<'a>, Row, Col),
     /// `</` not followed by a name.
     CloseName(Row, Col),
     CloseMismatch { expected: &'a str, found: &'a str, row: Row, col: Col },
     /// `</name` not followed by `>`.
-    CloseEnd(Row, Col),
+    CloseEnd(ExpectedEnd),
     /// EOF before the closing tag; position of the opening tag.
     Unclosed { name: &'a str, row: Row, col: Col },
     /// EOF before `</>`.
@@ -1619,7 +1636,7 @@ pub enum Attr<'a> {
     String(StringError, Row, Col),
     Expr(&'a Expr<'a>, Row, Col),
     /// Expected `}`.
-    ExprEnd(Row, Col),
+    ExprEnd(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1627,7 +1644,7 @@ pub enum Child<'a> {
     /// `{}`
     HoleEmpty(Row, Col),
     Hole(&'a Expr<'a>, Row, Col),
-    HoleEnd(Row, Col),
+    HoleEnd(ExpectedEnd),
     /// A bare `}` in text (write `{"}"}`).
     StrayBrace(Row, Col),
     Element(&'a Markup<'a>, Row, Col),
@@ -1677,14 +1694,14 @@ pub enum DirMatch<'a> {
     BareText(Row, Col),
     Block(&'a ChildBlock<'a>, Row, Col),
     /// Expected `,`, a pattern, or `}`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
 pub enum ChildBlock<'a> {
     Open(Row, Col),
     Item(&'a Child<'a>, Row, Col),
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 // ============================================================================
@@ -1722,14 +1739,14 @@ pub enum Pattern<'a> {
 pub enum PCtor<'a> {
     Arg(&'a Pattern<'a>, Row, Col),
     /// Expected `,` or `)`.
-    End(Row, Col),
+    End(ExpectedEnd),
     Record(&'a PRecord<'a>, Row, Col),
 }
 
 #[derive(Debug)]
 pub enum PTuple<'a> {
     Pattern(&'a Pattern<'a>, Row, Col),
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1739,7 +1756,7 @@ pub enum PArray<'a> {
     RestNotLast(Row, Col),
     /// `..` followed by a reserved word (`[..type]`) or, in `query { }`, a SQL word.
     RestName(Row, Col),
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1748,7 +1765,7 @@ pub enum PRecord<'a> {
     Field(Row, Col),
     Pattern(&'a Pattern<'a>, Row, Col),
     RestNotLast(Row, Col),
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 // ============================================================================
@@ -1773,14 +1790,14 @@ pub enum TArgs<'a> {
     /// `Array[]`
     Empty(Row, Col),
     /// Expected `,` or `]`.
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
 pub enum TFn<'a> {
     Open(Row, Col),
     Param(&'a Type<'a>, Row, Col),
-    ParamEnd(Row, Col),
+    ParamEnd(ExpectedEnd),
     Arrow(Row, Col),
     Ret(&'a Type<'a>, Row, Col),
 }
@@ -1788,7 +1805,7 @@ pub enum TFn<'a> {
 #[derive(Debug)]
 pub enum TTuple<'a> {
     Type(&'a Type<'a>, Row, Col),
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1799,7 +1816,7 @@ pub enum TRecord<'a> {
     Type(&'a Type<'a>, Row, Col),
     /// `{ r | }` with no fields.
     ExtField(Row, Col),
-    End(Row, Col),
+    End(ExpectedEnd),
 }
 
 #[derive(Debug)]
@@ -1810,7 +1827,9 @@ pub enum TErrorRow<'a> {
     /// `|` not followed by a tag or a variable.
     Ext(Row, Col),
     /// Expected `|` or `]`.
-    End(Row, Col),
+    End(ExpectedEnd),
+    /// The extension variable is last; only `]` may follow it.
+    ExtEnd(ExpectedEnd),
 }
 
 // ============================================================================
@@ -1983,6 +2002,9 @@ pub(crate) struct ParserState {
     pos: usize,
     row: Row,
     col: Col,
+    comments_len: usize,
+    verbatim_len: usize,
+    trivia_boundary: Option<(usize, Position)>,
 }
 
 pub struct Parser<'a> {
@@ -1997,6 +2019,8 @@ pub struct Parser<'a> {
     no_record_ctor: bool,
     /// Current nesting of the recursive parsers (`nest`), capped at `MAX_NESTING` (§10.44).
     depth: u32,
+    // Transactional comment/verbatim side tables are omitted here.
+    trivia_boundary: Option<(usize, Position)>,
 }
 
 /// Nesting limit (§10.44).
@@ -2097,6 +2121,15 @@ report `Start` yourself; use `one_of` only for genuinely ambiguous forks
 (kept for compatibility with existing code, not as the default).
 
 ### 5.2 `space.rs`
+
+`chomp` retains the position before its trivia run and the ending byte cursor.
+Repeated calls at that cursor preserve the earlier boundary. Once another token
+is consumed, `expected_end()` uses the current position until the next `chomp`.
+Save/restore includes this state alongside the cursor and comment/verbatim side
+tables. `expected_end(opening)` requires the opener's explicitly retained position;
+helpers entered after an opener receive it from the caller. `word_end` checks a
+closing byte and constructs an `ExpectedEnd` with that opener on failure;
+it does not chomp or otherwise change token recognition.
 
 ```rust
 impl<'a> Parser<'a> {
@@ -2265,7 +2298,7 @@ impl<'a> Parser<'a> {
     pub fn item(&mut self) -> Result<&'a Located<Item<'a>>, error::Item<'a>>;
     /// Items until `}` (for `tests { }`); `}` is consumed. Same line-break rule as
     /// `module()` → Tests::SameLine. `item()` itself reports a `;` as Item::Semicolon.
-    pub(crate) fn items_until_close(&mut self) -> Result<&'a [&'a Located<Item<'a>>], error::Tests<'a>>;
+    pub(crate) fn items_until_close(&mut self, opening: Position) -> Result<&'a [&'a Located<Item<'a>>], error::Tests<'a>>;
 }
 // item/attribute.rs
 pub(crate) fn attributes(&mut self) -> Result<&'a [Located<Attribute<'a>>], error::Attribute<'a>>;
@@ -2301,7 +2334,7 @@ pub(crate) fn error_decl(&mut self) -> Result<&'a ErrorDecl<'a>, error::ErrorDec
 pub(crate) fn component_decl(&mut self) -> Result<&'a ComponentDecl<'a>, error::Component<'a>>;
 // item/table.rs  (after `table`)
 pub(crate) fn table_decl(&mut self) -> Result<&'a TableDecl<'a>, error::Table<'a>>;
-pub(crate) fn modifier<E>(&mut self, to_arg_error: impl Fn(&'a Expr<'a>, Row, Col) -> E + Copy, to_end_error: impl FnOnce(Row, Col) -> E) -> Result<Modifier<'a>, E>;  // shared with schema rules
+pub(crate) fn modifier<E>(&mut self, to_arg_error: impl Fn(&'a Expr<'a>, Row, Col) -> E + Copy, to_end_error: impl FnOnce(ExpectedEnd) -> E) -> Result<Modifier<'a>, E>;  // shared with schema rules
 // item/schema.rs  (after `schema`)
 pub(crate) fn schema_decl(&mut self) -> Result<&'a SchemaDecl<'a>, error::Schema<'a>>;
 // item/macro_.rs
@@ -2370,7 +2403,7 @@ pub(crate) fn array(&mut self, start: Position) -> Result<&'a Located<Expr<'a>>,
 pub(crate) fn tuple(&mut self, start: Position) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>>;
 // expression/record.rs
 pub(crate) fn record(&mut self, start: Position) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>>;
-pub(crate) fn record_fields(&mut self) -> Result<&'a [RecordField<'a>], error::Record<'a>>;   // after `{`; also RecordCtor and query `set`
+pub(crate) fn record_fields(&mut self, opening: Position) -> Result<&'a [RecordField<'a>], error::Record<'a>>;   // after `{`; also RecordCtor and query `set`
 pub(crate) fn looks_like_record(&mut self) -> bool;   // lookahead at `{` (§2.2)
 // expression/path.rs  (Var, Path, PathVar, RecordCtor, macro call dispatch)
 pub(crate) fn name_or_path(&mut self, start: Position) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>>;
@@ -2407,7 +2440,7 @@ impl<'a> Parser<'a> {
 // pattern/ctor.rs: pub(super) fn pattern_ctor(start), pub(super) fn pattern_tag(start)  -> Result<&'a Located<Pattern<'a>>, error::Pattern<'a>>
 // pattern/tuple.rs: pub(super) fn pattern_tuple(start)                                  -> Result<&'a Located<Pattern<'a>>, error::PTuple<'a>>
 // pattern/array.rs: pub(super) fn pattern_array(start)                                  -> Result<&'a Located<Pattern<'a>>, error::PArray<'a>>
-// pattern/record.rs: pub(super) fn pattern_record_fields() -> Result<(&'a [FieldPattern<'a>], Option<Region>), error::PRecord<'a>>   // after `{`; shared with CtorRecord
+// pattern/record.rs: pub(super) fn pattern_record_fields(&mut self, opening: Position) -> Result<(&'a [FieldPattern<'a>], Option<Region>), error::PRecord<'a>>   // after `{`; shared with CtorRecord
 ```
 
 ### 5.15 `type_.rs`
@@ -2423,7 +2456,7 @@ impl<'a> Parser<'a> {
     /// `:tag[(T, …)]` — shared by error rows and `error` groups.
     pub(crate) fn tag_variant(&mut self) -> Result<TagVariant<'a>, error::TagVariant<'a>>;
     /// After `{`: fields with `?` and `r |` extension. Shared with enum record variants.
-    pub(crate) fn field_types(&mut self) -> Result<(&'a [FieldType<'a>], Option<Name<'a>>), error::TRecord<'a>>;
+    pub(crate) fn field_types(&mut self, opening: Position) -> Result<(&'a [FieldType<'a>], Option<Name<'a>>), error::TRecord<'a>>;
     fn type_fn(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, error::TFn<'a>>;
     fn type_tuple(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, error::TTuple<'a>>;
     fn type_error_row(&mut self, start: Position) -> Result<&'a Located<Type<'a>>, error::TErrorRow<'a>>;
@@ -2439,7 +2472,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn markup(&mut self, start: Position) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>>;
     pub(crate) fn element(&mut self) -> Result<&'a Element<'a>, error::Markup<'a>>;             // at `<name`
     pub(crate) fn fragment(&mut self) -> Result<&'a [&'a Located<Child<'a>>], error::Markup<'a>>; // at `<>`
-    pub(crate) fn attrs(&mut self) -> Result<(&'a [Attr<'a>], bool /* self_closing */), error::Markup<'a>>;
+    pub(crate) fn attrs(&mut self, opening: Position) -> Result<(&'a [Attr<'a>], bool /* self_closing */), error::Markup<'a>>;
     /// Text mode loop until `</` (CloseTag) or `}` (Brace).
     pub(crate) fn children(&mut self, term: ChildTerminator) -> Result<&'a [&'a Located<Child<'a>>], error::Child<'a>>;
     pub(crate) fn child(&mut self, term: ChildTerminator) -> Result<Option<&'a Located<Child<'a>>>, error::Child<'a>>;   // None = droppable whitespace run

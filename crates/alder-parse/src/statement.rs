@@ -66,6 +66,7 @@ impl<'a> Parser<'a> {
 
     fn block_body(&mut self) -> Result<&'a Located<Block<'a>>, error::Block<'a>> {
         let start = self.get_position();
+        let opening = self.get_position();
         self.word1(b'{', error::Block::Open)?;
         self.chomp();
         let mut stmts: BumpVec<'a, &'a Located<Stmt<'a>>> = BumpVec::new_in(self.bump);
@@ -80,7 +81,7 @@ impl<'a> Parser<'a> {
                     self.advance();
                     break;
                 }
-                None => return Err(error::Block::End(row, col)),
+                None => return Err(error::Block::End(self.expected_end(opening))),
                 Some(b';') => {}
                 Some(_) => {
                     if stmts.is_empty() && self.looks_like_record_start() {
@@ -93,7 +94,7 @@ impl<'a> Parser<'a> {
                 Err(error::Stmt::Expr(error::Expr::Start(r, c), _, _))
                     if (*r, *c) == (row, col) =>
                 {
-                    return Err(error::Block::End(row, col));
+                    return Err(error::Block::End(self.expected_end(opening)));
                 }
                 _ if same_line => return Err(error::Block::SameLine(row, col)),
                 Err(e) => return Err(error::Block::Stmt(self.alloc(e), row, col)),

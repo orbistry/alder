@@ -35,6 +35,7 @@ impl<'a> Parser<'a> {
         self.chomp();
         let name = self.located_lower(error::Table::Name)?;
         self.chomp();
+        let opening = self.get_position();
         self.word1(b'{', error::Table::Open)?;
         self.chomp();
         let mut columns = BumpVec::new_in(self.bump);
@@ -50,7 +51,7 @@ impl<'a> Parser<'a> {
                     return Err(if columns.is_empty() {
                         error::Table::Column(row, col)
                     } else {
-                        error::Table::End(row, col)
+                        error::Table::End(self.expected_end(opening))
                     });
                 }
             }
@@ -108,25 +109,33 @@ impl<'a> Parser<'a> {
     ///
     /// Precondition: the cursor is on a lowercase letter (callers check
     /// `peek_modifier`). The signature (§5.11) has no name-error callback,
-    /// so a caller that skips the check gets `to_end_error` at the cursor
-    /// rather than a panic. The `(` must be on the name's line; otherwise
+    /// so a caller that skips the check gets `to_arg_error` at the cursor
+    /// rather than a fabricated delimiter opener. The `(` must be on the name's line; otherwise
     /// the modifier is bare and the `(` is left for the caller. Chomps
     /// trailing whitespace.
     pub(crate) fn modifier<E>(
         &mut self,
         to_arg_error: impl Fn(&'a error::Expr<'a>, Row, Col) -> E + Copy,
-        to_end_error: impl FnOnce(Row, Col) -> E,
+        to_end_error: impl FnOnce(error::ExpectedEnd) -> E,
     ) -> Result<Modifier<'a>, E> {
         let name = match self.raw_lower(|row, col| (row, col)) {
             Ok(name) => name,
-            Err((row, col)) => return Err(to_end_error(row, col)),
+            Err((row, col)) => {
+                return Err(to_arg_error(
+                    self.alloc(error::Expr::Start(row, col)),
+                    row,
+                    col,
+                ));
+            }
         };
         self.chomp();
         let args = if self.peek() == Some(b'(') && !self.newline_since(name.region.end) {
+            let opening = self.get_position();
             self.advance();
             self.chomp();
-            let args =
-                self.with_record_ctor(true, |p| p.modifier_args(to_arg_error, to_end_error))?;
+            let args = self.with_record_ctor(true, |p| {
+                p.modifier_args(opening, to_arg_error, to_end_error)
+            })?;
             self.chomp();
             args
         } else {
@@ -138,8 +147,9 @@ impl<'a> Parser<'a> {
     /// After `(` and whitespace; consumes through the `)`.
     fn modifier_args<E>(
         &mut self,
+        opening: alder_region::Position,
         to_arg_error: impl Fn(&'a error::Expr<'a>, Row, Col) -> E + Copy,
-        to_end_error: impl FnOnce(Row, Col) -> E,
+        to_end_error: impl FnOnce(error::ExpectedEnd) -> E,
     ) -> Result<&'a [&'a Located<Expr<'a>>], E> {
         let mut args = BumpVec::new_in(self.bump);
         loop {
@@ -163,8 +173,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 _ => {
-                    let (row, col) = self.position();
-                    return Err(to_end_error(row, col));
+                    return Err(to_end_error(self.expected_end(opening)));
                 }
             }
         }
