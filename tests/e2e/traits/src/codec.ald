@@ -1,5 +1,11 @@
 pub fn encode_value(value: a) String where a: Json { Json.encode(value) }
 
+pub fn capture_order(left: a) fn(a) (Ordering, Bool) where a: Ord {
+    let ordering = compare
+    let equality = (right: a) -> left == right
+    right -> (ordering(left, right), equality(right))
+}
+
 pub fn describe(value: a) String where a: Show, a: Eq, a: Show {
     if value == value { show(value) } else { "not equal" }
 }

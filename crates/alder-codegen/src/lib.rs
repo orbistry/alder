@@ -236,6 +236,34 @@ macro_rules! assert_solved_emit_snapshot {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn nested_option_ordering_emits_each_payload_once() {
+        for depth in [2, 4, 8] {
+            let ty = format!("{}Number{}", "Option[".repeat(depth), "]".repeat(depth));
+            let source = format!(
+                "pub fn order(left: {ty}, right: {ty}) Ordering {{ compare(left, right) }}"
+            );
+            let code = emit_solved(&source);
+            assert_eq!(code.matches("$compareContainer(").count(), depth);
+            assert_eq!(code.matches("$equalContainer(").count(), depth);
+        }
+    }
+
+    #[test]
+    fn nested_single_method_evidence_emits_each_payload_once() {
+        for depth in [2, 4, 8] {
+            let ty = format!("{}Number{}", "Array[".repeat(depth), "]".repeat(depth));
+            let equality = emit_solved(&format!(
+                "pub fn same(left: {ty}, right: {ty}) Bool {{ left == right }}"
+            ));
+            assert_eq!(equality.matches("$equalStructural(").count(), depth);
+            let showing = emit_solved(&format!(
+                "pub fn render(value: {ty}) String {{ show(value) }}"
+            ));
+            assert_eq!(showing.matches("$showContainer(").count(), depth);
+        }
+    }
+
+    #[test]
     fn coalesce_unwraps_only_the_present_branch() {
         assert_solved_emit_snapshot! {r#"
             pub fn default_unit(value: Option[()], events: Array[Number]) () {

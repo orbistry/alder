@@ -1,4 +1,5 @@
 import ~/codec
+import ~/ordering_evidence
 import ~/array_iterators
 import ~/overlay_contracts
 import ~/option_constructors
@@ -202,6 +203,7 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    ordering_evidence.run()
     array_iterators.run()
     assert(array_iterators.advance(Array.iter([42])) == Option.some(42))
     let overlay_left = { value: 0, extra: true }

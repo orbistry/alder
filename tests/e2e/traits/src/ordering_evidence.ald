@@ -1,0 +1,27 @@
+import ~/codec
+
+enum Reverse { Value(Number) }
+
+impl Ord[Reverse] {
+    fn compare(left: Reverse, right: Reverse) Ordering {
+        match (left, right) {
+            (Reverse::Value(a), Reverse::Value(b)) => compare(b, a),
+        }
+    }
+}
+
+pub fn run() {
+    let nested: Option[Option[Reverse]] = Some(Some(Reverse::Value(1)))
+    let operation = codec.capture_order(nested)
+    assert(operation(Some(Some(Reverse::Value(2)))) == (Ordering::Greater, false))
+    assert(operation(Some(Some(Reverse::Value(1)))) == (Ordering::Equal, true))
+    assert(operation(Some(None)) == (Ordering::Greater, false))
+    assert(operation(None) == (Ordering::Greater, false))
+    let missing: Option[Option[Reverse]] = Some(None)
+    let missing_operation = codec.capture_order(missing)
+    assert(missing_operation(Some(None)) == (Ordering::Equal, true))
+    assert(missing_operation(None) == (Ordering::Greater, false))
+    let unit: Option[()] = Some(())
+    assert(codec.capture_order(unit)(Some(())) == (Ordering::Equal, true))
+    assert(codec.capture_order(unit)(None) == (Ordering::Greater, false))
+}
