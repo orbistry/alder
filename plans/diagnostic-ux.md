@@ -923,3 +923,40 @@ Check and Build, exited 1 and left only source/configuration files. A positive
 packaged Run executed mutation and primitive Show, printing `42` and `true` and
 exiting 0. Its first fixture attempted unavailable tuple Show; using the separate
 primitive instances corrected the fixture without changing compiler semantics.
+
+## Pattern-policy audit and nested-pin correction
+
+`docs/language.md` explicitly requires exhaustive closed error-group matching and
+a catch-all for open rows. It specifies pin scoping but does not settle general
+partial-match or redundancy diagnostics. Elm's `Nitpick/PatternMatches.hs`
+simplifies patterns into recursive constructor/literal matrices; its reporter
+rejects redundant arms and incomplete cases, arguments and destructurings.
+The active Alder checker is `inference.rs::check_error_matches`, not the inactive
+Elm-port pattern modules.
+
+| Pattern family | Current active behavior | Classification |
+| --- | --- | --- |
+| Ordinary enums and Option | Type checking without general usefulness/exhaustiveness checking | Existing partial acceptance; policy decision needed |
+| Result | Checks outer Ok/error-tag coverage and open-row catch-alls | Documented Alder-specific requirement, not full recursive payload coverage |
+| Tuples and records | Structural typing/pattern checking; no general recursive coverage matrix | Payload literals and other refutable subpatterns remain a policy boundary |
+| Arrays/rest | Pattern typing and execution; no length/usefulness coverage analysis | Elm lists are not an implementation of Alder array coverage |
+| Alternatives | Each unguarded alternative contributes to Result coverage | Valid unpinned alternatives can cover cases also attempted by pins |
+| Guards | Any guarded arm is excluded from unconditional Result coverage | Existing implementation, with `guarded_error_arm_does_not_complete_coverage` evidence |
+| Pins | Pins anywhere in a candidate pattern now exclude that candidate from unconditional coverage | Confirmed nested-pin defect corrected below; effectful pins must not be optimized away |
+| Redundancy and refutable bindings | No general warning/error policy is imposed | User decision remains required before changing acceptance or adding blanket warnings |
+
+The source regression `nested_pins_do_not_complete_result_coverage` first proved
+that `Err(:failed(^expected))` alone incorrectly completed the failed tag's
+coverage and allowed interface publication. Coverage now detects pins recursively
+through constructors, tags, tuples, arrays, records and aliases. Four reviewed
+source snapshots cover Err payloads, Ok payloads, nested tuples and a pin that
+calls an effectful function. Invalid sources publish no interfaces/artifacts;
+wildcard payloads, fallback arms retaining the pin, and an unpinned alternative
+remain valid. This implements the explicit requirement that pins are not
+unconditional coverage, without changing ordinary-match or payload-literal policy.
+
+Validation: formatting, strict all-target/all-feature Clippy and full workspace
+tests/snapshot-reference checks passed (252 driver tests and seven CLI/editor
+subprocess tests). The four new source snapshots were reviewed; no existing
+snapshots changed and no pending/unreferenced snapshots remain. The preceding
+package refresh predates this fix and will need a final refresh.

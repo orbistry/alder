@@ -1251,6 +1251,11 @@ struct ErrorCoverage<'a> {
 }
 
 fn collect_error_coverage<'a>(pattern: &'a Located<Pattern<'a>>, coverage: &mut ErrorCoverage<'a>) {
+    // A pin can reject (or exit before reaching) its arm, including when it is
+    // nested under a Result constructor or an error-tag payload.
+    if contains_pattern_pin(pattern) {
+        return;
+    }
     match &pattern.value {
         Pattern::Anything | Pattern::Bind(_) => coverage.all = true,
         Pattern::Alias { pattern, .. } => collect_error_coverage(pattern, coverage),
@@ -1275,6 +1280,30 @@ fn collect_error_coverage<'a>(pattern: &'a Located<Pattern<'a>>, coverage: &mut 
             }
         }
         _ => {}
+    }
+}
+
+fn contains_pattern_pin(pattern: &Located<Pattern<'_>>) -> bool {
+    match &pattern.value {
+        Pattern::Pin { .. } => true,
+        Pattern::Alias { pattern, .. } => contains_pattern_pin(pattern),
+        Pattern::Constructor { args, .. } | Pattern::Tag { args, .. } => {
+            args.iter().any(|pattern| contains_pattern_pin(pattern))
+        }
+        Pattern::ConstructorRecord { fields, .. } | Pattern::Record { fields, .. } => fields
+            .iter()
+            .any(|field| contains_pattern_pin(field.pattern)),
+        Pattern::Tuple(patterns)
+        | Pattern::Array {
+            elements: patterns, ..
+        } => patterns.iter().any(|pattern| contains_pattern_pin(pattern)),
+        Pattern::Anything
+        | Pattern::Bind(_)
+        | Pattern::Number { .. }
+        | Pattern::BigInt(_)
+        | Pattern::Str(_)
+        | Pattern::Bool(_)
+        | Pattern::Unit => false,
     }
 }
 

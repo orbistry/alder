@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn inspect(value: Result[Number, [:failed((Number, Number))]], expected: Number) Number {\n    match value { Ok(_) => 0, Err(:failed((_, ^expected))) => 1 }\n}\n"
+---
+alder::type::non_exhaustive_error_match
+
+  × this match does not cover every Result
+   ╭─[/app/src/main.ald:2:5]
+ 1 │ pub fn inspect(value: Result[Number, [:failed((Number, Number))]], expected: Number) Number {
+ 2 │     match value { Ok(_) => 0, Err(:failed((_, ^expected))) => 1 }
+   ·     ──────────────────────────────┬──────────────────────────────
+   ·                                   ╰── missing :failed
+ 3 │ }
+   ╰────
+  help: add an arm for each missing Result case

@@ -254,6 +254,8 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
   - [x] Warn on unused module value bindings with conservative reachability,
     initializer-effect preservation, and CLI/editor delivery tests
 - [ ] Reconcile general pattern and inferred-annotation diagnostic policy
+  - [x] Exclude nested pins, including effectful payload pins, from unconditional
+    Result coverage; preserve fallback and alternative coverage
 - [x] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing
 - [ ] Complete diagnostic parity matrix, validation, and final evidence report
 

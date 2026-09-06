@@ -3453,6 +3453,94 @@ mod tests {
         "#};
     }
 
+    #[test]
+    fn nested_pins_do_not_complete_result_coverage() {
+        for (suffix, source) in [
+            (
+                "error_payload",
+                indoc::indoc! {r#"
+                pub fn inspect(value: Result[Number, [:failed(Number)]], expected: Number) Number {
+                    match value { Ok(_) => 0, Err(:failed(^expected)) => 1 }
+                }
+            "#},
+            ),
+            (
+                "ok_payload",
+                indoc::indoc! {r#"
+                pub fn inspect(value: Result[Number, [:failed]], expected: Number) Number {
+                    match value { Ok(^expected) => 0, Err(_) => 1 }
+                }
+            "#},
+            ),
+            (
+                "tuple_payload",
+                indoc::indoc! {r#"
+                pub fn inspect(value: Result[Number, [:failed((Number, Number))]], expected: Number) Number {
+                    match value { Ok(_) => 0, Err(:failed((_, ^expected))) => 1 }
+                }
+            "#},
+            ),
+            (
+                "effectful_payload",
+                indoc::indoc! {r#"
+                    fn read(value: Number) Number {
+                        Io.print("pin")
+                        value
+                    }
+                    pub fn inspect(value: Result[Number, [:failed(Number)]], expected: Number) Number {
+                        match value { Ok(_) => 0, Err(:failed(^read(expected))) => 1 }
+                    }
+                "#},
+            ),
+        ] {
+            let uri = url("app/src/main.ald");
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("a pinned payload cannot complete {suffix} coverage: {result:?}")
+            };
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            assert_eq!(
+                diagnostics[0].message(),
+                "this match does not cover every Result"
+            );
+            assert!(result.interfaces.is_empty());
+            assert!(result.artifacts.is_empty());
+            insta::with_settings!({ snapshot_suffix => suffix }, {
+                assert_rendered_diagnostics_snapshot!(source, diagnostics);
+            });
+            let valid = source
+                .replace("^expected", "_")
+                .replace("^read(expected)", "_");
+            let fallback = source.replace("=> 1 }", "=> 1, _ => 2 }");
+            let alternative = source.replace(
+                "Err(:failed(^expected))",
+                "Err(:failed(^expected)) | Err(:failed(_))",
+            );
+            for valid in [
+                Some(valid),
+                Some(fallback),
+                (suffix == "error_payload").then_some(alternative),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                let result = build_fixture_sync(
+                    vec![(uri.clone(), Ok(valid))],
+                    BuildMode::Check,
+                    BuildDependencies::default(),
+                );
+                assert!(
+                    matches!(result.modules[&uri], ModuleResult::Success { .. }),
+                    "{result:?}"
+                );
+            }
+        }
+    }
+
     #[tokio::test]
     async fn renders_bodyless_trait_invalid_result_error_without_color() {
         assert_diagnostic_snapshot! {r#"
