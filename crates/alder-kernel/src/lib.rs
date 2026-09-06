@@ -744,6 +744,77 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn promise_mapper_failure_preserves_origin_cause_and_cleanup() {
+        let harness = indoc::indoc! {r#"
+            const cause = new Error("mapper failed");
+            let mapped = 0, cleaned = 0, continued = false, defect;
+            try {
+                await $runTask($task(function* () {
+                    try {
+                        yield* $tryPromise(() => Promise.reject("foreign"), false,
+                            "mapper-origin", error => {
+                                $assert(error === "foreign");
+                                mapped++;
+                                throw cause;
+                            });
+                        continued = true;
+                    } finally { cleaned++; }
+                }));
+            } catch (error) { defect = error; }
+            $assert(defect?.name === "AlderForeignDefect");
+            $assert(defect.origin === "mapper-origin" && defect.cause === cause);
+            $assert(mapped === 1 && cleaned === 1 && !continued);
+            $assert(await $runTask($task(function* () { return 42; })) === 42);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("mapper failure and cleanup must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn promise_then_getter_failure_is_a_defect_not_a_mapped_rejection() {
+        let harness = indoc::indoc! {r#"
+            const cause = new Error("then getter failed");
+            let reads = 0, mapped = 0, cleaned = 0, defect;
+            try {
+                await $runTask($task(function* () {
+                    try {
+                        yield* $tryPromise(() => ({ get then() {
+                            reads++;
+                            throw cause;
+                        }}), false, "getter-origin", error => {
+                            mapped++;
+                            return $resultErr(error);
+                        });
+                    } finally { cleaned++; }
+                }));
+            } catch (error) { defect = error; }
+            $assert(defect?.name === "AlderForeignDefect");
+            $assert(defect.origin === "getter-origin" && defect.cause === cause);
+            $assert(reads === 1 && mapped === 0 && cleaned === 1);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("then getter failure must unwind cleanup")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn cancelled_promise_does_not_run_a_late_rejection_mapper() {
         let harness = indoc::indoc! {r#"
             let reject, registered;
