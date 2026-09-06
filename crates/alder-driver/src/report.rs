@@ -1294,10 +1294,11 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             .with_help(help);
         }
         ErrorKind::MissingReturn { expected } => {
-            return Diagnostic::error(source, format!("this function can finish without returning `{expected}`"))
+            let diagnostic = Diagnostic::error(source, format!("this function can finish without returning `{expected}`"))
                 .with_code("alder::type::missing_return")
                 .with_primary_label(error.region, "a path reaches the end without a value")
                 .with_help("add a final expression or return a value on every path; a while or for loop may run zero times");
+            return with_expectation_origin(diagnostic, error);
         }
         ErrorKind::AmbiguousOptionLifting => {
             return Diagnostic::error(source, "I cannot choose consistent Option wrapping for these values")
@@ -1490,20 +1491,7 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
     let mut diagnostic = Diagnostic::error(source, message)
         .with_code(format!("alder::type::{code}"))
         .with_primary_label(error.region, label);
-    if let Some(expectation) = &error.expectation
-        && let Some(origin) = expectation.origin
-        && origin != error.region
-    {
-        use alder_constrain::ExpectationKind as E;
-        let label = match expectation.kind {
-            E::Annotation => "the declared type",
-            E::Return => "the declared return type",
-            E::ArrayElement { .. } => "an earlier array element",
-            E::Branch => "another branch in this expression",
-            _ => "a related type requirement",
-        };
-        diagnostic = diagnostic.with_secondary_label(origin, label);
-    }
+    diagnostic = with_expectation_origin(diagnostic, error);
     if matches!(error.kind, ErrorKind::InfiniteType { .. }) {
         diagnostic = diagnostic.with_help("these requirements form a cycle: expanding the type would keep nesting it inside itself. Check the highlighted use and the types it connects; adding an annotation cannot make this structural cycle finite");
     }
@@ -1564,6 +1552,27 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             Some(candidate) => format!("did you mean `{candidate}`? {listing}"),
             None => listing,
         });
+    }
+    diagnostic
+}
+
+fn with_expectation_origin(
+    mut diagnostic: Diagnostic,
+    error: &alder_constrain::Error,
+) -> Diagnostic {
+    if let Some(expectation) = &error.expectation
+        && let Some(origin) = expectation.origin
+        && origin != error.region
+    {
+        use alder_constrain::ExpectationKind as E;
+        let label = match expectation.kind {
+            E::Annotation => "the declared type",
+            E::Return => "the declared return type",
+            E::ArrayElement { .. } => "an earlier array element",
+            E::Branch => "another branch in this expression",
+            _ => "a related type requirement",
+        };
+        diagnostic = diagnostic.with_secondary_label(origin, label);
     }
     diagnostic
 }

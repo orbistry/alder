@@ -789,3 +789,24 @@ mistake, and a numeric Show control passed without compiler changes.
 
 This is local-host checkpoint evidence, not a claim that the remaining provenance,
 metadata-recovery or pattern-policy audit is complete.
+
+## Missing-return provenance checkpoint
+
+`missing_return_diagnostics_label_only_written_return_annotations` reproduced
+missing origin labels for functions that can reach their end without a value.
+Inference now retains the written return annotation as the expectation origin;
+the specialized renderer uses the same secondary-origin rendering as ordinary
+mismatches while retaining its fallthrough-specific primary label and advice.
+
+The source regression checks exact annotation slices for Number, a transparent
+alias and an async function, and checks the absence of an invented origin for
+an inferred result established by an early return. Corrected source returns a
+value on every path. Existing imported-name and zero-iteration-loop snapshots
+also retain their written return requirements. This adds context, not a change
+to fallthrough acceptance or recovery.
+
+Validation: formatting, strict all-target/all-feature Clippy, and the full
+workspace snapshot/reference check passed (248 driver tests), with no pending
+or unreferenced snapshots. The new source snapshot and both changed snapshots
+were reviewed. Package verification above predates this checkpoint and remains
+to be refreshed for the final branch.

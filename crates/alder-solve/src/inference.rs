@@ -2498,6 +2498,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                             region: body.region,
                             kind: ErrorKind::MissingReturn { expected },
                         }
+                        .expected_by(ExpectationKind::Return, ret.map(|ret| ret.region))
                     } else {
                         error.expected_by(ExpectationKind::Return, ret.map(|ret| ret.region))
                     }

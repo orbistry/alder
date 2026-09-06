@@ -1,0 +1,54 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "type Count = Number\npub fn missing() Number {}\npub fn alias() Count {}\npub async fn asynchronous() Number {}\npub fn inferred(flag: Bool) { while flag { return 42 } }\n"
+---
+alder::type::missing_return
+
+  × this function can finish without returning `Number`
+   ╭─[/app/src/main.ald:2:25]
+ 1 │ type Count = Number
+ 2 │ pub fn missing() Number {}
+   ·                  ───┬── ─┬
+   ·                     │    ╰── a path reaches the end without a value
+   ·                     ╰── the declared return type
+ 3 │ pub fn alias() Count {}
+   ╰────
+  help: add a final expression or return a value on every path; a while or for
+        loop may run zero times
+alder::type::missing_return
+
+  × this function can finish without returning `Number`
+   ╭─[/app/src/main.ald:3:22]
+ 2 │ pub fn missing() Number {}
+ 3 │ pub fn alias() Count {}
+   ·                ──┬── ─┬
+   ·                  │    ╰── a path reaches the end without a value
+   ·                  ╰── the declared return type
+ 4 │ pub async fn asynchronous() Number {}
+   ╰────
+  help: add a final expression or return a value on every path; a while or for
+        loop may run zero times
+alder::type::missing_return
+
+  × this function can finish without returning `Number`
+   ╭─[/app/src/main.ald:4:36]
+ 3 │ pub fn alias() Count {}
+ 4 │ pub async fn asynchronous() Number {}
+   ·                             ───┬── ─┬
+   ·                                │    ╰── a path reaches the end without a value
+   ·                                ╰── the declared return type
+ 5 │ pub fn inferred(flag: Bool) { while flag { return 42 } }
+   ╰────
+  help: add a final expression or return a value on every path; a while or for
+        loop may run zero times
+alder::type::missing_return
+
+  × this function can finish without returning `Number`
+   ╭─[/app/src/main.ald:5:29]
+ 4 │ pub async fn asynchronous() Number {}
+ 5 │ pub fn inferred(flag: Bool) { while flag { return 42 } }
+   ·                             ──────────────┬─────────────
+   ·                                           ╰── a path reaches the end without a value
+   ╰────
+  help: add a final expression or return a value on every path; a while or for
+        loop may run zero times

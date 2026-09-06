@@ -7,6 +7,8 @@ alder::type::missing_return
   × this function can finish without returning `Number`
    ╭─[/project/src/main.ald:1:31]
  1 │ ╭─▶ fn missing(flag: Bool) Number {
+   · │                          ───┬──
+   · │                             ╰── the declared return type
  2 │ │       while flag { return 42 }
  3 │ ├─▶ }
    · ╰──── a path reaches the end without a value

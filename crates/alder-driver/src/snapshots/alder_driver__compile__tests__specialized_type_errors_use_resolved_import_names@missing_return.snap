@@ -8,8 +8,9 @@ alder::type::missing_return
    ╭─[/app/src/main.ald:2:32]
  1 │ import ~/left.{ Token as LeftToken }
  2 │ fn missing() Option[LeftToken] {}
-   ·                                ─┬
-   ·                                 ╰── a path reaches the end without a value
+   ·              ────────┬──────── ─┬
+   ·                      │          ╰── a path reaches the end without a value
+   ·                      ╰── the declared return type
    ╰────
   help: add a final expression or return a value on every path; a while or for
         loop may run zero times

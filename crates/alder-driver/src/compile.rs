@@ -1222,6 +1222,61 @@ mod tests {
     }
 
     #[test]
+    fn missing_return_diagnostics_label_only_written_return_annotations() {
+        let source = indoc::indoc! {r#"
+            type Count = Number
+            pub fn missing() Number {}
+            pub fn alias() Count {}
+            pub async fn asynchronous() Number {}
+            pub fn inferred(flag: Bool) { while flag { return 42 } }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("all four functions can fall through without their result")
+        };
+        assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+        for (diagnostic, annotation) in
+            diagnostics
+                .iter()
+                .zip([Some("Number"), Some("Count"), Some("Number"), None])
+        {
+            assert_eq!(
+                diagnostic.message(),
+                "this function can finish without returning `Number`"
+            );
+            let origin = miette::Diagnostic::labels(diagnostic)
+                .unwrap()
+                .find(|label| label.label() == Some("the declared return type"));
+            assert_eq!(
+                origin.map(|label| &source[label.offset()..label.offset() + label.len()]),
+                annotation
+            );
+        }
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = source
+            .replace("Number {}", "Number { 42 }")
+            .replace("Count {}", "Count { 42 }")
+            .replace(
+                "while flag { return 42 } }",
+                "while flag { return 42 }\n42 }",
+            );
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(valid))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+    }
+
+    #[test]
     fn trait_diagnostics_keep_distinct_inferred_variables() {
         let source = indoc::indoc! {r#"
             fn identity(value: a) a { value }
