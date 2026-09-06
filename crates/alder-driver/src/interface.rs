@@ -274,28 +274,21 @@ impl InterfaceCache {
         self.build_id
     }
 
-    pub fn cache_path(&self, module_name: &str) -> PathBuf {
-        self.cache_dir
-            .join(format!("{}.aldi", module_name.replace('.', "/")))
-    }
-
     pub fn interface_path(&self, module: &OwnedModuleId) -> PathBuf {
         let package = match &module.package {
-            OwnedPackageId::Application => None,
-            OwnedPackageId::Named { author, project } => Some(format!("@{author}/{project}")),
-            OwnedPackageId::ApplicationMember(member) => Some(format!("members/{member}")),
-            OwnedPackageId::Builtin => Some("builtin".to_owned()),
+            OwnedPackageId::Application => "application".to_owned(),
+            OwnedPackageId::Named { author, project } => format!("packages/{author}/{project}"),
+            OwnedPackageId::ApplicationMember(member) => format!("members/{member}"),
+            OwnedPackageId::Builtin => "builtin".to_owned(),
         };
-        let mut path = self.cache_dir.clone();
-        if let Some(package) = package {
-            path = path.join(package);
-        }
-        path.join(format!("{}.aldi", module.path.join("/")))
+        self.cache_dir
+            .join(package)
+            .join(format!("{}.aldi", module.path.join("/")))
     }
 
     pub fn package_index_path(&self, package: &OwnedPackageId) -> PathBuf {
         let name = match package {
-            OwnedPackageId::Named { author, project } => format!("{author}/{project}"),
+            OwnedPackageId::Named { author, project } => format!("packages/{author}/{project}"),
             OwnedPackageId::Application => "application".to_owned(),
             OwnedPackageId::ApplicationMember(member) => format!("members/{member}"),
             OwnedPackageId::Builtin => "builtin".to_owned(),
@@ -305,10 +298,6 @@ impl InterfaceCache {
             .expect("interface cache always has an .alder parent")
             .join("instances")
             .join(format!("{name}.aldi"))
-    }
-
-    pub fn load(&self, module_name: &str) -> Option<InterfaceFile> {
-        InterfaceFile::load(&self.cache_path(module_name)).ok()
     }
 
     pub fn load_interface(&self, module: &OwnedModuleId) -> Result<InterfaceFile, DriverError> {
@@ -727,11 +716,54 @@ mod tests {
     }
 
     #[test]
+    fn cache_paths_separate_package_identity_variants() {
+        let cache = InterfaceCache::new(Path::new("/project"));
+        let modules = [
+            OwnedModuleId {
+                package: OwnedPackageId::Application,
+                path: vec!["builtin".into(), "value".into()],
+            },
+            OwnedModuleId {
+                package: OwnedPackageId::Builtin,
+                path: vec!["value".into()],
+            },
+            OwnedModuleId {
+                package: OwnedPackageId::Application,
+                path: vec!["members".into(), "member".into(), "value".into()],
+            },
+            OwnedModuleId {
+                package: OwnedPackageId::ApplicationMember("member".into()),
+                path: vec!["value".into()],
+            },
+        ];
+        let paths = modules
+            .iter()
+            .map(|module| cache.interface_path(module))
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            paths.len(),
+            modules.len(),
+            "distinct module identities must not overwrite caches"
+        );
+        assert_ne!(
+            cache.package_index_path(&OwnedPackageId::ApplicationMember("member".into())),
+            cache.package_index_path(&OwnedPackageId::Named {
+                author: "members".into(),
+                project: "member".into(),
+            }),
+            "named packages must not overwrite workspace member indexes"
+        );
+    }
+
+    #[test]
     fn test_cache_path() {
         let cache = InterfaceCache::new(Path::new("/project"));
         assert_eq!(
-            cache.cache_path("Json.Decode"),
-            PathBuf::from("/project/.alder/interfaces/Json/Decode.aldi")
+            cache.interface_path(&OwnedModuleId {
+                package: OwnedPackageId::Application,
+                path: vec!["Json".to_owned(), "Decode".to_owned()],
+            }),
+            PathBuf::from("/project/.alder/interfaces/application/Json/Decode.aldi")
         );
         assert_eq!(
             cache.interface_path(&OwnedModuleId {
@@ -741,14 +773,14 @@ mod tests {
                 },
                 path: vec!["Decode".to_owned()],
             }),
-            PathBuf::from("/project/.alder/interfaces/@alice/json/Decode.aldi")
+            PathBuf::from("/project/.alder/interfaces/packages/alice/json/Decode.aldi")
         );
         assert_eq!(
             cache.package_index_path(&OwnedPackageId::Named {
                 author: "alice".to_owned(),
                 project: "json".to_owned(),
             }),
-            PathBuf::from("/project/.alder/instances/alice/json.aldi")
+            PathBuf::from("/project/.alder/instances/packages/alice/json.aldi")
         );
     }
 }

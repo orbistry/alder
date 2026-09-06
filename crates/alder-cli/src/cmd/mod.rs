@@ -286,7 +286,10 @@ mod tests {
         ));
         super::build::persist_semantic_artifacts(&root, &compiled.result).unwrap();
 
-        assert!(root.join(".alder/interfaces/main.aldi").is_file());
+        assert!(
+            root.join(".alder/interfaces/application/main.aldi")
+                .is_file()
+        );
         assert!(root.join(".alder/instances/application.aldi").is_file());
         std::fs::remove_dir_all(root).unwrap();
     }

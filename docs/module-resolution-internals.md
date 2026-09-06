@@ -60,6 +60,14 @@ underlying resolver explanation, and returns that structured report to the CLI.
 Reports are sorted by source name and message before grouping; the CLI does not
 flatten them to strings. Colorless rendering is selected only by tests.
 
+Interface caches separate package identity kinds into `application/`, `builtin/`,
+`members/<key>/`, and `packages/<author>/<project>/` namespaces before appending
+the module path. Package indexes use the same kind separation. A source module
+named `builtin/value` therefore cannot overwrite builtin `value`, and a named
+package `members/<key>` cannot overwrite a workspace member's index. Cache APIs
+take owned canonical identities rather than unqualified dotted module names.
+There is no fallback reader for the previous colliding layout.
+
 Every source build requires both `BuildDependencies::module_paths` and
 `module_packages` entries for each source URI. `Project::build_dependencies`
 supplies them for filesystem projects; embedders supply the identities of their
