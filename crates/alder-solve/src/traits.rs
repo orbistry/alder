@@ -124,6 +124,26 @@ pub enum CoherenceError<'a> {
     },
 }
 
+impl<'a> CoherenceError<'a> {
+    /// Defining modules, ordered by canonical identity for diagnostic ownership.
+    pub fn modules(&self) -> BTreeSet<alder_ast::ModuleId<'a>> {
+        match self {
+            Self::SuperclassCycle { traits } => {
+                traits.iter().map(|trait_| trait_.0.module).collect()
+            }
+            Self::OverlappingImpl { first, second, .. } => {
+                [first.module, second.module].into_iter().collect()
+            }
+            Self::OrphanImpl { implementation, .. }
+            | Self::InvalidTermination { implementation, .. }
+            | Self::KindMismatch { implementation, .. }
+            | Self::ProjectionCycle { implementation, .. } => {
+                [implementation.module].into_iter().collect()
+            }
+        }
+    }
+}
+
 impl<'a> TraitDatabase<'a> {
     pub fn build(
         bump: &'a Bump,

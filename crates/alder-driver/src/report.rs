@@ -1493,6 +1493,29 @@ fn with_obligation_chain(help: String, chain: &[alder_solve::ObligationFrame<'_>
 }
 
 fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) -> Diagnostic {
+    coherence_report(source, module, error, true)
+}
+
+pub(crate) fn dependency_coherence(module: &Module<'_>, error: &CoherenceError<'_>) -> Diagnostic {
+    let source = Source::new("dependency trait registry", "");
+    let modules = error
+        .modules()
+        .into_iter()
+        .map(|module| format!("`{}`", module_name(module)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    coherence_report(source.clone(), module, error, false).with_related(Diagnostic::advice(
+        source,
+        format!("these definitions come from dependency modules: {modules}"),
+    ))
+}
+
+fn coherence_report(
+    source: Source,
+    module: &Module<'_>,
+    error: &CoherenceError<'_>,
+    show_spans: bool,
+) -> Diagnostic {
     let (code, message, primary, primary_label, secondary, help) = match error {
         CoherenceError::SuperclassCycle { traits } => (
             "superclass_cycle",
@@ -1505,10 +1528,11 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
                     .join(" -> ")
             ),
             traits
-                .last()
-                .and_then(|trait_| local_trait_region(module, *trait_))
+                .iter()
+                .rev()
+                .find_map(|trait_| local_trait_region(module, *trait_))
                 .unwrap_or_else(Region::one),
-            "this superclass closes the cycle",
+            "this trait participates in the superclass cycle",
             None,
             Some("remove one of the superclass constraints in this cycle".to_owned()),
         ),
@@ -1540,17 +1564,33 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
             first,
             second,
             trait_,
-        } => (
-            "overlapping_impl",
-            format!(
-                "overlapping implementations of `{}` are not allowed",
-                trait_.0.name
-            ),
-            impl_region(module, *second),
-            "this implementation overlaps the first",
-            Some((impl_region(module, *first), "first implementation is here")),
-            Some("remove one impl or introduce a distinct wrapper type; Alder has no specialization".to_owned()),
-        ),
+        } => {
+            let first_region = local_impl_region(module, *first);
+            let second_region = local_impl_region(module, *second);
+            let other_module = if first_region.is_some() { second.module } else { first.module };
+            let mut help = "remove one impl or introduce a distinct wrapper type; Alder has no specialization".to_owned();
+            if show_spans && (first_region.is_none() || second_region.is_none()) {
+                help.push_str(&format!(
+                    "; the other implementation is in module `{}`",
+                    module_name(other_module),
+                ));
+            }
+            (
+                "overlapping_impl",
+                format!(
+                    "overlapping implementations of `{}` are not allowed",
+                    trait_.0.name
+                ),
+                second_region.or(first_region).unwrap_or_else(Region::one),
+                if first_region.is_some() && second_region.is_some() {
+                    "this implementation overlaps the first"
+                } else {
+                    "this implementation overlaps one in another module"
+                },
+                first_region.zip(second_region).map(|(region, _)| (region, "first implementation is here")),
+                Some(help),
+            )
+        },
         CoherenceError::InvalidTermination {
             implementation,
             prerequisite,
@@ -1603,10 +1643,12 @@ fn coherence(source: Source, module: &Module<'_>, error: &CoherenceError<'_>) ->
             Some("make at least one associated type resolve to a non-cyclic type".to_owned()),
         ),
     };
-    let mut diagnostic = Diagnostic::error(source, message)
-        .with_code(format!("alder::trait::{code}"))
-        .with_primary_label(primary, primary_label);
-    if let Some((region, label)) = secondary {
+    let mut diagnostic =
+        Diagnostic::error(source, message).with_code(format!("alder::trait::{code}"));
+    if show_spans {
+        diagnostic = diagnostic.with_primary_label(primary, primary_label);
+    }
+    if show_spans && let Some((region, label)) = secondary {
         diagnostic = diagnostic.with_secondary_label(region, label);
     }
     if let Some(help) = help {
@@ -2038,20 +2080,14 @@ fn local_impl_region(module: &Module<'_>, implementation: ImplId<'_>) -> Option<
     if implementation.module != module.id {
         return None;
     }
-    let ordinal = match implementation.origin {
-        ImplOrigin::Source { item_ordinal } => item_ordinal,
-        ImplOrigin::Derived { type_ordinal, .. } | ImplOrigin::AutomaticEq { type_ordinal } => {
-            type_ordinal
-        }
-        ImplOrigin::Builtin { .. } => return None,
-    };
-    module
-        .items
-        .get(ordinal as usize)
-        .map(|item| match item.value.kind {
-            ItemKind::Impl(_) | ItemKind::Enum(_) | ItemKind::ErrorGroup(_) => item.region,
-            _ => item.region,
-        })
+    // Origins retain source ordinals, but canonical items omit imports (and
+    // header-only modules omit value declarations). Generated implementations
+    // also carry their originating declaration's region, so identity lookup
+    // works for source implementations and derives alike.
+    module.items.iter().find_map(|item| match item.value.kind {
+        ItemKind::Impl(declaration) if declaration.id == implementation => Some(item.region),
+        _ => None,
+    })
 }
 
 fn impl_description(implementation: ImplId<'_>) -> String {

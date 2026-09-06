@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets/api.{ Token, Display }\nimpl Display[Token] { fn display(value: Token) String { \"token\" } }\n"
+---
+alder::trait::overlapping_impl
+
+  × overlapping implementations of `Display` are not allowed
+  help: remove one impl or introduce a distinct wrapper type; Alder has no
+        specialization
+
+Advice: 
+  ☞ these definitions come from dependency modules: `vendor/widgets/first`,
+  │ `vendor/widgets/second`

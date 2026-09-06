@@ -1,5 +1,5 @@
 ---
-cargo/alder-driver: patch
+cargo/alder-driver: minor
 cargo/alder-cli: patch
 ---
 

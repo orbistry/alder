@@ -10,6 +10,6 @@ alder::trait::superclass_cycle
  4 │ ╭─▶ trait Second[a] where a: First {
  5 │ │       fn second(value: a) a
  6 │ ├─▶ }
-   · ╰──── this superclass closes the cycle
+   · ╰──── this trait participates in the superclass cycle
    ╰────
   help: remove one of the superclass constraints in this cycle

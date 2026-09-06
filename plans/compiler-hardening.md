@@ -2,6 +2,13 @@
 
 Status: active on `compiler-hardening`, based on `21994e0`.
 
+Coherence diagnostic checkpoint: validate the frozen package registry before
+body compilation, retain errors on their defining source modules, and report
+dependency-only errors once without fabricated spans. Resolve implementation
+labels by identity, not source ordinals into canonical items. A newly reproduced
+cross-module superclass-cycle label now selects a local trait declaration.
+See `docs/coherence-diagnostics-hardening.md` for regressions and validation.
+
 Explicit module-identity checkpoint: removed URI-based fallback identities and
 metadata-free driver entry points. Both package and source-relative path are
 required before graph/build publication. Missing metadata yields deterministic

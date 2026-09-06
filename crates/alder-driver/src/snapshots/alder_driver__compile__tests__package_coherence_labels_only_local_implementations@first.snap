@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/model.{ Token, Display }\nimpl Display[Token] {\n    fn display(value: Token) String { \"token\" }\n}\n"
+---
+alder::trait::overlapping_impl
+
+  × overlapping implementations of `Display` are not allowed
+   ╭─[/project/src/first.ald:2:1]
+ 1 │     import ~/model.{ Token, Display }
+ 2 │ ╭─▶ impl Display[Token] {
+ 3 │ │       fn display(value: Token) String { "token" }
+ 4 │ ├─▶ }
+   · ╰──── this implementation overlaps one in another module
+   ╰────
+  help: remove one impl or introduce a distinct wrapper type; Alder has no
+        specialization; the other implementation is in module `second`

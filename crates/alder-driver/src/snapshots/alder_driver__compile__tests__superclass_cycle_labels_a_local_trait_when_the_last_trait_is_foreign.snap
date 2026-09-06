@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let marker = 42\n\npub trait Local[a] { fn local(value: a) a }\n"
+---
+alder::trait::superclass_cycle
+
+  × trait superclass cycle: Local -> Foreign
+   ╭─[local.ald:3:1]
+ 2 │ 
+ 3 │ pub trait Local[a] { fn local(value: a) a }
+   · ─────────────────────┬─────────────────────
+   ·                      ╰── this trait participates in the superclass cycle
+   ╰────
+  help: remove one of the superclass constraints in this cycle

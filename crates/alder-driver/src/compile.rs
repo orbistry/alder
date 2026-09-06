@@ -286,6 +286,100 @@ fn build_sync(
         }
     }
 
+    // Reject an incoherent source package before compiling bodies against its
+    // frozen registry. Otherwise each module's solver repeats the same foreign
+    // errors against its own source, and missing inferred interfaces cascade.
+    let registry_module = store.alloc(alder_ast::Module {
+        id: ModuleId {
+            package: PackageId::Builtin,
+            path: &[],
+        },
+        imports: &[],
+        items: &[],
+        value_sccs: &[],
+        assigned_bindings: &[],
+    });
+    let registry = alder_solve::TraitDatabase::build_with_package_instances(
+        &store,
+        registry_module,
+        &interfaces,
+        package_instances,
+    );
+    let coherence_errors = registry.validate(&store);
+    let owners = sources
+        .iter()
+        .filter_map(|(uri, _)| {
+            let identity = &identities[uri];
+            let home = ModuleId {
+                package: hydrate_package_id(&store, &identity.package),
+                path: store.alloc_slice_fill_iter(
+                    identity
+                        .path
+                        .iter()
+                        .map(|part| store.alloc_str(part) as &str),
+                ),
+            };
+            coherence_errors
+                .iter()
+                .any(|error| coherence_belongs_to(error, home))
+                .then_some(uri.clone())
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    if !coherence_errors.is_empty() {
+        let source_modules = sources
+            .iter()
+            .map(|(uri, _)| {
+                let identity = &identities[uri];
+                ModuleId {
+                    package: hydrate_package_id(&store, &identity.package),
+                    path: store.alloc_slice_fill_iter(
+                        identity
+                            .path
+                            .iter()
+                            .map(|part| store.alloc_str(part) as &str),
+                    ),
+                }
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        let diagnostics = coherence_errors
+            .iter()
+            .filter(|error| error.modules().is_disjoint(&source_modules))
+            .map(|error| crate::report::dependency_coherence(registry_module, error))
+            .collect();
+        let modules = sources
+            .iter()
+            .map(|(uri, source)| {
+                let result = if owners.contains(uri) {
+                    compile_module(
+                        uri,
+                        source,
+                        &identities[uri],
+                        &store,
+                        &interfaces,
+                        package_instances,
+                        BuildMode::Check,
+                    )
+                    .0
+                    .result
+                } else {
+                    ModuleResult::Blocked
+                };
+                (uri.clone(), result)
+            })
+            .collect();
+        return BuildResult {
+            diagnostics,
+            modules,
+            total,
+            success: 0,
+            failed: total,
+            warnings: vec![],
+            artifacts: HashMap::new(),
+            interfaces: vec![],
+            package_instance_indexes: vec![],
+        };
+    }
+
     let mut results: HashMap<Url, ModuleResult> = HashMap::new();
     let mut all_warnings: Vec<Diagnostic> = Vec::new();
     let mut artifacts = HashMap::new();
@@ -637,20 +731,7 @@ fn compile_module<'s>(
 }
 
 fn coherence_belongs_to(error: &alder_solve::CoherenceError<'_>, home: ModuleId<'_>) -> bool {
-    match error {
-        alder_solve::CoherenceError::SuperclassCycle { traits } => {
-            traits.iter().any(|trait_| trait_.0.module == home)
-        }
-        alder_solve::CoherenceError::OrphanImpl { implementation, .. }
-        | alder_solve::CoherenceError::InvalidTermination { implementation, .. }
-        | alder_solve::CoherenceError::KindMismatch { implementation, .. }
-        | alder_solve::CoherenceError::ProjectionCycle { implementation, .. } => {
-            implementation.module == home
-        }
-        alder_solve::CoherenceError::OverlappingImpl { first, second, .. } => {
-            first.module == home || second.module == home
-        }
-    }
+    error.modules().contains(&home)
 }
 
 fn source_identities<'u>(
@@ -1915,6 +1996,62 @@ mod tests {
         diagnostics.clone()
     }
 
+    #[test]
+    fn superclass_cycle_labels_a_local_trait_when_the_last_trait_is_foreign() {
+        let source = indoc::indoc! {r#"
+            let marker = 42
+
+            pub trait Local[a] { fn local(value: a) a }
+        "#};
+        let bump = Bump::new();
+        let parsed = alder_parse::parse_module(&bump, source).unwrap();
+        let canonical = alder_can::canonicalize(
+            &bump,
+            alder_can::Context {
+                home: ModuleId {
+                    package: PackageId::Application,
+                    path: &["local"],
+                },
+                imports: &[],
+                interfaces: &[],
+            },
+            &parsed,
+        )
+        .unwrap();
+        let local = canonical
+            .module
+            .items
+            .iter()
+            .find_map(|item| match item.value.kind {
+                alder_ast::ItemKind::Trait(declaration) => Some(declaration.id),
+                _ => None,
+            })
+            .unwrap();
+        let foreign = alder_ast::TraitId(alder_ast::QualifiedName {
+            module: ModuleId {
+                package: PackageId::Application,
+                path: &["foreign"],
+            },
+            name: "Foreign",
+        });
+        let diagnostic = crate::report::solve(
+            Source::new("local.ald", source),
+            canonical.module,
+            &alder_solve::SolveError::Coherence(alder_solve::CoherenceError::SuperclassCycle {
+                traits: &[local, foreign],
+            }),
+        );
+        let labels = miette::Diagnostic::labels(&diagnostic)
+            .unwrap()
+            .collect::<Vec<_>>();
+        assert_eq!(labels.len(), 1);
+        assert!(
+            labels[0].offset() > source.find("\n\n").unwrap(),
+            "the label must point to the local trait, not the first source character"
+        );
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
+    }
+
     fn ambiguous_failure(source: &str) -> Diagnostic {
         let bump = Bump::new();
         let source = bump.alloc_str(source);
@@ -2807,6 +2944,314 @@ mod tests {
         assert!(result.is_success(), "{:?}", result.modules[&consumer]);
     }
 
+    #[test]
+    fn stored_projection_cycle_is_rejected_without_application_source() {
+        let valid = dependency_interface(
+            indoc::indoc! {r#"
+            pub enum Counter { Counter }
+            pub trait Pair[i] {
+                type Left
+                type Right
+            }
+            impl Pair[Counter] {
+                type Left = Number
+                type Right = String
+            }
+        "#},
+            &["associated"],
+            &[],
+        );
+        let mut cyclic = valid.clone();
+        let implementation = cyclic
+            .instances
+            .iter_mut()
+            .find(|implementation| implementation.trait_ref.trait_.0.name == "Pair")
+            .unwrap();
+        let left = implementation.assoc_bindings[0].assoc.clone();
+        let right = implementation.assoc_bindings[1].assoc.clone();
+        for (binding, target) in implementation.assoc_bindings.iter_mut().zip([right, left]) {
+            binding.typ.typ =
+                crate::interface::OwnedType::Projection(crate::interface::OwnedProjection {
+                    trait_ref: implementation.trait_ref.clone(),
+                    assoc: target,
+                });
+        }
+        let bump = Bump::new();
+        let cyclic = InterfaceFile::dehydrate(&cyclic.hydrate(&bump)).unwrap();
+        for (interface, accepted) in [(valid, true), (cyclic, false)] {
+            let bytes = bincode::serialize(&interface).unwrap();
+            let interface = bincode::deserialize(&bytes).unwrap();
+            let result = build_fixture_sync(
+                vec![],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: vec![interface],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(result.is_success(), accepted);
+            if !accepted {
+                assert_eq!(result.diagnostics.len(), 1);
+                let diagnostic = &result.diagnostics[0];
+                assert!(diagnostic.message().contains("associated type cycle"));
+                assert!(diagnostic.message().contains("Left"));
+                assert!(diagnostic.message().contains("Right"));
+                assert!(miette::Diagnostic::labels(diagnostic).is_none());
+                let related = miette::Diagnostic::related(diagnostic)
+                    .unwrap()
+                    .collect::<Vec<_>>();
+                assert!(related[0].to_string().contains("vendor/widgets/associated"));
+                assert!(result.interfaces.is_empty());
+                assert!(result.package_instance_indexes.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn stored_superclass_cycle_is_a_build_level_error_without_source_spans() {
+        let valid = dependency_interface(
+            indoc::indoc! {r#"
+            pub trait First[a] { fn first(value: a) a }
+            pub trait Second[a] where a: First { fn second(value: a) a }
+        "#},
+            &["hierarchy"],
+            &[],
+        );
+        let mut cyclic = valid.clone();
+        let first = cyclic
+            .traits
+            .iter()
+            .position(|trait_| trait_.id.0.name == "First")
+            .unwrap();
+        let second = cyclic
+            .traits
+            .iter()
+            .position(|trait_| trait_.id.0.name == "Second")
+            .unwrap();
+        let mut back_edge = cyclic.traits[second].superclasses[0].clone();
+        back_edge.trait_ = cyclic.traits[second].id.clone();
+        cyclic.traits[first].superclasses.push(back_edge);
+        // Simulate semantically invalid stored metadata with a valid checksum:
+        // persistence integrity must not substitute for coherence validation.
+        let bump = Bump::new();
+        let cyclic = InterfaceFile::dehydrate(&cyclic.hydrate(&bump)).unwrap();
+        for (interface, accepted) in [(valid, true), (cyclic, false)] {
+            let bytes = bincode::serialize(&interface).unwrap();
+            let interface = bincode::deserialize(&bytes).unwrap();
+            let result = build_fixture_sync(
+                vec![],
+                BuildMode::Build,
+                BuildDependencies {
+                    interfaces: vec![interface],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(result.is_success(), accepted);
+            if !accepted {
+                assert_eq!(result.diagnostics.len(), 1);
+                let diagnostic = &result.diagnostics[0];
+                assert!(diagnostic.message().contains("trait superclass cycle"));
+                assert!(diagnostic.message().contains("First"));
+                assert!(diagnostic.message().contains("Second"));
+                assert!(miette::Diagnostic::labels(diagnostic).is_none());
+                let related = miette::Diagnostic::related(diagnostic)
+                    .unwrap()
+                    .collect::<Vec<_>>();
+                assert_eq!(related.len(), 1);
+                assert!(related[0].to_string().contains("vendor/widgets/hierarchy"));
+                assert!(result.artifacts.is_empty());
+                assert!(result.interfaces.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn source_and_stored_dependency_overlap_retains_local_ownership() {
+        let api = dependency_interface(
+            indoc::indoc! {r#"
+            pub enum Token { Token }
+            pub trait Display[a] { fn display(value: a) String }
+        "#},
+            &["api"],
+            &[],
+        );
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets/api.{ Token, Display }
+            impl Display[Token] {
+                fn display(value: Token) String { "token" }
+            }
+        "#};
+        let stored = dependency_interface(source, &["stored"], std::slice::from_ref(&api));
+        let index = PackageInstanceIndexFile::new(
+            api.module.package.clone(),
+            vec![stored.module.clone()],
+            stored.instances,
+        )
+        .unwrap();
+        let bytes = bincode::serialize(&(api, index)).unwrap();
+        let (api, index): (InterfaceFile, PackageInstanceIndexFile) =
+            bincode::deserialize(&bytes).unwrap();
+        let live = url("project/dependency/live.ald");
+        let main = url("project/src/main.ald");
+        for path in ["a_live", "z_live"] {
+            for include_stored in [false, true] {
+                let result = build_fixture_sync(
+                    vec![
+                        (main.clone(), Ok("pub fn main() { 42 }".to_owned())),
+                        (live.clone(), Ok(source.to_owned())),
+                    ],
+                    BuildMode::Build,
+                    BuildDependencies {
+                        module_packages: BTreeMap::from([(
+                            live.clone(),
+                            api.module.package.clone(),
+                        )]),
+                        module_paths: BTreeMap::from([(live.clone(), vec![path.to_owned()])]),
+                        interfaces: vec![api.clone()],
+                        package_instance_indexes: if include_stored {
+                            vec![index.clone()]
+                        } else {
+                            vec![]
+                        },
+                        ..BuildDependencies::default()
+                    },
+                );
+                if !include_stored {
+                    assert!(
+                        result.is_success(),
+                        "a valid local implementation must still compile: {:?}",
+                        result.modules
+                    );
+                    continue;
+                }
+                assert!(!result.is_success());
+                assert!(
+                    result.diagnostics.is_empty(),
+                    "the same overlap must not also appear at build level"
+                );
+                assert!(matches!(result.modules[&main], ModuleResult::Blocked));
+                let ModuleResult::Failed { diagnostics } = &result.modules[&live] else {
+                    panic!("the source-side implementation must retain its diagnostic");
+                };
+                assert_eq!(diagnostics.len(), 1);
+                assert_eq!(diagnostics[0].source().text(), source);
+                assert_eq!(
+                    miette::Diagnostic::labels(&diagnostics[0]).unwrap().count(),
+                    1
+                );
+                assert!(
+                    miette::Diagnostic::help(&diagnostics[0])
+                        .unwrap()
+                        .to_string()
+                        .contains("vendor/widgets/stored")
+                );
+                assert!(result.artifacts.is_empty());
+                assert!(result.interfaces.is_empty());
+                assert!(result.package_instance_indexes.is_empty());
+                if path == "a_live" {
+                    assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn stored_dependency_overlap_does_not_blame_application_sources() {
+        let api = dependency_interface(
+            indoc::indoc! {r#"
+            pub enum Token { Token }
+            pub trait Display[a] { fn display(value: a) String }
+        "#},
+            &["api"],
+            &[],
+        );
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets/api.{ Token, Display }
+            impl Display[Token] { fn display(value: Token) String { "token" } }
+        "#};
+        let first = dependency_interface(source, &["first"], std::slice::from_ref(&api));
+        let second = dependency_interface(source, &["second"], std::slice::from_ref(&api));
+        let index = PackageInstanceIndexFile::new(
+            api.module.package.clone(),
+            vec![
+                api.module.clone(),
+                first.module.clone(),
+                second.module.clone(),
+            ],
+            first
+                .instances
+                .into_iter()
+                .chain(second.instances)
+                .collect(),
+        )
+        .unwrap();
+        let bytes = bincode::serialize(&(api, index)).unwrap();
+        let (api, index): (InterfaceFile, PackageInstanceIndexFile) =
+            bincode::deserialize(&bytes).unwrap();
+        let consumer = url("project/src/main.ald");
+        let invalid = url("project/src/invalid.ald");
+        let application = (consumer.clone(), Ok("pub fn main() { 42 }".to_owned()));
+        for sources in [
+            vec![],
+            vec![application.clone()],
+            vec![
+                application.clone(),
+                (
+                    url("project/src/helper.ald"),
+                    Ok("pub fn answer() { 42 }".to_owned()),
+                ),
+            ],
+            vec![
+                application,
+                (
+                    invalid.clone(),
+                    Ok(indoc::indoc! {r#"
+                enum Key { Value(Number) }
+                impl Eq[Key] { fn eq(left: Key, right: Key) Bool { true } }
+            "#}
+                    .to_owned()),
+                ),
+            ],
+        ] {
+            let result = build_fixture_sync(
+                sources,
+                BuildMode::Build,
+                BuildDependencies {
+                    interfaces: vec![api.clone()],
+                    package_instance_indexes: vec![index.clone()],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert!(
+                !result.is_success(),
+                "even a build with no source modules must reject an invalid registry"
+            );
+            for (uri, module) in &result.modules {
+                if uri == &invalid {
+                    let ModuleResult::Failed { diagnostics } = module else {
+                        panic!("local conflict must remain diagnosed")
+                    };
+                    assert_eq!(diagnostics.len(), 1);
+                } else {
+                    assert!(matches!(module, ModuleResult::Blocked), "{uri}: {module:?}");
+                }
+            }
+            assert!(result.artifacts.is_empty());
+            assert!(result.interfaces.is_empty());
+            assert_eq!(
+                result.diagnostics.len(),
+                1,
+                "dependency errors must not repeat per source"
+            );
+            let diagnostic = &result.diagnostics[0];
+            assert_eq!(diagnostic.source().name(), "dependency trait registry");
+            assert!(miette::Diagnostic::labels(diagnostic).is_none());
+            if result.modules.is_empty() {
+                assert_rendered_diagnostic_snapshot!(source, diagnostic.clone());
+            }
+        }
+    }
+
     #[tokio::test]
     async fn imported_error_group_is_flattened_as_a_closed_row() {
         let errors = dependency_interface(
@@ -2935,6 +3380,103 @@ mod tests {
         );
 
         assert!(result.is_success(), "{:?}", result.modules[&consumer]);
+    }
+
+    #[test]
+    fn package_coherence_does_not_blame_unrelated_sources() {
+        let invalid = url("project/src/invalid.ald");
+        let helper = url("project/src/helper.ald");
+        let consumer = url("project/src/consumer.ald");
+        let invalid_source = indoc::indoc! {r#"
+            enum Key { Value(Number) }
+            impl Eq[Key] {
+                fn eq(left: Key, right: Key) Bool { true }
+            }
+        "#};
+        let sources = vec![
+            (invalid.clone(), Ok(invalid_source.to_owned())),
+            (helper.clone(), Ok("pub fn answer() { 42 }".to_owned())),
+            (
+                consumer.clone(),
+                Ok(indoc::indoc! {r#"
+                import ~/helper.{ answer }
+                pub fn main() Number { answer() }
+            "#}
+                .to_owned()),
+            ),
+        ];
+        for reverse in [false, true] {
+            let mut sources = sources.clone();
+            if reverse {
+                sources.reverse();
+            }
+            let result =
+                build_fixture_sync(sources, BuildMode::Build, BuildDependencies::default());
+            assert!(
+                !result.is_success(),
+                "package coherence must still reject the build"
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&invalid] else {
+                panic!("the invalid implementation must retain its diagnostic");
+            };
+            assert_eq!(diagnostics.len(), 1);
+            assert_eq!(
+                diagnostics[0].message(),
+                "overlapping implementations of `Eq` are not allowed"
+            );
+            for uri in [&helper, &consumer] {
+                assert!(
+                    matches!(result.modules[uri], ModuleResult::Blocked),
+                    "unrelated source {uri} received: {:?}",
+                    result.modules[uri]
+                );
+            }
+            assert!(result.artifacts.is_empty());
+            assert!(result.interfaces.is_empty());
+        }
+    }
+
+    #[test]
+    fn package_coherence_labels_only_local_implementations() {
+        let model = url("project/src/model.ald");
+        let first = url("project/src/first.ald");
+        let second = url("project/src/second.ald");
+        let source = indoc::indoc! {r#"
+            import ~/model.{ Token, Display }
+            impl Display[Token] {
+                fn display(value: Token) String { "token" }
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![
+                (
+                    model,
+                    Ok(indoc::indoc! {r#"
+                pub enum Token { Token }
+                pub trait Display[a] { fn display(value: a) String }
+            "#}
+                    .to_owned()),
+                ),
+                (first.clone(), Ok(source.to_owned())),
+                (second.clone(), Ok(source.to_owned())),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        for (suffix, uri) in [("first", first), ("second", second)] {
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("both defining modules must retain the overlap error");
+            };
+            assert_eq!(diagnostics.len(), 1);
+            assert_eq!(
+                miette::Diagnostic::labels(&diagnostics[0]).unwrap().count(),
+                1,
+                "a foreign implementation must not acquire a local source span"
+            );
+            insta::with_settings!({ snapshot_suffix => suffix }, {
+                assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+            });
+        }
     }
 
     #[test]
