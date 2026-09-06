@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/data\npub fn main() { data.users }\n"
+---
+alder::canonicalize::unknown_name
+
+  × unknown name `users`
+   ╭─[/project/src/main.ald:2:22]
+ 1 │ import ~/data
+ 2 │ pub fn main() { data.users }
+   ·                      ──┬──
+   ·                        ╰── reported here
+   ╰────

@@ -537,16 +537,50 @@ mod tests {
     use crate::interface::{InterfaceFile, OwnedModuleId, PackageInstanceIndexFile};
     use crate::source::InMemorySource;
 
+    fn temporary_project() -> PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+        loop {
+            let sequence = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+            let root = std::env::temp_dir().join(format!(
+                "alder-project-test-{}-{sequence}",
+                std::process::id()
+            ));
+            match std::fs::create_dir(&root) {
+                Ok(()) => return root,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("cannot create test project {}: {error}", root.display()),
+            }
+        }
+    }
+
+    #[test]
+    fn concurrent_project_fixtures_have_exclusive_directories() {
+        let roots = std::thread::scope(|scope| {
+            let workers = (0..8)
+                .map(|_| scope.spawn(|| (0..8).map(|_| temporary_project()).collect::<Vec<_>>()))
+                .collect::<Vec<_>>();
+            workers
+                .into_iter()
+                .flat_map(|worker| worker.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(
+            roots
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            64
+        );
+        for root in roots {
+            assert!(root.is_dir());
+            std::fs::remove_dir(root).unwrap();
+        }
+    }
+
     #[tokio::test]
     async fn workspace_imports_do_not_activate_sibling_dependencies() {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "alder-member-imports-{}-{nonce}",
-            std::process::id()
-        ));
+        let root = temporary_project();
         for directory in ["a/src", "b/src", "widgets/src"] {
             std::fs::create_dir_all(root.join(directory)).unwrap();
         }
@@ -954,14 +988,7 @@ mod tests {
     }
 
     async fn check_interface_only_generation(interface_has_impl: bool, index_has_impl: bool) {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "alder-project-dependency-test-{}-{nonce}",
-            std::process::id()
-        ));
+        let root = temporary_project();
         let app_root = root.join("app");
         let dependency_root = root.join("widgets");
         let package = OwnedPackageId::Named {
@@ -1077,14 +1104,7 @@ mod tests {
 
     #[tokio::test]
     async fn workspace_rejects_distinct_roots_with_one_package_name() {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "alder-duplicate-package-test-{}-{nonce}",
-            std::process::id()
-        ));
+        let root = temporary_project();
         for (member, module) in [("first", "one"), ("second", "two")] {
             let directory = root.join(member);
             std::fs::create_dir_all(directory.join("src")).unwrap();
@@ -1146,14 +1166,7 @@ mod tests {
 
     #[tokio::test]
     async fn workspace_member_aliases_share_one_source_identity() {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "alder-workspace-parent-test-{}-{nonce}",
-            std::process::id()
-        ));
+        let root = temporary_project();
         let workspace = root.join("workspace");
         let member = root.join("external");
         std::fs::create_dir_all(&workspace).unwrap();

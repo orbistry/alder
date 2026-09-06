@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn view() { (\"café 😀\", <div />) }"
+---
+alder::codegen
+
+  × markup is not executable yet; rendering compilation is planned for M6
+   ╭─[/project/src/main.ald:1:32]
+ 1 │ pub fn view() { ("café 😀", <div />) }
+   ·                             ───┬───
+   ·                                ╰── code generation failed here
+   ╰────

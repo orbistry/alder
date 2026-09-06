@@ -1994,6 +1994,141 @@ mod tests {
     }
 
     #[test]
+    fn deferred_declarations_publish_only_provisional_types() {
+        let producer = url("project/src/data.ald");
+        let consumer = url("project/src/main.ald");
+        let source = indoc::indoc! {r#"
+            pub table users {}
+            pub schema SignUp from users {}
+            pub macro identity(x) { x }
+            pub fn answer() Number { 42 }
+        "#};
+        for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+            let result = build_fixture_sync(
+                vec![
+                    (producer.clone(), Ok(source.to_owned())),
+                    (
+                        consumer.clone(),
+                        Ok(indoc::indoc! {r#"
+                        import ~/data.{ SignUp, answer }
+                        pub fn keep(value: SignUp) SignUp { value }
+                        pub fn main() Number { answer() }
+                    "#}
+                        .to_owned()),
+                    ),
+                ],
+                mode,
+                BuildDependencies::default(),
+            );
+            assert!(result.is_success(), "{:#?}", result.modules);
+            let interface = result
+                .interfaces
+                .iter()
+                .find(|interface| interface.module.path == ["data"])
+                .unwrap();
+            assert_eq!(
+                interface
+                    .values
+                    .iter()
+                    .map(|value| value.exported_as.as_str())
+                    .collect::<Vec<_>>(),
+                ["answer"]
+            );
+            assert_eq!(
+                interface
+                    .types
+                    .iter()
+                    .map(|typ| typ.reference.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["users", "SignUp"]
+            );
+            if mode == BuildMode::Check {
+                assert!(result.artifacts.is_empty());
+            } else {
+                let code = result.artifacts[&producer].code();
+                assert!(
+                    !code.contains("users")
+                        && !code.contains("SignUp")
+                        && !code.contains("identity"),
+                    "{code}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn deferred_type_names_cannot_be_used_as_runtime_values() {
+        let producer = url("project/src/data.ald");
+        let consumer = url("project/src/main.ald");
+        let source = indoc::indoc! {r#"
+            import ~/data
+            pub fn main() { data.users }
+        "#};
+        let mut diagnostic = None;
+        for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+            let result = build_fixture_sync(
+                vec![
+                    (producer.clone(), Ok("pub table users {}".to_owned())),
+                    (consumer.clone(), Ok(source.to_owned())),
+                ],
+                mode,
+                BuildDependencies::default(),
+            );
+            assert!(!result.is_success());
+            assert!(!result.artifacts.contains_key(&consumer));
+            assert!(
+                !result
+                    .interfaces
+                    .iter()
+                    .any(|interface| interface.module.path == ["main"])
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&consumer] else {
+                panic!("runtime table reference must fail")
+            };
+            diagnostic = Some(diagnostics[0].clone());
+        }
+        assert_rendered_diagnostic_snapshot!(source, diagnostic.unwrap());
+    }
+
+    #[test]
+    fn declared_macro_invocation_cannot_publish_a_runtime_stub() {
+        let uri = url("project/src/main.ald");
+        let source = indoc::indoc! {r#"
+            macro identity(x) { x }
+            pub fn main() { identity!(42) }
+        "#};
+        for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                mode,
+                BuildDependencies::default(),
+            );
+            assert!(!result.is_success());
+            assert!(result.artifacts.is_empty());
+            assert!(result.interfaces.is_empty());
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("macro invocation must fail before codegen")
+            };
+            assert!(!diagnostics.is_empty());
+        }
+    }
+
+    #[test]
+    fn unicode_before_deferred_expression_preserves_diagnostic_snippet() {
+        let source = "pub fn view() { (\"café 😀\", <div />) }";
+        let diagnostic = unavailable_codegen(source);
+        let label = miette::Diagnostic::labels(&diagnostic)
+            .unwrap()
+            .find(|label| label.primary())
+            .unwrap();
+        assert_eq!(
+            &source[label.offset()..label.offset() + label.len()],
+            "<div />"
+        );
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
+    }
+
+    #[test]
     fn unimplemented_markup_cannot_produce_executable_artifact() {
         let source = indoc::indoc! {r#"
             pub fn view() {

@@ -64,10 +64,14 @@ the remaining canonical-AST MacroCall Any branch and ignored Comptime item in
 later phases are not reachable from ordinary source compilation; codegen also
 defensively rejects macro calls.
 
-Table/schema declarations and macro declarations retain provisional metadata
-and emit no code. Their absence from runtime output is not implemented database
-or macro execution. Query/macro use sites are guarded as above. The broader
-deferred-declaration/interface publication audit is still open.
+Table/schema declarations publish provisional opaque types, not runtime values;
+macro declarations publish no callable interface value. These declarations emit
+no code. Their absence from runtime output is not implemented database or macro
+execution. Query/macro use sites are guarded as above. The driver regression
+`deferred_declarations_publish_only_provisional_types` checks all three build
+modes and a consumer using an imported opaque schema type. Companion tests reject
+runtime table references and macro invocation without publishing an artifact or
+interface for the failed consumer. See `source-boundaries-hardening.md`.
 
 Provider context is an intentionally implemented runtime seam, separate from
 unfinished provider checking. Do not disable it as though it were a web stub.
