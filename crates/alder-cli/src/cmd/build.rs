@@ -87,9 +87,11 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
             .values()
             .filter_map(|result| match result {
                 alder_driver::ModuleResult::Failed { diagnostics } => Some(diagnostics.clone()),
-                alder_driver::ModuleResult::Success { .. } => None,
+                alder_driver::ModuleResult::Success { .. }
+                | alder_driver::ModuleResult::Blocked => None,
             })
             .flatten()
+            .chain(result.diagnostics.iter().cloned())
             .collect::<Vec<_>>();
         errors.sort_by(|left, right| {
             left.source()

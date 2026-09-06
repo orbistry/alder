@@ -32,6 +32,9 @@ use crate::interface::{
 /// Result of compiling a single module.
 #[derive(Debug)]
 pub enum ModuleResult {
+    /// Build or package validation prevented body compilation. The cause is
+    /// reported at build level or on another module; no artifact is produced.
+    Blocked,
     /// Module compiled successfully.
     Success {
         /// Number of declarations in the module.
@@ -47,6 +50,10 @@ pub enum ModuleResult {
 /// Result of a full build.
 #[derive(Debug)]
 pub struct BuildResult {
+    /// Build-level errors without an owning source module, such as invalid
+    /// stored dependency trait indexes or missing identity metadata. These do
+    /// not carry fabricated spans.
+    pub diagnostics: Vec<Diagnostic>,
     /// Results for each module.
     pub modules: HashMap<Url, ModuleResult>,
 
@@ -56,7 +63,7 @@ pub struct BuildResult {
     /// Number of successful compilations.
     pub success: usize,
 
-    /// Number of failed compilations.
+    /// Number of modules that did not compile, including blocked modules.
     pub failed: usize,
 
     /// Warnings collected during canonicalization.
@@ -85,8 +92,10 @@ pub struct BuildDependencies {
     /// Dependency source modules that must participate in this compilation so
     /// generated evidence imports retain in-memory Oxc ASTs through bundling.
     pub source_modules: Vec<Url>,
+    /// Explicit owning package for every source module in this build.
     pub module_packages: BTreeMap<Url, OwnedPackageId>,
-    /// Paths relative to each module's actual package source root.
+    /// Explicit paths relative to each module's actual package source root.
+    /// Every source module needs both entries, including application modules.
     pub module_paths: BTreeMap<Url, Vec<String>>,
     pub interfaces: Vec<InterfaceFile>,
     pub package_instance_indexes: Vec<PackageInstanceIndexFile>,
@@ -95,7 +104,7 @@ pub struct BuildDependencies {
 impl BuildResult {
     /// Check if the build was completely successful.
     pub fn is_success(&self) -> bool {
-        self.failed == 0
+        self.failed == 0 && self.diagnostics.is_empty()
     }
 }
 
@@ -112,33 +121,12 @@ struct InterfaceOutput<'a> {
     solved: bool,
 }
 
-/// Compile all modules through the full pipeline, in dependency order.
-///
-/// The async part only fetches sources; the CPU-bound compilation runs on
-/// tokio's blocking pool (`spawn_blocking`) so no executor worker is ever
-/// stalled.
-pub async fn build(db: Arc<Mutex<Database>>, graph: &DepGraph) -> BuildResult {
-    build_with_mode(db, graph, BuildMode::Check).await
-}
-
-pub async fn build_with_mode(
-    db: Arc<Mutex<Database>>,
-    graph: &DepGraph,
-    mode: BuildMode,
-) -> BuildResult {
-    build_with_dependencies(db, graph, mode, BuildDependencies::default()).await
-}
-
 fn duplicate_sources(
     sources: &[(Url, Result<String, String>)],
-    dependencies: &BuildDependencies,
+    identities: &BTreeMap<Url, OwnedModuleId>,
 ) -> Option<BuildResult> {
-    let identities = sources
-        .iter()
-        .map(|(uri, _)| (uri.clone(), source_identity(uri, dependencies)))
-        .collect::<BTreeMap<_, _>>();
     let mut origins = BTreeMap::<OwnedModuleId, Vec<&Url>>::new();
-    for (uri, identity) in &identities {
+    for (uri, identity) in identities {
         origins.entry(identity.clone()).or_default().push(uri);
     }
     let mut duplicates = HashMap::new();
@@ -174,6 +162,7 @@ fn duplicate_sources(
     }
     if !duplicates.is_empty() {
         return Some(BuildResult {
+            diagnostics: vec![],
             total: duplicates.len(),
             failed: duplicates.len(),
             success: 0,
@@ -187,6 +176,8 @@ fn duplicate_sources(
     None
 }
 
+/// Compile graph sources with explicit package and source-relative identity
+/// metadata. Source fetching is async; compilation runs on the blocking pool.
 pub async fn build_with_dependencies(
     db: Arc<Mutex<Database>>,
     graph: &DepGraph,
@@ -214,13 +205,31 @@ fn build_sync(
     mode: BuildMode,
     dependencies: BuildDependencies,
 ) -> BuildResult {
-    if let Some(failure) = duplicate_sources(&sources, &dependencies) {
+    let identities = match source_identities(sources.iter().map(|(uri, _)| uri), &dependencies) {
+        Ok(identities) => identities,
+        Err(error) => {
+            return BuildResult {
+                diagnostics: vec![
+                    Diagnostic::error(Source::new("build", ""), error.to_string())
+                        .with_code("alder::driver::missing_module_identity"),
+                ],
+                modules: sources
+                    .iter()
+                    .map(|(uri, _)| (uri.clone(), ModuleResult::Blocked))
+                    .collect(),
+                total: sources.len(),
+                success: 0,
+                failed: sources.len(),
+                warnings: vec![],
+                artifacts: HashMap::new(),
+                interfaces: vec![],
+                package_instance_indexes: vec![],
+            };
+        }
+    };
+    if let Some(failure) = duplicate_sources(&sources, &identities) {
         return failure;
     }
-    let identities = sources
-        .iter()
-        .map(|(uri, _)| (uri.clone(), source_identity(uri, &dependencies)))
-        .collect::<BTreeMap<_, _>>();
     // This arena owns canonical package headers and solved public interfaces.
     // Every source module and all phase-local ASTs use a separate arena in
     // `compile_module`.
@@ -314,6 +323,7 @@ fn build_sync(
     let package_instance_indexes = package_indexes(&interface_files);
 
     BuildResult {
+        diagnostics: vec![],
         modules: results,
         total,
         success,
@@ -643,34 +653,29 @@ fn coherence_belongs_to(error: &alder_solve::CoherenceError<'_>, home: ModuleId<
     }
 }
 
-fn source_identity(uri: &Url, dependencies: &BuildDependencies) -> OwnedModuleId {
-    let package = dependencies
-        .module_packages
-        .get(uri)
-        .cloned()
-        .unwrap_or(OwnedPackageId::Application);
-    if let Some(path) = dependencies.module_paths.get(uri) {
-        return OwnedModuleId {
-            package,
-            path: path.clone(),
-        };
-    }
-    // Compatibility for source-only driver clients without project metadata.
-    // Project builds always provide source-root-relative paths explicitly.
-    let path = uri.path();
-    let relative = path
-        .split("/src/")
-        .nth(1)
-        .unwrap_or_else(|| path.rsplit('/').next().unwrap_or(path));
-    let without_extension = relative.strip_suffix(".ald").unwrap_or(relative);
-    let mut segments: Vec<_> = without_extension.split('/').collect();
-    if segments.last() == Some(&"mod") {
-        segments.pop();
-    }
-    OwnedModuleId {
-        package,
-        path: segments.into_iter().map(str::to_owned).collect(),
-    }
+fn source_identities<'u>(
+    uris: impl IntoIterator<Item = &'u Url>,
+    dependencies: &BuildDependencies,
+) -> Result<BTreeMap<Url, OwnedModuleId>, DriverError> {
+    uris.into_iter()
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .map(|uri| {
+            let (Some(package), Some(path)) = (
+                dependencies.module_packages.get(uri),
+                dependencies.module_paths.get(uri),
+            ) else {
+                return Err(DriverError::MissingModuleIdentity { uri: uri.clone() });
+            };
+            Ok((
+                uri.clone(),
+                OwnedModuleId {
+                    package: package.clone(),
+                    path: path.clone(),
+                },
+            ))
+        })
+        .collect()
 }
 
 fn hydrate_package_id<'a>(bump: &'a Bump, package: &OwnedPackageId) -> PackageId<'a> {
@@ -748,17 +753,6 @@ fn resolve_imports<'a>(
     bump.alloc_slice_copy(&imports)
 }
 
-/// Build a dependency graph from parsed modules.
-///
-/// This is a simplified implementation that parses modules to extract imports.
-/// For a full implementation, we would parse just the header/imports.
-pub async fn build_graph(
-    db: Arc<Mutex<Database>>,
-    modules: &[Url],
-) -> Result<DepGraph, DriverError> {
-    build_graph_with_dependencies(db, modules, &BuildDependencies::default()).await
-}
-
 /// Resolve graph edges with the same package identities and source-relative
 /// paths used by canonicalization. Ambiguous identities are diagnosed by build
 /// preflight before any interfaces or code are produced.
@@ -768,10 +762,7 @@ pub async fn build_graph_with_dependencies(
     dependencies: &BuildDependencies,
 ) -> Result<DepGraph, DriverError> {
     let mut graph = DepGraph::new();
-    let identities = modules
-        .iter()
-        .map(|uri| (uri.clone(), source_identity(uri, dependencies)))
-        .collect::<BTreeMap<_, _>>();
+    let identities = source_identities(modules, dependencies)?;
     let mut origins = BTreeMap::<OwnedModuleId, Vec<Url>>::new();
     for (uri, identity) in &identities {
         origins
@@ -879,6 +870,197 @@ mod tests {
     use super::*;
     use crate::source::InMemorySource;
 
+    /// Source-only fixtures have one explicit `src` boundary. Tests of other
+    /// layouts supply their own paths. This convenience is not a driver API:
+    /// production callers must provide both identity maps for every module.
+    fn fixture_dependencies<'u>(
+        uris: impl IntoIterator<Item = &'u Url>,
+        mut dependencies: BuildDependencies,
+    ) -> BuildDependencies {
+        for uri in uris {
+            dependencies
+                .module_packages
+                .entry(uri.clone())
+                .or_insert(OwnedPackageId::Application);
+            dependencies
+                .module_paths
+                .entry(uri.clone())
+                .or_insert_with(|| {
+                    let (_, relative) = uri
+                        .path()
+                        .split_once("/src/")
+                        .expect("source-only fixture needs a src root or an explicit module path");
+                    assert!(
+                        !relative.contains("/src/"),
+                        "ambiguous fixture needs an explicit path"
+                    );
+                    let mut path = relative
+                        .strip_suffix(".ald")
+                        .unwrap()
+                        .split('/')
+                        .map(str::to_owned)
+                        .collect::<Vec<_>>();
+                    if path.last().is_some_and(|part| part == "mod") {
+                        path.pop();
+                    }
+                    path
+                });
+        }
+        dependencies
+    }
+
+    fn build_fixture_sync(
+        sources: Vec<(Url, Result<String, String>)>,
+        mode: BuildMode,
+        dependencies: BuildDependencies,
+    ) -> BuildResult {
+        let dependencies = fixture_dependencies(sources.iter().map(|(uri, _)| uri), dependencies);
+        super::build_sync(sources, mode, dependencies)
+    }
+
+    async fn fixture_graph_with_dependencies(
+        db: Arc<Mutex<Database>>,
+        modules: &[Url],
+        dependencies: &BuildDependencies,
+    ) -> Result<DepGraph, DriverError> {
+        let dependencies = fixture_dependencies(modules, dependencies.clone());
+        super::build_graph_with_dependencies(db, modules, &dependencies).await
+    }
+
+    async fn fixture_graph(
+        db: Arc<Mutex<Database>>,
+        modules: &[Url],
+    ) -> Result<DepGraph, DriverError> {
+        fixture_graph_with_dependencies(db, modules, &BuildDependencies::default()).await
+    }
+
+    async fn build_fixture_with_dependencies(
+        db: Arc<Mutex<Database>>,
+        graph: &DepGraph,
+        mode: BuildMode,
+        dependencies: BuildDependencies,
+    ) -> BuildResult {
+        let dependencies = fixture_dependencies(&graph.order, dependencies);
+        super::build_with_dependencies(db, graph, mode, dependencies).await
+    }
+
+    async fn build_fixture_with_mode(
+        db: Arc<Mutex<Database>>,
+        graph: &DepGraph,
+        mode: BuildMode,
+    ) -> BuildResult {
+        build_fixture_with_dependencies(db, graph, mode, BuildDependencies::default()).await
+    }
+
+    async fn build_fixture(db: Arc<Mutex<Database>>, graph: &DepGraph) -> BuildResult {
+        build_fixture_with_mode(db, graph, BuildMode::Check).await
+    }
+
+    #[tokio::test]
+    async fn graph_requires_explicit_module_identity() {
+        let uri = url("checkout/src/nested/src/main.ald");
+        let db = Arc::new(Mutex::new(Database::new(InMemorySource::with_files([(
+            uri.clone(),
+            "pub fn answer() Number { 42 }".to_owned(),
+        )]))));
+        let result = super::build_graph_with_dependencies(
+            db,
+            std::slice::from_ref(&uri),
+            &BuildDependencies::default(),
+        )
+        .await;
+        assert!(
+            matches!(result, Err(DriverError::MissingModuleIdentity { uri: missing }) if missing == uri),
+            "URI spelling cannot supply a module identity"
+        );
+    }
+
+    #[test]
+    fn incomplete_module_identity_cannot_publish_artifacts() {
+        let uri = url("checkout/src/nested/src/main.ald");
+        for dependencies in [
+            BuildDependencies::default(),
+            BuildDependencies {
+                module_packages: BTreeMap::from([(uri.clone(), OwnedPackageId::Application)]),
+                ..BuildDependencies::default()
+            },
+            BuildDependencies {
+                module_paths: BTreeMap::from([(uri.clone(), vec!["main".to_owned()])]),
+                ..BuildDependencies::default()
+            },
+        ] {
+            let result = super::build_sync(
+                vec![(uri.clone(), Ok("pub fn answer() Number { 42 }".to_owned()))],
+                BuildMode::Build,
+                dependencies,
+            );
+            assert!(
+                !result.is_success(),
+                "both package and source-relative path are required"
+            );
+            assert!(result.artifacts.is_empty());
+            assert!(result.interfaces.is_empty());
+            assert!(result.package_instance_indexes.is_empty());
+            assert_eq!(result.diagnostics.len(), 1);
+            assert!(result.diagnostics[0].message().contains(uri.as_str()));
+            assert!(miette::Diagnostic::labels(&result.diagnostics[0]).is_none());
+            assert!(matches!(result.modules[&uri], ModuleResult::Blocked));
+        }
+    }
+
+    #[test]
+    fn missing_identity_diagnostic_does_not_depend_on_discovery_order() {
+        let first = url("first/input.ald");
+        let second = url("second/input.ald");
+        for uris in [
+            [first.clone(), second.clone()],
+            [second.clone(), first.clone()],
+        ] {
+            let result = super::build_sync(
+                uris.into_iter()
+                    .map(|uri| (uri, Ok("pub fn answer() Number { 42 }".to_owned())))
+                    .collect(),
+                BuildMode::Build,
+                BuildDependencies::default(),
+            );
+            assert!(!result.is_success());
+            assert_eq!(result.diagnostics.len(), 1);
+            assert!(result.diagnostics[0].message().contains(first.as_str()));
+        }
+    }
+
+    #[test]
+    fn explicit_module_identity_is_independent_of_source_uri_spelling() {
+        let identity = OwnedModuleId {
+            package: OwnedPackageId::Application,
+            path: vec!["logical".to_owned(), "entry".to_owned()],
+        };
+        let mut previous = None;
+        for uri in [
+            url("checkout/src/nested/src/input.ald"),
+            Url::parse("memory:///embedded/input").unwrap(),
+        ] {
+            let result = super::build_sync(
+                vec![(uri.clone(), Ok("pub fn answer() Number { 42 }".to_owned()))],
+                BuildMode::Build,
+                BuildDependencies {
+                    module_packages: BTreeMap::from([(uri.clone(), identity.package.clone())]),
+                    module_paths: BTreeMap::from([(uri.clone(), identity.path.clone())]),
+                    ..BuildDependencies::default()
+                },
+            );
+            assert!(result.is_success(), "{:?}", result.modules);
+            assert_eq!(result.interfaces.len(), 1);
+            assert_eq!(result.interfaces[0].module, identity);
+            let artifact = &result.artifacts[&uri];
+            assert_eq!(artifact.module_id, "alder://app/logical/entry.mjs");
+            if let Some(previous) = &previous {
+                assert_eq!(&artifact.code(), previous);
+            }
+            previous = Some(artifact.code());
+        }
+    }
+
     fn url(path: &str) -> Url {
         Url::parse(&format!("file:///{}", path)).unwrap()
     }
@@ -909,7 +1091,7 @@ mod tests {
                 deferred(number).await + inner.await + String.length(text)
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -925,7 +1107,7 @@ mod tests {
                 deferred("wrong").await
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -968,7 +1150,7 @@ mod tests {
                 forward(number) + String.length(text)
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -984,7 +1166,7 @@ mod tests {
                 forward("wrong")
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -1026,7 +1208,7 @@ mod tests {
                 number + String.length(text) + String.length(rendered)
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -1041,7 +1223,7 @@ mod tests {
                 number`value: ${"wrong"}`
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -1088,7 +1270,7 @@ mod tests {
                 first.x + first.y + String.length(second.value)
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -1103,7 +1285,7 @@ mod tests {
                 merge({ value: 42 }, { value: "wrong" }).value
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -1144,7 +1326,7 @@ mod tests {
                 wrapped.value
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -1210,7 +1392,7 @@ mod tests {
                 answer()
             }
         "#};
-        let checked = build_sync(
+        let checked = build_fixture_sync(
             vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies {
@@ -1230,7 +1412,7 @@ mod tests {
             "import @vendor/widgets/facade.{ hidden_method }",
         ] {
             let consumer = url("project/src/main.ald");
-            let result = build_sync(
+            let result = build_fixture_sync(
                 vec![(consumer.clone(), Ok(source.to_owned()))],
                 BuildMode::Build,
                 BuildDependencies {
@@ -1264,7 +1446,7 @@ mod tests {
             pub import ~/right.*
         "#};
         let facade = url("project/src/facade.ald");
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (
                     url("project/src/left.ald"),
@@ -1298,7 +1480,7 @@ mod tests {
     fn named_reexport_cannot_publish_a_private_value() {
         let source = "pub import ~/leaf.{ secret }";
         let facade = url("project/src/facade.ald");
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (
                     url("project/src/leaf.ald"),
@@ -1347,7 +1529,7 @@ mod tests {
             impl Probe[Number] { fn obtain(value: Number) Number { value } }
             pub fn plain(value: Number) Number { value }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (url("project/src/leaf.ald"), Ok(leaf.to_owned())),
                 (consumer.clone(), Ok(source.to_owned())),
@@ -1393,7 +1575,7 @@ mod tests {
             import ~/facade
             pub fn main() Number { facade.answer() }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (leaf, Ok("pub fn answer() Number { 42 }".to_owned())),
                 (facade_uri.clone(), Ok(facade.to_owned())),
@@ -1474,7 +1656,7 @@ mod tests {
 
     fn unavailable_codegen(source: &str) -> Diagnostic {
         let uri = url("project/src/main.ald");
-        let checked = build_sync(
+        let checked = build_fixture_sync(
             vec![(uri.clone(), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies::default(),
@@ -1485,7 +1667,7 @@ mod tests {
         );
         let mut diagnostic = None;
         for mode in [BuildMode::Build, BuildMode::Test] {
-            let result = build_sync(
+            let result = build_fixture_sync(
                 vec![(uri.clone(), Ok(source.to_owned()))],
                 mode,
                 BuildDependencies::default(),
@@ -1510,7 +1692,7 @@ mod tests {
             pub fn load() { query { select * from users } }
         "#};
         let uri = url("project/src/main.ald");
-        let checked = build_sync(
+        let checked = build_fixture_sync(
             vec![(uri.clone(), Ok(source.to_owned()))],
             BuildMode::Check,
             BuildDependencies::default(),
@@ -1520,14 +1702,14 @@ mod tests {
             "query syntax remains available for checking"
         );
         assert!(checked.artifacts.is_empty());
-        let tested = build_sync(
+        let tested = build_fixture_sync(
             vec![(uri.clone(), Ok(source.to_owned()))],
             BuildMode::Test,
             BuildDependencies::default(),
         );
         assert!(!tested.is_success());
         assert!(tested.artifacts.is_empty());
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![(uri.clone(), Ok(source.to_owned()))],
             BuildMode::Build,
             BuildDependencies::default(),
@@ -1550,7 +1732,7 @@ mod tests {
             ["project/src/util.ald", "project/src/util/mod.ald"],
             ["project/src/util/mod.ald", "project/src/util.ald"],
         ] {
-            let result = build_sync(
+            let result = build_fixture_sync(
                 paths
                     .into_iter()
                     .map(|path| (url(path), Ok(source.to_owned())))
@@ -1567,7 +1749,7 @@ mod tests {
     #[test]
     fn duplicate_module_diagnostic_labels_both_sources() {
         let source = "pub fn answer() Number { 42 }";
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (url("project/src/util/mod.ald"), Ok(source.to_owned())),
                 (url("project/src/util.ald"), Ok(source.to_owned())),
@@ -1637,16 +1819,20 @@ mod tests {
             vec![app.clone(), local.clone(), foreign.clone(), root.clone()],
             vec![root.clone(), foreign.clone(), local.clone(), app.clone()],
         ] {
-            let graph = build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+            let graph = fixture_graph_with_dependencies(db.clone(), &modules, &dependencies)
                 .await
                 .unwrap();
             assert_eq!(graph.edges[&root], vec![foreign.clone()]);
             let mut expected = vec![local.clone(), root.clone()];
             expected.sort();
             assert_eq!(graph.edges[&app], expected);
-            let result =
-                build_with_dependencies(db.clone(), &graph, BuildMode::Build, dependencies.clone())
-                    .await;
+            let result = build_fixture_with_dependencies(
+                db.clone(),
+                &graph,
+                BuildMode::Build,
+                dependencies.clone(),
+            )
+            .await;
             assert!(result.is_success(), "{:?}", result.modules);
             assert_eq!(
                 result.artifacts[&local].module_id,
@@ -1719,10 +1905,10 @@ mod tests {
         let uri = url("project/src/main.ald");
         mem.insert(uri.clone(), source.to_owned());
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let graph = build_graph(db.clone(), std::slice::from_ref(&uri))
+        let graph = fixture_graph(db.clone(), std::slice::from_ref(&uri))
             .await
             .unwrap();
-        let result = build(db, &graph).await;
+        let result = build_fixture(db, &graph).await;
         let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
             panic!("source unexpectedly compiled");
         };
@@ -2227,8 +2413,8 @@ mod tests {
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![uri];
-        let graph = build_graph(db.clone(), &modules).await.unwrap();
-        let result = build(db, &graph).await;
+        let graph = fixture_graph(db.clone(), &modules).await.unwrap();
+        let result = build_fixture(db, &graph).await;
 
         assert_eq!(result.total, 1);
         assert_eq!(result.success, 1);
@@ -2251,8 +2437,8 @@ mod tests {
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![uri.clone()];
-        let graph = build_graph(db.clone(), &modules).await.unwrap();
-        let result = build_with_mode(db, &graph, BuildMode::Build).await;
+        let graph = fixture_graph(db.clone(), &modules).await.unwrap();
+        let result = build_fixture_with_mode(db, &graph, BuildMode::Build).await;
 
         assert!(result.is_success());
         assert_eq!(result.artifacts.len(), 1);
@@ -2279,8 +2465,8 @@ mod tests {
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![uri];
-        let graph = build_graph(db.clone(), &modules).await.unwrap();
-        let result = build(db, &graph).await;
+        let graph = fixture_graph(db.clone(), &modules).await.unwrap();
+        let result = build_fixture(db, &graph).await;
 
         assert_eq!(result.total, 1);
         assert_eq!(result.failed, 1);
@@ -2303,8 +2489,8 @@ mod tests {
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![url("project/src/utils.ald"), url("project/src/main.ald")];
 
-        let graph = build_graph(db.clone(), &modules).await.unwrap();
-        let result = build(db, &graph).await;
+        let graph = fixture_graph(db.clone(), &modules).await.unwrap();
+        let result = build_fixture(db, &graph).await;
 
         // Utils is solved first; Main canonicalizes and type checks
         // against its interface.
@@ -2333,7 +2519,7 @@ mod tests {
                 pub fn run() RETURN_TYPE { utils.combine(left(), right()) }
             "#}
             .replace("RETURN_TYPE", return_type);
-            let result = build_sync(
+            let result = build_fixture_sync(
                 vec![
                     (url("project/src/utils.ald"), Ok(library.to_owned())),
                     (url("project/src/main.ald"), Ok(consumer)),
@@ -2361,7 +2547,7 @@ mod tests {
                 result
             }
         "#};
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (url("project/src/utils.ald"), Ok(indoc::indoc! {r#"
                     pub fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
@@ -2391,7 +2577,7 @@ mod tests {
 
     #[test]
     fn imported_exact_error_union_supports_exhaustive_matching() {
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (url("project/src/utils.ald"), Ok(indoc::indoc! {r#"
                     pub fn combine(left: Result[Number, [:known | e]], right: Result[Number, [:known | f]]) {
@@ -2427,7 +2613,7 @@ mod tests {
         let named = url("project/src/named.ald");
         let open = url("project/src/open.ald");
         let trait_qualified = url("project/src/trait_qualified.ald");
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (
                     traits,
@@ -2476,7 +2662,7 @@ mod tests {
             pub fn main() String { render(1) }
         "#};
         let consumer = url("project/src/main.ald");
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (
                     url("project/src/first.ald"),
@@ -2517,8 +2703,11 @@ mod tests {
         let implementation = url("package/src/instances.ald");
         mem.insert(
             model.clone(),
-            "pub enum Token { Token }\npub trait Display[a] { fn display(value: a) String }"
-                .to_owned(),
+            indoc::indoc! {r#"
+                pub enum Token { Token }
+                pub trait Display[a] { fn display(value: a) String }
+            "#}
+            .to_owned(),
         );
         mem.insert(
             implementation.clone(),
@@ -2532,15 +2721,12 @@ mod tests {
         );
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![model.clone(), implementation.clone()];
-        let graph = build_graph(db.clone(), &modules).await.unwrap();
         let package = OwnedPackageId::Named {
             author: "vendor".to_owned(),
             project: "widgets".to_owned(),
         };
-        let result = build_with_dependencies(
-            db,
-            &graph,
-            BuildMode::Check,
+        let dependencies = fixture_dependencies(
+            &modules,
             BuildDependencies {
                 module_packages: BTreeMap::from([
                     (model, package.clone()),
@@ -2548,8 +2734,12 @@ mod tests {
                 ]),
                 ..BuildDependencies::default()
             },
-        )
-        .await;
+        );
+        let graph = super::build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+            .await
+            .unwrap();
+        let result =
+            super::build_with_dependencies(db, &graph, BuildMode::Check, dependencies).await;
 
         assert!(result.is_success(), "{:?}", result.modules);
         assert!(
@@ -2598,10 +2788,10 @@ mod tests {
             .to_owned(),
         );
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let graph = build_graph(db.clone(), std::slice::from_ref(&consumer))
+        let graph = fixture_graph(db.clone(), std::slice::from_ref(&consumer))
             .await
             .unwrap();
-        let result = build_with_dependencies(
+        let result = build_fixture_with_dependencies(
             db,
             &graph,
             BuildMode::Check,
@@ -2643,10 +2833,10 @@ mod tests {
             .to_owned(),
         );
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let graph = build_graph(db.clone(), std::slice::from_ref(&consumer))
+        let graph = fixture_graph(db.clone(), std::slice::from_ref(&consumer))
             .await
             .unwrap();
-        let result = build_with_dependencies(
+        let result = build_fixture_with_dependencies(
             db,
             &graph,
             BuildMode::Check,
@@ -2681,8 +2871,8 @@ mod tests {
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![url("project/src/utils.ald"), url("project/src/main.ald")];
 
-        let graph = build_graph(db.clone(), &modules).await.unwrap();
-        let result = build(db, &graph).await;
+        let graph = fixture_graph(db.clone(), &modules).await.unwrap();
+        let result = build_fixture(db, &graph).await;
 
         // Utils.helper is a number, not a function: Main gets a type
         // error against the imported annotation.
@@ -2706,10 +2896,10 @@ mod tests {
         );
 
         let db = Arc::new(Mutex::new(Database::new(mem)));
-        let graph = build_graph(db.clone(), std::slice::from_ref(&uri))
+        let graph = fixture_graph(db.clone(), std::slice::from_ref(&uri))
             .await
             .unwrap();
-        let result = build(db, &graph).await;
+        let result = build_fixture(db, &graph).await;
         let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
             panic!("missing trait evidence must fail compilation");
         };
@@ -2725,7 +2915,7 @@ mod tests {
         let model = url("project/src/model.ald");
         let consumer = url("project/src/a_consumer.ald");
         let implementation = url("project/src/z_impl.ald");
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (
                     model,
@@ -2752,7 +2942,7 @@ mod tests {
         let model = url("project/src/model.ald");
         let first = url("project/src/first.ald");
         let second = url("project/src/second.ald");
-        let result = build_sync(
+        let result = build_fixture_sync(
             vec![
                 (
                     model,
@@ -2930,8 +3120,8 @@ mod tests {
             mem.insert(url("project/src/main.ald"), consumer.to_owned());
             let db = Arc::new(Mutex::new(Database::new(mem)));
             let modules = vec![url("project/src/rows.ald"), url("project/src/main.ald")];
-            let graph = build_graph(db.clone(), &modules).await.unwrap();
-            let result = build(db, &graph).await;
+            let graph = fixture_graph(db.clone(), &modules).await.unwrap();
+            let result = build_fixture(db, &graph).await;
             assert!(!result.is_success(), "{provider}\n{consumer}");
             assert_eq!(
                 result.success, 1,
@@ -2960,8 +3150,8 @@ mod tests {
         );
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![url("project/src/state.ald"), url("project/src/main.ald")];
-        let graph = build_graph(db.clone(), &modules).await.unwrap();
-        let result = build(db, &graph).await;
+        let graph = fixture_graph(db.clone(), &modules).await.unwrap();
+        let result = build_fixture(db, &graph).await;
         assert!(
             !result.is_success(),
             "importing a shared array cannot change its element type"
@@ -3085,8 +3275,8 @@ pub fn main() { utils.pong(1) }
         let db = Arc::new(Mutex::new(Database::new(mem)));
         let modules = vec![url("project/src/utils.ald"), url("project/src/main.ald")];
 
-        let graph = build_graph(db.clone(), &modules).await.unwrap();
-        let result = build(db, &graph).await;
+        let graph = fixture_graph(db.clone(), &modules).await.unwrap();
+        let result = build_fixture(db, &graph).await;
 
         assert_eq!(result.total, 2);
         assert_eq!(result.success, 2);

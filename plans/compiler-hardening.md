@@ -2,6 +2,13 @@
 
 Status: active on `compiler-hardening`, based on `21994e0`.
 
+Explicit module-identity checkpoint: removed URI-based fallback identities and
+metadata-free driver entry points. Both package and source-relative path are
+required before graph/build publication. Missing metadata yields deterministic
+build-level diagnostics without fabricated spans. Isolated staged-tree driver
+validation passed all 124 tests; see `docs/module-identity-hardening.md`. This
+does not close the separate package-coherence or final release-readiness audit.
+
 Canonical pattern checkpoint review: match-only permission is now carried by
 binding mode rather than leaked expression depth. Pins use pre-pattern lexical
 scopes; alternatives share the first pattern's local IDs and must bind equal

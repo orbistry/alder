@@ -51,6 +51,10 @@ pub enum DriverError {
     #[error("module not found: {module}")]
     ModuleNotFound { module: String },
 
+    #[error("missing explicit package or source-relative module path for {uri}")]
+    #[diagnostic(code(alder::driver::missing_module_identity))]
+    MissingModuleIdentity { uri: Url },
+
     #[error("failed to serialize interface: {0}")]
     SerializeError(#[from] bincode::Error),
 

@@ -80,17 +80,30 @@ impl Args {
             Ok(())
         } else {
             eprintln!("Compilation failed.");
+            if !result.diagnostics.is_empty() {
+                eprintln!("  {} build errors", result.diagnostics.len());
+            }
             eprintln!("  {} succeeded", result.success);
-            eprintln!("  {} failed", result.failed);
+            let blocked = result
+                .modules
+                .values()
+                .filter(|module| matches!(module, alder_driver::ModuleResult::Blocked))
+                .count();
+            eprintln!("  {} failed", result.failed - blocked);
+            if blocked != 0 {
+                eprintln!("  {blocked} blocked by build validation errors");
+            }
 
             let mut diagnostics = result
                 .modules
                 .values()
                 .filter_map(|module_result| match module_result {
                     alder_driver::ModuleResult::Failed { diagnostics } => Some(diagnostics.iter()),
-                    alder_driver::ModuleResult::Success { .. } => None,
+                    alder_driver::ModuleResult::Success { .. }
+                    | alder_driver::ModuleResult::Blocked => None,
                 })
                 .flatten()
+                .chain(result.diagnostics.iter())
                 .collect::<Vec<_>>();
             diagnostics.sort_by(|left, right| {
                 left.source()

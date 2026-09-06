@@ -58,10 +58,13 @@ underlying resolver explanation, and returns that structured report to the CLI.
 Reports are sorted by source name and message before grouping; the CLI does not
 flatten them to strings. Colorless rendering is selected only by tests.
 
-The low-level source-only driver API retains a compatibility path inference
-when project metadata is absent. It is not appropriate for ambiguous source
-roots; project-aware callers should supply `BuildDependencies::module_paths`
-and `module_packages` and use `build_graph_with_dependencies`.
+Every source build requires both `BuildDependencies::module_paths` and
+`module_packages` entries for each source URI. `Project::build_dependencies`
+supplies them for filesystem projects; embedders supply the identities of their
+own sources, including in-memory URLs. Graph construction and compilation use
+the same validated maps. Missing metadata is rejected deterministically before
+interfaces or code are produced, without fabricated source labels. There are
+no metadata-free graph/build entry points or URI-based identity guesses.
 
 Remaining audits are tracked in `plans/compiler-hardening.md`, including
 external workspace members, cache consistency, and
