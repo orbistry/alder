@@ -1209,6 +1209,33 @@ export function $tryPromise(thunk, abort = false, origin = "JavaScript extern", 
     });
 }
 
+export function $refMake(value) {
+    return $task(function* () { return { value }; });
+}
+
+export function $refGet(ref) {
+    return $task(function* () { return ref.value; });
+}
+
+export function $refSet(ref, value) {
+    return $task(function* () { ref.value = value; });
+}
+
+export function $refUpdate(ref, update) {
+    return $task(function* () {
+        const next = update(ref.value);
+        ref.value = next;
+    });
+}
+
+export function $refModify(ref, modify) {
+    return $task(function* () {
+        const [result, next] = modify(ref.value);
+        ref.value = next;
+        return result;
+    });
+}
+
 export function $taskSleep(milliseconds) {
     return $tryPromise((signal) => new Promise((resolve, reject) => {
         const timer = setTimeout(resolve, milliseconds);

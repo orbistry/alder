@@ -62,6 +62,123 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn ref_operations_are_lazy_reusable_and_commit_after_callback_success() {
+        let harness = indoc::indoc! {r#"
+            await $runTask($task(function* () {
+                const make = $refMake(0);
+                const ref = yield* make;
+                const independent = yield* make;
+                $assert(ref !== independent);
+                let calls = 0;
+                const update = $refUpdate(ref, (value) => { calls++; return value + 1; });
+                $assert(calls === 0);
+                yield* update;
+                yield* update;
+                $assert(calls === 2 && (yield* $refGet(ref)) === 2);
+                $assert((yield* $refGet(independent)) === 0);
+                const read = $refGet(ref);
+                const write = $refSet(ref, 10);
+                $assert((yield* read) === 2);
+                yield* write;
+                $assert((yield* read) === 10);
+                const defect = new Error("transition failed");
+                for (const operation of [$refUpdate, $refModify]) {
+                    let caught = false;
+                    try { yield* operation(ref, () => { throw defect; }); }
+                    catch (error) { caught = error === defect; }
+                    $assert(caught && (yield* read) === 10);
+                }
+                $assert((yield* $refModify(ref, (value) => ["previous: " + value, 42])) === "previous: 10");
+                $assert((yield* read) === 42);
+                const workers = Array.from({ length: 16 }, () => $task(function* () {
+                    for (let index = 0; index < 100; index++) {
+                        yield* $refUpdate(ref, (value) => value + 1);
+                    }
+                }));
+                yield* $fiberAll(workers);
+                $assert((yield* read) === 1642);
+            }));
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn ref_interruption_skips_pending_updates_and_preserves_committed_updates() {
+        let harness = indoc::indoc! {r#"
+            const ref = await $runTask($refMake(0));
+            let callbacks = 0;
+            const update = $refUpdate(ref, (value) => { callbacks++; return value + 1; });
+            const pending = new FiberImpl(update).start();
+            pending.interruptUnsafe();
+            const skipped = await pending.awaitExit();
+            $assert(skipped.$ === "Failure" && skipped.error instanceof Interrupted);
+            $assert(callbacks === 0 && (await $runTask($refGet(ref))) === 0);
+
+            let entered;
+            const suspended = new Promise((resolve) => { entered = resolve; });
+            let cleaned = 0;
+            const committed = new FiberImpl($task(function* () {
+                try {
+                    yield* update;
+                    yield* $tryPromise(() => {
+                        entered();
+                        return new Promise(() => {});
+                    });
+                } finally { cleaned++; }
+            })).start();
+            await suspended;
+            committed.interruptUnsafe();
+            committed.interruptUnsafe();
+            const cancelled = await committed.awaitExit();
+            $assert(cancelled.$ === "Failure" && cancelled.error instanceof Interrupted);
+            $assert(callbacks === 1 && cleaned === 1);
+            $assert((await $runTask($refGet(ref))) === 1);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        let execution = alder_runtime::execute(code, Vec::new());
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(10), execution)
+                .await
+                .expect("Ref interruption must complete")
+                .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn ref_preserves_payload_aliases_and_does_not_interpret_task_or_result_values() {
+        let harness = indoc::indoc! {r#"
+            const payload = [];
+            const allocation = $refMake(payload);
+            payload.push(1);
+            const left = await $runTask(allocation);
+            const right = await $runTask(allocation);
+            $assert(left !== right);
+            $assert((await $runTask($refGet(left))) === payload);
+            const defect = new Error("after alias mutation");
+            let caught = false;
+            try {
+                await $runTask($refUpdate(left, (value) => { value.push(2); throw defect; }));
+            } catch (error) { caught = error === defect; }
+            $assert(caught && (await $runTask($refGet(right))) === payload);
+            $assert(payload.length === 2 && payload[1] === 2);
+            let ran = false;
+            const task = $task(function* () { ran = true; return 42; });
+            const taskCell = await $runTask($refMake(task));
+            $assert((await $runTask($refGet(taskCell))) === task && !ran);
+            await $runTask($refUpdate(taskCell, () => task));
+            $assert(!ran);
+            const err = { $: "Err", _0: { $: ":expected" } };
+            const resultCell = await $runTask($refMake(err));
+            $assert((await $runTask($refGet(resultCell))) === err);
+            $assert((await $runTask($refModify(resultCell, () => [err, err]))) === err);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn primitive_json_codecs_validate_types_and_round_trip() {
         let harness = indoc::indoc! {r#"
             for (const [value, kind] of [[42, "number"], ["text", "string"], [true, "boolean"],
