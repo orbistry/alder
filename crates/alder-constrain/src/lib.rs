@@ -199,7 +199,9 @@ pub enum ErrorKind {
         expected: String,
         actual: String,
     },
-    InfiniteType,
+    InfiniteType {
+        equation: Option<Box<(DiagnosticType, DiagnosticType)>>,
+    },
     UnsupportedHigherKindedUnification,
     InvalidAwait,
     InvalidTry,

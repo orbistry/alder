@@ -1381,7 +1381,16 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
                 "associated type `{assoc}` has conflicting equalities: expected `{expected}`, found `{actual}`"
             ),
         ),
-        ErrorKind::InfiniteType => ("infinite_type", "infinite type".to_owned()),
+        ErrorKind::InfiniteType { equation } => (
+            "infinite_type",
+            match equation {
+                Some(equation) => format!(
+                    "infinite type: `{}` would need to equal `{}`",
+                    equation.0, equation.1
+                ),
+                None => "infinite type: a structural type would contain itself".to_owned(),
+            },
+        ),
         ErrorKind::UnsupportedHigherKindedUnification => (
             "higher_kinded_unification",
             "these higher-kinded types cannot be unified".to_owned(),
@@ -1460,6 +1469,9 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             _ => "a related type requirement",
         };
         diagnostic = diagnostic.with_secondary_label(origin, label);
+    }
+    if matches!(error.kind, ErrorKind::InfiniteType { .. }) {
+        diagnostic = diagnostic.with_help("these requirements form a cycle: expanding the type would keep nesting it inside itself. Check the highlighted use and the types it connects; adding an annotation cannot make this structural cycle finite");
     }
     if let ErrorKind::MissingField { field, available } = &error.kind {
         let fields = available

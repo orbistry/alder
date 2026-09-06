@@ -421,3 +421,28 @@ Validation: full workspace tests passed (223 driver tests, six CLI subprocess
 tests and all other suites; two existing ignored doctests). Strict all-target/
 all-feature Clippy, formatting and diff checks passed. The mixed-error source
 snapshot was reviewed; existing inference snapshots remained unchanged.
+
+## Infinite-type explanation checkpoint
+
+Occurs-check failures now retain an optional pair of owned `DiagnosticType` trees
+before the failing substitution is installed. The same dense variable-name map
+is used on both sides, so diagnostics show the actual recursive equation without
+internal solver IDs: `a = fn(a) b`, `a = { next: a }`, or `a = Array[a]`.
+Formatting remains in the renderer. The explanation describes the infinite
+structural expansion instead of suggesting a speculative wrapper or annotation.
+Sparse tuple/row-cycle checks that do not capture a single equation retain an
+explicit structural-cycle explanation without fabricating a type equation.
+
+`infinite_types_explain_the_actual_recursive_equation` first failed with only
+“infinite type” and no help. Its final source snapshot covers three independent
+cycles while retaining call, branch, array-element and earlier-requirement
+locations. `deferred_structural_cycles_explain_why_no_finite_type_exists` checks
+the fallback explanation on mutually recursive tuple projections. The existing
+higher-kinded occurs-cycle snapshot now retains its structured equation too;
+existing cycle-rejection tests still assert the same error category.
+
+Validation: full workspace tests passed (224 driver tests, six CLI subprocess
+tests and all other suites; two existing ignored doctests), followed by the added
+deferred-cycle fallback test. Strict workspace Clippy, formatting and diff checks
+passed. The new source snapshot and changed higher-kinded inference snapshot
+were reviewed; the duplicate pending snapshot proposal was removed.

@@ -14,7 +14,25 @@ description: "fn impossible(value: f[a]) a { value }\n"
                 column: 37,
             },
         },
-        kind: InfiniteType,
+        kind: InfiniteType {
+            equation: Some(
+                (
+                    Variable(
+                        0,
+                    ),
+                    Application(
+                        Variable(
+                            1,
+                        ),
+                        [
+                            Variable(
+                                0,
+                            ),
+                        ],
+                    ),
+                ),
+            ),
+        },
         expectation: Some(
             Expectation {
                 kind: Return,

@@ -3682,7 +3682,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                             return Err(Error {
                                 expectation: None,
                                 region: shape.region,
-                                kind: ErrorKind::InfiniteType,
+                                kind: ErrorKind::InfiniteType { equation: None },
                             });
                         }
                     }
@@ -3772,7 +3772,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             return Err(Error {
                 expectation: None,
                 region: regions[id],
-                kind: ErrorKind::InfiniteType,
+                kind: ErrorKind::InfiniteType { equation: None },
             });
         }
         Ok(())
@@ -7189,7 +7189,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         Err(Error {
                             expectation: None,
                             region,
-                            kind: ErrorKind::InfiniteType,
+                            kind: ErrorKind::InfiniteType { equation: None },
                         })
                     };
                 }
@@ -7331,10 +7331,15 @@ impl<'a, 'db> Infer<'a, 'db> {
             self.variable_kinds[*other] = merged;
         }
         if self.occurs(id, &typ) {
+            let mut names = BTreeMap::new();
+            let variable = self.diagnostic_type(Ty::Var(id), &mut names);
+            let containing_type = self.diagnostic_type(typ, &mut names);
             return Err(Error {
                 expectation: None,
                 region,
-                kind: ErrorKind::InfiniteType,
+                kind: ErrorKind::InfiniteType {
+                    equation: Some(Box::new((variable, containing_type))),
+                },
             });
         }
         self.substitutions[id] = Some(typ);

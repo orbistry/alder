@@ -447,7 +447,7 @@ fn sparse_tuple_shapes_reject_transitive_element_cycles() {
         errors.iter().any(|error| matches!(
             error,
             alder_solve::SolveError::Core(Error {
-                kind: ErrorKind::InfiniteType,
+                kind: ErrorKind::InfiniteType { .. },
                 ..
             })
         )),
@@ -4129,7 +4129,7 @@ fn record_rows_reject_direct_and_mutual_payload_cycles() {
             errors.iter().any(|error| matches!(
                 error,
                 alder_solve::SolveError::Core(Error {
-                    kind: ErrorKind::InfiniteType,
+                    kind: ErrorKind::InfiniteType { .. },
                     ..
                 })
             )),
@@ -4793,7 +4793,7 @@ fn mutually_recursive_overlays_reject_unbroken_payload_growth() {
         errors.iter().any(|error| matches!(
             error,
             alder_solve::SolveError::Core(Error {
-                kind: ErrorKind::InfiniteType | ErrorKind::Mismatch { .. },
+                kind: ErrorKind::InfiniteType { .. } | ErrorKind::Mismatch { .. },
                 ..
             })
         )),
@@ -4840,7 +4840,7 @@ fn recursive_overlay_instantiation_rejects_an_unbroken_payload_cycle() {
         errors.iter().any(|error| matches!(
             error,
             alder_solve::SolveError::Core(Error {
-                kind: ErrorKind::InfiniteType | ErrorKind::Mismatch { .. },
+                kind: ErrorKind::InfiniteType { .. } | ErrorKind::Mismatch { .. },
                 ..
             })
         )),
@@ -4878,7 +4878,7 @@ fn recursive_overlay_rejects_an_infinite_nested_payload() {
         matches!(
             errors.as_slice(),
             [alder_solve::SolveError::Core(Error {
-                kind: ErrorKind::InfiniteType,
+                kind: ErrorKind::InfiniteType { .. },
                 ..
             })]
         ),

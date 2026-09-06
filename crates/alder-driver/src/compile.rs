@@ -1277,6 +1277,65 @@ mod tests {
     }
 
     #[test]
+    fn infinite_types_explain_the_actual_recursive_equation() {
+        let source = indoc::indoc! {r#"
+            fn apply_to_self(value) { value(value) }
+            fn nested(value) { if true { value } else { { next: value } } }
+            fn array(value) { [value, [value]] }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("self application must fail")
+        };
+        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        for diagnostic in diagnostics {
+            assert!(
+                diagnostic.message().contains("would need to equal"),
+                "{diagnostic:?}"
+            );
+            assert!(miette::Diagnostic::help(diagnostic).is_some());
+        }
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn deferred_structural_cycles_explain_why_no_finite_type_exists() {
+        let source = indoc::indoc! {r#"
+            fn cycle(first, second) {
+                first.0 = second
+                second.0 = first
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("structural cycle must fail")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            diagnostics[0]
+                .message()
+                .contains("structural type would contain itself"),
+            "{diagnostics:?}"
+        );
+        assert!(
+            miette::Diagnostic::help(&diagnostics[0])
+                .unwrap()
+                .to_string()
+                .contains("expanding the type")
+        );
+    }
+
+    #[test]
     fn core_recovery_also_reports_independent_trait_obligations() {
         let source = indoc::indoc! {r#"
             trait Needed[a] { fn required(value: a) Number }

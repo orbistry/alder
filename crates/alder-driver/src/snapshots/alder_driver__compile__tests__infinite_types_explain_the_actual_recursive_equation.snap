@@ -1,0 +1,43 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn apply_to_self(value) { value(value) }\nfn nested(value) { if true { value } else { { next: value } } }\nfn array(value) { [value, [value]] }\n"
+---
+alder::type::infinite_type
+
+  × infinite type: `a` would need to equal `fn(a) b`
+   ╭─[/app/src/main.ald:1:27]
+ 1 │ fn apply_to_self(value) { value(value) }
+   ·                           ──────┬─────
+   ·                                 ╰── this call to `value` is incompatible with its signature
+ 2 │ fn nested(value) { if true { value } else { { next: value } } }
+   ╰────
+  help: these requirements form a cycle: expanding the type would keep nesting
+        it inside itself. Check the highlighted use and the types it connects;
+        adding an annotation cannot make this structural cycle finite
+alder::type::infinite_type
+
+  × infinite type: `a` would need to equal `{ next: a }`
+   ╭─[/app/src/main.ald:2:43]
+ 1 │ fn apply_to_self(value) { value(value) }
+ 2 │ fn nested(value) { if true { value } else { { next: value } } }
+   ·                            ────┬────      ─────────┬─────────
+   ·                                │                   ╰── this branch has an incompatible result type
+   ·                                ╰── another branch in this expression
+ 3 │ fn array(value) { [value, [value]] }
+   ╰────
+  help: these requirements form a cycle: expanding the type would keep nesting
+        it inside itself. Check the highlighted use and the types it connects;
+        adding an annotation cannot make this structural cycle finite
+alder::type::infinite_type
+
+  × infinite type: `a` would need to equal `Array[a]`
+   ╭─[/app/src/main.ald:3:27]
+ 2 │ fn nested(value) { if true { value } else { { next: value } } }
+ 3 │ fn array(value) { [value, [value]] }
+   ·                    ──┬──  ───┬───
+   ·                      │       ╰── array element 2 has an incompatible type
+   ·                      ╰── an earlier array element
+   ╰────
+  help: these requirements form a cycle: expanding the type would keep nesting
+        it inside itself. Check the highlighted use and the types it connects;
+        adding an annotation cannot make this structural cycle finite
