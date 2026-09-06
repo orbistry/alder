@@ -1058,6 +1058,53 @@ mod tests {
     }
 
     #[test]
+    fn mismatch_preserves_distinct_generic_variables() {
+        let source = indoc::indoc! {r#"
+            fn broken(value: fn(a, b) a) Bool { value }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid return must fail");
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert!(
+            diagnostics[0].to_string().contains("fn(a, b) a"),
+            "{diagnostics:?}"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn mismatch_preserves_nested_types_and_open_rows() {
+        let source = indoc::indoc! {r#"
+            fn broken(value: (Option[a], Result[b, [:failed(a) | e]], Task[b], {r | name: a})) Bool {
+                value
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid return must fail");
+        };
+        assert_eq!(diagnostics.len(), 1);
+        let message = diagnostics[0].to_string();
+        assert!(
+            message.contains("Option[a], Result[b, [:failed(a) | c]], Task[b], { d | name: a }"),
+            "{message}"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
     fn independent_type_errors_accumulate_without_publishing() {
         let source = indoc::indoc! {r#"
             fn first() Number { "wrong" }

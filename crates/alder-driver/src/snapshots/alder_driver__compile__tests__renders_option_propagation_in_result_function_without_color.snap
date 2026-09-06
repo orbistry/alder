@@ -4,7 +4,7 @@ description: "fn read(value: Option[Number]) Result[Number] { Ok(value?) }\n"
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `Option[a]`, found `Result[Number, [_]]`
+  × type mismatch: expected `Option[b]`, found `Result[Number, [a]]`
    ╭─[/project/src/main.ald:1:52]
  1 │ fn read(value: Option[Number]) Result[Number] { Ok(value?) }
    ·                                                    ───┬──

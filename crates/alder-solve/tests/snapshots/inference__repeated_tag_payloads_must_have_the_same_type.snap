@@ -15,8 +15,12 @@ description: "fn invalid(flag: Bool) Result[()] {\n    if flag {\n        Err(:i
             },
         },
         kind: Mismatch {
-            actual: "Number",
-            expected: "String",
+            actual: Named(
+                "Number",
+            ),
+            expected: Named(
+                "String",
+            ),
         },
     },
 ]

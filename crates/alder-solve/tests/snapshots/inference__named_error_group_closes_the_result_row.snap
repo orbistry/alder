@@ -15,8 +15,28 @@ description: "error Failure {\n    :known(String)\n}\n\nfn invalid() Result[(), 
             },
         },
         kind: Mismatch {
-            actual: "[:other]",
-            expected: "[:known(String)]",
+            actual: ErrorRow(
+                [
+                    (
+                        "other",
+                        [],
+                    ),
+                ],
+                None,
+            ),
+            expected: ErrorRow(
+                [
+                    (
+                        "known",
+                        [
+                            Named(
+                                "String",
+                            ),
+                        ],
+                    ),
+                ],
+                None,
+            ),
         },
     },
 ]

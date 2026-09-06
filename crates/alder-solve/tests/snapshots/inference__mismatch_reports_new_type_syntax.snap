@@ -15,8 +15,12 @@ description: "fn bad() Number { \"nope\" }"
             },
         },
         kind: Mismatch {
-            actual: "String",
-            expected: "Number",
+            actual: Named(
+                "String",
+            ),
+            expected: Named(
+                "Number",
+            ),
         },
     },
 ]

@@ -15,8 +15,24 @@ description: "fn read() Result[Number, [:storage]] {\n    Err(:storage)\n}\n\nfn
             },
         },
         kind: Mismatch {
-            actual: "[:storage]",
-            expected: "[:invalid]",
+            actual: ErrorRow(
+                [
+                    (
+                        "storage",
+                        [],
+                    ),
+                ],
+                None,
+            ),
+            expected: ErrorRow(
+                [
+                    (
+                        "invalid",
+                        [],
+                    ),
+                ],
+                None,
+            ),
         },
     },
 ]

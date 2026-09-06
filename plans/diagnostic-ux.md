@@ -90,3 +90,21 @@ Checkpoint validation: full `cargo test --quiet` passed (including 203 driver,
 467 inference integration, and 17 CLI tests; two existing doctests ignored).
 Strict all-target/all-feature Clippy and formatting passed. These results
 validate this slice only; the final matrix gates remain unchecked.
+
+## Structured type checkpoint
+
+`Mismatch` now owns a `DiagnosticType` tree rather than two strings. The snapshot
+is detached from the inference arena; a shared, dense variable-name map preserves
+equalities and distinctions across both sides without leaking solver IDs. Trees
+retain applications, functions, tuples (including sparse tuple lengths), record
+and error-row tails, partial applications, and associated projections. Formatting
+is deferred to the diagnostic consumer. Open records use Alder's `{ r | field: T }`
+syntax and error rows use `[:tag(T) | r]`.
+
+The source regression `mismatch_preserves_distinct_generic_variables` first failed
+with `fn(a, a) a` for an actual `fn(a, b) a`. It and the nested Option/Result/Task,
+tuple, record and error-row source snapshot now verify the distinction. Existing
+solver snapshots now inspect the trees; two propagation renderer snapshots retain
+previously erased open-row variables. This does not yet supply expectation
+contexts, alias provenance, name disambiguation, outer structural comparisons, or
+convert specialized error payloads that still store strings. Those remain open.

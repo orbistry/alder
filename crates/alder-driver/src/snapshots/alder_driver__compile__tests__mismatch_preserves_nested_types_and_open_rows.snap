@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn broken(value: (Option[a], Result[b, [:failed(a) | e]], Task[b], {r | name: a})) Bool {\n    value\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `(Option[a], Result[b, [:failed(a) |
+  │ c]], Task[b], { d | name: a })`
+   ╭─[/app/src/main.ald:1:1]
+ 1 │ ╭─▶ fn broken(value: (Option[a], Result[b, [:failed(a) | e]], Task[b], {r | name: a})) Bool {
+ 2 │ │       value
+ 3 │ ├─▶ }
+   · ╰──── type requirement originates here
+   ╰────

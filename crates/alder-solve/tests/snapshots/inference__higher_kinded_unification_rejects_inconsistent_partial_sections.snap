@@ -15,8 +15,24 @@ description: "fn combine(left: f[a], right: f[b]) f[a] { left }\nfn invalid(\n  
             },
         },
         kind: Mismatch {
-            actual: "[:right]",
-            expected: "[:left]",
+            actual: ErrorRow(
+                [
+                    (
+                        "right",
+                        [],
+                    ),
+                ],
+                None,
+            ),
+            expected: ErrorRow(
+                [
+                    (
+                        "left",
+                        [],
+                    ),
+                ],
+                None,
+            ),
         },
     },
 ]

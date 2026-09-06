@@ -15,8 +15,12 @@ description: "let identity = (value) -> { value }\nfn number() { identity(1) }\n
             },
         },
         kind: Mismatch {
-            actual: "String",
-            expected: "Number",
+            actual: Named(
+                "String",
+            ),
+            expected: Named(
+                "Number",
+            ),
         },
     },
 ]

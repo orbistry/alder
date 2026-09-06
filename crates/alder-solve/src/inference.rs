@@ -6,7 +6,9 @@ use alder_ast::{
     TraitId, Type, TypeSlot, UseId, ValueRef,
 };
 use alder_can::Annotations;
-use alder_constrain::{Constraints, Error, ErrorKind, RequirementKind, RequirementSeed};
+use alder_constrain::{
+    Constraints, DiagnosticType, Error, ErrorKind, RequirementKind, RequirementSeed,
+};
 use alder_region::{Located, Region};
 use bumpalo::Bump;
 
@@ -3577,8 +3579,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                             return Err(Error {
                                 region: shape.region,
                                 kind: ErrorKind::Mismatch {
-                                    actual: format!("tuple of length {}", shape.length),
-                                    expected: format!("tuple of length {}", previous.length),
+                                    actual: DiagnosticType::TupleShape(shape.length),
+                                    expected: DiagnosticType::TupleShape(previous.length),
                                 },
                             });
                         }
@@ -3597,8 +3599,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                     return Err(Error {
                         region: shape.region,
                         kind: ErrorKind::Mismatch {
-                            actual: self.render(actual),
-                            expected: format!("tuple of length {}", shape.length),
+                            actual: self.diagnostic_type(actual, &mut BTreeMap::new()),
+                            expected: DiagnosticType::TupleShape(shape.length),
                         },
                     });
                 }
@@ -7716,12 +7718,88 @@ impl<'a, 'db> Infer<'a, 'db> {
     }
 
     fn mismatch(&mut self, region: Region, actual: Ty<'a>, expected: Ty<'a>) -> Error {
+        let mut names = BTreeMap::new();
         Error {
             region,
             kind: ErrorKind::Mismatch {
-                actual: self.render(actual),
-                expected: self.render(expected),
+                actual: self.diagnostic_type(actual, &mut names),
+                expected: self.diagnostic_type(expected, &mut names),
             },
+        }
+    }
+
+    fn diagnostic_type(
+        &mut self,
+        typ: Ty<'a>,
+        names: &mut BTreeMap<usize, usize>,
+    ) -> DiagnosticType {
+        use DiagnosticType as D;
+        match self.prune(typ) {
+            Ty::Var(id) => {
+                let next = names.len();
+                D::Variable(*names.entry(id).or_insert(next))
+            }
+            Ty::Con(name) => D::Named(name.name.to_owned()),
+            Ty::App(head, args) => D::Application(
+                Box::new(self.diagnostic_type(*head, names)),
+                args.into_iter()
+                    .map(|arg| self.diagnostic_type(arg, names))
+                    .collect(),
+            ),
+            Ty::Fn(args, ret) => D::Function(
+                args.into_iter()
+                    .map(|arg| self.diagnostic_type(arg, names))
+                    .collect(),
+                Box::new(self.diagnostic_type(*ret, names)),
+            ),
+            Ty::Unit => D::Unit,
+            Ty::Tuple(items) => D::Tuple(
+                items
+                    .into_iter()
+                    .map(|item| self.diagnostic_type(item, names))
+                    .collect(),
+            ),
+            Ty::RecordRow(row) => self.diagnostic_type(*row, names),
+            Ty::Record(fields, tail) => D::Record(
+                fields
+                    .into_iter()
+                    .map(|(name, typ)| (name.to_owned(), self.diagnostic_type(typ, names)))
+                    .collect(),
+                tail.map(|tail| Box::new(self.diagnostic_type(*tail, names))),
+            ),
+            Ty::Partial(reference, slots) => D::Application(
+                Box::new(D::Named(reference.name.to_owned())),
+                slots
+                    .into_iter()
+                    .map(|slot| match slot {
+                        TySlot::Hole(_) => D::Hole,
+                        TySlot::Fixed(typ) => self.diagnostic_type(typ, names),
+                    })
+                    .collect(),
+            ),
+            Ty::Projection(trait_, args, assoc) => D::Projection(
+                Box::new(D::Application(
+                    Box::new(D::Named(trait_.0.name.to_owned())),
+                    args.into_iter()
+                        .map(|arg| self.diagnostic_type(arg, names))
+                        .collect(),
+                )),
+                assoc.name.to_owned(),
+            ),
+            Ty::ErrorRow { tags, tail } => D::ErrorRow(
+                tags.into_iter()
+                    .map(|(name, args)| {
+                        (
+                            name.to_owned(),
+                            args.into_iter()
+                                .map(|arg| self.diagnostic_type(arg, names))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+                tail.map(|tail| Box::new(self.diagnostic_type(*tail, names))),
+            ),
+            Ty::Any => D::Hole,
         }
     }
 

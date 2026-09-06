@@ -2,7 +2,7 @@
 
 use alder_ast::{Annotation, Kind, ModuleId, PackageId, RowExtension, Type};
 use alder_can::{Annotations, Context};
-use alder_constrain::{Error, ErrorKind};
+use alder_constrain::{DiagnosticType, Error, ErrorKind};
 use alder_region::Located;
 use bumpalo::Bump;
 use indoc::indoc;
@@ -2911,7 +2911,7 @@ fn call_arguments_constrain_later_literal_arguments_from_left_to_right() {
             alder_solve::SolveError::Core(Error {
                 kind: ErrorKind::Mismatch { actual, expected },
                 ..
-            }) if actual == "String" && expected == "Number"
+            }) if *actual == DiagnosticType::Named("String".into()) && *expected == DiagnosticType::Named("Number".into())
         )),
         "{source}\n{errors:?}"
     );
@@ -2934,7 +2934,7 @@ fn piped_argument_constrains_later_literal_arguments() {
             alder_solve::SolveError::Core(Error {
                 kind: ErrorKind::Mismatch { actual, expected },
                 ..
-            }) if actual == "String" && expected == "Number"
+            }) if *actual == DiagnosticType::Named("String".into()) && *expected == DiagnosticType::Named("Number".into())
         )),
         "{source}\n{errors:?}"
     );
@@ -7200,8 +7200,8 @@ fn impl_method_must_match_the_substituted_associated_type() {
         alder_solve::SolveError::Core(Error {
             kind: ErrorKind::Mismatch { actual, expected },
             ..
-        }) if (actual == "String" && expected == "Number")
-            || (actual == "Number" && expected == "String")
+        }) if (*actual == DiagnosticType::Named("String".into()) && *expected == DiagnosticType::Named("Number".into()))
+            || (*actual == DiagnosticType::Named("Number".into()) && *expected == DiagnosticType::Named("String".into()))
     ));
 }
 

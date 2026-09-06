@@ -15,8 +15,12 @@ description: "fn invalid() {\n    let identity = (value) -> { value }\n    let n
             },
         },
         kind: Mismatch {
-            actual: "String",
-            expected: "Number",
+            actual: Named(
+                "String",
+            ),
+            expected: Named(
+                "Number",
+            ),
         },
     },
 ]

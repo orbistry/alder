@@ -4,7 +4,7 @@ description: "#[extern(\"alder:kernel\", \"$taskSleep\")]\nfn sleep(milliseconds
 ---
 alder::type::type_mismatch
 
-  × type mismatch: expected `Result[a, [_]]`, found `()`
+  × type mismatch: expected `Result[a, [b]]`, found `()`
    ╭─[/project/src/main.ald:5:5]
  4 │ async fn invalid() Result[Number] {
  5 │     sleep(1).await?

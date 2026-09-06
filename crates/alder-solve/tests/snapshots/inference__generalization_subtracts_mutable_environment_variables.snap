@@ -15,8 +15,12 @@ description: "let identity = (value) -> { value }\nfn forward(value) { identity(
             },
         },
         kind: Mismatch {
-            actual: "String",
-            expected: "Number",
+            actual: Named(
+                "String",
+            ),
+            expected: Named(
+                "Number",
+            ),
         },
     },
 ]

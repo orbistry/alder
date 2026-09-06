@@ -9,6 +9,98 @@
 use alder_ast::{MethodId, Module, UseId};
 use alder_region::Region;
 
+/// An owned snapshot of a diagnostic type, independent of the inference arena.
+/// Variable indices are dense, comparison-local names, never solver IDs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DiagnosticType {
+    Variable(usize),
+    Named(String),
+    Application(Box<Self>, Vec<Self>),
+    Function(Vec<Self>, Box<Self>),
+    Unit,
+    Tuple(Vec<Self>),
+    TupleShape(u64),
+    Record(Vec<(String, Self)>, Option<Box<Self>>),
+    ErrorRow(Vec<(String, Vec<Self>)>, Option<Box<Self>>),
+    Projection(Box<Self>, String),
+    Hole,
+}
+
+impl std::fmt::Display for DiagnosticType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn separated<T: std::fmt::Display>(
+            f: &mut std::fmt::Formatter<'_>,
+            items: &[T],
+        ) -> std::fmt::Result {
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{item}")?;
+            }
+            Ok(())
+        }
+        match self {
+            Self::Variable(index) if *index < 26 => write!(f, "{}", (b'a' + *index as u8) as char),
+            Self::Variable(index) => write!(f, "t{index}"),
+            Self::Named(name) => f.write_str(name),
+            Self::Application(head, args) => {
+                write!(f, "{head}[")?;
+                separated(f, args)?;
+                write!(f, "]")
+            }
+            Self::Function(args, result) => {
+                write!(f, "fn(")?;
+                separated(f, args)?;
+                write!(f, ") {result}")
+            }
+            Self::Unit => write!(f, "()"),
+            Self::Tuple(items) => {
+                write!(f, "(")?;
+                separated(f, items)?;
+                write!(f, ")")
+            }
+            Self::TupleShape(length) => write!(f, "tuple of length {length}"),
+            Self::Record(fields, tail) => {
+                write!(f, "{{ ")?;
+                if let Some(tail) = tail {
+                    write!(f, "{tail} | ")?;
+                }
+                for (index, (name, typ)) in fields.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{name}: {typ}")?;
+                }
+                write!(f, " }}")
+            }
+            Self::ErrorRow(tags, tail) => {
+                write!(f, "[")?;
+                for (index, (name, args)) in tags.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, " | ")?;
+                    }
+                    write!(f, ":{name}")?;
+                    if !args.is_empty() {
+                        write!(f, "(")?;
+                        separated(f, args)?;
+                        write!(f, ")")?;
+                    }
+                }
+                if let Some(tail) = tail {
+                    if !tags.is_empty() {
+                        write!(f, " | ")?;
+                    }
+                    write!(f, "{tail}")?;
+                }
+                write!(f, "]")
+            }
+            Self::Projection(head, assoc) => write!(f, "{head}::{assoc}"),
+            Self::Hole => write!(f, "_"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Constraints<'a> {
     pub module: &'a Module<'a>,
@@ -46,8 +138,8 @@ pub enum ErrorKind {
         actual: String,
     },
     Mismatch {
-        actual: String,
-        expected: String,
+        actual: DiagnosticType,
+        expected: DiagnosticType,
     },
     Arity {
         expected: usize,
