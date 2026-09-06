@@ -1869,6 +1869,64 @@ $assert(reads === 1);
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn nested_option_operations_obey_payload_laws_across_four_layers() {
+        let harness = indoc::indoc! {r#"
+            const option = child => ({
+                eq: (a, b) => $equalContainer(a, b, "option", [child]),
+                hash: value => $hashContainer(value, "option", [child]),
+                encode: value => $jsonEncodeContainer(value, "option", [child]),
+                decode: value => $jsonDecodeContainer(value, "option", [child]),
+            });
+            const identity = { pure: value => ({ value }), $super0: { map: (box, f) => ({ value: f(box.value) }) } };
+            for (const [kind, payloads] of [["number", [-0, 0, 1, -1]], ["unit", [undefined]]]) {
+                let dictionary = {
+                    eq: (a, b) => a === b,
+                    hash: $hash,
+                    encode: value => $jsonEncodePrimitive(value, kind),
+                    decode: text => $jsonDecodePrimitive(text, kind),
+                };
+                let values = payloads;
+                for (let depth = 1; depth <= 4; depth++) {
+                    dictionary = option(dictionary);
+                    values = [null, ...values.map(value => $optionSome(value))];
+                    for (const value of values) {
+                        $assert(dictionary.eq(value, value));
+                        const decoded = dictionary.decode(dictionary.encode(value));
+                        $assert(decoded.$ === "Ok" && dictionary.eq(value, decoded._0));
+                        $assert(dictionary.hash(value) === dictionary.hash(decoded._0));
+                        $assert(dictionary.eq($optionMap(value, x => x), value));
+                        $assert(dictionary.eq($optionFlatMap(value, $optionSome), value));
+                        $assert(dictionary.eq($optionApply($optionSome(x => x), value), value));
+                        $assert(dictionary.eq($optionTraverse(identity, value, identity.pure).value, value));
+                        const twice = option(option(dictionary));
+                        $assert(twice.eq(
+                            $optionMap($optionMap(value, $optionSome), $optionSome),
+                            $optionMap(value, x => $optionSome($optionSome(x)))
+                        ));
+                        for (const other of values) {
+                            $assert(dictionary.eq(value, other) === dictionary.eq(other, value));
+                            if (dictionary.eq(value, other)) {
+                                $assert(dictionary.hash(value) === dictionary.hash(other));
+                            }
+                        }
+                    }
+                }
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new()),
+            )
+            .await
+            .expect("bounded Option law matrix must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn option_equality_unwraps_nested_payloads() {
         let harness = r#"
 const inner = { eq: (a, b) => $equalContainer(a, b, "option", [{ eq: (x, y) => x === y }]) };
