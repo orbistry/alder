@@ -4,7 +4,7 @@
 
 Alder is a programming language compiler forked from the Elm compiler and ported from Haskell to Rust, adapting to Rust idioms where appropriate. It compiles to JavaScript with a focus on targeting Cloudflare. Unlike Elm it has no TEA (components use compile-time-tracked signals), supports SSR, ships a built-in Drizzle-like data layer, uses curly-brace Rust-flavored syntax, and is a general-purpose language via an embedded V8 runtime. Source files use the `.ald` extension.
 
-The pipeline (`alder-parse`, `alder-can`, `alder-constrain`, `alder-solve`, `alder-driver`) started as a finished Elm port. `alder-parse` (over `alder-source`) now implements the new grammar in `SPEC.md` (milestone M1, done; design in `docs/parser-internals.md`); `alder-can` onward still consume the old AST and do not compile until M2 adapts them, so the workspace build and CI are red on the `parser-rewrite` branch by design.
+The pipeline started as an Elm port and now compiles Alder through parsing, canonicalization, inference/trait solving, direct Oxc AST generation, and Rolldown bundling. The CLI builds and runs JavaScript. See `docs/compiler-implementation-map.md` for active modules versus inactive Elm-era files, and `plans/compiler-hardening.md` for current acceptance gates. Workspace build, tests, and strict Clippy are expected to pass; red CI is not intentional.
 
 ## Design Documents
 
