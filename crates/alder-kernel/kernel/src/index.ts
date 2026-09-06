@@ -60,7 +60,30 @@ export function $equalStructural(left, right, kind, fields, dictionaries) {
     throw new TypeError(`unknown structural Eq shape: ${kind}`);
 }
 
+// Synchronous dictionary operations share only their active traversal path.
+// Distinct domains avoid mistaking erased Option payloads or a delegate's view
+// of the same object for a graph edge. Never retain completed results: values
+// can be mutated between calls, and user dictionaries can throw.
+const activeValueOperations = new Map();
+function withActiveValue(operation, domain, value, visit) {
+    if (value === null || typeof value !== "object") return visit();
+    const key = `${operation}:${domain}`;
+    let active = activeValueOperations.get(key);
+    if (!active) activeValueOperations.set(key, active = new WeakSet());
+    if (active.has(value)) {
+        if (operation === "Show") return "<cycle>";
+        throw new TypeError(`${operation}: cyclic value`);
+    }
+    active.add(value);
+    try { return visit(); }
+    finally { active.delete(value); }
+}
+
 export function $show(value) {
+    return withActiveValue("Show", "structural", value, () => showValue(value));
+}
+
+function showValue(value) {
     if (typeof value === "string") return JSON.stringify(value);
     if (value === undefined) return "()";
     if (value === null) return "None";
@@ -79,6 +102,10 @@ export function $show(value) {
 }
 
 export function $showDerived(value, variants) {
+    return withActiveValue("Show", "derived", value, () => showDerivedValue(value, variants));
+}
+
+function showDerivedValue(value, variants) {
     const shape = value && variants[value.$];
     if (!shape) throw new TypeError("$: unknown derived Show variant");
     if (shape.record) {
@@ -128,6 +155,11 @@ export function $compareEnum(left, right, variants) {
 }
 
 export function $compareDerived(left, right, variants) {
+    return withActiveValue("Ord", "derived-left", left, () =>
+        withActiveValue("Ord", "derived-right", right, () => compareDerivedValues(left, right, variants)));
+}
+
+function compareDerivedValues(left, right, variants) {
     const names = Object.keys(variants);
     const leftIndex = names.indexOf(left?.$);
     const rightIndex = names.indexOf(right?.$);
@@ -211,10 +243,14 @@ export function $resultTraverse(applicative, value, transform) {
 }
 
 export function $hash(value) {
-    return hashBytes(hashStream(value));
+    return withActiveValue("Hash", "structural", value, () => hashBytes(hashStream(value)));
 }
 
 export function $hashDerived(value, typeName, variants) {
+    return withActiveValue("Hash", "derived", value, () => hashDerivedValue(value, typeName, variants));
+}
+
+function hashDerivedValue(value, typeName, variants) {
     const names = Object.keys(variants);
     const variantIndex = names.indexOf(value?.$);
     if (variantIndex < 0) throw new TypeError("$: unknown derived Hash variant");
@@ -530,6 +566,10 @@ export function $jsonDecodeContainer(value, kind, dictionaries) {
     }
 }
 export function $jsonEncodeDerived(value, variants) {
+    return withActiveValue("JSON", "derived", value, () => jsonEncodeDerivedValue(value, variants));
+}
+
+function jsonEncodeDerivedValue(value, variants) {
     const shape = value && variants[value.$];
     if (!shape) throw new TypeError("$: unknown derived JSON variant");
     if (shape.record) {

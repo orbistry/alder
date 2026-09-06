@@ -62,6 +62,85 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn cyclic_show_has_a_marker() {
+        check_cyclic_derived_operation("Show").await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cyclic_hash_has_an_explicit_error() {
+        check_cyclic_derived_operation("Hash").await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cyclic_ord_has_an_explicit_error() {
+        check_cyclic_derived_operation("Ord").await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cyclic_json_has_an_explicit_error() {
+        check_cyclic_derived_operation("JSON").await;
+    }
+
+    async fn check_cyclic_derived_operation(operation: &str) {
+        let harness = indoc::indoc! {r#"
+            let fail = false;
+            const dictionary = {
+                show: value => { if (fail && value.$ === "End") throw new Error("payload"); return $showDerived(value, variants); },
+                hash: value => { if (fail && value.$ === "End") throw new Error("payload"); return $hashDerived(value, "Node", variants); },
+                encode: value => { if (fail && value.$ === "End") throw new Error("payload"); return $jsonEncodeDerived(value, variants); },
+                compare: (left, right) => {
+                    if (fail && left.$ === "End") throw new Error("payload");
+                    const result = $compareDerived(left, right, variants);
+                    return { $: result < 0 ? "Less" : result > 0 ? "Greater" : "Equal" };
+                }
+            };
+            const variants = {
+                End: { fields: [], dictionaries: [] },
+                Link: { fields: ["_0"], dictionaries: [dictionary] }
+            };
+            const run = value => operation === "Show" ? dictionary.show(value)
+                : operation === "Hash" ? dictionary.hash(value)
+                : operation === "JSON" ? dictionary.encode(value)
+                : dictionary.compare(value, value);
+            const end = { $: "End" };
+            const value = { $: "Link", _0: end };
+            const expected = run(value);
+            value._0 = value;
+            for (let attempt = 0; attempt < 2; attempt++) {
+                if (operation === "Show") {
+                    $assert(run(value) === "Link(<cycle>)");
+                } else {
+                    let error;
+                    try { run(value); } catch (caught) { error = caught; }
+                    $assert(error instanceof TypeError && error.message === `${operation}: cyclic value`);
+                }
+            }
+            value._0 = end;
+            $assert($equal(run(value), expected));
+            fail = true;
+            try { run(value); } catch (error) { $assert(error.message === "payload"); }
+            fail = false;
+            $assert($equal(run(value), expected));
+            // Visiting the same child twice in distinct branches is not a cycle.
+            variants.Pair = { fields: ["_0", "_1"], dictionaries: [dictionary, dictionary] };
+            const shared = { $: "Pair", _0: value, _1: value };
+            const copied = { $: "Pair", _0: value, _1: { $: "Link", _0: end } };
+            $assert($equal(run(shared), run(copied)));
+        "#};
+        let code = format!("{KERNEL_JS}\nconst operation = {operation:?};\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new()),
+            )
+            .await
+            .expect("cyclic operation must terminate")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn ref_operations_are_lazy_reusable_and_commit_after_callback_success() {
         let harness = indoc::indoc! {r#"
             await $runTask($task(function* () {
