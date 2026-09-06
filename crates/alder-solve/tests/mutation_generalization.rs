@@ -46,6 +46,35 @@ fn assert_type_mismatch(source: &str) {
 }
 
 #[test]
+fn array_iterator_keeps_its_mutable_source_payload_monomorphic() {
+    assert_type_mismatch(indoc! {r#"
+        let values = []
+        let iterator = Array.iter(values)
+        let alias = iterator
+        fn invalid() Option[String] {
+            Array.push(values, 42)
+            next(alias)
+        }
+    "#});
+}
+
+#[test]
+fn independent_array_iterators_preserve_factory_polymorphism() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn fresh(values: Array[a]) ArrayIterator[a] { Array.iter(values) }
+            fn valid() {
+                let numbers: Option[Number] = next(fresh([42]))
+                let strings: Option[String] = next(fresh(["text"]))
+            }
+        "#},
+    )
+    .expect("independent cursors may have independent payload types");
+}
+
+#[test]
 fn allocated_closure_cannot_regeneralize_hidden_mutable_state() {
     assert_type_mismatch(indoc! {r#"
         fn make() {

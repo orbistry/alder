@@ -770,7 +770,7 @@ fn builtin_instance_evidence<'a>(
         ("Traversable", Some("Array")) => Intrinsic::TraversableArray,
         ("Traversable", Some("Option")) => Intrinsic::TraversableOption,
         ("Traversable", Some("Result")) => Intrinsic::TraversableResult,
-        ("Iterator", Some("Array")) => Intrinsic::IteratorArray,
+        ("Iterator", Some("ArrayIterator")) => Intrinsic::IteratorArray,
         ("Show", None) if matches!(subject, Ty::Unit) => Intrinsic::ShowKernel,
         ("Hash", None) if matches!(subject, Ty::Unit) => Intrinsic::HashKernel,
         ("Json", None) if matches!(subject, Ty::Unit) => Intrinsic::JsonUnit,

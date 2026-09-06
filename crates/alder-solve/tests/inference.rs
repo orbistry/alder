@@ -4422,7 +4422,7 @@ fn builtin_array_iterator_normalizes_its_item_projection() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            fn first(values: Array[Number]) Option[Number] { next(values) }
+            fn first(values: Array[Number]) Option[Number] { next(Array.iter(values)) }
             fn generic(value: i) Option[Number]
                 where i: Iterator, i.Item == Number
             {
@@ -4430,7 +4430,7 @@ fn builtin_array_iterator_normalizes_its_item_projection() {
             }
         "#},
     )
-    .expect("Array's Iterator Item projection normalizes to its element type");
+    .expect("ArrayIterator's Item projection normalizes to its element type");
     assert!(solved.uses.values().any(|action| matches!(
         action,
         alder_solve::UseAction::Reference { dictionaries, method: Some(method) }

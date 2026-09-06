@@ -134,6 +134,7 @@ impl<'a> Env<'a> {
             ("String", 0),
             ("Bool", 0),
             ("Array", 1),
+            ("ArrayIterator", 1),
             ("Map", 2),
             ("Set", 1),
             ("Task", 1),

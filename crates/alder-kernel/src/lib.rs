@@ -25,7 +25,8 @@ mod tests {
             "$optionFlatMap",
             "$resultPure",
             "$arrayTraverse",
-            "$arrayNext",
+            "$arrayIter",
+            "$arrayIteratorNext",
             "$jsonEncodeDerived",
             "$jsonDecodeDerived",
             "$jsonEncodeContainer",
@@ -59,6 +60,75 @@ mod tests {
         ] {
             assert!(KERNEL_JS.contains(&format!("export function {symbol}")));
         }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn array_iterators_advance_independently_without_consuming_values() {
+        let harness = indoc::indoc! {r#"
+            const values = [7, 8];
+            const first = $arrayIter(values);
+            const alias = first;
+            const second = $arrayIter(values);
+            $assert($arrayIteratorNext(first) === 7);
+            $assert($arrayIteratorNext(alias) === 8);
+            $assert($arrayIteratorNext(first) === null);
+            $assert($arrayIteratorNext(first) === null);
+            $assert($arrayIteratorNext(second) === 7);
+            $assert($arrayIteratorNext(second) === 8);
+            $assert(values.length === 2 && values[0] === 7 && values[1] === 8);
+            const units = $arrayIter([undefined]);
+            $assert($arrayIteratorNext(units) !== null);
+            $assert($arrayIteratorNext(units) === null);
+            const options = $arrayIter([null, $optionSome(null), 42]);
+            $assert(optionValue($arrayIteratorNext(options)) === null);
+            $assert(optionValue(optionValue($arrayIteratorNext(options))) === null);
+            $assert($arrayIteratorNext(options) === 42);
+            $assert($arrayIteratorNext(options) === null);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            alder_runtime::execute(code, vec![]),
+        )
+        .await
+        .expect("bounded iterator checks must terminate")
+        .unwrap();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn array_iterators_observe_live_values_and_stay_exhausted() {
+        let harness = indoc::indoc! {r#"
+            const values = [1, 2];
+            const iterator = $arrayIter(values);
+            $assert($arrayIteratorNext(iterator) === 1);
+            values[1] = 20;
+            values.push(30);
+            $assert($arrayIteratorNext(iterator) === 20);
+            $assert($arrayIteratorNext(iterator) === 30);
+            $assert($arrayIteratorNext(iterator) === null);
+            values.push(40);
+            $assert($arrayIteratorNext(iterator) === null);
+            const empty = [];
+            const finished = $arrayIter(empty);
+            $assert($arrayIteratorNext(finished) === null);
+            empty.push(1);
+            $assert($arrayIteratorNext(finished) === null);
+            const shrinking = [1, 2];
+            const cursor = $arrayIter(shrinking);
+            $assert($arrayIteratorNext(cursor) === 1);
+            shrinking.length = 0;
+            $assert($arrayIteratorNext(cursor) === null);
+            shrinking.push(3, 4);
+            $assert($arrayIteratorNext(cursor) === null);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            alder_runtime::execute(code, vec![]),
+        )
+        .await
+        .expect("bounded iterator mutation checks must terminate")
+        .unwrap();
     }
 
     #[tokio::test(flavor = "current_thread")]

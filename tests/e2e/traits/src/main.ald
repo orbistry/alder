@@ -1,4 +1,5 @@
 import ~/codec
+import ~/array_iterators
 import ~/overlay_contracts
 import ~/option_constructors
 import ~/facade
@@ -201,6 +202,8 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    array_iterators.run()
+    assert(array_iterators.advance(Array.iter([42])) == Option.some(42))
     let overlay_left = { value: 0, extra: true }
     let overlay_right = { value: "discarded", other: false }
     assert(overlay_contracts.overlay_read(0, overlay_left, overlay_right) == 42)
@@ -370,8 +373,8 @@ pub fn main() {
     )
     assert(traversed_array == Option.some([2, 3]))
 
-    let first: Option[Number] = next([7, 8])
-    let empty: Option[Number] = next([])
+    let first: Option[Number] = next(Array.iter([7, 8]))
+    let empty: Option[Number] = next(Array.iter([]))
     assert(first == Option.some(7))
     assert(empty == Option.none())
 }

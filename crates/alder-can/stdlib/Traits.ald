@@ -170,7 +170,7 @@ impl Traversable[Result[_, e]] {
     fn traverse(value: Result[a, e], transform: fn(a) f[b]) f[Result[b, e]] where f: Applicative
 }
 
-impl Iterator[Array[a]] {
+impl Iterator[ArrayIterator[a]] {
     type Item = a
-    fn next(iterator: Array[a]) Option[a]
+    fn next(iterator: ArrayIterator[a]) Option[a]
 }

@@ -1,3 +1,6 @@
+#[extern("alder:kernel", "$arrayIter")]
+pub fn iter(values: Array[a]) ArrayIterator[a]
+
 #[extern("alder:kernel", "$arrayLength")]
 pub fn length(values: Array[a]) Number
 

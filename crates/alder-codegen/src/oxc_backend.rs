@@ -3078,8 +3078,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 properties.push(self.js.property("traverse", self.js.identifier(traverse)));
             }
             Intrinsic::IteratorArray => {
-                self.kernel.insert("$arrayNext");
-                properties.push(self.js.property("next", self.js.identifier("$arrayNext")));
+                self.kernel.insert("$arrayIteratorNext");
+                properties.push(
+                    self.js
+                        .property("next", self.js.identifier("$arrayIteratorNext")),
+                );
             }
         }
         self.js.object(properties)

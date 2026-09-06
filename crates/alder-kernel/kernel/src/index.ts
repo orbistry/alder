@@ -228,8 +228,13 @@ export function $arrayTraverse(applicative, values, transform) {
     return result;
 }
 
-export function $arrayNext(values) {
-    return values.length === 0 ? null : $optionSome(values[0]);
+export function $arrayIter(values) {
+    return values.values();
+}
+
+export function $arrayIteratorNext(iterator) {
+    const step = iterator.next();
+    return step.done ? null : $optionSome(step.value);
 }
 
 export function $optionTraverse(applicative, value, transform) {
