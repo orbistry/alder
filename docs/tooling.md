@@ -61,9 +61,18 @@ the compiler's embedded V8 during the build. Output is cached per module.
 
 ## Language server and editor
 
-- `alder-language-server` on tower-lsp: diagnostics, hover, go to
-  definition, formatting, code actions.
-- Unsaved buffers through `InMemorySource` overlaying the file system.
+- `alder-language-server` uses tower-lsp-server's native Tokio stdio transport.
+  Diagnostics are implemented; hover, go to definition, formatting, and code
+  actions remain planned.
+- Full-text open/change/close notifications maintain versioned unsaved buffers
+  through `InMemorySource` overlaying the file system. Each update checks the
+  containing projects afresh, including dependents, without writing build
+  artifacts or interface caches. Older document versions are ignored.
+- Diagnostics include errors, unused warnings, UTF-16 ranges, codes, help text,
+  and secondary requirement locations. Empty publications clear stale results.
+  Save and client-supplied watched-file notifications recheck disk dependencies.
+  The server does not yet register file watchers or provide incremental checking.
+  File-backed projects are required; untitled documents are not checked.
 - A browser playground via a WASM build of the LSP is planned.
 
 ## Error reporting
@@ -81,5 +90,5 @@ hints preserve needed initializer effects and distinguish `_`, unnamed array
 rests, and aliases. Module-level dead-code analysis is not implemented.
 
 CLI diagnostics are ordered by source file and primary source location, not
-message text. The diagnostic-restoration acceptance matrix, including remaining
-editor work, is tracked in `plans/diagnostic-ux.md`.
+message text. The diagnostic-restoration acceptance matrix and remaining work
+are tracked in `plans/diagnostic-ux.md`.

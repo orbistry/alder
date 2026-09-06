@@ -18,7 +18,7 @@ not a claim that historical Elm-port modules are active.
 | General pattern coverage | `Nitpick/PatternMatches.hs` uses usefulness/exhaustiveness matrices and checks arguments, destructuring and cases; `Reporting/Error/Pattern.hs` rejects unsafe/redundant patterns | `check_error_matches` checks Result error rows, not general enum/Option/tuple/array coverage | General partial-match acceptance is unresolved policy, not permission to impose Elm rules. Request decision; account for alternatives, array rest, records, guards and effectful pins |
 | Error-row coverage | Elm has no Alder open tagged error rows | Documented closed error groups exhaustive; open rows require catch-all | Intentional language difference. Preserve rule and verify guards/pins never count as unconditional coverage |
 | CLI delivery | Elm emits source-local reports | Driver retains structured source diagnostics and forwards warnings; CLI collects them | Existing plumbing, not proof of recovery/warning generation. Actual CLI multiple-error/warning/source-order regressions |
-| Editor delivery | Not provided by these Elm compiler modules | Active Server only initialize/initialized/shutdown; no document checks or diagnostic publication | Confirmed missing implementation, despite tooling design claims. Actual LSP open/change/close, dependent invalidation, version handling and stale-diagnostic clearing tests |
+| Editor delivery | Not provided by these Elm compiler modules | Baseline Server only initialize/initialized/shutdown; no document checks or diagnostic publication | Restored: real stdio tests cover open/change/close, dependent invalidation, stale versions, save/watched-file rechecks, warnings, UTF-16 and clearing; see editor checkpoint below |
 | Ordering and publication | Solver only produces annotations on error-free completion | Driver dependency ordering/publication gates already hardened | Preserve and extend evidence: deterministic diagnostics independent of source discovery order; no recovered invalid interfaces, evidence, caches or executable artifacts |
 
 ## Recovery invariants and implementation sequence
@@ -238,3 +238,47 @@ tests, 17 existing CLI tests and all other suites; two existing ignored doctests
 Strict all-target/all-feature Clippy, formatting and diff checks passed. The two
 new source snapshots were reviewed; final snapshot-reference and package gates
 still need to run against the completed work.
+
+## Editor delivery checkpoint
+
+`alder lsp` now advertises full document synchronization and checks file-backed
+projects using the actual driver in `BuildMode::Check`. Open buffers overlay disk
+sources, with a fresh database/interface check for each update. Updates and
+publication are serialized; stale document versions are ignored. All project
+modules, including closed dependents, receive source-ordered diagnostics, and
+previously published files receive empty results when no longer relevant.
+Closing a buffer restores disk content for remaining open project documents.
+Save and client-supplied watched-file notifications recheck disk dependencies.
+No compiler output or interface cache is written by these checks.
+
+The real stdio regression first timed out reading the initial response body.
+Inspection found that the runtime-agnostic codec could complete a pending flush
+without forwarding another flush to Tokio stdout. Switching tower-lsp-server to
+its native Tokio transport fixes complete JSON-RPC response delivery. The old
+server also had no open/change/close diagnostic handlers; the implementation now
+publishes compiler errors and warnings rather than manufactured editor reports.
+
+Three subprocess tests in `crates/alder-cli/tests/diagnostics.rs` exercise:
+
+- two independent unsaved type errors, a subsequent unused warning, clean source,
+  malformed source and repair, and final close clearing;
+- an unsaved inferred-library type change, dependent errors, disk restoration on
+  close, ignoring an older edit, and absence of `.alder`/`dist` output;
+- UTF-16 ranges spanning an emoji, secondary annotation locations, and save/file
+  change rechecks of disk dependencies. All temporary project paths contain spaces,
+  exercising percent-encoded file URIs and warning ownership too.
+
+A position unit test additionally covers CRLF, partial UTF-8 offsets, and clamping.
+Codes, help text and primary/secondary source labels are carried into LSP reports.
+Source-less build failures are visible without borrowing another file's spans.
+
+Deliberate current limits: full project checks, not incremental checks; no watcher
+registration, untitled-document checking, test-mode checking, hover, definition,
+formatting or code actions. These are not claims of a complete editor milestone.
+The general recovery/context/pattern and module-level warning work remains open.
+
+Validation: full workspace tests passed, including five CLI subprocess tests and
+the new language-server position test; strict all-target/all-feature Clippy and
+formatting passed. The extra malformed-source/repair protocol regression also
+passed after the full run. Final snapshot-reference and affected-package gates
+remain part of the overall completion checklist.

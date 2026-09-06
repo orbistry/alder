@@ -142,10 +142,11 @@ dependencies = [
  "indoc",
  "miette",
  "octocrab",
+ "serde_json",
  "tar",
  "tokio",
- "tokio-util",
  "tower-lsp-server",
+ "url",
  "xz2",
  "zip",
 ]
@@ -247,7 +248,12 @@ dependencies = [
 name = "alder-language-server"
 version = "0.1.0"
 dependencies = [
+ "alder-driver",
+ "alder-report",
+ "miette",
+ "tokio",
  "tower-lsp-server",
+ "url",
 ]
 
 [[package]]
@@ -451,22 +457,6 @@ name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
-
-[[package]]
-name = "async-codec-lite"
-version = "0.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2527c30e3972d8ff366b353125dae828c4252a154dbe6063684f6c5e014760a3"
-dependencies = [
- "anyhow",
- "bytes",
- "futures-core",
- "futures-io",
- "futures-sink",
- "log",
- "pin-project-lite",
- "thiserror 1.0.69",
-]
 
 [[package]]
 name = "async-compression"
@@ -7093,7 +7083,6 @@ checksum = "494815d09bf52b5548659851081238f0ca39ff638363907596da739561c62c52"
 dependencies = [
  "bytes",
  "futures-core",
- "futures-io",
  "futures-sink",
  "libc",
  "pin-project-lite",
@@ -7187,7 +7176,6 @@ version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f0e711655c89181a6bc6a2cc348131fcd9680085f5b06b6af13427a393a6e72"
 dependencies = [
- "async-codec-lite",
  "bytes",
  "dashmap",
  "futures",
@@ -7196,6 +7184,8 @@ dependencies = [
  "memchr",
  "serde",
  "serde_json",
+ "tokio",
+ "tokio-util",
  "tower",
  "tracing",
 ]

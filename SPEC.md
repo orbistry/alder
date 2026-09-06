@@ -241,7 +241,7 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
     preserving re-exports and verifying CLI delivery without removing effects
   - [ ] Complete module-level binding and import analysis and consumer tests
 - [ ] Reconcile general pattern and inferred-annotation diagnostic policy
-- [ ] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing
+- [x] Verify CLI/editor diagnostic delivery and stale-diagnostic clearing
 - [ ] Complete diagnostic parity matrix, validation, and final evidence report
 
 Ordered. Each milestone is the task list for that phase; check items off

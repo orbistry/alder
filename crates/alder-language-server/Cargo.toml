@@ -9,3 +9,8 @@ license.workspace = true
 
 [dependencies]
 tower-lsp-server.workspace = true
+tokio.workspace = true
+url.workspace = true
+miette.workspace = true
+alder-driver = { path = "../alder-driver", version = "0.3.0" }
+alder-report = { path = "../alder-report", version = "0.2.0" }
