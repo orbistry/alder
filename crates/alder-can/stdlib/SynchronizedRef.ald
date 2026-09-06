@@ -1,0 +1,14 @@
+#[extern("alder:kernel", "$synchronizedRefMake")]
+pub fn make(value: a) Task[SynchronizedRef[a]]
+
+#[extern("alder:kernel", "$synchronizedRefGet")]
+pub fn get(cell: SynchronizedRef[a]) Task[a]
+
+#[extern("alder:kernel", "$synchronizedRefSet")]
+pub fn set(cell: SynchronizedRef[a], value: a) Task[()]
+
+#[extern("alder:kernel", "$synchronizedRefUpdate")]
+pub fn update(cell: SynchronizedRef[a], transform: fn(a) Task[a]) Task[()]
+
+#[extern("alder:kernel", "$synchronizedRefModify")]
+pub fn modify(cell: SynchronizedRef[a], transform: fn(a) Task[(b, a)]) Task[b]

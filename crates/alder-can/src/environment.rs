@@ -138,6 +138,9 @@ impl<'a> Env<'a> {
             ("Set", 1),
             ("Task", 1),
             ("Fiber", 1),
+            ("Ref", 1),
+            ("Semaphore", 0),
+            ("SynchronizedRef", 1),
             ("Option", 1),
             ("Result", 2),
             ("Ordering", 0),
@@ -263,8 +266,23 @@ impl<'a> Env<'a> {
 
     fn add_builtin_modules(&mut self) {
         for name in [
-            "Array", "String", "Number", "BigInt", "Map", "Set", "Task", "Fiber", "Http", "Io",
-            "Cli", "Json", "Option", "Ref", "Result",
+            "Array",
+            "String",
+            "Number",
+            "BigInt",
+            "Map",
+            "Set",
+            "Task",
+            "Fiber",
+            "Http",
+            "Io",
+            "Cli",
+            "Json",
+            "Option",
+            "Ref",
+            "Result",
+            "Semaphore",
+            "SynchronizedRef",
         ] {
             self.modules.insert(
                 name,
@@ -1525,6 +1543,8 @@ fn builtin_module_path(name: &str) -> &'static [&'static str] {
         "Json" => &["Json"],
         "Option" => &["Option"],
         "Ref" => &["Ref"],
+        "Semaphore" => &["Semaphore"],
+        "SynchronizedRef" => &["SynchronizedRef"],
         "Result" => &["Result"],
         _ => unreachable!("all builtin module names are listed"),
     }

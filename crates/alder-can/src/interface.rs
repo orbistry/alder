@@ -22,6 +22,11 @@ const BUILTIN_VALUE_SOURCES: &[(&str, &str)] = &[
     ("Option", include_str!("../stdlib/Option.ald")),
     ("Ref", include_str!("../stdlib/Ref.ald")),
     ("Result", include_str!("../stdlib/Result.ald")),
+    ("Semaphore", include_str!("../stdlib/Semaphore.ald")),
+    (
+        "SynchronizedRef",
+        include_str!("../stdlib/SynchronizedRef.ald"),
+    ),
     ("Set", include_str!("../stdlib/Set.ald")),
     ("String", include_str!("../stdlib/String.ald")),
     ("Task", include_str!("../stdlib/Task.ald")),

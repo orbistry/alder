@@ -539,6 +539,87 @@ async fn main() {
   compare by reference; the docs warn about it. There is no structural
   dictionary in the first version.
 
+## Shared cells
+
+`Ref[a]` is an opaque shared cell. Its operations return lazy reusable tasks:
+`Ref.make(value)`, `Ref.get(cell)`, `Ref.set(cell, value)`,
+`Ref.update(cell, value -> replacement)`, and
+`Ref.modify(cell, value -> (result, replacement))`.
+`update` and `set` complete with unit; `modify` completes with `result`.
+
+```alder
+pub async fn main() {
+    let count = Ref.make(0).await
+    Ref.update(count, value -> value + 1).await
+    let previous = Ref.modify(count, value -> (value, value + 1)).await
+    assert previous == 1
+    assert Ref.get(count).await == 2
+}
+```
+
+An update's synchronous read–callback–write cannot interleave with another
+fiber. This is not a cross-worker atomic or protection for writes through
+escaped payload aliases. Callbacks cannot await; returning a Task as the cell's
+payload stores it without executing it. A thrown defect leaves the cell's
+binding unchanged, but mutations through aliases are not rolled back.
+
+Each execution of a make task allocates a fresh cell, not a fresh copy of its
+argument. For example, repeated execution of `Ref.make([])` shares the array
+evaluated when that task was constructed. Allocate inside an async body when
+each run needs a fresh payload. Type inference keeps shared payloads from being
+instantiated at incompatible types. `Ref.same` remains an immediate identity
+comparison, not a task operation.
+
+`SynchronizedRef[a]` supports transformations that may suspend. Its `make`,
+`get`, and `set` have the same task-shaped API as Ref; `update` takes
+`fn(a) Task[a]`, and `modify` takes `fn(a) Task[(b, a)]` and returns `Task[b]`.
+
+```alder
+pub async fn main() {
+    let count = SynchronizedRef.make(0).await
+    let increment = SynchronizedRef.update(count, value -> async {
+        Task.sleep(0).await
+        value + 1
+    })
+    Fiber.all([increment, increment]).await
+    assert SynchronizedRef.get(count).await == 2
+}
+```
+
+Writes serialize, and callbacks read the latest value only after acquiring the
+cell's lock. Reads do not wait for the lock: they see the last committed binding
+while an update is suspended. A defect or interruption before commit leaves
+that binding unchanged; neither later cleanup failures nor alias mutations are
+rolled back. The lock remains held through protected cleanup. Updating the same
+cell again from its own update is non-reentrant and can deadlock.
+
+Results remain ordinary values. A modify callback can return
+`(Err(error), oldValue)` to report a typed error without replacing state; no
+implicit error channel is added to these operations.
+
+## Semaphores
+
+`Semaphore.make(capacity).await` creates a fixed-capacity semaphore.
+`Semaphore.withPermits(gate, count, task).await` waits for permits, runs the
+task in an owned scope, and releases permits after its children and finalizers
+finish. The wrapper is lazy and reusable; it preserves the task's result,
+including ordinary `Err` values, and releases on defects or interruption too.
+
+```alder
+pub async fn main() {
+    let gate = Semaphore.make(1).await
+    let protected = Semaphore.withPermits(gate, 1, async { 42 })
+    assert Fiber.all([protected, protected]).await == [42, 42]
+}
+```
+
+Capacity and requested count must be positive safe integers, and the count
+cannot exceed capacity. Invalid values produce a runtime RangeError defect
+when the task executes. Waiters are FIFO: a smaller request does not bypass
+an older larger request. Waiting is interruptible, and cancellation does not
+leak permits. Acquisition is not reentrant; reacquiring permits already held
+by the same operation can deadlock. There is no manual release or resize API.
+
 ## Typed markup
 
 Markup looks like JSX but is a typed HTML DSL: elements, attributes, and

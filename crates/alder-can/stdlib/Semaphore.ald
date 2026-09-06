@@ -1,0 +1,5 @@
+#[extern("alder:kernel", "$semaphoreMake")]
+pub fn make(permits: Number) Task[Semaphore]
+
+#[extern("alder:kernel", "$semaphoreWithPermits")]
+pub fn withPermits(semaphore: Semaphore, permits: Number, task: Task[a]) Task[a]

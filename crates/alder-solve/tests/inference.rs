@@ -8,6 +8,65 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn synchronized_ref_accepts_task_callbacks_and_preserves_payload_types() {
+    let bump = Bump::new();
+    let result = solve_input(
+        &bump,
+        indoc! {r#"
+        async fn fresh(value: a) SynchronizedRef[a] { SynchronizedRef.make(value).await }
+        async fn run() String {
+            let number = fresh(1).await
+            let text = fresh("text").await
+            SynchronizedRef.update(number, value -> async { value + 1 }).await
+            SynchronizedRef.modify(number, value -> async { ("previous", value + 1) }).await
+            SynchronizedRef.get(text).await
+        }
+    "#},
+    );
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn semaphore_preserves_independent_protected_result_types() {
+    let bump = Bump::new();
+    let result = solve_input(
+        &bump,
+        indoc! {r#"
+        async fn protect(gate: Semaphore, task: Task[a]) a {
+            Semaphore.withPermits(gate, 1, task).await
+        }
+        async fn run() String {
+            let gate = Semaphore.make(2).await
+            let number = protect(gate, async { 42 }).await
+            let text = protect(gate, async { "text" }).await
+            text
+        }
+    "#},
+    );
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn ref_operations_preserve_payload_and_callback_result_types() {
+    let bump = Bump::new();
+    let result = solve_input(
+        &bump,
+        indoc! {r#"
+        async fn fresh(value: a) Ref[a] { Ref.make(value).await }
+        async fn run() String {
+            let number = fresh(1).await
+            let text = fresh("text").await
+            Ref.set(number, 2).await
+            Ref.update(number, value -> value + 1).await
+            Ref.modify(number, value -> (Ref.same(number, number), value + 1)).await
+            Ref.get(text).await
+        }
+    "#},
+    );
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
 fn ordinary_bindings_and_parameters_allow_type_checked_assignment() {
     let source = indoc! {r#"
         let total = 0

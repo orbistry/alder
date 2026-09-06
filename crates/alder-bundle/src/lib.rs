@@ -223,10 +223,37 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
             "Json",
             exports(&[("$jsonEncodeWith", "encode"), ("$jsonDecodeWith", "decode")]),
         ),
-        ("Ref", exports(&[("$refSame", "same")])),
+        (
+            "Ref",
+            exports(&[
+                ("$refSame", "same"),
+                ("$refMake", "make"),
+                ("$refGet", "get"),
+                ("$refSet", "set"),
+                ("$refUpdate", "update"),
+                ("$refModify", "modify"),
+            ]),
+        ),
         ("Io", exports(&[("$ioPrint", "print")])),
         ("Cli", exports(&[("$cliArgs", "args")])),
         ("Task", exports(&[("$taskSleep", "sleep")])),
+        (
+            "SynchronizedRef",
+            exports(&[
+                ("$synchronizedRefMake", "make"),
+                ("$synchronizedRefGet", "get"),
+                ("$synchronizedRefSet", "set"),
+                ("$synchronizedRefUpdate", "update"),
+                ("$synchronizedRefModify", "modify"),
+            ]),
+        ),
+        (
+            "Semaphore",
+            exports(&[
+                ("$semaphoreMake", "make"),
+                ("$semaphoreWithPermits", "withPermits"),
+            ]),
+        ),
         (
             "Fiber",
             exports(&[

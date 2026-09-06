@@ -1,2 +1,18 @@
 #[extern("alder:kernel", "$refSame")]
 pub fn same(left: a, right: b) Bool
+
+
+#[extern("alder:kernel", "$refMake")]
+pub fn make(value: a) Task[Ref[a]]
+
+#[extern("alder:kernel", "$refGet")]
+pub fn get(cell: Ref[a]) Task[a]
+
+#[extern("alder:kernel", "$refSet")]
+pub fn set(cell: Ref[a], value: a) Task[()]
+
+#[extern("alder:kernel", "$refUpdate")]
+pub fn update(cell: Ref[a], transform: fn(a) a) Task[()]
+
+#[extern("alder:kernel", "$refModify")]
+pub fn modify(cell: Ref[a], transform: fn(a) (b, a)) Task[b]
