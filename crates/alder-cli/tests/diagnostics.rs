@@ -344,6 +344,39 @@ fn cli_delivers_unused_warnings_without_removing_effects() {
 }
 
 #[test]
+fn cli_reports_failed_dependencies_without_unknown_name_cascades() {
+    let project = Project::new();
+    project.source(
+        "broken.ald",
+        indoc::indoc! {r#"
+        pub fn value() Number { true }
+        fn another() String { 42 }
+    "#},
+    );
+    project.source("facade.ald", "pub import ~/broken.*");
+    project.source(
+        "main.ald",
+        "import ~/facade\npub fn main() { facade.value() }",
+    );
+    project.source("independent.ald", "pub fn separate() Bool { 42 }");
+    for command in ["check", "build", "test"] {
+        let output = project.run(command);
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(!output.status.success(), "{command}: {stderr}");
+        for message in [
+            "expected `Number`, found `Bool`",
+            "expected `String`, found `Number`",
+            "expected `Bool`, found `Number`",
+        ] {
+            assert!(stderr.contains(message), "{command}: {stderr}");
+        }
+        assert!(!stderr.contains("unknown name"), "{command}: {stderr}");
+        assert!(!stderr.contains("does not export"), "{command}: {stderr}");
+        assert!(!project.0.join("dist").exists());
+    }
+}
+
+#[test]
 fn cli_orders_independent_errors_by_source_not_message() {
     let project = Project::new();
     project.source(

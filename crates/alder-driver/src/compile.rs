@@ -70,9 +70,11 @@ pub struct BuildResult {
     pub warnings: Vec<Diagnostic>,
 
     /// ESM modules produced in build or test mode, keyed by source URI.
+    /// Empty if any source module fails or is blocked.
     pub artifacts: HashMap<Url, alder_codegen::EmittedModule>,
 
     /// Solved semantic interfaces ready for persistent caching.
+    /// Published only after the entire source build succeeds.
     pub interfaces: Vec<InterfaceFile>,
 
     /// Complete exported instance indexes, grouped by package.
@@ -380,11 +382,53 @@ fn build_sync(
         };
     }
 
+    // Header discovery is intentionally broader than successful body checking:
+    // coherence still needs declarations from invalid modules. Those headers
+    // must not turn an unavailable value interface into errors in importers.
+    let origins = identities
+        .iter()
+        .map(|(uri, identity)| (identity.clone(), vec![uri.clone()]))
+        .collect();
+    let imports = sources
+        .iter()
+        .map(|(uri, source)| {
+            (
+                uri,
+                source
+                    .as_ref()
+                    .map(|source| extract_imports(source, &identities[uri].package, &origins))
+                    .unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut unavailable = sources
+        .iter()
+        .zip(&solved_interfaces)
+        .filter_map(|((uri, _), solved)| (!solved).then_some(uri.clone()))
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut blocked = std::collections::BTreeSet::new();
+    loop {
+        let mut changed = false;
+        for (uri, imports) in &imports {
+            if imports.iter().any(|import| unavailable.contains(import)) {
+                blocked.insert((*uri).clone());
+                changed |= unavailable.insert((*uri).clone());
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
     let mut results: HashMap<Url, ModuleResult> = HashMap::new();
     let mut all_warnings: Vec<Diagnostic> = Vec::new();
     let mut artifacts = HashMap::new();
     let mut interface_files = Vec::new();
     for (uri, source) in &sources {
+        if blocked.contains(uri) {
+            results.insert(uri.clone(), ModuleResult::Blocked);
+            continue;
+        }
         let (output, discovered) = compile_module(
             uri,
             source,
@@ -415,6 +459,13 @@ fn build_sync(
         .count();
     interface_files.sort_by(|left, right| left.module.cmp(&right.module));
     all_warnings.sort_by(Diagnostic::source_order);
+    // A package registry is a complete semantic unit, not a cache of whichever
+    // modules happened to pass. In particular, package-wide evidence can refer
+    // to impl headers whose bodies failed in another source module.
+    if success != total {
+        artifacts.clear();
+        interface_files.clear();
+    }
     let package_instance_indexes = package_indexes(&interface_files);
 
     BuildResult {
@@ -1544,6 +1595,81 @@ mod tests {
             matches!(result, Err(DriverError::MissingModuleIdentity { uri: missing }) if missing == uri),
             "URI spelling cannot supply a module identity"
         );
+    }
+
+    #[test]
+    fn failed_modules_block_importers_without_publishing_partial_builds() {
+        let broken = url("project/src/broken.ald");
+        let facade = url("project/src/facade.ald");
+        let consumer = url("project/src/consumer.ald");
+        let independent = url("project/src/independent.ald");
+        for signature in [
+            "pub fn value() Number { true }",
+            "pub fn value() { 1 + true }",
+        ] {
+            for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+                let result = build_fixture_sync(
+                    vec![
+                        (
+                            consumer.clone(),
+                            Ok("import ~/facade\npub fn main() { facade.value() }".to_owned()),
+                        ),
+                        (facade.clone(), Ok("pub import ~/broken.*".to_owned())),
+                        (independent.clone(), Ok("pub fn other() { 42 }".to_owned())),
+                        (broken.clone(), Ok(signature.to_owned())),
+                    ],
+                    mode,
+                    BuildDependencies::default(),
+                );
+                assert!(
+                    matches!(result.modules[&broken], ModuleResult::Failed { .. }),
+                    "{result:?}"
+                );
+                assert!(
+                    matches!(result.modules[&consumer], ModuleResult::Blocked),
+                    "dependent errors must not cascade: {result:?}"
+                );
+                assert!(matches!(result.modules[&facade], ModuleResult::Blocked));
+                assert!(matches!(
+                    result.modules[&independent],
+                    ModuleResult::Success { .. }
+                ));
+                assert!(
+                    result.artifacts.is_empty(),
+                    "failed builds cannot publish executable output"
+                );
+                assert!(
+                    result.interfaces.is_empty(),
+                    "failed builds cannot publish partial interfaces"
+                );
+                assert!(result.package_instance_indexes.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_sibling_impl_bodies_cannot_publish_consumer_evidence() {
+        let model = url("project/src/model.ald");
+        let consumer = url("project/src/consumer.ald");
+        let implementation = url("project/src/implementation.ald");
+        for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+            let result = build_fixture_sync(vec![
+                (model.clone(), Ok("pub enum Token { Token }\npub trait Display[a] { fn display(value: a) String }".to_owned())),
+                (consumer.clone(), Ok("import ~/model.{ Token, display }\npub fn render(value: Token) String { display(value) }".to_owned())),
+                (implementation.clone(), Ok("import ~/model.{ Token, Display }\nimpl Display[Token] { fn display(value: Token) String { 42 } }".to_owned())),
+            ], mode, BuildDependencies::default());
+            assert!(
+                matches!(result.modules[&implementation], ModuleResult::Failed { .. }),
+                "{result:?}"
+            );
+            assert!(
+                matches!(result.modules[&consumer], ModuleResult::Success { .. }),
+                "the consumer can select the invalid body's header without importing that module: {result:?}"
+            );
+            assert!(result.artifacts.is_empty());
+            assert!(result.interfaces.is_empty());
+            assert!(result.package_instance_indexes.is_empty());
+        }
     }
 
     #[test]

@@ -19,7 +19,7 @@ not a claim that historical Elm-port modules are active.
 | Error-row coverage | Elm has no Alder open tagged error rows | Documented closed error groups exhaustive; open rows require catch-all | Intentional language difference. Preserve rule and verify guards/pins never count as unconditional coverage |
 | CLI delivery | Elm emits source-local reports | Driver retains structured source diagnostics and forwards warnings; CLI collects them | Existing plumbing, not proof of recovery/warning generation. Actual CLI multiple-error/warning/source-order regressions |
 | Editor delivery | Not provided by these Elm compiler modules | Baseline Server only initialize/initialized/shutdown; no document checks or diagnostic publication | Restored: real stdio tests cover open/change/close, dependent invalidation, stale versions, save/watched-file rechecks, warnings, UTF-16 and clearing; see editor checkpoint below |
-| Ordering and publication | Solver only produces annotations on error-free completion | Driver dependency ordering/publication gates already hardened | Preserve and extend evidence: deterministic diagnostics independent of source discovery order; no recovered invalid interfaces, evidence, caches or executable artifacts |
+| Ordering and publication | Solver only produces annotations on error-free completion | Baseline driver could return partial interfaces/indexes and cascading importer errors after a body failure | Restored failed-build output gate and transitive importer suppression; source/CLI tests cover re-exports and invalid sibling impl evidence. Ordering evidence is recorded in the CLI checkpoint; broader recovery audit remains open |
 
 ## Recovery invariants and implementation sequence
 
@@ -282,3 +282,35 @@ the new language-server position test; strict all-target/all-feature Clippy and
 formatting passed. The extra malformed-source/repair protocol regression also
 passed after the full run. Final snapshot-reference and affected-package gates
 remain part of the overall completion checklist.
+
+## Cross-module failure isolation checkpoint
+
+The source regression `failed_modules_block_importers_without_publishing_partial_builds`
+first produced an `unknown name value` error in a consumer of a failed library,
+alongside a partial package index containing only an unrelated valid module.
+Header discovery remains intact for package coherence, but final body checking
+now marks importers of unavailable solved interfaces as blocked. This propagates
+through resolved package-qualified imports and public re-exports, independent of
+source input order. The failing source keeps its real diagnostics, and unrelated
+modules are still checked. Suppression is at the importing-module boundary, not
+a claim of expression-level recovery inside those blocked modules.
+
+If any source fails or is blocked, `BuildResult` returns no artifacts, interfaces,
+or package-instance indexes. This is a complete-build publication boundary: a
+valid-looking consumer can select package-wide impl evidence from a sibling
+whose method body is invalid, even without importing that sibling. The source
+regression `invalid_sibling_impl_bodies_cannot_publish_consumer_evidence` confirms
+that the consumer itself checks successfully but its output is withheld. Both
+driver regressions cover Check, Build and Test modes. Existing successful-build
+artifact/interface/instance tests remain positive controls.
+
+The real CLI regression
+`cli_reports_failed_dependencies_without_unknown_name_cascades` checks a failed
+library with two independent errors, a public re-export chain, and another
+independently invalid module. Check/build/test report all three root type errors,
+no unknown-name/export cascades, and create no `dist` output.
+
+Validation: full workspace tests passed (217 driver tests, six CLI subprocess
+tests and all other suites; two existing ignored doctests). Strict workspace
+Clippy, formatting and diff checks passed. Broader nominal/trait recovery, context/comparison completion,
+pattern policy and final snapshot/package verification remain open.

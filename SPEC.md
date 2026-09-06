@@ -232,6 +232,8 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
 
 - [x] Recover independent executable-declaration type errors with fresh inference
   state and dependent suppression; failed attempts never publish checked output
+- [x] Suppress cross-module importer cascades and withhold artifacts, interfaces,
+  and package indexes from any failed source build
 - [ ] Complete recovery parity around nominal metadata, traits, and finer-grained contexts
 - [ ] Preserve structured expected/actual types and source expectation context
 - [ ] Generate actionable unused-import/binding warnings from source
