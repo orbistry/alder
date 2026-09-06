@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let x: while = 1"
+---
+alder::syntax
+
+  × `while` is reserved and cannot be used as a type
+   ╭─[/project/src/main.ald:1:8]
+ 1 │ let x: while = 1
+   · ┬      ──┬──
+   · │        ╰── this is a reserved word
+   · ╰── this binding starts here
+   ╰────

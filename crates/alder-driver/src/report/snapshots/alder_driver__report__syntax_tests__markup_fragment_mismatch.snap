@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let value = <>hi</div>
+---
+alder::syntax
+
+  × this closing tag does not match: expected `</>`, found `</div>`
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ let value = <>hi</div>
+   ·             ┬     ─┬─
+   ·             │      ╰── mismatched closing tag
+   ·             ╰── this markup starts here
+   ╰────
+  help: check the tag spelling and nesting; close the innermost element first

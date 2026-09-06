@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x 1
+---
+alder::syntax
+
+  × I was expecting `=` after this binding
+   ╭─[/project/src/main.ald:1:7]
+ 1 │ let x 1
+   · ┬     ┬
+   · │     ╰── expected `=`
+   · ╰── this binding starts here
+   ╰────

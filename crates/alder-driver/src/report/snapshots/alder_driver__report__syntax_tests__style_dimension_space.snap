@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = style { padding: 16 px }"
+---
+alder::syntax
+
+  × a style unit must be adjacent to its number
+   ╭─[/project/src/main.ald:1:32]
+ 1 │ let value = style { padding: 16 px }
+   ·             ┬                  ┬
+   ·             │                  ╰── remove the space before the unit
+   ·             ╰── this style block starts here
+   ╰────
+  help: write `16px`, not `16 px`

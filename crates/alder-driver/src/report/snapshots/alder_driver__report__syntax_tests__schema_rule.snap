@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "schema User { name: min(1), 2 }"
+---
+alder::syntax
+
+  × I was expecting a schema rule name
+   ╭─[/project/src/main.ald:1:29]
+ 1 │ schema User { name: min(1), 2 }
+   · ┬                           ┬
+   · │                           ╰── expected a lower-case rule name
+   · ╰── this schema declaration starts here
+   ╰────
+  help: write a rule like `min(1)` and separate multiple rules with commas

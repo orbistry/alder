@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type X = Array[1]"
+---
+alder::syntax
+
+  × I was expecting a type
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ type X = Array[1]
+   ·               ┬┬
+   ·               │╰── expected a type here
+   ·               ╰── this type argument list starts here
+   ╰────
+  help: types include names like `Number`, applications like `Array[Number]`,
+        and type variables like `a`

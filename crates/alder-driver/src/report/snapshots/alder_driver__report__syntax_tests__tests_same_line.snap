@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "tests { test \"a\" {} test \"b\" {} }"
+---
+alder::syntax
+
+  × declarations inside a tests block must be separated by line breaks
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ tests { test "a" {} test "b" {} }
+   · ┬                   ┬
+   · │                   ╰── start this declaration on a new line
+   · ╰── this tests block starts here
+   ╰────

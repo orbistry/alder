@@ -7,8 +7,9 @@ alder::syntax
   × this tuple index is too large
    ╭─[/project/src/main.ald:1:22]
  1 │ fn read(pair) { pair.4294967296 }
-   ·                      ┬
-   ·                      ╰── tuple index exceeds the supported integer range
+   ·               ┬      ┬
+   ·               │      ╰── tuple index exceeds the supported integer range
+   ·               ╰── this function body starts here
    ╰────
   help: tuple indices must fit in an unsigned 32-bit integer (0 through
         4294967295)

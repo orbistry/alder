@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@match x { A => </p>"
+---
+alder::syntax
+
+  × I was expecting a markup body after `=>`, not a closing tag
+   ╭─[/project/src/main.ald:1:32]
+ 1 │ let value = <p>@match x { A => </p>
+   ·                ┬               ┬
+   ·                │               ╰── expected a markup body
+   ·                ╰── this `@match` starts here
+   ╰────
+  help: give this arm an element, fragment, directive, or `{ ... }` child
+        block

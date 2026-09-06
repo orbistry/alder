@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl Show[User User] {}"
+---
+alder::syntax
+
+  × I was expecting `,` or `]` after this trait argument
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ impl Show[User User] {}
+   · ┬              ┬
+   · │              ╰── expected `,` or `]`
+   · ╰── this impl declaration starts here
+   ╰────

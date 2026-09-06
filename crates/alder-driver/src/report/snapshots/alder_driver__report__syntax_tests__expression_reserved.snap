@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = type
+---
+alder::syntax
+
+  × `type` cannot start an expression here
+   ╭─[/project/src/main.ald:1:9]
+ 1 │ let x = type
+   · ┬       ──┬─
+   · │         ╰── reserved word used here
+   · ╰── this binding starts here
+   ╰────

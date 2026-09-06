@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() where type: Show {}"
+---
+alder::syntax
+
+  × I was expecting a type variable after `where`
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ fn f() where type: Show {}
+   · ┬            ┬
+   · │            ╰── expected a lower-case type variable
+   · ╰── this function declaration starts here
+   ╰────
+  help: a bound looks like `where a: Show`

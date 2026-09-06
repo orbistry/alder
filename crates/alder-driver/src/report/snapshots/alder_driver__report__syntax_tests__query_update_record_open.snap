@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { update users set name: ^n }"
+---
+alder::syntax
+
+  × I was expecting a record after `set`
+   ╭─[/project/src/main.ald:1:38]
+ 1 │ let value = query { update users set name: ^n }
+   ·                     ┬                ┬
+   ·                     │                ╰── expected `{`
+   ·                     ╰── this `update` starts here
+   ╰────
+  help: put the updated fields inside braces, as in `set { name: ^name }`

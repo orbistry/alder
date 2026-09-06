@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@if x { let y }</p>"
+---
+alder::syntax
+
+  × I was expecting `=` after this binding
+   ╭─[/project/src/main.ald:1:30]
+ 1 │ let value = <p>@if x { let y }</p>
+   ·                        ┬     ┬
+   ·                        │     ╰── expected `=`
+   ·                        ╰── this binding starts here
+   ╰────

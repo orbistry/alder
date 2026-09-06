@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = quote!( \"hello"
+---
+alder::syntax
+
+  × this string is missing its closing quote at the end of the file
+   ╭─[/project/src/main.ald:1:27]
+ 1 │ let value = quote!( "hello
+   ·                     ┬
+   ·                     ╰── this string starts here
+   ╰────
+  help: add a closing `"` before the end of the line

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let value = <div =>
+---
+alder::syntax
+
+  × I was expecting an attribute or the end of this opening tag
+   ╭─[/project/src/main.ald:1:18]
+ 1 │ let value = <div =>
+   ·             ┬    ┬
+   ·             │    ╰── expected an attribute, `>`, or `/>`
+   ·             ╰── this markup starts here
+   ╰────

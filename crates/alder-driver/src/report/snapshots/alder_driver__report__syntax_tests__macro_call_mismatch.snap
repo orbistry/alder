@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = quote!( [) )"
+---
+alder::syntax
+
+  × I found `)` where this macro's open delimiter needs `]`
+   ╭─[/project/src/main.ald:1:22]
+ 1 │ let value = quote!( [) )
+   ·                     ┬┬
+   ·                     │╰── this closing delimiter does not match
+   ·                     ╰── this delimiter is still open
+   ╰────
+  help: close the highlighted opening delimiter with `]`

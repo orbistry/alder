@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "enum Color { Red Green }"
+---
+alder::syntax
+
+  × I was expecting another enum variant or the end of the enum
+   ╭─[/project/src/main.ald:1:18]
+ 1 │ enum Color { Red Green }
+   · ┬                ┬
+   · │                ╰── expected `,` or `}`
+   · ╰── this enum declaration starts here
+   ╰────

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let { .., name } = value"
+---
+alder::syntax
+
+  × `..` must be last and unnamed in a record pattern
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ let { .., name } = value
+   ·     ┬     ┬
+   ·     │     ╰── expected the end of the record pattern
+   ·     ╰── this record pattern starts here
+   ╰────
+  help: write `{ name, .. }` to match named fields and ignore the others

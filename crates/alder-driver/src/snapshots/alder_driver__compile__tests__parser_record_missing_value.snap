@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = { name: }"
+---
+alder::syntax
+
+  × I was expecting an expression
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ let value = { name: }
+   ·             ┬       ┬
+   ·             │       ╰── expected an expression here
+   ·             ╰── this record starts here
+   ╰────

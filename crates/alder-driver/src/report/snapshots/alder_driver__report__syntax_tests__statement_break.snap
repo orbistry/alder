@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() { loop { break (1 +) } }"
+---
+alder::syntax
+
+  × operator `+` is missing its right operand
+   ╭─[/project/src/main.ald:1:27]
+ 1 │ fn f() { loop { break (1 +) } }
+   ·                       ┬   ┬
+   ·                       │   ╰── expected an expression
+   ·                       ╰── these parentheses start here
+   ╰────

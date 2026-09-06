@@ -1022,6 +1022,22 @@ macro_rules! assert_diagnostic_snapshot {
 }
 
 #[cfg(test)]
+macro_rules! assert_parser_diagnostic_snapshot {
+    ($source:expr) => {{
+        let source = indoc::indoc!($source);
+        let diagnostic = compile_failure(source).await;
+        assert_eq!(
+            miette::Diagnostic::code(&diagnostic)
+                .map(|code| code.to_string())
+                .as_deref(),
+            Some("alder::syntax"),
+            "fixture must fail during parsing, not in a later compiler phase"
+        );
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
+    }};
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::source::InMemorySource;
@@ -6577,6 +6593,173 @@ mod tests {
             &[],
             &error,
         )
+    }
+
+    #[tokio::test]
+    async fn parser_unicode_invalid_entry() {
+        assert_parser_diagnostic_snapshot!("let value = [1, 😀]");
+    }
+
+    #[tokio::test]
+    async fn parser_unicode_before_failure() {
+        assert_parser_diagnostic_snapshot!("let value = [\"😀\", read(1 2)]");
+    }
+
+    #[tokio::test]
+    async fn parser_multiline_eof() {
+        assert_parser_diagnostic_snapshot! {r#"
+            let value = [
+                1
+        "#};
+    }
+
+    #[tokio::test]
+    async fn parser_match_arrow() {
+        assert_parser_diagnostic_snapshot!("let value = match true { true -> 1 }");
+    }
+
+    #[tokio::test]
+    async fn parser_match_open() {
+        assert_parser_diagnostic_snapshot!("let value = match true of { true => 1 }");
+    }
+
+    #[tokio::test]
+    async fn parser_match_guard() {
+        assert_parser_diagnostic_snapshot!("let value = match true { value if => 1 }");
+    }
+
+    #[tokio::test]
+    async fn parser_match_body() {
+        assert_parser_diagnostic_snapshot!("let value = match true { true => }");
+    }
+
+    #[tokio::test]
+    async fn parser_pattern_array_rest() {
+        assert_parser_diagnostic_snapshot!("let [..tail, head] = values");
+    }
+
+    #[tokio::test]
+    async fn parser_pattern_array_rest_name() {
+        assert_parser_diagnostic_snapshot!("let [..type] = values");
+    }
+
+    #[tokio::test]
+    async fn parser_pattern_record_rest() {
+        assert_parser_diagnostic_snapshot!("let { .., name } = value");
+    }
+
+    #[tokio::test]
+    async fn parser_pattern_nested_constructor() {
+        assert_parser_diagnostic_snapshot!("let Some([first second]) = value");
+    }
+
+    #[tokio::test]
+    async fn parser_pattern_constructor_separator() {
+        assert_parser_diagnostic_snapshot!("let Some(first second) = value");
+    }
+
+    #[tokio::test]
+    async fn parser_pattern_tuple_separator() {
+        assert_parser_diagnostic_snapshot!("let (first, second third) = value");
+    }
+
+    #[tokio::test]
+    async fn parser_for_in() {
+        assert_parser_diagnostic_snapshot!("fn main() { for item values {} }");
+    }
+
+    #[tokio::test]
+    async fn parser_for_nested_pattern() {
+        assert_parser_diagnostic_snapshot!("fn main() { for [..tail, head] in values {} }");
+    }
+
+    #[tokio::test]
+    async fn parser_while_nested_call() {
+        assert_parser_diagnostic_snapshot!("fn main() { while read(1 2) {} }");
+    }
+
+    #[tokio::test]
+    async fn parser_lambda_assignment() {
+        assert_parser_diagnostic_snapshot!("let value = () -> 1 /= 2");
+    }
+
+    #[tokio::test]
+    async fn parser_lambda_body() {
+        assert_parser_diagnostic_snapshot!("let value = () -> [1 2]");
+    }
+
+    #[tokio::test]
+    async fn parser_index_end() {
+        assert_parser_diagnostic_snapshot!("let value = values[0)");
+    }
+
+    #[tokio::test]
+    async fn parser_tag_argument() {
+        assert_parser_diagnostic_snapshot!("let value = :failed(1 2)");
+    }
+
+    #[tokio::test]
+    async fn parser_state_open() {
+        assert_parser_diagnostic_snapshot!("let value = state 0");
+    }
+
+    #[tokio::test]
+    async fn parser_provide_equals() {
+        assert_parser_diagnostic_snapshot!("let value = provide Db value {}");
+    }
+
+    #[tokio::test]
+    async fn parser_array_separator() {
+        assert_parser_diagnostic_snapshot!("let values = [1 2]");
+    }
+
+    #[tokio::test]
+    async fn parser_call_separator() {
+        assert_parser_diagnostic_snapshot!("let value = read(1 2)");
+    }
+
+    #[tokio::test]
+    async fn parser_if_then_keyword() {
+        assert_parser_diagnostic_snapshot!("let value = if true then { 1 }");
+    }
+
+    #[tokio::test]
+    async fn parser_if_else_body() {
+        assert_parser_diagnostic_snapshot!("let value = if true { 1 } else 2");
+    }
+
+    #[tokio::test]
+    async fn parser_record_equals() {
+        assert_parser_diagnostic_snapshot!("let value = User { name = 1 }");
+    }
+
+    #[tokio::test]
+    async fn parser_nested_array_call() {
+        assert_parser_diagnostic_snapshot!("let value = [read(1 2)]");
+    }
+
+    #[tokio::test]
+    async fn parser_array_eof() {
+        assert_parser_diagnostic_snapshot!("let value = [1");
+    }
+
+    #[tokio::test]
+    async fn parser_tuple_separator() {
+        assert_parser_diagnostic_snapshot!("let value = (1, 2 3)");
+    }
+
+    #[tokio::test]
+    async fn parser_record_missing_value() {
+        assert_parser_diagnostic_snapshot!("let value = { name: }");
+    }
+
+    #[tokio::test]
+    async fn parser_if_nested_failure() {
+        assert_parser_diagnostic_snapshot! {r#"
+            let value = if true {
+                [read(1 2)]
+            }
+        "#};
     }
 
     #[tokio::test]

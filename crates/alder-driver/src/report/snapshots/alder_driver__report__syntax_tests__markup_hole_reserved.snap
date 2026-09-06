@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>{else}</p>"
+---
+alder::syntax
+
+  × `else` cannot start an expression here
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ let value = <p>{else}</p>
+   ·             ┬   ──┬─
+   ·             │     ╰── reserved word used here
+   ·             ╰── this markup starts here
+   ╰────

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <ul>@for x in xs; key ) {}</ul>"
+---
+alder::syntax
+
+  × I was expecting a key expression after `key`
+   ╭─[/project/src/main.ald:1:35]
+ 1 │ let value = <ul>@for x in xs; key ) {}</ul>
+   ·                 ┬                 ┬
+   ·                 │                 ╰── expected an expression
+   ·                 ╰── this `@for` starts here
+   ╰────

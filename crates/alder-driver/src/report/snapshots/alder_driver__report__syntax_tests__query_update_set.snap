@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { update users { name: ^n } }"
+---
+alder::syntax
+
+  × I was expecting `set` after this update's table name
+   ╭─[/project/src/main.ald:1:34]
+ 1 │ let value = query { update users { name: ^n } }
+   ·                     ┬            ┬
+   ·                     │            ╰── expected `set`
+   ·                     ╰── this `update` starts here
+   ╰────
+  help: write `update users set { name: ^name }`

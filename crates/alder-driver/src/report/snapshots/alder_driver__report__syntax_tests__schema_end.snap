@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "schema User { pick email name }"
+---
+alder::syntax
+
+  × I was expecting another schema item or the end of this schema
+   ╭─[/project/src/main.ald:1:26]
+ 1 │ schema User { pick email name }
+   · ┬                        ┬
+   · │                        ╰── expected a field, `pick`, or `}`
+   · ╰── this schema declaration starts here
+   ╰────
+  help: rules and `pick` names need commas between them; each new field starts
+        with `name:`

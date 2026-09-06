@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "macro value() { (] }"
+---
+alder::syntax
+
+  × I found `]` where this macro's open delimiter needs `)`
+   ╭─[/project/src/main.ald:1:18]
+ 1 │ macro value() { (] }
+   ·                 ┬┬
+   ·                 │╰── this closing delimiter does not match
+   ·                 ╰── this delimiter is still open
+   ╰────
+  help: close the highlighted opening delimiter with `)`

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl Iterator[Foo] { type item = Number }"
+---
+alder::syntax
+
+  × I was expecting an associated type name after `type`
+   ╭─[/project/src/main.ald:1:27]
+ 1 │ impl Iterator[Foo] { type item = Number }
+   · ┬                         ┬
+   · │                         ╰── expected an upper-case name
+   · ╰── this impl declaration starts here
+   ╰────

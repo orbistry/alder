@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = :failed(1 2)"
+---
+alder::syntax
+
+  × I was expecting a comma or the end of this tag's arguments
+   ╭─[/project/src/main.ald:1:23]
+ 1 │ let value = :failed(1 2)
+   ·             ┬         ┬
+   ·             │         ╰── expected `,` or `)`
+   ·             ╰── this tagged value starts here
+   ╰────
+  help: separate tag arguments with commas and close them with `)`

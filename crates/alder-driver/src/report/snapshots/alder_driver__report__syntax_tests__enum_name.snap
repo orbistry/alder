@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "enum { A }"
+---
+alder::syntax
+
+  × I was expecting an enum name after `enum`
+   ╭─[/project/src/main.ald:1:6]
+ 1 │ enum { A }
+   · ┬    ┬
+   · │    ╰── expected an upper-case name
+   · ╰── this enum declaration starts here
+   ╰────

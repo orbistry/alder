@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = style { 42: 1 }"
+---
+alder::syntax
+
+  × I was expecting a style property, a quoted selector, or `}`
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ let value = style { 42: 1 }
+   ·             ┬       ┬
+   ·             │       ╰── expected a lower-case name, a string, or `}`
+   ·             ╰── this style block starts here
+   ╰────
+  help: write a property like `padding: 16px`, or a nested selector like
+        `":hover": { ... }`

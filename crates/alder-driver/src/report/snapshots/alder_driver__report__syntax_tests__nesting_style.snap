@@ -1,0 +1,18 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+expression: rendered
+---
+alder::syntax
+
+  × this style block is nested too deeply
+     ╭─[/project/src/main.ald:128:4]
+ 126 │ a: {
+ 127 │ a: {
+     ·    ┬
+     ·    ╰── this nested style block starts here
+ 128 │ a: {
+     ·    ┬
+     ·    ╰── nesting limit reached here
+ 129 │ a: {
+     ╰────
+  help: split deeply nested styles into smaller blocks

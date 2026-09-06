@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { update users set {} where }"
+---
+alder::syntax
+
+  × I was expecting a condition after this update's `where`
+   ╭─[/project/src/main.ald:1:47]
+ 1 │ let value = query { update users set {} where }
+   ·                     ┬                         ┬
+   ·                     │                         ╰── expected an expression
+   ·                     ╰── this `update` starts here
+   ╰────

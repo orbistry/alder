@@ -4,9 +4,14 @@ description: "macro f(a) { (a] }"
 ---
 Macro(
     Body(
-        Unbalanced(
-            93,
-        ),
+        Unbalanced {
+            found: 93,
+            expected: 41,
+            opening: Position {
+                line: 1,
+                column: 14,
+            },
+        },
         1,
         16,
     ),

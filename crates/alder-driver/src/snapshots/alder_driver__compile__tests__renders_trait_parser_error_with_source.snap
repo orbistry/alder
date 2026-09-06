@@ -7,8 +7,9 @@ alder::syntax
   × I was expecting a trait bound or associated type equality
    ╭─[/project/src/main.ald:1:23]
  1 │ trait Show[a] where a Show {
-   ·                       ┬
-   ·                       ╰── expected `:` or `.Assoc ==`
+   · ┬                     ┬
+   · │                     ╰── expected `:` or `.Assoc ==`
+   · ╰── this trait declaration starts here
  2 │     fn show(value: a) String
    ╰────
   help: write `a: Show` or `i.Item == Number`

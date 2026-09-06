@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@if x { use Db.run }</p>"
+---
+alder::syntax
+
+  × `use` names a provider, not one of its members
+   ╭─[/project/src/main.ald:1:30]
+ 1 │ let value = <p>@if x { use Db.run }</p>
+   ·                ┬             ┬
+   ·                │             ╰── remove this member access
+   ·                ╰── this `@if` starts here
+   ╰────

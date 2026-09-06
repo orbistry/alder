@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "test \"example\" 1"
+---
+alder::syntax
+
+  × I was expecting `{` to start this block
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ test "example" 1
+   · ┬              ┬
+   · │              ╰── expected `{`
+   · ╰── this test declaration starts here
+   ╰────

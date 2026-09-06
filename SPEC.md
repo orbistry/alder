@@ -271,6 +271,13 @@ settled and open decisions, waves, tests, risks).
 
 ### M1: Parser rewrite (`alder-parse`)
 
+Parser-message hardening is completed in
+`plans/parser-diagnostic-parity.md`; the implementation evidence and full variant
+inventory are recorded in `docs/parser-diagnostic-parity.md`.
+
+- [x] Complete Elm-quality rendered parser diagnostics across all active syntax
+  families, including source context, repair advice, and CLI/editor verification
+
 New parser for the grammar below (`crates/alder-parse` over
 `crates/alder-source`), with snapshot tests per construct. Done; the
 design and its decisions are in `docs/parser-internals.md`. `alder-ast`,

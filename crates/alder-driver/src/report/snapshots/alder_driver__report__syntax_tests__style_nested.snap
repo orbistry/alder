@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = style { \":hover\": { color red } }"
+---
+alder::syntax
+
+  × I was expecting `:` after this style property or selector
+   ╭─[/project/src/main.ald:1:39]
+ 1 │ let value = style { ":hover": { color red } }
+   ·                               ┬       ┬
+   ·                               │       ╰── expected `:`
+   ·                               ╰── this nested style block starts here
+   ╰────

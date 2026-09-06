@@ -1,0 +1,19 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+expression: rendered
+---
+alder::syntax
+
+  × this pattern is nested too deeply
+     ╭─[/project/src/main.ald:129:1]
+ 127 │ Some(
+ 128 │ Some(
+     · ┬
+     · ╰── this constructor pattern starts here
+ 129 │ _
+     · ┬
+     · ╰── nesting limit reached here
+ 130 │ )
+     ╰────
+  help: match the outer structure first, then inspect nested values in a
+        separate match

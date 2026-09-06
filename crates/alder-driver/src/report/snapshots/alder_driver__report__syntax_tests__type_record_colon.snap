@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type X = { name String }"
+---
+alder::syntax
+
+  × I was expecting a colon after this record field name
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ type X = { name String }
+   ·          ┬      ┬
+   ·          │      ╰── expected `:` or `?:`
+   ·          ╰── this record type starts here
+   ╰────

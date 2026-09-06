@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = \"\\q\""
+---
+alder::syntax
+
+  × I do not recognize this escape sequence
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ let value = "\q"
+   ·             ┬─┬
+   ·             │ ╰── unknown escape
+   ·             ╰── this string starts here
+   ╰────
+  help: use an escape such as `\n`, `\t`, `\"`, `\\`, or `\u{0041}`; a literal
+        backslash is written `\\`

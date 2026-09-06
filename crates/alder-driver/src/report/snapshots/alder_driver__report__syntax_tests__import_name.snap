@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "import @alder/http.{ 1 }"
+---
+alder::syntax
+
+  × I was expecting a name in this import list
+   ╭─[/project/src/main.ald:1:22]
+ 1 │ import @alder/http.{ 1 }
+   · ┬                    ┬
+   · │                    ╰── expected an imported name
+   · ╰── this import starts here
+   ╰────

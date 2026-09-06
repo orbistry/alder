@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select * from users limit 1 limit 2 }"
+---
+alder::syntax
+
+  × the `limit` clause cannot appear here
+   ╭─[/project/src/main.ald:1:49]
+ 1 │ let value = query { select * from users limit 1 limit 2 }
+   ·             ┬                                   ┬
+   ·             │                                   ╰── this clause is repeated, out of order, or not allowed for this operation
+   ·             ╰── this query starts here
+   ╰────
+  help: select clauses follow `from`, joins, `where`, `groupBy`, `orderBy`,
+        `limit`, `offset`; only joins may repeat. Update/delete allow one
+        `where`; insert has no trailing clauses

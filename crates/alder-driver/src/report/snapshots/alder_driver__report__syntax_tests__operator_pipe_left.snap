@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = a <| b
+---
+alder::syntax
+
+  × `<|` is not a binary operator in Alder
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ let x = a <| b
+   · ┬         ─┬
+   · │          ╰── unsupported operator
+   · ╰── this binding starts here
+   ╰────
+  help: write a function call such as `f(value)`; Alder does not have Elm's
+        reverse application operator

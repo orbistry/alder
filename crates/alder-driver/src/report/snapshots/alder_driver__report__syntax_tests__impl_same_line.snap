@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl Iterator[Foo] { type Item = Number fn next() {} }"
+---
+alder::syntax
+
+  × impl items must be separated by a line break
+   ╭─[/project/src/main.ald:1:41]
+ 1 │ impl Iterator[Foo] { type Item = Number fn next() {} }
+   · ┬                                       ┬
+   · │                                       ╰── this item needs its own line
+   · ╰── this impl declaration starts here
+   ╰────

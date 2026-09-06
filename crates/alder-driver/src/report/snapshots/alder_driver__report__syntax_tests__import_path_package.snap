@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: import @alder/
+---
+alder::syntax
+
+  × I was expecting a package name after `/` at the end of the file
+   ╭─[/project/src/main.ald:1:15]
+ 1 │ import @alder/
+   · ┬
+   · ╰── this import starts here
+   ╰────

@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: fn work
+---
+alder::syntax
+
+  × I was expecting `(` to start the parameter list at the end of the file
+   ╭─[/project/src/main.ald:1:8]
+ 1 │ fn work
+   · ┬
+   · ╰── this function declaration starts here
+   ╰────

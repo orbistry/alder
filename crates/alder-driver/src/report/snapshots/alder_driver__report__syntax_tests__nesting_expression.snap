@@ -1,0 +1,18 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+expression: rendered
+---
+alder::syntax
+
+  × this expression is nested too deeply
+     ╭─[/project/src/main.ald:129:1]
+ 127 │ (
+ 128 │ (
+     · ┬
+     · ╰── these parentheses start here
+ 129 │ 1
+     · ┬
+     · ╰── nesting limit reached here
+ 130 │ )
+     ╰────
+  help: move part of this expression into a named binding

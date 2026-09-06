@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = provide Db value {}"
+---
+alder::syntax
+
+  × I was expecting `=` after this provider name
+   ╭─[/project/src/main.ald:1:24]
+ 1 │ let value = provide Db value {}
+   ·             ┬          ┬
+   ·             │          ╰── expected `=`
+   ·             ╰── this `provide` starts here
+   ╰────
+  help: write `provide Db = connection { ... }`

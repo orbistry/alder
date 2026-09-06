@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = 0xG
+---
+alder::syntax
+
+  × this hexadecimal number needs a hexadecimal digit
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ let x = 0xG
+   · ┬         ┬
+   · │         ╰── expected `0`-`9` or `a`-`f`
+   · ╰── this binding starts here
+   ╰────

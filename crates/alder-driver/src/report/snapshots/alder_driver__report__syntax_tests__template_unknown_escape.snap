@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = `hello \\q`"
+---
+alder::syntax
+
+  × I do not recognize this escape sequence
+   ╭─[/project/src/main.ald:1:20]
+ 1 │ let value = `hello \q`
+   ·             ┬      ─┬
+   ·             │       ╰── unknown escape
+   ·             ╰── this template starts here
+   ╰────
+  help: use an escape such as `\n`, `\t`, `\\`, or `\u{0041}`; templates also
+        allow a backslash before a backtick or `$`

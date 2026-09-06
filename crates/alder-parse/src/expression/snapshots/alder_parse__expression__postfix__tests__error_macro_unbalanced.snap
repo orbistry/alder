@@ -3,9 +3,14 @@ source: crates/alder-parse/src/expression/postfix.rs
 description: "f!(a]"
 ---
 MacroCall(
-    Unbalanced(
-        93,
-    ),
+    Unbalanced {
+        found: 93,
+        expected: 41,
+        opening: Position {
+            line: 1,
+            column: 3,
+        },
+    },
     1,
     5,
 )

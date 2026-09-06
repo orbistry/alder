@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = \"\\u{D800}\""
+---
+alder::syntax
+
+  × this Unicode escape does not name a valid Unicode scalar value
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ let value = "\u{D800}"
+   ·             ┬────┬───
+   ·             │    ╰── invalid Unicode scalar value
+   ·             ╰── this string starts here
+   ╰────
+  help: use a value from `0000` to `10FFFF`, excluding surrogate values `D800`
+        through `DFFF`

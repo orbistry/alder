@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let :Bad = x"
+---
+alder::syntax
+
+  × I was expecting a lower-case tag name after `:`
+   ╭─[/project/src/main.ald:1:5]
+ 1 │ let :Bad = x
+   · ┬   ┬
+   · │   ╰── expected a tag name
+   · ╰── this binding starts here
+   ╰────

@@ -1,0 +1,11 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: pub
+---
+alder::syntax
+
+  × I was expecting an item after `pub` at the end of the file
+   ╭─[/project/src/main.ald:1:4]
+ 1 │ pub
+   ╰────
+  help: `pub` marks the following item as public, as in `pub fn main() { 0 }`

@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "component App() { let }"
+---
+alder::syntax
+
+  × I was expecting a pattern
+   ╭─[/project/src/main.ald:1:23]
+ 1 │ component App() { let }
+   ·                   ┬   ┬
+   ·                   │   ╰── expected a pattern here
+   ·                   ╰── this binding starts here
+   ╰────
+  help: a pattern can bind a name, destructure a value, or use `_` to ignore
+        it

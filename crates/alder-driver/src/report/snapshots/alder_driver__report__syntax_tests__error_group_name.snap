@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "error { :a }"
+---
+alder::syntax
+
+  × I was expecting a name after `error`
+   ╭─[/project/src/main.ald:1:7]
+ 1 │ error { :a }
+   · ┬     ┬
+   · │     ╰── expected an upper-case name
+   · ╰── this error declaration starts here
+   ╰────

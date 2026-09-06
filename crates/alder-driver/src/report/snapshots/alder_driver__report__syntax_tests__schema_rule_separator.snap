@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "schema User { name: min(1 2) }"
+---
+alder::syntax
+
+  × I was expecting a comma or the end of this schema rule's arguments
+   ╭─[/project/src/main.ald:1:27]
+ 1 │ schema User { name: min(1 2) }
+   · ┬                         ┬
+   · │                         ╰── expected `,` or `)`
+   · ╰── this schema declaration starts here
+   ╰────
+  help: separate rule arguments with commas and close them with `)`

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "schema User ["
+---
+alder::syntax
+
+  × I was expecting `{` to start this schema body
+   ╭─[/project/src/main.ald:1:13]
+ 1 │ schema User [
+   · ┬           ┬
+   · │           ╰── expected `{`
+   · ╰── this schema declaration starts here
+   ╰────

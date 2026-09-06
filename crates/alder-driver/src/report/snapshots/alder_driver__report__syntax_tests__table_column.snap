@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "table users { Upper: int() }"
+---
+alder::syntax
+
+  × I was expecting a column name or the end of this table
+   ╭─[/project/src/main.ald:1:15]
+ 1 │ table users { Upper: int() }
+   · ┬             ┬
+   · │             ╰── expected a lower-case column name or `}`
+   · ╰── this table declaration starts here
+   ╰────
+  help: write each column as `name: builder`, for example `id: int()`

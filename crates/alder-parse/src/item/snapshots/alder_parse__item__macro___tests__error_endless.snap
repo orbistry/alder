@@ -4,7 +4,13 @@ description: "macro f(a) { quote { a }"
 ---
 Macro(
     Body(
-        Endless,
+        Endless {
+            expected: 125,
+            opening: Position {
+                line: 1,
+                column: 12,
+            },
+        },
         1,
         12,
     ),

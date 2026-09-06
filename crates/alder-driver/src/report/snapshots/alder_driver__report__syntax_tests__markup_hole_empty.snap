@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>{}</p>"
+---
+alder::syntax
+
+  × this markup interpolation is empty
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ let value = <p>{}</p>
+   ·             ┬   ┬
+   ·             │   ╰── expected an expression before `}`
+   ·             ╰── this markup starts here
+   ╰────
+  help: put an expression inside `{ ... }`, or remove the empty interpolation

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { delete from posts where }"
+---
+alder::syntax
+
+  × I was expecting a condition after this delete's `where`
+   ╭─[/project/src/main.ald:1:45]
+ 1 │ let value = query { delete from posts where }
+   ·                     ┬                       ┬
+   ·                     │                       ╰── expected an expression
+   ·                     ╰── this `delete` starts here
+   ╰────

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = (1, 2 3)"
+---
+alder::syntax
+
+  × I was expecting a comma or a closing parenthesis
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ let value = (1, 2 3)
+   ·             ┬     ┬
+   ·             │     ╰── expected `,` or `)`
+   ·             ╰── these parentheses start here
+   ╰────
+  help: separate tuple entries with commas and close the parentheses with `)`

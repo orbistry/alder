@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select * from users where }"
+---
+alder::syntax
+
+  × I was expecting a condition after `where`
+   ╭─[/project/src/main.ald:1:47]
+ 1 │ let value = query { select * from users where }
+   ·                     ┬                         ┬
+   ·                     │                         ╰── expected an expression
+   ·                     ╰── this `select` starts here
+   ╰────

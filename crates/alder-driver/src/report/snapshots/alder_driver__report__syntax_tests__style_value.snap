@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = style { color: }"
+---
+alder::syntax
+
+  × I was expecting a value for this style property
+   ╭─[/project/src/main.ald:1:28]
+ 1 │ let value = style { color: }
+   ·             ┬              ┬
+   ·             │              ╰── expected an expression
+   ·             ╰── this style block starts here
+   ╰────

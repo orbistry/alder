@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let ^(1 +) = x
+---
+alder::syntax
+
+  × operator `+` is missing its right operand
+   ╭─[/project/src/main.ald:1:10]
+ 1 │ let ^(1 +) = x
+   ·      ┬   ┬
+   ·      │   ╰── expected an expression
+   ·      ╰── these parentheses start here
+   ╰────

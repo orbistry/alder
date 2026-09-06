@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let [..tail, head] = values"
+---
+alder::syntax
+
+  × the rest pattern must come last in an array pattern
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ let [..tail, head] = values
+   ·     ┬        ┬
+   ·     │        ╰── nothing may follow the rest pattern
+   ·     ╰── this array pattern starts here
+   ╰────
+  help: write the fixed entries first, as in `[first, ..rest]`

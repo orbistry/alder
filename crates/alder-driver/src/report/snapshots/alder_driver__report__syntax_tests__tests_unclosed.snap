@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "tests {"
+---
+alder::syntax
+
+  × I was expecting another declaration or the end of this tests block at the
+  │ end of the file
+   ╭─[/project/src/main.ald:1:8]
+ 1 │ tests {
+   · ┬
+   · ╰── this tests block starts here
+   ╰────
+  help: put declarations such as `test`, `fn`, or `let` on separate lines and
+        close the block with `}`

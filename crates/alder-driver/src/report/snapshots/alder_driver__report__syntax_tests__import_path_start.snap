@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: import http
+---
+alder::syntax
+
+  × I was expecting an import path
+   ╭─[/project/src/main.ald:1:8]
+ 1 │ import http
+   · ┬      ┬
+   · │      ╰── expected `@` or `~`
+   · ╰── this import starts here
+   ╰────

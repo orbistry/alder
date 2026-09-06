@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "trait Iterator[i] { type Item fn next(it: i) Item }"
+---
+alder::syntax
+
+  × trait items must be separated by a line break
+   ╭─[/project/src/main.ald:1:31]
+ 1 │ trait Iterator[i] { type Item fn next(it: i) Item }
+   · ┬                             ┬
+   · │                             ╰── this item needs its own line
+   · ╰── this trait declaration starts here
+   ╰────

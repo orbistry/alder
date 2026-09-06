@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "tests ["
+---
+alder::syntax
+
+  × I was expecting `{` after `tests`
+   ╭─[/project/src/main.ald:1:7]
+ 1 │ tests [
+   · ┬     ┬
+   · │     ╰── expected `{`
+   · ╰── this tests block starts here
+   ╰────
+  help: write `tests { ... }` with a declaration on each line

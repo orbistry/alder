@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "schema User { pick }"
+---
+alder::syntax
+
+  × I was expecting a field name in this `pick` list
+   ╭─[/project/src/main.ald:1:20]
+ 1 │ schema User { pick }
+   · ┬                  ┬
+   · │                  ╰── expected a lower-case field name
+   · ╰── this schema declaration starts here
+   ╰────
+  help: write `pick name, email` with commas between field names

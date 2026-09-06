@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "#[derive(Show, ])] type X"
+---
+alder::syntax
+
+  × I was expecting an expression
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ #[derive(Show, ])] type X
+   · ┬              ┬
+   · │              ╰── expected an expression here
+   · ╰── this attribute sequence starts here
+   ╰────

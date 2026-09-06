@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { insert into users values ^ }"
+---
+alder::syntax
+
+  × this unary operator is missing its operand
+   ╭─[/project/src/main.ald:1:47]
+ 1 │ let value = query { insert into users values ^ }
+   ·                     ┬                         ┬
+   ·                     │                         ╰── expected an expression
+   ·                     ╰── this `insert` starts here
+   ╰────

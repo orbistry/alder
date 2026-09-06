@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "macro value(Upper) {}"
+---
+alder::syntax
+
+  × I was expecting a macro parameter name
+   ╭─[/project/src/main.ald:1:13]
+ 1 │ macro value(Upper) {}
+   · ┬           ┬
+   · │           ╰── expected a lower-case name
+   · ╰── this macro declaration starts here
+   ╰────
+  help: macro parameters are names separated by commas, as in `macro
+        pair(left, right) { ... }`

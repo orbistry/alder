@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { insert users values ^rows }"
+---
+alder::syntax
+
+  × I was expecting `into` after `insert`
+   ╭─[/project/src/main.ald:1:28]
+ 1 │ let value = query { insert users values ^rows }
+   ·                     ┬      ┬
+   ·                     │      ╰── expected `into`
+   ·                     ╰── this `insert` starts here
+   ╰────
+  help: write `insert into users values ^rows`

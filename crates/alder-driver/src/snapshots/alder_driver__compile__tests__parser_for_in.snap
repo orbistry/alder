@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn main() { for item values {} }"
+---
+alder::syntax
+
+  × I was expecting `in` after this loop's pattern
+   ╭─[/project/src/main.ald:1:22]
+ 1 │ fn main() { for item values {} }
+   ·             ┬        ┬
+   ·             │        ╰── expected `in`
+   ·             ╰── this `for` loop starts here
+   ╰────
+  help: write `for pattern in values { ... }`

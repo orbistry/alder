@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <ul>@for x in xs; foo x {}</ul>"
+---
+alder::syntax
+
+  × I was expecting `key` after `;` in this markup loop
+   ╭─[/project/src/main.ald:1:31]
+ 1 │ let value = <ul>@for x in xs; foo x {}</ul>
+   ·                 ┬             ┬
+   ·                 │             ╰── expected `key`
+   ·                 ╰── this `@for` starts here
+   ╰────
+  help: write `@for item in items; key item.id { ... }`

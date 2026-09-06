@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type X = { Name: String }"
+---
+alder::syntax
+
+  × I was expecting a field name in this record type
+   ╭─[/project/src/main.ald:1:12]
+ 1 │ type X = { Name: String }
+   ·          ┬ ┬
+   ·          │ ╰── expected a lower-case field name
+   ·          ╰── this record type starts here
+   ╰────

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "trait Show {"
+---
+alder::syntax
+
+  × I was expecting `[` after this trait name
+   ╭─[/project/src/main.ald:1:12]
+ 1 │ trait Show {
+   · ┬          ┬
+   · │          ╰── expected `[` here
+   · ╰── this trait declaration starts here
+   ╰────
+  help: trait parameters look like `[a]` or `[f, a]`

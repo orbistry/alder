@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "import @alder/http.{ Request as }"
+---
+alder::syntax
+
+  × I was expecting an alias for this imported name after `as`
+   ╭─[/project/src/main.ald:1:33]
+ 1 │ import @alder/http.{ Request as }
+   · ┬                               ┬
+   · │                               ╰── expected an identifier
+   · ╰── this import starts here
+   ╰────
+  help: rename an imported name inside the list, as in `.{ Request as
+        HttpRequest }`

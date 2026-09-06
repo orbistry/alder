@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = `hello ${ }`"
+---
+alder::syntax
+
+  × this template interpolation needs an expression
+   ╭─[/project/src/main.ald:1:23]
+ 1 │ let value = `hello ${ }`
+   ·             ┬         ┬
+   ·             │         ╰── expected an expression before `}`
+   ·             ╰── this template starts here
+   ╰────
+  help: write `${value}` to insert a value, or remove `${}` if no value
+        belongs here

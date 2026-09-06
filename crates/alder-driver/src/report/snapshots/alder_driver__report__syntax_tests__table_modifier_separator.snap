@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "table users { id: int() default(1 2) }"
+---
+alder::syntax
+
+  × I was expecting a comma or the end of this column modifier's arguments
+   ╭─[/project/src/main.ald:1:35]
+ 1 │ table users { id: int() default(1 2) }
+   · ┬                                 ┬
+   · │                                 ╰── expected `,` or `)`
+   · ╰── this table declaration starts here
+   ╰────
+  help: separate modifier arguments with commas and close them with `)`

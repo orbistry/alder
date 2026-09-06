@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = values[0)"
+---
+alder::syntax
+
+  × I was expecting `]` after this index
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ let value = values[0)
+   ·                   ┬ ┬
+   ·                   │ ╰── expected `]`
+   ·                   ╰── this index starts here
+   ╰────
+  help: write an index like `values[index]`

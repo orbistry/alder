@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@match x A => <b>a</b> }</p>"
+---
+alder::syntax
+
+  × I was expecting `{` to start the markup match arms
+   ╭─[/project/src/main.ald:1:25]
+ 1 │ let value = <p>@match x A => <b>a</b> }</p>
+   ·                ┬        ┬
+   ·                │        ╰── expected `{`
+   ·                ╰── this `@match` starts here
+   ╰────

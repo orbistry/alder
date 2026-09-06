@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() { assert }"
+---
+alder::syntax
+
+  × I was expecting a condition after `assert`
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ fn f() { assert }
+   ·        ┬        ┬
+   ·        │        ╰── expected an expression
+   ·        ╰── this function body starts here
+   ╰────

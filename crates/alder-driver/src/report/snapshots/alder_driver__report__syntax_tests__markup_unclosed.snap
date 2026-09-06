@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let value = <div><p>x
+---
+alder::syntax
+
+  × I was expecting `</p>` to close this element at the end of the file
+   ╭─[/project/src/main.ald:1:22]
+ 1 │ let value = <div><p>x
+   ·                  ┬
+   ·                  ╰── this element starts here
+   ╰────

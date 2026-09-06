@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: let value = read(1 2)
+---
+alder::syntax
+
+  × I was expecting a comma or the end of this function call
+   ╭─[/project/src/main.ald:1:20]
+ 1 │ let value = read(1 2)
+   ·                 ┬  ┬
+   ·                 │  ╰── expected `,` or `)`
+   ·                 ╰── this argument list starts here
+   ╰────
+  help: separate arguments with commas and close the call with `)`

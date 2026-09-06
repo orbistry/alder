@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: import ~/db/type
+---
+alder::syntax
+
+  × `type` is reserved and cannot be the local module name
+   ╭─[/project/src/main.ald:1:13]
+ 1 │ import ~/db/type
+   · ┬           ──┬─
+   · │             ╰── reserved word used as a binding
+   · ╰── this import starts here
+   ╰────
+  help: add `as name` or import selected names with `.{ ... }`

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <div class={x id=\"y\">"
+---
+alder::syntax
+
+  × I was expecting `}` after this attribute expression
+   ╭─[/project/src/main.ald:1:27]
+ 1 │ let value = <div class={x id="y">
+   ·                  ┬        ┬
+   ·                  │        ╰── expected `}`
+   ·                  ╰── this attribute starts here
+   ╰────

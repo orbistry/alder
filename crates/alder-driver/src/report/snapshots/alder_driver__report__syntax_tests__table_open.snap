@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "table users ["
+---
+alder::syntax
+
+  × I was expecting `{` to start this table's columns
+   ╭─[/project/src/main.ald:1:13]
+ 1 │ table users [
+   · ┬           ┬
+   · │           ╰── expected `{`
+   · ╰── this table declaration starts here
+   ╰────

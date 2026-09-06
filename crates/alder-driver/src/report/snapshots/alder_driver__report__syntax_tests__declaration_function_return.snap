@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn work() Array[] {}"
+---
+alder::syntax
+
+  × type argument lists cannot be empty
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ fn work() Array[] {}
+   ·                ┬┬
+   ·                │╰── add a type argument or remove `[]`
+   ·                ╰── this type argument list starts here
+   ╰────

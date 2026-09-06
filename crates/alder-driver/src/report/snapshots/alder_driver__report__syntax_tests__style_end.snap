@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = style { padding: 16px 8px }"
+---
+alder::syntax
+
+  × I was expecting another style property or the end of this style block
+   ╭─[/project/src/main.ald:1:35]
+ 1 │ let value = style { padding: 16px 8px }
+   ·             ┬                     ┬
+   ·             │                     ╰── expected `,`, a property, a quoted selector, or `}`
+   ·             ╰── this style block starts here
+   ╰────
+  help: write each entry as `property: value`; use commas or new lines, not
+        CSS semicolons

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl Show[User] fn"
+---
+alder::syntax
+
+  × I was expecting `{` to start this impl body
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ impl Show[User] fn
+   · ┬               ┬
+   · │               ╰── expected `{` here
+   · ╰── this impl declaration starts here
+   ╰────

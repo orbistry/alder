@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = a + b -> c
+---
+alder::syntax
+
+  × `->` is not a binary operator in Alder
+   ╭─[/project/src/main.ald:1:15]
+ 1 │ let x = a + b -> c
+   · ┬             ─┬
+   · │              ╰── unsupported operator
+   · ╰── this binding starts here
+   ╰────
+  help: `->` introduces an anonymous function body; match arms use `=>`

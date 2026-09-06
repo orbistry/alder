@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() { let x = 1; }"
+---
+alder::syntax
+
+  × statements are separated by line breaks, not semicolons
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ fn f() { let x = 1; }
+   ·        ┬          ┬
+   ·        │          ╰── remove this semicolon
+   ·        ╰── this function body starts here
+   ╰────

@@ -77,9 +77,12 @@ the compiler's embedded V8 during the build. Output is cached per module.
 
 ## Error reporting
 
-miette diagnostics with Elm-quality messages, including the full
-`Reporting/Error/Syntax.hs` hierarchy ported from Elm and
-Levenshtein-based suggestions.
+miette diagnostics with nested parser errors modeled on Elm's
+`Reporting/Error/Syntax.hs` hierarchy and Levenshtein-based name suggestions.
+Elm-quality parser rendering is completed in
+`plans/parser-diagnostic-parity.md`. Active parser errors retain
+their detailed causes and nearby context; family coverage, limitations, and
+acceptance evidence are recorded in `docs/parser-diagnostic-parity.md`.
 
 The active compiler emits unused-local/parameter, module-value and unused-import-binding
 warnings. Import usage includes type and trait references, constructors, and

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() where a Show {}"
+---
+alder::syntax
+
+  × I was expecting a trait bound or associated type equality
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ fn f() where a Show {}
+   · ┬              ┬
+   · │              ╰── expected `:` or `.Assoc ==`
+   · ╰── this function declaration starts here
+   ╰────
+  help: write `a: Show` or `i.Item == Number`

@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn work(+x) {}"
+---
+alder::syntax
+
+  × I was expecting a pattern
+   ╭─[/project/src/main.ald:1:9]
+ 1 │ fn work(+x) {}
+   ·        ┬┬
+   ·        │╰── expected a pattern here
+   ·        ╰── this parameter list starts here
+   ╰────
+  help: a pattern can bind a name, destructure a value, or use `_` to ignore
+        it

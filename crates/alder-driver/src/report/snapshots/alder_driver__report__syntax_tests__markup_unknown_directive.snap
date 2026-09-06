@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let value = <p>@when x</p>
+---
+alder::syntax
+
+  × I do not recognize this markup directive
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ let value = <p>@when x</p>
+   ·             ┬  ┬
+   ·             │  ╰── unknown directive
+   ·             ╰── this markup starts here
+   ╰────
+  help: use `@if`, `@for`, or `@match`; `@else` follows `@if`, and `@empty`
+        follows `@for`

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: import @/http
+---
+alder::syntax
+
+  × I was expecting a package author after `@`
+   ╭─[/project/src/main.ald:1:9]
+ 1 │ import @/http
+   · ┬       ┬
+   · │       ╰── expected a lower-case author name
+   · ╰── this import starts here
+   ╰────

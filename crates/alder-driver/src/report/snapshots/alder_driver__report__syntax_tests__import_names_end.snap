@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "import @alder/http.{ get Request }"
+---
+alder::syntax
+
+  × I was expecting another imported name or the end of this list
+   ╭─[/project/src/main.ald:1:26]
+ 1 │ import @alder/http.{ get Request }
+   · ┬                        ┬
+   · │                        ╰── expected `,` or `}`
+   · ╰── this import starts here
+   ╰────

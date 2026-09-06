@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: type User =
+---
+alder::syntax
+
+  × I was expecting a type at the end of the file
+   ╭─[/project/src/main.ald:1:12]
+ 1 │ type User =
+   · ┬
+   · ╰── this type alias starts here
+   ╰────
+  help: types include names like `Number`, applications like `Array[Number]`,
+        and type variables like `a`

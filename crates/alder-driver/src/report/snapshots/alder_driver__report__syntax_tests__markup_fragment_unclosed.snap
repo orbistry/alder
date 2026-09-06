@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let value = <>hi
+---
+alder::syntax
+
+  × I was expecting `</>` to close this fragment at the end of the file
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ let value = <>hi
+   ·             ┬
+   ·             ╰── this fragment starts here
+   ╰────

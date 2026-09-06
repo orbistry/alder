@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = `\\u{41}`"
+---
+alder::syntax
+
+  × this Unicode escape has 2 hexadecimal digits, but only four to six are
+  │ allowed
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ let value = `\u{41}`
+   ·             ┬───┬──
+   ·             │   ╰── expected four to six hexadecimal digits
+   ·             ╰── this template starts here
+   ╰────
+  help: pad the code with leading zeros, as in `\u{0041}`

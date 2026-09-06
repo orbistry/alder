@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = `hello ${ value )`"
+---
+alder::syntax
+
+  × I was expecting `}` to close this template interpolation
+   ╭─[/project/src/main.ald:1:29]
+ 1 │ let value = `hello ${ value )`
+   ·             ┬               ┬
+   ·             │               ╰── expected `}`
+   ·             ╰── this template starts here
+   ╰────
+  help: each `${` interpolation must end with `}` before the template text
+        continues

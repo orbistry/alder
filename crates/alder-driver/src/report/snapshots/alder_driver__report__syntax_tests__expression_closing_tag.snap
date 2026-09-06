@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = </p>
+---
+alder::syntax
+
+  × I found a closing markup tag where an expression was expected
+   ╭─[/project/src/main.ald:1:9]
+ 1 │ let x = </p>
+   · ┬       ┬
+   · │       ╰── unexpected closing tag
+   · ╰── this binding starts here
+   ╰────

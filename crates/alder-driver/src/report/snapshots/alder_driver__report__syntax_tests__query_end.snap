@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select * from users on x }"
+---
+alder::syntax
+
+  × I was expecting an allowed query clause or `}`
+   ╭─[/project/src/main.ald:1:41]
+ 1 │ let value = query { select * from users on x }
+   ·             ┬                           ┬
+   ·             │                           ╰── unexpected input after the query operation
+   ·             ╰── this query starts here
+   ╰────
+  help: close the query with `}` after its operation and any permitted clauses

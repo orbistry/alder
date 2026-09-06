@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "trait [a] {}"
+---
+alder::syntax
+
+  × I was expecting a trait name after `trait`
+   ╭─[/project/src/main.ald:1:7]
+ 1 │ trait [a] {}
+   · ┬     ┬
+   · │     ╰── expected an upper-case name
+   · ╰── this trait declaration starts here
+   ╰────
+  help: trait declarations start like `trait Show[a]`

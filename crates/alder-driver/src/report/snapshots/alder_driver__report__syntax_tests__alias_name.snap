@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: type id = Number
+---
+alder::syntax
+
+  × I was expecting a name after `type`
+   ╭─[/project/src/main.ald:1:6]
+ 1 │ type id = Number
+   · ┬    ┬
+   · │    ╰── expected an upper-case name
+   · ╰── this type alias starts here
+   ╰────
+  help: a type alias starts like `type UserId = Number`

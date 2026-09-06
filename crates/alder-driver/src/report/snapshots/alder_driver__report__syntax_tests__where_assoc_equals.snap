@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() where i.Item = Number {}"
+---
+alder::syntax
+
+  × I was expecting `==` after this associated type
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ fn f() where i.Item = Number {}
+   · ┬                   ┬
+   · │                   ╰── expected `==` here
+   · ╰── this function declaration starts here
+   ╰────

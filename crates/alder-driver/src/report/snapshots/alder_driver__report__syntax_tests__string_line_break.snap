@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = \"hello\nthere\""
+---
+alder::syntax
+
+  × ordinary strings cannot contain a line break
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ let value = "hello
+   ·             ┬     ▲
+   ·             │     ╰── line break occurs here
+   ·             ╰── this string starts here
+ 2 │ there"
+   ╰────
+  help: use a template literal for multiline text

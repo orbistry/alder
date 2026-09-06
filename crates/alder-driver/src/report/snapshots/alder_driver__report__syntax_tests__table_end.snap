@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "table users { id: int() ; }"
+---
+alder::syntax
+
+  × I was expecting another column or the end of this table
+   ╭─[/project/src/main.ald:1:25]
+ 1 │ table users { id: int() ; }
+   · ┬                       ┬
+   · │                       ╰── expected a lower-case column name or `}`
+   · ╰── this table declaration starts here
+   ╰────
+  help: write each column as `name: builder` and close the table with `}`;
+        columns do not use commas or semicolons

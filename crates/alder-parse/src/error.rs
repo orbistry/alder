@@ -908,10 +908,17 @@ pub enum Number {
 
 #[derive(Debug)]
 pub enum RawTokens {
-    /// Unmatched closer (the byte found).
-    Unbalanced(u8),
-    /// EOF before the matching closer.
-    Endless,
+    /// Unmatched closer, with the innermost delimiter it should close.
+    Unbalanced {
+        found: u8,
+        expected: u8,
+        opening: alder_region::Position,
+    },
+    /// EOF before the innermost matching closer.
+    Endless {
+        expected: u8,
+        opening: alder_region::Position,
+    },
     String(StringError),
     /// Not at the expected opener (`(` for `name!(`, `{` for a macro body);
     /// nothing consumed. The wrapping variant carries the position.

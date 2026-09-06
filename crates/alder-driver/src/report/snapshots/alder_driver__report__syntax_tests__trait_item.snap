@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "trait Show[a] { let x = 1 }"
+---
+alder::syntax
+
+  × I was expecting a trait method, associated type, or `}`
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ trait Show[a] { let x = 1 }
+   · ┬               ┬
+   · │               ╰── expected `fn`, `type`, or `}`
+   · ╰── this trait declaration starts here
+   ╰────

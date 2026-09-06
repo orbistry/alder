@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <ul>@for +x in xs {}</ul>"
+---
+alder::syntax
+
+  × I was expecting a pattern
+   ╭─[/project/src/main.ald:1:22]
+ 1 │ let value = <ul>@for +x in xs {}</ul>
+   ·                 ┬    ┬
+   ·                 │    ╰── expected a pattern here
+   ·                 ╰── this `@for` starts here
+   ╰────
+  help: a pattern can bind a name, destructure a value, or use `_` to ignore
+        it

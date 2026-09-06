@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "table users { id: }"
+---
+alder::syntax
+
+  × I was expecting an expression
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ table users { id: }
+   · ┬                 ┬
+   · │                 ╰── expected an expression here
+   · ╰── this table declaration starts here
+   ╰────

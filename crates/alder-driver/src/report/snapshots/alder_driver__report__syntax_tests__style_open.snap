@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = style ["
+---
+alder::syntax
+
+  × I was expecting `{` to start this style block
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ let value = style [
+   ·             ┬     ┬
+   ·             │     ╰── expected `{`
+   ·             ╰── this style block starts here
+   ╰────
+  help: write `style { padding: 16px }`

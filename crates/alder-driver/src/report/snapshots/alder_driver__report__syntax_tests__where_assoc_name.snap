@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() where i.item == Number {}"
+---
+alder::syntax
+
+  × I was expecting an associated type name after `.`
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ fn f() where i.item == Number {}
+   · ┬              ┬
+   · │              ╰── expected an upper-case name
+   · ╰── this function declaration starts here
+   ╰────

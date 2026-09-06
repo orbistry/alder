@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "#[derive(Show Eq)] type X"
+---
+alder::syntax
+
+  × I was expecting another attribute argument or the end of the argument list
+   ╭─[/project/src/main.ald:1:15]
+ 1 │ #[derive(Show Eq)] type X
+   · ┬             ┬
+   · │             ╰── expected `,` or `)`
+   · ╰── this attribute sequence starts here
+   ╰────

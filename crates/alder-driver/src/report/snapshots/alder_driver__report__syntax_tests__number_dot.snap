@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = 1.
+---
+alder::syntax
+
+  × this decimal point needs digits after it
+   ╭─[/project/src/main.ald:1:10]
+ 1 │ let x = 1.
+   · ┬        ┬
+   · │        ╰── expected a decimal digit
+   · ╰── this binding starts here
+   ╰────

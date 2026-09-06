@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <ul>@for x items {<li>{x}</li>}</ul>"
+---
+alder::syntax
+
+  × I was expecting `in` after this markup loop pattern
+   ╭─[/project/src/main.ald:1:24]
+ 1 │ let value = <ul>@for x items {<li>{x}</li>}</ul>
+   ·                 ┬      ┬
+   ·                 │      ╰── expected `in`
+   ·                 ╰── this `@for` starts here
+   ╰────
+  help: write `@for item in items { ... }`

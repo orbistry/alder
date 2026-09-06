@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select * from users offset }"
+---
+alder::syntax
+
+  × I was expecting a value after `offset`
+   ╭─[/project/src/main.ald:1:48]
+ 1 │ let value = query { select * from users offset }
+   ·                     ┬                          ┬
+   ·                     │                          ╰── expected an expression
+   ·                     ╰── this `select` starts here
+   ╰────

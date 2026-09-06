@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: let value = state 0
+---
+alder::syntax
+
+  × I was expecting `(` after `state`
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ let value = state 0
+   ·             ┬     ┬
+   ·             │     ╰── expected `(`
+   ·             ╰── this `state` starts here
+   ╰────
+  help: write `state(initialValue)`

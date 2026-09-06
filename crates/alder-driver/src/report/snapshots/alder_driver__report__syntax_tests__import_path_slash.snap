@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: import @alder
+---
+alder::syntax
+
+  × I was expecting `/` between the package author and name at the end of
+  │ the file
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ import @alder
+   · ┬
+   · ╰── this import starts here
+   ╰────

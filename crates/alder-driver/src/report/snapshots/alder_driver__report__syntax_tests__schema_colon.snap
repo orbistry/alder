@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "schema User { name String }"
+---
+alder::syntax
+
+  × I was expecting `:` after this schema field name
+   ╭─[/project/src/main.ald:1:20]
+ 1 │ schema User { name String }
+   · ┬                  ┬
+   · │                  ╰── expected `:`
+   · ╰── this schema declaration starts here
+   ╰────
+  help: write a field like `name: String` or `name: min(1)`

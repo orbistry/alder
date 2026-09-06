@@ -8,7 +8,8 @@ alder::syntax
    ╭─[/project/src/main.ald:2:26]
  1 │ trait Show[a] {
  2 │     fn show(value: Array[]) String
-   ·                          ┬
-   ·                          ╰── add a type argument or remove `[]`
+   ·                         ┬┬
+   ·                         │╰── add a type argument or remove `[]`
+   ·                         ╰── this type argument list starts here
  3 │ }
    ╰────

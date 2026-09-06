@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>}</p>"
+---
+alder::syntax
+
+  × this `}` is not closing a markup expression
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ let value = <p>}</p>
+   ·             ┬  ┬
+   ·             │  ╰── unexpected `}`
+   ·             ╰── this markup starts here
+   ╰────
+  help: write `{"}"}` to display a literal closing brace

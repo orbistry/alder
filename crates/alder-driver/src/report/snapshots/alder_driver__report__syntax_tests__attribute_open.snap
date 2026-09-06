@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "# derive"
+---
+alder::syntax
+
+  × I found `#`, but an attribute starts with `#[`
+   ╭─[/project/src/main.ald:1:1]
+ 1 │ # derive
+   · ┬
+   · ╰── expected `[` after `#`
+   ╰────
+  help: write an attribute like `#[derive(Eq)]`

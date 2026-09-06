@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = if true { 1 } else 2"
+---
+alder::syntax
+
+  × I was expecting a block or another `if` after `else`
+   ╭─[/project/src/main.ald:1:32]
+ 1 │ let value = if true { 1 } else 2
+   ·             ┬                  ┬
+   ·             │                  ╰── expected `{` or `if`
+   ·             ╰── this `if` starts here
+   ╰────
+  help: write `else { value }` or `else if condition { value }`

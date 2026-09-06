@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "component for() {}"
+---
+alder::syntax
+
+  × I was expecting a component name
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ component for() {}
+   · ┬         ┬
+   · │         ╰── expected a non-reserved identifier
+   · ╰── this component declaration starts here
+   ╰────

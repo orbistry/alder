@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = value.
+---
+alder::syntax
+
+  × I was expecting a field name, tuple index, or `await` after `.` at the end
+  │ of the file
+   ╭─[/project/src/main.ald:1:15]
+ 1 │ let x = value.
+   · ┬
+   · ╰── this binding starts here
+   ╰────

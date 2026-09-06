@@ -92,6 +92,100 @@ struct Editor {
     reader: Option<std::thread::JoinHandle<()>>,
 }
 
+#[test]
+fn parser_diagnostics_preserve_cli_links_and_editor_context() {
+    let project = Project::new();
+    let source = "pub fn main() { [\"😀\" 2] }";
+    project.source("main.ald", source);
+    let uri = url::Url::from_file_path(project.0.canonicalize().unwrap().join("src/main.ald"))
+        .unwrap()
+        .to_string();
+    for command in ["check", "build", "test"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_alder"))
+            .arg(command)
+            .arg(&project.0)
+            .current_dir(project.0.parent().unwrap())
+            .env("ALDER_PROXY_VERSION", alder_cli::VERSION)
+            .env("NO_COLOR", "1")
+            .env("FORCE_HYPERLINK", "1")
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        let link = format!("\x1b]8;;{uri}\x1b\\src/main.ald\x1b]8;;\x1b\\");
+        assert!(stderr.contains(&link), "{command}: {stderr:?}");
+        for message in [
+            "I was expecting a comma or the end of this array",
+            "expected `,` or `]`",
+            "this array starts here",
+            "separate array entries with commas",
+        ] {
+            assert!(stderr.contains(message), "{command}: {stderr}");
+        }
+    }
+    let mut editor = Editor::new(&project);
+    editor.send(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}));
+    editor.receive(|message| message["id"] == 1);
+    editor.send(json!({"jsonrpc":"2.0","method":"initialized","params":{}}));
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{
+            "uri":uri,"languageId":"alder","version":1,"text":source
+        }}}),
+    );
+    let errors = editor.diagnostics(1);
+    assert_eq!(errors.as_array().unwrap().len(), 1, "{errors}");
+    let error = &errors[0];
+    assert_eq!(error["code"], "alder::syntax");
+    let column = source[..source.find('2').unwrap()].encode_utf16().count();
+    assert_eq!(
+        error["range"],
+        json!({"start":{"line":0,"character":column},"end":{"line":0,"character":column+1}})
+    );
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .contains("separate array entries with commas")
+    );
+    assert_eq!(
+        error["relatedInformation"][0]["message"],
+        "this array starts here"
+    );
+    assert_eq!(error["relatedInformation"][0]["location"]["uri"], uri);
+    assert_eq!(
+        error["relatedInformation"][0]["location"]["range"]["start"]["character"],
+        source.find('[').unwrap()
+    );
+
+    // An unsaved multiline EOF retains an insertion point and the inner opener.
+    editor.send(json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+        "textDocument":{"uri":uri,"version":2},"contentChanges":[{"text":"pub fn main() {\n    [\"😀\""}]
+    }}));
+    let errors = editor.diagnostics(2);
+    assert_eq!(errors.as_array().unwrap().len(), 1, "{errors}");
+    assert_eq!(
+        errors[0]["range"],
+        json!({"start":{"line":1,"character":9},"end":{"line":1,"character":9}})
+    );
+    assert!(
+        errors[0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("at the end of the file")
+    );
+    assert_eq!(errors[0]["relatedInformation"][0]["location"]["uri"], uri);
+    assert_eq!(
+        errors[0]["relatedInformation"][0]["location"]["range"]["start"],
+        json!({"line":1,"character":4})
+    );
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+            "textDocument":{"uri":uri,"version":3},"contentChanges":[{"text":"pub fn main() { 0 }"}]
+        }}),
+    );
+    assert_eq!(editor.diagnostics(3), json!([]));
+}
+
 impl Editor {
     fn new(project: &Project) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_alder"))

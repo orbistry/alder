@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: pub import @alder/http
+---
+alder::syntax
+
+  × a public import must say which names it re-exports at the end of the file
+   ╭─[/project/src/main.ald:1:23]
+ 1 │ pub import @alder/http
+   ·     ┬
+   ·     ╰── this import starts here
+   ╰────
+  help: use `pub import ~/module.{ Name }` or `pub import ~/module.*`

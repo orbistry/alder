@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "error E { :a(1) }"
+---
+alder::syntax
+
+  × I was expecting a type
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ error E { :a(1) }
+   · ┬            ┬
+   · │            ╰── expected a type here
+   · ╰── this error declaration starts here
+   ╰────
+  help: types include names like `Number`, applications like `Array[Number]`,
+        and type variables like `a`

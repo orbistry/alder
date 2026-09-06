@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl Iterator[Foo] { type Item = Number; }"
+---
+alder::syntax
+
+  × impl items are separated by line breaks, not semicolons
+   ╭─[/project/src/main.ald:1:40]
+ 1 │ impl Iterator[Foo] { type Item = Number; }
+   · ┬                                      ┬
+   · │                                      ╰── remove this semicolon
+   · ╰── this impl declaration starts here
+   ╰────

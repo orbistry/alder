@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = ^value
+---
+alder::syntax
+
+  × expression pins are only allowed inside queries
+   ╭─[/project/src/main.ald:1:9]
+ 1 │ let x = ^value
+   · ┬       ┬
+   · │       ╰── `^` is not valid here
+   · ╰── this binding starts here
+   ╰────

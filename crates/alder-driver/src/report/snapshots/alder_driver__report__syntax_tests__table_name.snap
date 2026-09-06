@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "table Upper {}"
+---
+alder::syntax
+
+  × I was expecting a lower-case table name
+   ╭─[/project/src/main.ald:1:7]
+ 1 │ table Upper {}
+   · ┬     ┬
+   · │     ╰── expected a name after `table`
+   · ╰── this table declaration starts here
+   ╰────
+  help: write a declaration like `table users { id: int() }`

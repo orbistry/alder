@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() { x = }"
+---
+alder::syntax
+
+  × I was expecting a value on the right side of this assignment
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ fn f() { x = }
+   ·        ┬     ┬
+   ·        │     ╰── expected an expression
+   ·        ╰── this function body starts here
+   ╰────

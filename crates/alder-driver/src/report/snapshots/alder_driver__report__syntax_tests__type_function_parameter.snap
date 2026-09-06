@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: type X = fn(1) a
+---
+alder::syntax
+
+  × I was expecting a type
+   ╭─[/project/src/main.ald:1:13]
+ 1 │ type X = fn(1) a
+   ·          ┬  ┬
+   ·          │  ╰── expected a type here
+   ·          ╰── this function type starts here
+   ╰────
+  help: types include names like `Number`, applications like `Array[Number]`,
+        and type variables like `a`

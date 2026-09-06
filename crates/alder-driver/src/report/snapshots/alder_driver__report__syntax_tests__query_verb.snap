@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { fetch * from users }"
+---
+alder::syntax
+
+  × I was expecting a query operation
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ let value = query { fetch * from users }
+   ·             ┬       ┬
+   ·             │       ╰── expected `select`, `insert`, `update`, or `delete`
+   ·             ╰── this query starts here
+   ╰────
+  help: a query contains one operation, such as `query { select * from users }
+        `

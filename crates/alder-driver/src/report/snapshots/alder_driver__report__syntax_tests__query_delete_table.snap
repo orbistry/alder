@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { delete from }"
+---
+alder::syntax
+
+  × I was expecting a table name after `delete from`
+   ╭─[/project/src/main.ald:1:33]
+ 1 │ let value = query { delete from }
+   ·                     ┬           ┬
+   ·                     │           ╰── expected a non-reserved lower-case table name
+   ·                     ╰── this `delete` starts here
+   ╰────

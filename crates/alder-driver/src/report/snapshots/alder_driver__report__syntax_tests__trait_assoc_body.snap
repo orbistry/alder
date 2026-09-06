@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "trait Iterator[i] { type Item = Number }"
+---
+alder::syntax
+
+  × associated types are declared without a value in traits
+   ╭─[/project/src/main.ald:1:31]
+ 1 │ trait Iterator[i] { type Item = Number }
+   · ┬                             ┬
+   · │                             ╰── remove this definition
+   · ╰── this trait declaration starts here
+   ╰────
+  help: provide the associated type value in each `impl`

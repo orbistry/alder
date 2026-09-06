@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { update Users set {} }"
+---
+alder::syntax
+
+  × I was expecting a table name after `update`
+   ╭─[/project/src/main.ald:1:28]
+ 1 │ let value = query { update Users set {} }
+   ·                     ┬      ┬
+   ·                     │      ╰── expected a non-reserved lower-case table name
+   ·                     ╰── this `update` starts here
+   ╰────

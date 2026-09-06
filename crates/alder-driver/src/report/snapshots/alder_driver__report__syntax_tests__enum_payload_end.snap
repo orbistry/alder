@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "enum Shape { Circle(Number Number) }"
+---
+alder::syntax
+
+  × I was expecting another payload type or the end of this variant
+   ╭─[/project/src/main.ald:1:28]
+ 1 │ enum Shape { Circle(Number Number) }
+   · ┬                          ┬
+   · │                          ╰── expected `,` or `)`
+   · ╰── this enum declaration starts here
+   ╰────

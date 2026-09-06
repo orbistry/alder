@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let Option:: = x"
+---
+alder::syntax
+
+  × I was expecting a constructor name after `::`
+   ╭─[/project/src/main.ald:1:13]
+ 1 │ let Option:: = x
+   · ┬           ┬
+   · │           ╰── expected a name
+   · ╰── this binding starts here
+   ╰────

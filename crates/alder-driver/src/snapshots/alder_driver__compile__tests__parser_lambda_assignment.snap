@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: let value = () -> 1 /= 2
+---
+alder::syntax
+
+  × the left side of this assignment is not assignable
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ let value = () -> 1 /= 2
+   ·             ┬     ┬
+   ·             │     ╰── expected a variable, field, or index
+   ·             ╰── this anonymous function starts here
+   ╰────
+  help: if you meant inequality, use `!=` instead of `/=`

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select { a b } from users }"
+---
+alder::syntax
+
+  × I was expecting a comma or the end of this select projection
+   ╭─[/project/src/main.ald:1:32]
+ 1 │ let value = query { select { a b } from users }
+   ·                     ┬          ┬
+   ·                     │          ╰── expected `,` or `}`
+   ·                     ╰── this `select` starts here
+   ╰────
+  help: separate selected expressions with commas inside `{ ... }`

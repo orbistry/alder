@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = match true { true => }"
+---
+alder::syntax
+
+  × I was expecting an expression
+   ╭─[/project/src/main.ald:1:34]
+ 1 │ let value = match true { true => }
+   ·                          ┬       ┬
+   ·                          │       ╰── expected an expression here
+   ·                          ╰── this match arm starts here
+   ╰────

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type Pair[a, b = (a, b)"
+---
+alder::syntax
+
+  × I was expecting `,` or `]` after this type parameter
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ type Pair[a, b = (a, b)
+   ·          ┬     ┬
+   ·          │     ╰── expected `,` or `]`
+   ·          ╰── this type parameter list starts here
+   ╰────

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: import @alder/http as H
+---
+alder::syntax
+
+  × I was expecting a lower-case alias after `as`
+   ╭─[/project/src/main.ald:1:23]
+ 1 │ import @alder/http as H
+   · ┬                     ┬
+   · │                     ╰── expected an alias
+   · ╰── this import starts here
+   ╰────

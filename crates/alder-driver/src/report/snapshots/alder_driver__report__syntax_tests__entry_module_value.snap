@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "42"
+---
+alder::syntax
+
+  × this input cannot start a module item
+   ╭─[/project/src/main.ald:1:1]
+ 1 │ 42
+   · ┬
+   · ╰── expected a declaration or import
+   ╰────
+  help: module items start with keywords such as `fn`, `let`, `type`, or
+        `import`

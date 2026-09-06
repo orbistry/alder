@@ -6,6 +6,11 @@ historical design snippets, determine what is compiled.
 
 ## Active checking path
 
+The driver's `report::parse` entry point is implemented in
+`alder-driver/src/report/syntax.rs`. It renders the active `alder-parse` nested
+error hierarchy against retained source text; syntax quality and coverage are
+tracked separately in `docs/parser-diagnostic-parity.md`.
+
 `alder-driver/src/compile.rs` canonicalizes with `alder_can::canonicalize`, builds
 requirement seeds with `alder_constrain::constrain`, builds a package-aware
 `TraitDatabase`, and calls `alder_solve::solve`. Successful checked annotations

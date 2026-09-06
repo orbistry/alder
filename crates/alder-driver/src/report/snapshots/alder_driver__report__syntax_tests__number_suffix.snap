@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = 123abc
+---
+alder::syntax
+
+  × a number cannot run directly into a name
+   ╭─[/project/src/main.ald:1:12]
+ 1 │ let x = 123abc
+   · ┬          ┬
+   · │          ╰── separate the number and name
+   · ╰── this binding starts here
+   ╰────

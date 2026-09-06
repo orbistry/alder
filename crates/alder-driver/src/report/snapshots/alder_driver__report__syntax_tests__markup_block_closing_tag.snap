@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@if x { </p> }"
+---
+alder::syntax
+
+  × this closing tag appears before the markup child block is complete
+   ╭─[/project/src/main.ald:1:26]
+ 1 │ let value = <p>@if x { </p> }
+   ·                        ┬ ┬
+   ·                        │ ╰── unexpected closing tag
+   ·                        ╰── this closing tag starts here
+   ╰────
+  help: close the child block with `}` before closing its parent element

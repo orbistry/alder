@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = match true { true -> 1 }"
+---
+alder::syntax
+
+  × I was expecting `=>` between this match pattern and its body
+   ╭─[/project/src/main.ald:1:31]
+ 1 │ let value = match true { true -> 1 }
+   ·                          ┬    ┬
+   ·                          │    ╰── expected `=>`
+   ·                          ╰── this match arm starts here
+   ╰────
+  help: match arms use `pattern => expression`; `->` is for anonymous
+        functions

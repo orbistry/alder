@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let x = query { select * from users where match x { select => 1 } }"
+---
+alder::syntax
+
+  × `select` is a query keyword, not a pattern
+   ╭─[/project/src/main.ald:1:53]
+ 1 │ let x = query { select * from users where match x { select => 1 } }
+   ·                                           ┬         ───┬──
+   ·                                           │            ╰── query keyword used here
+   ·                                           ╰── this `match` starts here
+   ╰────

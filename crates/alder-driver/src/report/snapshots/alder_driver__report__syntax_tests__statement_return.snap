@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() { return (1 +) }"
+---
+alder::syntax
+
+  × operator `+` is missing its right operand
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ fn f() { return (1 +) }
+   ·                 ┬   ┬
+   ·                 │   ╰── expected an expression
+   ·                 ╰── these parentheses start here
+   ╰────

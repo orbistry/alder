@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = [\n    1\n"
+---
+alder::syntax
+
+  × I was expecting a comma or the end of this array at the end of the file
+   ╭─[/project/src/main.ald:3:1]
+ 1 │ let value = [
+   ·             ┬
+   ·             ╰── this array starts here
+ 2 │     1
+   ╰────
+  help: separate array entries with commas and close the array with `]`

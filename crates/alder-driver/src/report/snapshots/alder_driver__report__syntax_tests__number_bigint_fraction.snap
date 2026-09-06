@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = 1.5n
+---
+alder::syntax
+
+  × BigInt literals cannot contain a fractional part
+   ╭─[/project/src/main.ald:1:12]
+ 1 │ let x = 1.5n
+   · ┬          ┬
+   · │          ╰── fractional BigInt
+   · ╰── this binding starts here
+   ╰────
+  help: remove the decimal part or the `n` suffix

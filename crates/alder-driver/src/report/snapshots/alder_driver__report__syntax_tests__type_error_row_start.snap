@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type X = [1]"
+---
+alder::syntax
+
+  × I was expecting an error tag, row variable, or `]`
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ type X = [1]
+   ·          ┬┬
+   ·          │╰── expected `:tag`, a row variable, or `]`
+   ·          ╰── this error row starts here
+   ╰────

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type Pair[A] = A"
+---
+alder::syntax
+
+  × I was expecting a type parameter in this type alias declaration
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ type Pair[A] = A
+   ·          ┬┬
+   ·          │╰── expected a lower-case name
+   ·          ╰── this type parameter list starts here
+   ╰────

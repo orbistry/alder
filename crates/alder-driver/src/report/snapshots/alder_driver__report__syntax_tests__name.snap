@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "test 42 {}"
+---
+alder::syntax
+
+  × I was expecting a quoted test name after `test`
+   ╭─[/project/src/main.ald:1:6]
+ 1 │ test 42 {}
+   · ┬    ┬
+   · │    ╰── expected a string
+   · ╰── this test declaration starts here
+   ╰────
+  help: write `test "description" { ... }`

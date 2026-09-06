@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "component App(a b) {}"
+---
+alder::syntax
+
+  × I was expecting another parameter or the end of the parameter list
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ component App(a b) {}
+   ·              ┬  ┬
+   ·              │  ╰── expected `,` or `)`
+   ·              ╰── this parameter list starts here
+   ╰────

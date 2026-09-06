@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let value = <div>< </div>
+---
+alder::syntax
+
+  × I was expecting an element name after `<`
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ let value = <div>< </div>
+   ·                  ┬┬
+   ·                  │╰── expected an element name
+   ·                  ╰── this element starts here
+   ╰────
+  help: write an element like `<div>` or a fragment like `<>`

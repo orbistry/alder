@@ -51,7 +51,8 @@ impl<'a> Parser<'a> {
     /// - EOF anywhere inside (including inside a `${ … }` hole) → `Endless`
     ///   at `open`;
     /// - a closer that is not the one expected for the innermost open bracket
-    ///   (`( ]`, or `( a }` at depth zero) → `Unbalanced(byte)` at that byte;
+    ///   (`( ]`, or `( a }` at depth zero) → `Unbalanced` at that byte,
+    ///   retaining the expected closer and the innermost opener;
     /// - a string problem → `String(_)` positioned as `string_literal`
     ///   does (§5.6): `Endless` at the cursor where the scan stopped,
     ///   `Newline` at the newline, `Escape` at the backslash;
@@ -129,11 +130,28 @@ impl<'a> Parser<'a> {
                 }
             } else {
                 match self.peek() {
-                    None => return Err((RawTokens::Endless, open_row, open_col)),
+                    None => {
+                        return Err((
+                            RawTokens::Endless {
+                                expected: top.close,
+                                opening: alder_region::Position::new(top.row, top.col),
+                            },
+                            open_row,
+                            open_col,
+                        ));
+                    }
                     Some(b @ (b')' | b']' | b'}')) => {
                         if b != top.close {
                             let (row, col) = self.position();
-                            return Err((RawTokens::Unbalanced(b), row, col));
+                            return Err((
+                                RawTokens::Unbalanced {
+                                    found: b,
+                                    expected: top.close,
+                                    opening: alder_region::Position::new(top.row, top.col),
+                                },
+                                row,
+                                col,
+                            ));
                         }
                         stack.pop();
                         if stack.is_empty() {
@@ -280,8 +298,8 @@ mod tests {
 
     fn describe(err: &RawTokens) -> String {
         match err {
-            RawTokens::Unbalanced(b) => format!("unbalanced {:?}", *b as char),
-            RawTokens::Endless => "endless".to_owned(),
+            RawTokens::Unbalanced { found, .. } => format!("unbalanced {:?}", *found as char),
+            RawTokens::Endless { .. } => "endless".to_owned(),
             RawTokens::Open => "open".to_owned(),
             RawTokens::String(StringError::Endless) => "string endless".to_owned(),
             RawTokens::String(StringError::Newline) => "string newline".to_owned(),

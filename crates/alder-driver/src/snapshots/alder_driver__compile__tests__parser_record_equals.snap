@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = User { name = 1 }"
+---
+alder::syntax
+
+  × record fields use `:`, not `=`
+   ╭─[/project/src/main.ald:1:25]
+ 1 │ let value = User { name = 1 }
+   ·                  ┬      ┬
+   ·                  │      ╰── replace this `=` with `:`
+   ·                  ╰── this record starts here
+   ╰────
+  help: write a field like `{ name: value }`

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let value = query select * from users
+---
+alder::syntax
+
+  × I was expecting `{` after `query`
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ let value = query select * from users
+   ·             ┬     ┬
+   ·             │     ╰── expected `{`
+   ·             ╰── this query starts here
+   ╰────
+  help: write `query { select * from users }`

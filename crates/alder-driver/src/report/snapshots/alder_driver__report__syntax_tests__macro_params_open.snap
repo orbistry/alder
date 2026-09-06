@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "macro value {}"
+---
+alder::syntax
+
+  × I was expecting `(` after this macro's name
+   ╭─[/project/src/main.ald:1:13]
+ 1 │ macro value {}
+   · ┬           ┬
+   · │           ╰── expected `(`
+   · ╰── this macro declaration starts here
+   ╰────
+  help: a macro needs a parameter list, even when it is empty: `macro now()
+        { ... }`

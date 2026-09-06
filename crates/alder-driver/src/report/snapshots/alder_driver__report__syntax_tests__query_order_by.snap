@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select * from users orderBy }"
+---
+alder::syntax
+
+  × I was expecting an expression in this `orderBy` clause
+   ╭─[/project/src/main.ald:1:49]
+ 1 │ let value = query { select * from users orderBy }
+   ·                     ┬                           ┬
+   ·                     │                           ╰── expected an expression
+   ·                     ╰── this `select` starts here
+   ╰────

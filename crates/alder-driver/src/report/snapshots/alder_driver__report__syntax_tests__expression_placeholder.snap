@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = _
+---
+alder::syntax
+
+  × `_` is only allowed as a complete call argument
+   ╭─[/project/src/main.ald:1:9]
+ 1 │ let x = _
+   · ┬       ┬
+   · │       ╰── placeholder is not valid here
+   · ╰── this binding starts here
+   ╰────

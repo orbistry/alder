@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "macro value() { ("
+---
+alder::syntax
+
+  × I was expecting `)` to close this macro's open delimiter at the end of
+  │ the file
+   ╭─[/project/src/main.ald:1:18]
+ 1 │ macro value() { (
+   ·                 ┬
+   ·                 ╰── this delimiter is still open
+   ╰────
+  help: macro token text must balance parentheses, brackets, and braces

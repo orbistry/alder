@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl Show {"
+---
+alder::syntax
+
+  × I was expecting `[` after the trait name
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ impl Show {
+   · ┬         ┬
+   · │         ╰── expected `[` here
+   · ╰── this impl declaration starts here
+   ╰────
+  help: the subject type goes in brackets, as in `impl Show[User]`

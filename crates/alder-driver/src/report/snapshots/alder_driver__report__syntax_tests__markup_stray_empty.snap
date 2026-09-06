@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@empty {}</p>"
+---
+alder::syntax
+
+  × this `@empty` has no preceding `@for`
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ let value = <p>@empty {}</p>
+   ·             ┬  ┬
+   ·             │  ╰── unexpected `@empty`
+   ·             ╰── this markup starts here
+   ╰────
+  help: place `@empty { ... }` directly after an `@for` body

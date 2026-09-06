@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let Some([first second]) = value"
+---
+alder::syntax
+
+  × I was expecting a comma or the end of this array pattern
+   ╭─[/project/src/main.ald:1:17]
+ 1 │ let Some([first second]) = value
+   ·          ┬      ┬
+   ·          │      ╰── expected `,` or `]`
+   ·          ╰── this array pattern starts here
+   ╰────
+  help: separate array patterns with commas, including before a `..rest`
+        pattern

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() { 1 /= 2 }"
+---
+alder::syntax
+
+  × the left side of this assignment is not assignable
+   ╭─[/project/src/main.ald:1:10]
+ 1 │ fn f() { 1 /= 2 }
+   ·        ┬ ┬
+   ·        │ ╰── expected a variable, field, or index
+   ·        ╰── this function body starts here
+   ╰────
+  help: if you meant inequality, use `!=` instead of `/=`

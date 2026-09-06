@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let [..type] = values"
+---
+alder::syntax
+
+  × I was expecting a binding name or the end of this rest pattern
+   ╭─[/project/src/main.ald:1:8]
+ 1 │ let [..type] = values
+   ·     ┬  ┬
+   ·     │  ╰── expected a non-reserved lower-case name, `,`, or `]`
+   ·     ╰── this array pattern starts here
+   ╰────
+  help: write `..rest` to bind the remaining entries, or `..` to ignore them

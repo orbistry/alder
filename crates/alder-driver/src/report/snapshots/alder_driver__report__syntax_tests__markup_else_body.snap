@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@if x {} @else { {)} }</p>"
+---
+alder::syntax
+
+  × I was expecting an expression inside this markup interpolation
+   ╭─[/project/src/main.ald:1:34]
+ 1 │ let value = <p>@if x {} @else { {)} }</p>
+   ·                ┬                 ┬
+   ·                │                 ╰── expected an expression
+   ·                ╰── this `@if` starts here
+   ╰────

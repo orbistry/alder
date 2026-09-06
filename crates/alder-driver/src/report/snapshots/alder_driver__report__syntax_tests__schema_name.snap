@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "schema lower {}"
+---
+alder::syntax
+
+  × I was expecting an upper-case schema name
+   ╭─[/project/src/main.ald:1:8]
+ 1 │ schema lower {}
+   · ┬      ┬
+   · │      ╰── expected a name after `schema`
+   · ╰── this schema declaration starts here
+   ╰────
+  help: write a declaration like `schema User { name: String }`

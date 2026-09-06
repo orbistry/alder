@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let x = query { select * from users where select }"
+---
+alder::syntax
+
+  × `select` is a query keyword, not a value
+   ╭─[/project/src/main.ald:1:43]
+ 1 │ let x = query { select * from users where select }
+   ·                 ┬                         ───┬──
+   ·                 │                            ╰── query keyword used as a value
+   ·                 ╰── this `select` starts here
+   ╰────

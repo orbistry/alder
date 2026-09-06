@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let _foo = x
+---
+alder::syntax
+
+  × `_foo` looks like a wildcard, not a binding
+   ╭─[/project/src/main.ald:1:5]
+ 1 │ let _foo = x
+   · ┬   ──┬─
+   · │     ╰── only `_` is a wildcard
+   · ╰── this binding starts here
+   ╰────
+  help: use `_` to ignore the value, or choose a binding name starting with
+        a letter

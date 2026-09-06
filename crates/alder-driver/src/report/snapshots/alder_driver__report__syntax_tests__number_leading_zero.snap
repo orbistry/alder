@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = 007
+---
+alder::syntax
+
+  × decimal numbers cannot have leading zeros
+   ╭─[/project/src/main.ald:1:10]
+ 1 │ let x = 007
+   · ┬        ┬
+   · │        ╰── remove the leading zero
+   · ╰── this binding starts here
+   ╰────

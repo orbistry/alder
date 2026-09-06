@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl show[User] {}"
+---
+alder::syntax
+
+  × I was expecting a trait name after `impl`
+   ╭─[/project/src/main.ald:1:6]
+ 1 │ impl show[User] {}
+   · ┬    ┬
+   · │    ╰── expected an upper-case path
+   · ╰── this impl declaration starts here
+   ╰────
+  help: implement a trait like `impl Show[User] { ... }`

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <ul>@for x in ) {}</ul>"
+---
+alder::syntax
+
+  × I was expecting an iterable after `in`
+   ╭─[/project/src/main.ald:1:27]
+ 1 │ let value = <ul>@for x in ) {}</ul>
+   ·                 ┬         ┬
+   ·                 │         ╰── expected an expression
+   ·                 ╰── this `@for` starts here
+   ╰────

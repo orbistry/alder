@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type X = [:timeout | 1]"
+---
+alder::syntax
+
+  × I was expecting an error tag or row variable after `|`
+   ╭─[/project/src/main.ald:1:22]
+ 1 │ type X = [:timeout | 1]
+   ·          ┬           ┬
+   ·          │           ╰── expected `:tag` or a row variable
+   ·          ╰── this error row starts here
+   ╰────

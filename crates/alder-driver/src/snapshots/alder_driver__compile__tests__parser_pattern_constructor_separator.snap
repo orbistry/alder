@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: let Some(first second) = value
+---
+alder::syntax
+
+  × I was expecting a comma or the end of this constructor pattern
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ let Some(first second) = value
+   ·     ┬          ┬
+   ·     │          ╰── expected `,` or `)`
+   ·     ╰── this constructor pattern starts here
+   ╰────
+  help: separate constructor arguments with commas and close them with `)`

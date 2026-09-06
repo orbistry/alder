@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: type X = fn(a b) c
+---
+alder::syntax
+
+  × I was expecting another parameter type or `)`
+   ╭─[/project/src/main.ald:1:15]
+ 1 │ type X = fn(a b) c
+   ·          ┬    ┬
+   ·          │    ╰── expected `,` or `)`
+   ·          ╰── this function type starts here
+   ╰────
+  help: separate parameter types with commas and close the list with `)`

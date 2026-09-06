@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl Iterator[Foo] { type Item }"
+---
+alder::syntax
+
+  × I was expecting `=` after this associated type name
+   ╭─[/project/src/main.ald:1:32]
+ 1 │ impl Iterator[Foo] { type Item }
+   · ┬                              ┬
+   · │                              ╰── expected `=` here
+   · ╰── this impl declaration starts here
+   ╰────
+  help: define it like `type Item = Value`

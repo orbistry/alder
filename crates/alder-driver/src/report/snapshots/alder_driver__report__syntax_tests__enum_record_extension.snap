@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "enum Shape { Rect { r | width: Number } }"
+---
+alder::syntax
+
+  × enum record payloads cannot extend another record
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ enum Shape { Rect { r | width: Number } }
+   · ┬                   ┬
+   · │                   ╰── remove this record extension
+   · ╰── this enum declaration starts here
+   ╰────

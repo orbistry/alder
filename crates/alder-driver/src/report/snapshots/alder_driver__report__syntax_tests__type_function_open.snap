@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: type X = fn -> a
+---
+alder::syntax
+
+  × I was expecting `(` after `fn` in this function type
+   ╭─[/project/src/main.ald:1:13]
+ 1 │ type X = fn -> a
+   ·          ┬  ┬
+   ·          │  ╰── expected `(`
+   ·          ╰── this function type starts here
+   ╰────

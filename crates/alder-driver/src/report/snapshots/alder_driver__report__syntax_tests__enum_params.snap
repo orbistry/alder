@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "enum Pair[] {}"
+---
+alder::syntax
+
+  × type parameter lists cannot be empty
+   ╭─[/project/src/main.ald:1:10]
+ 1 │ enum Pair[] {}
+   · ┬        ┬
+   · │        ╰── empty parameter list
+   · ╰── this enum declaration starts here
+   ╰────

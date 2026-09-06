@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type X = [:failed(Number]"
+---
+alder::syntax
+
+  × I was expecting another tag payload type or `)`
+   ╭─[/project/src/main.ald:1:25]
+ 1 │ type X = [:failed(Number]
+   ·          ┬              ┬
+   ·          │              ╰── expected `,` or `)`
+   ·          ╰── this error row starts here
+   ╰────

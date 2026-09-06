@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+expression: rendered
+---
+alder::syntax
+
+  × this block is nested too deeply
+    ╭─[/project/src/main.ald:65:6]
+ 64 │ loop {
+ 65 │ loop {
+    · ┬    ┬
+    · │    ╰── nesting limit reached here
+    · ╰── this loop starts here
+ 66 │ 0
+    ╰────
+  help: move part of this expression into a named function

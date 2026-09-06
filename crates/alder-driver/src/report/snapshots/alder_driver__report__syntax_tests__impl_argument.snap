@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl Show[1] {}"
+---
+alder::syntax
+
+  × I was expecting a type
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ impl Show[1] {}
+   · ┬         ┬
+   · │         ╰── expected a type here
+   · ╰── this impl declaration starts here
+   ╰────
+  help: types include names like `Number`, applications like `Array[Number]`,
+        and type variables like `a`

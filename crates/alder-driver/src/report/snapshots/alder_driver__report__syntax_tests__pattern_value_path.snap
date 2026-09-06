@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let Color::red = x"
+---
+alder::syntax
+
+  × a value path must be pinned when used as a pattern
+   ╭─[/project/src/main.ald:1:5]
+ 1 │ let Color::red = x
+   · ┬   ┬
+   · │   ╰── this is a value path
+   · ╰── this binding starts here
+   ╰────
+  help: prefix the path with `^` to compare against its value

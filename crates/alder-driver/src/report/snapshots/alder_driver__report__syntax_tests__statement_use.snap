@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn f() { use 1 }"
+---
+alder::syntax
+
+  × I was expecting a provider name after `use`
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ fn f() { use 1 }
+   ·        ┬     ┬
+   ·        │     ╰── expected a provider path
+   ·        ╰── this function body starts here
+   ╰────

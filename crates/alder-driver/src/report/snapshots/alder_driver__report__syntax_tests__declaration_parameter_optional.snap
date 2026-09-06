@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn work(x?) {}"
+---
+alder::syntax
+
+  × I was expecting a type annotation for this optional parameter
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ fn work(x?) {}
+   ·        ┬  ┬
+   ·        │  ╰── expected `: Type`
+   ·        ╰── this parameter list starts here
+   ╰────

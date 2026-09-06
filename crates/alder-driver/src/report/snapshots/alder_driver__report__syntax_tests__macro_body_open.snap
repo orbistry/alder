@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: macro value() 1
+---
+alder::syntax
+
+  × I was expecting `{` to start this macro body
+   ╭─[/project/src/main.ald:1:15]
+ 1 │ macro value() 1
+   · ┬             ┬
+   · │             ╰── expected `{`
+   · ╰── this macro declaration starts here
+   ╰────
+  help: write `macro name(args) { ... }`

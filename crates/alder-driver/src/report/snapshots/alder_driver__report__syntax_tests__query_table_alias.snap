@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select * from users as }"
+---
+alder::syntax
+
+  × I was expecting a table alias after `as`
+   ╭─[/project/src/main.ald:1:44]
+ 1 │ let value = query { select * from users as }
+   ·                     ┬                      ┬
+   ·                     │                      ╰── expected a non-reserved lower-case alias
+   ·                     ╰── this `select` starts here
+   ╰────
+  help: write a table reference like `users as u`

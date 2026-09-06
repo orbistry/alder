@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "#[extern]"
+---
+alder::syntax
+
+  × an attribute must be followed by a declaration at the end of the file
+   ╭─[/project/src/main.ald:1:10]
+ 1 │ #[extern]
+   · ┬
+   · ╰── this attribute sequence starts here
+   ╰────

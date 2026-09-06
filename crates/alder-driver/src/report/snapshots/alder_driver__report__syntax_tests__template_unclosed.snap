@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = `hello"
+---
+alder::syntax
+
+  × this template is missing its closing backtick at the end of the file
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ let value = `hello
+   ·             ┬
+   ·             ╰── this template starts here
+   ╰────
+  help: close the template with a backtick; put a backslash before a literal
+        backtick in its text

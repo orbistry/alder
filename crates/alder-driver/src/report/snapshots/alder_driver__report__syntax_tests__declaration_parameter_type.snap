@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn work(x: ) {}"
+---
+alder::syntax
+
+  × I was expecting a type
+   ╭─[/project/src/main.ald:1:12]
+ 1 │ fn work(x: ) {}
+   ·        ┬   ┬
+   ·        │   ╰── expected a type here
+   ·        ╰── this parameter list starts here
+   ╰────
+  help: types include names like `Number`, applications like `Array[Number]`,
+        and type variables like `a`

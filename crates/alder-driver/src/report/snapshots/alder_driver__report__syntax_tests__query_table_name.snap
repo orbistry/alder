@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select * from Users }"
+---
+alder::syntax
+
+  × I was expecting a table name in this query
+   ╭─[/project/src/main.ald:1:35]
+ 1 │ let value = query { select * from Users }
+   ·                     ┬             ┬
+   ·                     │             ╰── expected a non-reserved lower-case table name
+   ·                     ╰── this `select` starts here
+   ╰────

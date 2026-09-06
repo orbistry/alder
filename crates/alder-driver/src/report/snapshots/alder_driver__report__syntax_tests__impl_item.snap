@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "impl Show[User] { let x = 1 }"
+---
+alder::syntax
+
+  × I was expecting an impl method, associated type, or `}`
+   ╭─[/project/src/main.ald:1:19]
+ 1 │ impl Show[User] { let x = 1 }
+   · ┬                 ┬
+   · │                 ╰── expected `fn`, `type`, or `}`
+   · ╰── this impl declaration starts here
+   ╰────

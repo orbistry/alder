@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@if ) {<b>x</b>}</p>"
+---
+alder::syntax
+
+  × I was expecting a condition after `@if`
+   ╭─[/project/src/main.ald:1:20]
+ 1 │ let value = <p>@if ) {<b>x</b>}</p>
+   ·                ┬   ┬
+   ·                │   ╰── expected an expression
+   ·                ╰── this `@if` starts here
+   ╰────

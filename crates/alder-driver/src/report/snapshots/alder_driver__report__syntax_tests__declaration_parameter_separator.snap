@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn work(x y) {}"
+---
+alder::syntax
+
+  × I was expecting another parameter or the end of the parameter list
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ fn work(x y) {}
+   ·        ┬  ┬
+   ·        │  ╰── expected `,` or `)`
+   ·        ╰── this parameter list starts here
+   ╰────

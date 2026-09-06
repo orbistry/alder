@@ -1,0 +1,18 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+expression: rendered
+---
+alder::syntax
+
+  × this type is nested too deeply
+     ╭─[/project/src/main.ald:129:1]
+ 127 │ Array[
+ 128 │ Array[
+     ·      ┬
+     ·      ╰── this type argument list starts here
+ 129 │ a
+     · ┬
+     · ╰── nesting limit reached here
+ 130 │ ]
+     ╰────
+  help: split this type into named aliases

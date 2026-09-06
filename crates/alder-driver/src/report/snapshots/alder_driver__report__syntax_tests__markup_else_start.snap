@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@if x{} @else <b>x</b></p>"
+---
+alder::syntax
+
+  × I was expecting `if` or `{` after `@else`
+   ╭─[/project/src/main.ald:1:30]
+ 1 │ let value = <p>@if x{} @else <b>x</b></p>
+   ·                ┬             ┬
+   ·                │             ╰── expected `if` or `{`
+   ·                ╰── this `@if` starts here
+   ╰────
+  help: write `@else { ... }` or `@else if condition { ... }`

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "error E { :a :b }"
+---
+alder::syntax
+
+  × I was expecting another error tag or the end of this group
+   ╭─[/project/src/main.ald:1:14]
+ 1 │ error E { :a :b }
+   · ┬            ┬
+   · │            ╰── expected `,` or `}`
+   · ╰── this error declaration starts here
+   ╰────

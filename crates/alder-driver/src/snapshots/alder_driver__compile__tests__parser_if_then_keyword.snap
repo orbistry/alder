@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "let value = if true then { 1 }"
+---
+alder::syntax
+
+  × Alder's `if` branches use braces, not `then`
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ let value = if true then { 1 }
+   ·             ┬       ┬
+   ·             │       ╰── remove `then` and put the branch inside `{ ... }`
+   ·             ╰── this `if` starts here
+   ╰────
+  help: write `if condition { value } else { other }`

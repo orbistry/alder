@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: import ~
+---
+alder::syntax
+
+  × the local import root does not provide a module name
+   ╭─[/project/src/main.ald:1:8]
+ 1 │ import ~
+   · ┬      ┬
+   · │      ╰── expected a module path
+   · ╰── this import starts here
+   ╰────
+  help: add a path, an alias, or a selected-name import

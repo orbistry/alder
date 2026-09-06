@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "type X = { name: String"
+---
+alder::syntax
+
+  × I was expecting another record field or `}` at the end of the file
+   ╭─[/project/src/main.ald:1:24]
+ 1 │ type X = { name: String
+   ·          ┬
+   ·          ╰── this record type starts here
+   ╰────
+  help: separate record fields with commas and close the type with `}`

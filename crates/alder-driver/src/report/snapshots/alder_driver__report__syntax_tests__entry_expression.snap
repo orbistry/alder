@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x =
+---
+alder::syntax
+
+  × I was expecting a value after `=` in this binding at the end of the file
+   ╭─[/project/src/main.ald:1:8]
+ 1 │ let x =
+   · ┬
+   · ╰── this binding starts here
+   ╰────

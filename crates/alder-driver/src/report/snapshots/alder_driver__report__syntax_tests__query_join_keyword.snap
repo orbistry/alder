@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select * from users left posts on x }"
+---
+alder::syntax
+
+  × I was expecting `join` after this join qualifier
+   ╭─[/project/src/main.ald:1:46]
+ 1 │ let value = query { select * from users left posts on x }
+   ·                                         ┬    ┬
+   ·                                         │    ╰── expected `join`
+   ·                                         ╰── this join starts here
+   ╰────
+  help: write `left join posts on condition` or `inner join posts on
+        condition`

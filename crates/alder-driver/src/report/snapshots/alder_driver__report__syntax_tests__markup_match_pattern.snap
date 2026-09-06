@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@match x { + => <b/> }</p>"
+---
+alder::syntax
+
+  × I was expecting a pattern
+   ╭─[/project/src/main.ald:1:27]
+ 1 │ let value = <p>@match x { + => <b/> }</p>
+   ·                ┬          ┬
+   ·                │          ╰── expected a pattern here
+   ·                ╰── this `@match` starts here
+   ╰────
+  help: a pattern can bind a name, destructure a value, or use `_` to ignore
+        it

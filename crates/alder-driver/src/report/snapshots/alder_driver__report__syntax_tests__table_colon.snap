@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "table users { id int() }"
+---
+alder::syntax
+
+  × I was expecting `:` after this column name
+   ╭─[/project/src/main.ald:1:18]
+ 1 │ table users { id int() }
+   · ┬                ┬
+   · │                ╰── expected `:`
+   · ╰── this table declaration starts here
+   ╰────
+  help: write each column as `name: builder`, for example `id: int()`

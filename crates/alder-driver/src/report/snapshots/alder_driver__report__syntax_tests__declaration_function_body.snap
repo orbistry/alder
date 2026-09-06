@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "fn work() {"
+---
+alder::syntax
+
+  × I was expecting another statement or the end of this block at the end of
+  │ the file
+   ╭─[/project/src/main.ald:1:12]
+ 1 │ fn work() {
+   ·           ┬
+   ·           ╰── this function body starts here
+   ╰────

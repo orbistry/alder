@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "#[Derive] type X"
+---
+alder::syntax
+
+  × I was expecting an attribute name
+   ╭─[/project/src/main.ald:1:3]
+ 1 │ #[Derive] type X
+   · ┬ ┬
+   · │ ╰── expected a lower-case name
+   · ╰── this attribute sequence starts here
+   ╰────

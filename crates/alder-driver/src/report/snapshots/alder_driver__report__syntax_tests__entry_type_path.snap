@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let x: Outer::inner = 1"
+---
+alder::syntax
+
+  × I was expecting a type name after `::`
+   ╭─[/project/src/main.ald:1:15]
+ 1 │ let x: Outer::inner = 1
+   · ┬             ┬
+   · │             ╰── expected an uppercase type name
+   · ╰── this binding starts here
+   ╰────
+  help: type path members start with an uppercase letter, as in `Outer::Inner`

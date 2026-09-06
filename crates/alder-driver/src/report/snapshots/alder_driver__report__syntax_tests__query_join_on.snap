@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { select * from users join posts }"
+---
+alder::syntax
+
+  × I was expecting `on` after this joined table
+   ╭─[/project/src/main.ald:1:52]
+ 1 │ let value = query { select * from users join posts }
+   ·                                         ┬          ┬
+   ·                                         │          ╰── expected `on`
+   ·                                         ╰── this join starts here
+   ╰────
+  help: each join needs a condition, as in `join posts on users.id ==
+        posts.userId`

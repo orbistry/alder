@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "schema User from Upper {}"
+---
+alder::syntax
+
+  × I was expecting a table name after `from`
+   ╭─[/project/src/main.ald:1:18]
+ 1 │ schema User from Upper {}
+   · ┬                ┬
+   · │                ╰── expected a lower-case table name
+   · ╰── this schema declaration starts here
+   ╰────
+  help: write `schema User from users { ... }`

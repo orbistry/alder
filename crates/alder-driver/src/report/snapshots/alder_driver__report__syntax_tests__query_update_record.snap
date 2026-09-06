@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = query { update users set { name = ^n } }"
+---
+alder::syntax
+
+  × record fields use `:`, not `=`
+   ╭─[/project/src/main.ald:1:45]
+ 1 │ let value = query { update users set { name = ^n } }
+   ·                                      ┬      ┬
+   ·                                      │      ╰── replace this `=` with `:`
+   ·                                      ╰── this update record starts here
+   ╰────
+  help: write a field like `{ name: value }`

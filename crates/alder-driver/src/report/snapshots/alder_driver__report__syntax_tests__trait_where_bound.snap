@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "trait Ord[a] where a: 1 {}"
+---
+alder::syntax
+
+  × I was expecting a trait name in this bound
+   ╭─[/project/src/main.ald:1:23]
+ 1 │ trait Ord[a] where a: 1 {}
+   · ┬                     ┬
+   · │                     ╰── expected an upper-case trait path
+   · ╰── this trait declaration starts here
+   ╰────

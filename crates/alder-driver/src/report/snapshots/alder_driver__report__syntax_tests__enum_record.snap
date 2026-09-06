@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "enum Shape { Rect { width } }"
+---
+alder::syntax
+
+  × I was expecting a colon after this record field name
+   ╭─[/project/src/main.ald:1:27]
+ 1 │ enum Shape { Rect { width } }
+   ·                   ┬       ┬
+   ·                   │       ╰── expected `:` or `?:`
+   ·                   ╰── this variant record starts here
+   ╰────

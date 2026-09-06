@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: component App()
+---
+alder::syntax
+
+  × I was expecting `{` to start this block at the end of the file
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ component App()
+   · ┬
+   · ╰── this component declaration starts here
+   ╰────

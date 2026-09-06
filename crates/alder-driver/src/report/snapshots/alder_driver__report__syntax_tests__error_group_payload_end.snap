@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "error E { :a(Number Number) }"
+---
+alder::syntax
+
+  × I was expecting another tag payload type or `)`
+   ╭─[/project/src/main.ald:1:21]
+ 1 │ error E { :a(Number Number) }
+   · ┬                   ┬
+   · │                   ╰── expected `,` or `)`
+   · ╰── this error declaration starts here
+   ╰────

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "let value = <p>@else {}</p>"
+---
+alder::syntax
+
+  × this `@else` has no preceding `@if`
+   ╭─[/project/src/main.ald:1:16]
+ 1 │ let value = <p>@else {}</p>
+   ·             ┬  ┬
+   ·             │  ╰── unexpected `@else`
+   ·             ╰── this markup starts here
+   ╰────
+  help: place `@else { ... }` directly after an `@if` branch

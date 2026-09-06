@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "trait Iterator[i] { type item }"
+---
+alder::syntax
+
+  × I was expecting an associated type name after `type`
+   ╭─[/project/src/main.ald:1:26]
+ 1 │ trait Iterator[i] { type item }
+   · ┬                        ┬
+   · │                        ╰── expected an upper-case name
+   · ╰── this trait declaration starts here
+   ╰────
+  help: declare an associated type like `type Item`

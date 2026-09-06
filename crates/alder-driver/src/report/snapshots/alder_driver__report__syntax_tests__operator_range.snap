@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: let x = a .. b
+---
+alder::syntax
+
+  × `..` is not a binary operator in Alder
+   ╭─[/project/src/main.ald:1:11]
+ 1 │ let x = a .. b
+   · ┬         ─┬
+   · │          ╰── unsupported operator
+   · ╰── this binding starts here
+   ╰────
+  help: `..` is used for record spreads and rest patterns, not as a range
+        operator between expressions

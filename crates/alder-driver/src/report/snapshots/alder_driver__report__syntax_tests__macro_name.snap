@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: "macro Upper() {}"
+---
+alder::syntax
+
+  × I was expecting a lower-case name after `macro`
+   ╭─[/project/src/main.ald:1:7]
+ 1 │ macro Upper() {}
+   · ┬     ┬
+   · │     ╰── expected a macro name
+   · ╰── this macro declaration starts here
+   ╰────
+  help: write a declaration like `macro identity(value) { value }`
