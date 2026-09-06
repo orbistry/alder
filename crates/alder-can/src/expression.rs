@@ -664,12 +664,11 @@ fn canonicalize_lambda<'a>(
     let mut params = Vec::with_capacity(lambda.params.len());
     for param in lambda.params {
         let annotation = match param.annotation {
-            Some(typ) => Some(canonicalize_type(
+            Some(typ) => Some(crate::canonicalize::parameter_annotation(
                 bump,
-                env,
-                &crate::canonicalize::type_variables(typ),
-                typ,
-            )?),
+                param.optional,
+                canonicalize_type(bump, env, &crate::canonicalize::type_variables(typ), typ)?,
+            )),
             None => None,
         };
         let pattern = canonicalize_pattern(bump, env, param.pattern, BindingMode::Local)?;

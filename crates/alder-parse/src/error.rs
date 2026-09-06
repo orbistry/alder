@@ -122,6 +122,8 @@ pub enum Params<'a> {
     Pattern(&'a Pattern<'a>, Row, Col),
     /// Type after `:`.
     Type(&'a Type<'a>, Row, Col),
+    /// An optional parameter needs `: Type` after `?`.
+    OptionalAnnotation(Row, Col),
     /// Expected `,` or `)`.
     End(Row, Col),
 }
@@ -405,10 +407,10 @@ pub enum Expr<'a> {
     PathMember(Row, Col),
     /// `.` not followed by a field name, digits or `await`.
     Access(Row, Col),
-    /// Missing operand after `-` or `!` (or `^` inside `query { }`, via
-    /// `pinned_value`): `postfix()` failed with `Start` at the operand
     /// A tuple index cannot be represented without changing its value.
     TupleIndexOverflow(Row, Col),
+    /// Missing operand after `-` or `!` (or `^` inside `query { }`, via
+    /// `pinned_value`): `postfix()` failed with `Start` at the operand
     /// position. Any other operand error propagates unchanged (§6.0).
     Unary(Row, Col),
     /// `^` outside `query { }` and patterns.

@@ -59,6 +59,7 @@ impl<'a> Parser<'a> {
             (
                 self.alloc_slice_copy(&[Param {
                     pattern,
+                    optional: false,
                     annotation: None,
                 }]),
                 None,

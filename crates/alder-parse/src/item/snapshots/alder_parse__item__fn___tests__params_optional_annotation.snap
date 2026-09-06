@@ -1,0 +1,109 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "(name: String, count?: Number)"
+---
+[
+    Param {
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 6,
+                },
+            },
+            value: Var(
+                "name",
+            ),
+        },
+        annotation: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 8,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 14,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 8,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 14,
+                                    },
+                                },
+                                value: "String",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+        ),
+    },
+    Param {
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 16,
+                },
+                end: Position {
+                    line: 1,
+                    column: 21,
+                },
+            },
+            value: Var(
+                "count",
+            ),
+        },
+        optional: true,
+        annotation: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 24,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 30,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 24,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 30,
+                                    },
+                                },
+                                value: "Number",
+                            },
+                        ],
+                    },
+                    args: [],
+                },
+            },
+        ),
+    },
+]

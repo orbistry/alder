@@ -142,10 +142,23 @@ pub struct FnDecl<'a> {
     pub body: Option<&'a Located<Block<'a>>>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Param<'a> {
     pub pattern: &'a Located<Pattern<'a>>,
+    /// Source-only shorthand: canonicalization wraps the annotation in Option.
+    pub optional: bool,
     pub annotation: Option<&'a Located<Type<'a>>>,
+}
+
+impl std::fmt::Debug for Param<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("Param");
+        debug.field("pattern", &self.pattern);
+        if self.optional {
+            debug.field("optional", &true);
+        }
+        debug.field("annotation", &self.annotation).finish()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

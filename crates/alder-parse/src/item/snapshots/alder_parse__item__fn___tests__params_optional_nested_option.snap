@@ -1,0 +1,91 @@
+---
+source: crates/alder-parse/src/item/fn_.rs
+description: "(value?: Option[Number])"
+---
+[
+    Param {
+        pattern: Located {
+            region: Region {
+                start: Position {
+                    line: 1,
+                    column: 2,
+                },
+                end: Position {
+                    line: 1,
+                    column: 7,
+                },
+            },
+            value: Var(
+                "value",
+            ),
+        },
+        optional: true,
+        annotation: Some(
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 10,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 24,
+                    },
+                },
+                value: Named {
+                    path: Path {
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 10,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 16,
+                                    },
+                                },
+                                value: "Option",
+                            },
+                        ],
+                    },
+                    args: [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 17,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 23,
+                                },
+                            },
+                            value: Named {
+                                path: Path {
+                                    segments: [
+                                        Located {
+                                            region: Region {
+                                                start: Position {
+                                                    line: 1,
+                                                    column: 17,
+                                                },
+                                                end: Position {
+                                                    line: 1,
+                                                    column: 23,
+                                                },
+                                            },
+                                            value: "Number",
+                                        },
+                                    ],
+                                },
+                                args: [],
+                            },
+                        },
+                    ],
+                },
+            },
+        ),
+    },
+]

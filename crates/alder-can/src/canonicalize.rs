@@ -1053,7 +1053,8 @@ pub(crate) fn trait_method_annotation<'a>(
                 }),
             )]);
         };
-        params.push(canonicalize_type(bump, env, &variables, annotation)?);
+        let annotation = canonicalize_type(bump, env, &variables, annotation)?;
+        params.push(parameter_annotation(bump, param.optional, annotation));
     }
     let Some(ret) = source.ret else {
         return Err(vec![Error::new(
@@ -2406,6 +2407,29 @@ fn canonicalize_fn<'a>(
     }))
 }
 
+pub(crate) fn parameter_annotation<'a>(
+    bump: &'a Bump,
+    optional: bool,
+    annotation: &'a Located<Type<'a>>,
+) -> &'a Located<Type<'a>> {
+    if !optional {
+        return annotation;
+    }
+    bump.alloc(Located::at(
+        annotation.region,
+        Type::Named {
+            reference: QualifiedName {
+                module: ModuleId {
+                    package: alder_ast::PackageId::Builtin,
+                    path: &[],
+                },
+                name: "Option",
+            },
+            args: bump.alloc_slice_copy(&[annotation]),
+        },
+    ))
+}
+
 fn canonicalize_params<'a>(
     bump: &'a Bump,
     env: &mut Env<'a>,
@@ -2415,7 +2439,11 @@ fn canonicalize_params<'a>(
     let mut params = Vec::with_capacity(source.len());
     for param in source {
         let annotation = match param.annotation {
-            Some(typ) => Some(canonicalize_type(bump, env, variables, typ)?),
+            Some(typ) => Some(parameter_annotation(
+                bump,
+                param.optional,
+                canonicalize_type(bump, env, variables, typ)?,
+            )),
             None => None,
         };
         let pattern = canonicalize_pattern(bump, env, param.pattern, BindingMode::Local)?;

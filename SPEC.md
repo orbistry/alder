@@ -396,7 +396,7 @@ ident_char    = lower | upper | digit | '_' ;
 tag           = ':' lower_ident ;                       (* error tag; ':' adjacent to the name *)
 number        = decimal | hex | float ;                 (* JS Number semantics; value and spelling kept (§10.10) *)
 bigint        = ( decimal | hex ) 'n' ;
-digits        = digit { digit } ;                       (* tuple index after '.' *)
+digits        = digit { digit } ;                       (* tuple index after '.'; must fit u32, overflow is an error *)
 string        = '"' { string_char | escape } '"' ;      (* single line; no interpolation (§10.11) *)
 template      = '`' { template_char | '${' expression '}' } '`' ;   (* multi-line; escapes add \` and \$ *)
 path          = upper_ident { '::' upper_ident } ;
@@ -430,7 +430,7 @@ where_clause  = 'where' [ constraint { ',' constraint } [ ',' ] ] ;
 constraint    = lower_ident ':' bound { '+' bound } | lower_ident '.' upper_ident '==' type ;
 bound         = path ;
 params        = param { ',' param } [ ',' ] ;
-param         = pattern [ ':' type ] ;
+param         = pattern [ ':' type ] | lower_ident '?' ':' type ;
 
 let_decl      = 'let' pattern [ ':' type ] '=' expression ;
 

@@ -6,7 +6,7 @@
 //!
 //! ```ebnf
 //! params       = param { ',' param } [ ',' ] ;
-//! param        = pattern [ ':' type ] ;
+//! param        = pattern [ ':' type ] | lower_ident '?' ':' type ;
 //! where_clause = 'where' constraint { ',' constraint } [ ',' ] ;
 //! constraint   = lower_ident ':' bound { '+' bound } | lower_ident '.' upper_ident '==' type ;
 //! bound        = path ;
@@ -171,12 +171,22 @@ impl<'a> Parser<'a> {
         Ok(params.into_bump_slice())
     }
 
-    /// `pattern [: type]`.
+    /// `pattern [: type]` or `name?: type`.
     fn param(&mut self) -> Result<Param<'a>, error::Params<'a>> {
         let pattern = self.specialize(
             |bump, e, row, col| error::Params::Pattern(bump.alloc(e), row, col),
             |p| p.pattern(),
         )?;
+        let optional =
+            self.peek() == Some(b'?') && matches!(pattern.value, alder_source::Pattern::Var(_));
+        if optional {
+            self.advance();
+            self.chomp();
+            if self.peek() != Some(b':') {
+                let (row, col) = self.position();
+                return Err(error::Params::OptionalAnnotation(row, col));
+            }
+        }
         let annotation = if self.peek() == Some(b':') {
             self.advance();
             self.chomp();
@@ -189,6 +199,7 @@ impl<'a> Parser<'a> {
         };
         Ok(Param {
             pattern,
+            optional,
             annotation,
         })
     }
@@ -439,6 +450,36 @@ mod tests {
     #[test]
     fn params_single_annotation() {
         assert_params_snapshot!("(count: Number)");
+    }
+
+    #[test]
+    fn params_optional_annotation() {
+        assert_params_snapshot!("(name: String, count?: Number)");
+    }
+
+    #[test]
+    fn params_optional_nested_option() {
+        assert_params_snapshot!("(value?: Option[Number])");
+    }
+
+    #[test]
+    fn optional_parameter_requires_annotation() {
+        let bump = bumpalo::Bump::new();
+        let mut parser = crate::Parser::new(&bump, b"(value?)");
+        assert!(matches!(
+            parser.params(),
+            Err(crate::error::Params::OptionalAnnotation(1, 8))
+        ));
+    }
+
+    #[test]
+    fn optional_parameter_marker_requires_name() {
+        let bump = bumpalo::Bump::new();
+        let mut parser = crate::Parser::new(&bump, b"((left, right)?: Number)");
+        assert!(matches!(
+            parser.params(),
+            Err(crate::error::Params::End(..))
+        ));
     }
 
     #[test]

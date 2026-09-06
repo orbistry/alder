@@ -306,6 +306,21 @@ mod tests {
         );
     }
 
+    #[test]
+    fn preserves_optional_parameter_shorthand() {
+        let source = indoc! {r#"
+            fn read(value?: Option[Number]) Option[Option[Number]] {
+                let identity = (item?: Number) -> item
+                value
+            }
+        "#};
+        let formatted = format_source(source).unwrap();
+        assert_eq!(semantic_structure(source), semantic_structure(&formatted));
+        assert!(formatted.contains("value?: Option[Number]"));
+        assert!(formatted.contains("item?: Number"));
+        assert_eq!(format_source(&formatted).unwrap(), formatted);
+    }
+
     fn template_payload(source: &str) -> String {
         let bump = Bump::new();
         let module = alder_parse::parse_module(&bump, source).unwrap();

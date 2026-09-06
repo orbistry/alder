@@ -536,6 +536,13 @@ fn params_problem(error: &alder_parse::error::Params<'_>) -> SyntaxProblem {
         ),
         Params::Pattern(error, ..) => pattern_problem(error),
         Params::Type(error, ..) => type_problem(error),
+        Params::OptionalAnnotation(row, column) => expected_problem(
+            "I was expecting a type annotation for this optional parameter",
+            *row,
+            *column,
+            "expected `: Type`",
+            None,
+        ),
         Params::End(row, column) => expected_problem(
             "I was expecting another parameter or the end of the parameter list",
             *row,

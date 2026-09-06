@@ -286,6 +286,8 @@ pub struct FnDecl<'a> {
 #[derive(Clone, Copy, Debug)]
 pub struct Param<'a> {
     pub pattern: &'a Located<Pattern<'a>>,
+    /// Source-only `name?: Type` marker; canonicalization adds Option[Type].
+    pub optional: bool,
     pub annotation: Option<&'a Located<Type<'a>>>,
 }
 
@@ -2155,7 +2157,7 @@ impl<'a> Parser<'a> {
     /// Committed numeric prefix without the dirty-end check (style dimensions read the unit after it).
     pub(crate) fn chomp_number(&mut self) -> Result<NumberLiteral<'a>, error::Number>;
     /// Bare digit run for tuple indices (`t.0`). None without consuming if no digit.
-    pub(crate) fn digits(&mut self) -> Option<Located<u32>>;
+    pub(crate) fn digits(&mut self) -> Result<Option<Located<u32>>, Position>; // overflow reports the index start
 }
 ```
 
@@ -2791,7 +2793,7 @@ One construct per test.
 
 **expression/loop\_.rs**: loop_simple, loop_break_value, loop_nested, state_simple, state_expr, error_loop_missing_block, error_state_no_parens.
 
-**statement.rs**: block_empty, block_tail_only, block_stmt_and_tail, block_stmts_no_tail, block_nested, block_looks_like_record_hint, let_simple, let_mut, let_annotated, let_pattern_tuple, let_pattern_record, let_multiline_value, assign_var, assign_field, assign_tuple_index, assign_index, assign_add, assign_sub, assign_mul, assign_div, expr_stmt_call, expr_stmt_if_then_stmt, for_simple, for_pattern, for_nested, while_simple, return_bare, return_value, return_newline_no_value, return_before_brace, break_bare, break_value, continue_, use_simple, use_path, provide_simple, provide_nested, assert_simple, assert_comparison, assert_await, style_let, two_calls_on_lines, call_after_newline_is_new_stmt, index_after_newline_is_new_stmt, array_after_newline_is_new_stmt, markup_after_expr_on_next_line, negative_after_newline_is_new_stmt, minus_with_space_after_newline_continues, pipe_after_newline_continues, error_same_line, error_assign_target, error_assign_target_slash_equals, error_semicolon, error_let_missing_equals, error_for_missing_in, error_unclosed_block, error_stmt_start.
+**statement.rs**: block_empty, block_tail_only, block_stmt_and_tail, block_stmts_no_tail, block_nested, block_looks_like_record_hint, let_simple, let_annotated, let_pattern_tuple, let_pattern_record, let_multiline_value, assign_var, assign_field, assign_tuple_index, assign_index, assign_add, assign_sub, assign_mul, assign_div, expr_stmt_call, expr_stmt_if_then_stmt, for_simple, for_pattern, for_nested, while_simple, return_bare, return_value, return_newline_no_value, return_before_brace, break_bare, break_value, continue_, use_simple, use_path, provide_simple, provide_nested, assert_simple, assert_comparison, assert_await, style_let, two_calls_on_lines, call_after_newline_is_new_stmt, index_after_newline_is_new_stmt, array_after_newline_is_new_stmt, markup_after_expr_on_next_line, negative_after_newline_is_new_stmt, minus_with_space_after_newline_continues, pipe_after_newline_continues, error_same_line, error_assign_target, error_assign_target_slash_equals, error_semicolon, error_let_missing_equals, error_for_missing_in, error_unclosed_block, error_stmt_start.
 
 **pattern/term (pattern/mod.rs)**: wildcard, variable, number, negative_number, bigint, string, bool_true, bool_false, unit, pin_var, pin_access, pin_call, pin_parens, alias_simple, alias_ctor, alias_tuple, alternatives_two, alternatives_three, error_wildcard_not_var, error_reserved, error_alias_no_name, error_start.
 
