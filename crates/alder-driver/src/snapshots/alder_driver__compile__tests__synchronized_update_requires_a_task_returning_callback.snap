@@ -9,6 +9,6 @@ alder::type::type_mismatch
  2 │     let cell = SynchronizedRef.make(0).await
  3 │     SynchronizedRef.update(cell, value -> value + 1).await
    ·                                  ─────────┬────────
-   ·                                           ╰── type requirement originates here
+   ·                                           ╰── argument 2 of `update` has an incompatible type
  4 │ }
    ╰────

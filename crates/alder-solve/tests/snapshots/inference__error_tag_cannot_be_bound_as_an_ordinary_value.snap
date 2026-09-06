@@ -15,5 +15,6 @@ description: "fn invalid() {\n    let failure = :not_found(42)\n    failure\n}\n
             },
         },
         kind: InvalidErrorTagPlacement,
+        expectation: None,
     },
 ]

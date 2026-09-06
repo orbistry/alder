@@ -17,5 +17,11 @@ description: "error Failure {\n    :known\n}\n\nfn render(value: Result[Number, 
         kind: ImpossibleErrorPattern {
             tag: "other",
         },
+        expectation: Some(
+            Expectation {
+                kind: Pattern,
+                origin: None,
+            },
+        ),
     },
 ]

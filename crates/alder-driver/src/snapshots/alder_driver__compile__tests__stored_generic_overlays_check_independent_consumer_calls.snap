@@ -9,6 +9,6 @@ alder::type::type_mismatch
  2 │ pub fn main() Number {
  3 │     merge({ value: 42 }, { value: "wrong" }).value
    ·                                   ───┬───
-   ·                                      ╰── type requirement originates here
+   ·                                      ╰── these types are incompatible
  4 │ }
    ╰────

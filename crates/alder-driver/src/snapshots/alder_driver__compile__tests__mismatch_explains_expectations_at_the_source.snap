@@ -1,0 +1,67 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn need(value: Number) { () }\nfn argument() { need(\"wrong\") }\nfn annotation() {\n    let value: Bool = 42\n    value\n}\nfn condition() { if 1 { () } else { () } }\nfn branch(flag: Bool) { if flag { 1 } else { \"wrong\" } }\nfn array() { [1, \"wrong\"] }\nfn returned() Bool { 42 }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/app/src/main.ald:2:22]
+ 1 │ fn need(value: Number) { () }
+ 2 │ fn argument() { need("wrong") }
+   ·                      ───┬───
+   ·                         ╰── argument 1 of `need` has an incompatible type
+ 3 │ fn annotation() {
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:4:23]
+ 3 │ fn annotation() {
+ 4 │     let value: Bool = 42
+   ·                ──┬─   ─┬
+   ·                  │     ╰── this value does not match its annotation
+   ·                  ╰── the declared type
+ 5 │     value
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:7:21]
+ 6 │ }
+ 7 │ fn condition() { if 1 { () } else { () } }
+   ·                     ┬
+   ·                     ╰── this condition must be Bool
+ 8 │ fn branch(flag: Bool) { if flag { 1 } else { "wrong" } }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/app/src/main.ald:8:44]
+ 7 │ fn condition() { if 1 { () } else { () } }
+ 8 │ fn branch(flag: Bool) { if flag { 1 } else { "wrong" } }
+   ·                                 ──┬──      ─────┬─────
+   ·                                   │             ╰── this branch has an incompatible result type
+   ·                                   ╰── another branch in this expression
+ 9 │ fn array() { [1, "wrong"] }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+    ╭─[/app/src/main.ald:9:18]
+  8 │ fn branch(flag: Bool) { if flag { 1 } else { "wrong" } }
+  9 │ fn array() { [1, "wrong"] }
+    ·               ┬  ───┬───
+    ·               │     ╰── array element 2 has an incompatible type
+    ·               ╰── an earlier array element
+ 10 │ fn returned() Bool { 42 }
+    ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+    ╭─[/app/src/main.ald:10:22]
+  9 │ fn array() { [1, "wrong"] }
+ 10 │ fn returned() Bool { 42 }
+    ·               ──┬─   ─┬
+    ·                 │     ╰── this return value has an incompatible type
+    ·                 ╰── the declared return type
+    ╰────

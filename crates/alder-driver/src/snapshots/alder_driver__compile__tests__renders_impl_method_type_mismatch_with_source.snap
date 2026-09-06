@@ -9,6 +9,6 @@ alder::type::type_mismatch
  2 │ impl Display[Number] {
  3 │     fn display(value: Number) Number { value }
    ·        ───┬───
-   ·           ╰── type requirement originates here
+   ·           ╰── these types are incompatible
  4 │ }
    ╰────

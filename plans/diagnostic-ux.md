@@ -108,3 +108,34 @@ solver snapshots now inspect the trees; two propagation renderer snapshots retai
 previously erased open-row variables. This does not yet supply expectation
 contexts, alias provenance, name disambiguation, outer structural comparisons, or
 convert specialized error payloads that still store strings. Those remain open.
+
+## Expectation checkpoint
+
+Core errors now carry an optional owned expectation and same-source requirement
+span. The innermost attached expectation wins. Immediate annotations, ordinary
+and piped call arguments, conditions, branch joins, inferred array elements,
+patterns, assignment checks, function tail returns, awaits and propagation have
+context labels. Function tail failures point to the expression rather than the
+whole declaration and retain the return annotation as a secondary label. Array
+and final-else joins retain the earlier expression that supplied the type.
+
+The six-error `mismatch_explains_expectations_at_the_source` fixture reproduced
+generic labels before the change. `nested_expectations_keep_the_innermost_cause`
+checks that a bad condition inside a call is not relabeled as an argument error,
+alongside assignment, literal pattern, await and propagation failures.
+`call_arity_reports_counts_and_callee` checks too-few/too-many counts and the
+callee while retaining successful omitted optional arguments. Previously the
+existing constructor arity snapshot showed only two incompatible function types.
+
+This is not full context coverage: deferred overlays/Option lifting/row and tuple
+constraints still lose some expectation provenance, as visible in existing
+imported-interface snapshots. Explicit-return and lambda annotation origins,
+contextually checked arrays/branches, tagged calls and constructor callee names
+also need completion. Specialized renderers currently retain their own labels.
+No foreign declaration span is presented as a location in the consumer source.
+
+Checkpoint validation: full `cargo test --quiet` passed (208 driver, 467 inference,
+17 CLI tests, plus the rest of the workspace; two existing ignored doctests).
+Formatting and strict all-target/all-feature Clippy passed. Changed source and
+inference snapshots were reviewed and accepted; final snapshot-reference and
+package verification remain part of the overall acceptance gate.

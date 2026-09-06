@@ -18,5 +18,22 @@ description: "fn invalid(flag: Bool) Result[()] {\n    if flag {\n        Err(:i
             expected: 1,
             actual: 2,
         },
+        expectation: Some(
+            Expectation {
+                kind: Branch,
+                origin: Some(
+                    Region {
+                        start: Position {
+                            line: 2,
+                            column: 13,
+                        },
+                        end: Position {
+                            line: 4,
+                            column: 6,
+                        },
+                    },
+                ),
+            },
+        ),
     },
 ]

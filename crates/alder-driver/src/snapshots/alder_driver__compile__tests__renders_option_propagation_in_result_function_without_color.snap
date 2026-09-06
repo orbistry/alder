@@ -8,5 +8,5 @@ alder::type::type_mismatch
    ╭─[/project/src/main.ald:1:52]
  1 │ fn read(value: Option[Number]) Result[Number] { Ok(value?) }
    ·                                                    ───┬──
-   ·                                                       ╰── type requirement originates here
+   ·                                                       ╰── this propagation requires compatible Option or Result types
    ╰────

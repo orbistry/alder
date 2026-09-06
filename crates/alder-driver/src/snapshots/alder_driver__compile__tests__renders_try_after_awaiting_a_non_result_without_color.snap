@@ -9,6 +9,6 @@ alder::type::type_mismatch
  4 │ async fn invalid() Result[Number] {
  5 │     sleep(1).await?
    ·     ───────┬───────
-   ·            ╰── type requirement originates here
+   ·            ╰── this propagation requires compatible Option or Result types
  6 │     Ok(42)
    ╰────

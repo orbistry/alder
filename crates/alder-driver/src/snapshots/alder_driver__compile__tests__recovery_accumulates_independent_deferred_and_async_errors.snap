@@ -19,16 +19,17 @@ alder::type::type_mismatch
  1 │ fn projection(value: (Number, Bool)) { value.2 }
  2 │ fn propagate(value: Number) Option[Number] { Some(value?) }
    ·                                                   ───┬──
-   ·                                                      ╰── type requirement originates here
+   ·                                                      ╰── this propagation requires compatible Option or Result types
  3 │ async fn wait() Number { "wrong" }
    ╰────
 alder::type::type_mismatch
 
   × type mismatch: expected `Number`, found `String`
-   ╭─[/app/src/main.ald:3:1]
+   ╭─[/app/src/main.ald:3:26]
  2 │ fn propagate(value: Number) Option[Number] { Some(value?) }
  3 │ async fn wait() Number { "wrong" }
-   · ─────────────────┬────────────────
-   ·                  ╰── type requirement originates here
+   ·                 ───┬──   ───┬───
+   ·                    │        ╰── this return value has an incompatible type
+   ·                    ╰── the declared return type
  4 │ pub fn dependent() { projection((1, true)) }
    ╰────

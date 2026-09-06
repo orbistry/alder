@@ -9,6 +9,6 @@ alder::type::type_mismatch
  3 │     let cell = shared().await
  4 │     SynchronizedRef.set(cell, ["wrong"]).await
    ·                                ───┬───
-   ·                                   ╰── type requirement originates here
+   ·                                   ╰── argument 2 of `set` has an incompatible type
  5 │ }
    ╰────

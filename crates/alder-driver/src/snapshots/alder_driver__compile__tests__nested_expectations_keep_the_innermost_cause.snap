@@ -1,0 +1,53 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn need(value: Number) { () }\nfn nested() { need(if 1 { 2 } else { 3 }) }\nfn assigned() {\n    let value = 1\n    value = \"wrong\"\n}\nfn patterned(value: Number) { match value { true => () } }\nasync fn awaited() { (1).await }\nfn propagated(value: Option[Number]) Result[Number] { Ok(value?) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:2:23]
+ 1 │ fn need(value: Number) { () }
+ 2 │ fn nested() { need(if 1 { 2 } else { 3 }) }
+   ·                       ┬
+   ·                       ╰── this condition must be Bool
+ 3 │ fn assigned() {
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/app/src/main.ald:5:13]
+ 4 │     let value = 1
+ 5 │     value = "wrong"
+   ·             ───┬───
+   ·                ╰── this assignment must preserve the target's type
+ 6 │ }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `Bool`
+   ╭─[/app/src/main.ald:7:45]
+ 6 │ }
+ 7 │ fn patterned(value: Number) { match value { true => () } }
+   ·                                             ──┬─
+   ·                                               ╰── this pattern does not match the value's type
+ 8 │ async fn awaited() { (1).await }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Task[a]`, found `Number`
+   ╭─[/app/src/main.ald:8:22]
+ 7 │ fn patterned(value: Number) { match value { true => () } }
+ 8 │ async fn awaited() { (1).await }
+   ·                      ────┬────
+   ·                          ╰── await requires a Task value
+ 9 │ fn propagated(value: Option[Number]) Result[Number] { Ok(value?) }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Option[b]`, found `Result[Number, [a]]`
+   ╭─[/app/src/main.ald:9:58]
+ 8 │ async fn awaited() { (1).await }
+ 9 │ fn propagated(value: Option[Number]) Result[Number] { Ok(value?) }
+   ·                                                          ───┬──
+   ·                                                             ╰── this propagation requires compatible Option or Result types
+   ╰────

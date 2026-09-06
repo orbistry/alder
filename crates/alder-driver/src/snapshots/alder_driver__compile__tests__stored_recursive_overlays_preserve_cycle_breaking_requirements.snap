@@ -9,6 +9,6 @@ alder::type::type_mismatch
  2 │ pub fn run() {
  3 │     repeat(2, { nested: { nested: 0 } }, {})
    ·     ───┬──
-   ·        ╰── type requirement originates here
+   ·        ╰── these types are incompatible
  4 │ }
    ╰────

@@ -5,8 +5,9 @@ description: "fn broken(value: fn(a, b) a) Bool { value }\n"
 alder::type::type_mismatch
 
   × type mismatch: expected `Bool`, found `fn(a, b) a`
-   ╭─[/app/src/main.ald:1:1]
+   ╭─[/app/src/main.ald:1:37]
  1 │ fn broken(value: fn(a, b) a) Bool { value }
-   · ─────────────────────┬─────────────────────
-   ·                      ╰── type requirement originates here
+   ·                              ──┬─   ──┬──
+   ·                                │      ╰── this return value has an incompatible type
+   ·                                ╰── the declared return type
    ╰────

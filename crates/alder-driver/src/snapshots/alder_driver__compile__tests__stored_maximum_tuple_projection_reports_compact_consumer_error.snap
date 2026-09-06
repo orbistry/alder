@@ -10,5 +10,5 @@ alder::type::type_mismatch
  1 │ import @vendor/widgets.{ last }
  2 │ pub fn main() { last((1, 2)) }
    ·                 ──┬─
-   ·                   ╰── type requirement originates here
+   ·                   ╰── these types are incompatible
    ╰────

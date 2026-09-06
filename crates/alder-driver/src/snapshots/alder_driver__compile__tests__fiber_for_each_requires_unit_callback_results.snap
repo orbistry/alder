@@ -9,6 +9,6 @@ alder::type::type_mismatch
  1 │ pub async fn main() {
  2 │     Fiber.forEach([1, 2], value -> async { value + 1 }).await
    ·                           ──────────────┬─────────────
-   ·                                         ╰── type requirement originates here
+   ·                                         ╰── argument 2 of `forEach` has an incompatible type
  3 │ }
    ╰────

@@ -9,6 +9,6 @@ alder::type::type_mismatch
  2 │     let first = { ..{ ..left, ..middle }, ..right }
  3 │     let second = { ..left, ..{ ..middle, ..right } }
    ·                              ──────────┬──────────
-   ·                                        ╰── type requirement originates here
+   ·                                        ╰── these types are incompatible
  4 │     let number: Number = first.value
    ╰────

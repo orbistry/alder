@@ -22,5 +22,16 @@ description: "let identity = (value) -> { value }\nfn forward(value) { identity(
                 "Number",
             ),
         },
+        expectation: Some(
+            Expectation {
+                kind: Argument {
+                    position: 1,
+                    callee: Some(
+                        "forward",
+                    ),
+                },
+                origin: None,
+            },
+        ),
     },
 ]

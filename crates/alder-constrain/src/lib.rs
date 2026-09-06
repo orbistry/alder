@@ -126,6 +126,47 @@ pub enum RequirementKind<'a> {
 pub struct Error {
     pub region: Region,
     pub kind: ErrorKind,
+    pub expectation: Option<Box<Expectation>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Expectation {
+    pub kind: ExpectationKind,
+    /// A requirement in this source module, never a foreign module's span.
+    pub origin: Option<Region>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExpectationKind {
+    Annotation,
+    Argument {
+        position: usize,
+        callee: Option<String>,
+    },
+    Call {
+        callee: Option<String>,
+    },
+    Condition,
+    Branch,
+    ArrayElement {
+        position: usize,
+    },
+    Pattern,
+    Assignment,
+    Return,
+    Await,
+    Propagation,
+}
+
+impl Error {
+    /// Keep the innermost explanation: an invalid condition inside an argument
+    /// should not be relabeled as a failure of the argument's parameter type.
+    pub fn expected_by(mut self, kind: ExpectationKind, origin: Option<Region>) -> Self {
+        if self.expectation.is_none() {
+            self.expectation = Some(Box::new(Expectation { kind, origin }));
+        }
+        self
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

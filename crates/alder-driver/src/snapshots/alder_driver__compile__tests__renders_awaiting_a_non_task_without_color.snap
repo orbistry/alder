@@ -9,6 +9,6 @@ alder::type::type_mismatch
  1 │ async fn invalid() {
  2 │     (42).await
    ·     ─────┬────
-   ·          ╰── type requirement originates here
+   ·          ╰── await requires a Task value
  3 │ }
    ╰────

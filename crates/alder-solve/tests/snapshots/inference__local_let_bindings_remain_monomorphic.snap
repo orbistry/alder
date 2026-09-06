@@ -22,5 +22,16 @@ description: "fn invalid() {\n    let identity = (value) -> { value }\n    let n
                 "Number",
             ),
         },
+        expectation: Some(
+            Expectation {
+                kind: Argument {
+                    position: 1,
+                    callee: Some(
+                        "identity",
+                    ),
+                },
+                origin: None,
+            },
+        ),
     },
 ]

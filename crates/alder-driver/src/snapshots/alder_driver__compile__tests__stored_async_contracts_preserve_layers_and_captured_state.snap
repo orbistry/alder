@@ -9,6 +9,6 @@ alder::type::type_mismatch
  3 │     specialize().await
  4 │     deferred("wrong").await
    ·              ───┬───
-   ·                 ╰── type requirement originates here
+   ·                 ╰── argument 1 of `deferred` has an incompatible type
  5 │ }
    ╰────

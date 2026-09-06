@@ -9,6 +9,6 @@ alder::type::type_mismatch
  6 │     type Item = String
  7 │     fn next(value: Number) Number { value }
    ·        ──┬─
-   ·          ╰── type requirement originates here
+   ·          ╰── these types are incompatible
  8 │ }
    ╰────

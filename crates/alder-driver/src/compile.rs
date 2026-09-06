@@ -1105,6 +1105,108 @@ mod tests {
     }
 
     #[test]
+    fn mismatch_explains_expectations_at_the_source() {
+        let source = indoc::indoc! {r#"
+            fn need(value: Number) { () }
+            fn argument() { need("wrong") }
+            fn annotation() {
+                let value: Bool = 42
+                value
+            }
+            fn condition() { if 1 { () } else { () } }
+            fn branch(flag: Bool) { if flag { 1 } else { "wrong" } }
+            fn array() { [1, "wrong"] }
+            fn returned() Bool { 42 }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid source must fail");
+        };
+        assert_eq!(diagnostics.len(), 6, "{diagnostics:?}");
+        let rendered = format!("{diagnostics:?}");
+        for context in [
+            "argument 1",
+            "annotation",
+            "condition",
+            "branch",
+            "array element 2",
+            "return value",
+        ] {
+            assert!(rendered.contains(context), "missing {context}: {rendered}");
+        }
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn nested_expectations_keep_the_innermost_cause() {
+        let source = indoc::indoc! {r#"
+            fn need(value: Number) { () }
+            fn nested() { need(if 1 { 2 } else { 3 }) }
+            fn assigned() {
+                let value = 1
+                value = "wrong"
+            }
+            fn patterned(value: Number) { match value { true => () } }
+            async fn awaited() { (1).await }
+            fn propagated(value: Option[Number]) Result[Number] { Ok(value?) }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid source must fail");
+        };
+        assert_eq!(diagnostics.len(), 5, "{diagnostics:?}");
+        let rendered = format!("{diagnostics:?}");
+        for context in [
+            "condition must be Bool",
+            "assignment",
+            "pattern",
+            "await requires",
+            "propagation",
+        ] {
+            assert!(rendered.contains(context), "missing {context}: {rendered}");
+        }
+        assert!(
+            !rendered.contains("argument 1"),
+            "the condition is invalid, not its enclosing argument: {rendered}"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn call_arity_reports_counts_and_callee() {
+        let source = indoc::indoc! {r#"
+            fn need(value: Number) { () }
+            fn too_few() { need() }
+            fn too_many() { need(1, 2) }
+            fn optional(value: Option[Number]) { () }
+            pub fn valid() { optional() }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid calls must fail");
+        };
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(diagnostics[0].to_string().contains("expected 1, found 0"));
+        assert!(diagnostics[1].to_string().contains("expected 1, found 2"));
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
     fn independent_type_errors_accumulate_without_publishing() {
         let source = indoc::indoc! {r#"
             fn first() Number { "wrong" }

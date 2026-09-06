@@ -9,6 +9,6 @@ alder::type::type_mismatch
  4 │ pub fn run() Result[Number, [:known | :left]] {
  5 │     let result: Result[Number, [:known | :left]] = utils.combine(left(), right())
    ·                                                    ──────┬──────
-   ·                                                          ╰── type requirement originates here
+   ·                                                          ╰── these types are incompatible
  6 │     result
    ╰────

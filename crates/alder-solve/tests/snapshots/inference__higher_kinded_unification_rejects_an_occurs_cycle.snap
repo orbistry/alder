@@ -7,13 +7,30 @@ description: "fn impossible(value: f[a]) a { value }\n"
         region: Region {
             start: Position {
                 line: 1,
-                column: 1,
+                column: 32,
             },
             end: Position {
                 line: 1,
-                column: 39,
+                column: 37,
             },
         },
         kind: InfiniteType,
+        expectation: Some(
+            Expectation {
+                kind: Return,
+                origin: Some(
+                    Region {
+                        start: Position {
+                            line: 1,
+                            column: 28,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 29,
+                        },
+                    },
+                ),
+            },
+        ),
     },
 ]

@@ -9,5 +9,5 @@ alder::type::type_mismatch
  2 │ error Local { :missing, :bad(String) }
  3 │ pub fn describe(value: Local) String { render(relay(value)) }
    ·                                                     ──┬──
-   ·                                                       ╰── type requirement originates here
+   ·                                                       ╰── argument 1 of `relay` has an incompatible type
    ╰────

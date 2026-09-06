@@ -7,11 +7,11 @@ description: "fn bad() Number { \"nope\" }"
         region: Region {
             start: Position {
                 line: 1,
-                column: 1,
+                column: 19,
             },
             end: Position {
                 line: 1,
-                column: 27,
+                column: 25,
             },
         },
         kind: Mismatch {
@@ -22,5 +22,22 @@ description: "fn bad() Number { \"nope\" }"
                 "Number",
             ),
         },
+        expectation: Some(
+            Expectation {
+                kind: Return,
+                origin: Some(
+                    Region {
+                        start: Position {
+                            line: 1,
+                            column: 10,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 16,
+                        },
+                    },
+                ),
+            },
+        ),
     },
 ]

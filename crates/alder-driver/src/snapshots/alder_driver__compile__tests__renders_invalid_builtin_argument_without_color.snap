@@ -8,5 +8,5 @@ alder::type::type_mismatch
    ╭─[/project/src/main.ald:1:33]
  1 │ fn bad() Number { String.length(42) }
    ·                                 ─┬
-   ·                                  ╰── type requirement originates here
+   ·                                  ╰── argument 1 of `length` has an incompatible type
    ╰────

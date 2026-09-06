@@ -14,37 +14,17 @@ description: "enum Maybe[a] { Just(a) }\nfn invalid() { Maybe::Just(1, 2) }"
                 column: 33,
             },
         },
-        kind: Mismatch {
-            actual: Function(
-                [
-                    Named(
-                        "Number",
-                    ),
-                    Named(
-                        "Number",
-                    ),
-                ],
-                Variable(
-                    0,
-                ),
-            ),
-            expected: Function(
-                [
-                    Named(
-                        "Number",
-                    ),
-                ],
-                Application(
-                    Named(
-                        "Maybe",
-                    ),
-                    [
-                        Named(
-                            "Number",
-                        ),
-                    ],
-                ),
-            ),
+        kind: Arity {
+            expected: 1,
+            actual: 2,
         },
+        expectation: Some(
+            Expectation {
+                kind: Call {
+                    callee: None,
+                },
+                origin: None,
+            },
+        ),
     },
 ]

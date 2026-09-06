@@ -9,5 +9,5 @@ alder::type::type_mismatch
  1 │ import @vendor/widgets.{ read }
  2 │ pub fn main() Option[Number] { read({ concurrency: "eight" }) }
    ·                                                    ───┬───
-   ·                                                       ╰── type requirement originates here
+   ·                                                       ╰── these types are incompatible
    ╰────

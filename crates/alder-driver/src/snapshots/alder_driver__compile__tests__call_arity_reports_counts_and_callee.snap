@@ -1,0 +1,24 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn need(value: Number) { () }\nfn too_few() { need() }\nfn too_many() { need(1, 2) }\nfn optional(value: Option[Number]) { () }\npub fn valid() { optional() }\n"
+---
+alder::type::arity
+
+  × wrong number of arguments: expected 1, found 0
+   ╭─[/app/src/main.ald:2:16]
+ 1 │ fn need(value: Number) { () }
+ 2 │ fn too_few() { need() }
+   ·                ───┬──
+   ·                   ╰── this call to `need` is incompatible with its signature
+ 3 │ fn too_many() { need(1, 2) }
+   ╰────
+alder::type::arity
+
+  × wrong number of arguments: expected 1, found 2
+   ╭─[/app/src/main.ald:3:17]
+ 2 │ fn too_few() { need() }
+ 3 │ fn too_many() { need(1, 2) }
+   ·                 ─────┬────
+   ·                      ╰── this call to `need` is incompatible with its signature
+ 4 │ fn optional(value: Option[Number]) { () }
+   ╰────

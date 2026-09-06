@@ -8,7 +8,8 @@ alder::type::type_mismatch
    ╭─[/project/src/main.ald:4:26]
  3 │     let first: Number = padded(left, right).value
  4 │     let second: String = plain(left, right).value
-   ·                          ────────────┬───────────
-   ·                                      ╰── type requirement originates here
+   ·                 ───┬──   ────────────┬───────────
+   ·                    │                 ╰── this value does not match its annotation
+   ·                    ╰── the declared type
  5 │     (first, second)
    ╰────

@@ -9,6 +9,6 @@ alder::type::type_mismatch
  2 │ pub async fn main() {
  3 │     each()([1], value -> async { value }).await
    ·                 ────────────┬───────────
-   ·                             ╰── type requirement originates here
+   ·                             ╰── argument 2 has an incompatible type
  4 │ }
    ╰────

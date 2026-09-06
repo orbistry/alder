@@ -34,5 +34,11 @@ description: "fn read() Result[Number, [:storage]] {\n    Err(:storage)\n}\n\nfn
                 None,
             ),
         },
+        expectation: Some(
+            Expectation {
+                kind: Propagation,
+                origin: None,
+            },
+        ),
     },
 ]

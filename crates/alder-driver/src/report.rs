@@ -1389,9 +1389,58 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
         | ErrorKind::ImpossibleErrorPattern { .. }
         | ErrorKind::InvalidErrorTagPlacement => unreachable!("handled above"),
     };
-    Diagnostic::error(source, message)
+    let label = error
+        .expectation
+        .as_ref()
+        .map(|expectation| {
+            use alder_constrain::ExpectationKind as E;
+            match &expectation.kind {
+                E::Annotation => "this value does not match its annotation".to_owned(),
+                E::Argument { position, callee } => match callee {
+                    Some(callee) => {
+                        format!("argument {position} of `{callee}` has an incompatible type")
+                    }
+                    None => format!("argument {position} has an incompatible type"),
+                },
+                E::Condition => "this condition must be Bool".to_owned(),
+                E::Call { callee } => match callee {
+                    Some(callee) => {
+                        format!("this call to `{callee}` is incompatible with its signature")
+                    }
+                    None => "this call is incompatible with the function's signature".to_owned(),
+                },
+                E::Branch => "this branch has an incompatible result type".to_owned(),
+                E::ArrayElement { position } => {
+                    format!("array element {position} has an incompatible type")
+                }
+                E::Pattern => "this pattern does not match the value's type".to_owned(),
+                E::Assignment => "this assignment must preserve the target's type".to_owned(),
+                E::Return => "this return value has an incompatible type".to_owned(),
+                E::Await => "await requires a Task value".to_owned(),
+                E::Propagation => {
+                    "this propagation requires compatible Option or Result types".to_owned()
+                }
+            }
+        })
+        .unwrap_or_else(|| "these types are incompatible".to_owned());
+    let mut diagnostic = Diagnostic::error(source, message)
         .with_code(format!("alder::type::{code}"))
-        .with_primary_label(error.region, "type requirement originates here")
+        .with_primary_label(error.region, label);
+    if let Some(expectation) = &error.expectation
+        && let Some(origin) = expectation.origin
+        && origin != error.region
+    {
+        use alder_constrain::ExpectationKind as E;
+        let label = match expectation.kind {
+            E::Annotation => "the declared type",
+            E::Return => "the declared return type",
+            E::ArrayElement { .. } => "an earlier array element",
+            E::Branch => "another branch in this expression",
+            _ => "a related type requirement",
+        };
+        diagnostic = diagnostic.with_secondary_label(origin, label);
+    }
+    diagnostic
 }
 
 fn trait_error(source: Source, module: &Module<'_>, error: &SolveTraitError<'_>) -> Diagnostic {

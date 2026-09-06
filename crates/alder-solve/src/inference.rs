@@ -7,7 +7,8 @@ use alder_ast::{
 };
 use alder_can::Annotations;
 use alder_constrain::{
-    Constraints, DiagnosticType, Error, ErrorKind, RequirementKind, RequirementSeed,
+    Constraints, DiagnosticType, Error, ErrorKind, ExpectationKind, RequirementKind,
+    RequirementSeed,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -1692,6 +1693,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             };
             if !valid {
                 return Err(Error {
+                    expectation: None,
                     region,
                     kind: ErrorKind::InvalidResultErrorType {
                         actual: self.render(typ),
@@ -1714,6 +1716,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             ) && !self.scheme_free_vars(&scheme).is_empty()
             {
                 return Err(Error {
+                    expectation: None,
                     region: value_items[&name].region,
                     kind: ErrorKind::UnresolvedSharedExport {
                         name: name.name.to_owned(),
@@ -2024,7 +2027,10 @@ impl<'a, 'db> Infer<'a, 'db> {
             ItemKind::Let(decl) => {
                 let value = if let Some(annotation) = decl.annotation {
                     let annotated = self.from_ast(annotation, &mut BTreeMap::new());
-                    self.infer_checked_expr(env, decl.value, annotated, None)?
+                    self.infer_checked_expr(env, decl.value, annotated, None)
+                        .map_err(|error| {
+                            error.expected_by(ExpectationKind::Annotation, Some(annotation.region))
+                        })?
                 } else {
                     self.infer_expr(env, decl.value, None)?
                 };
@@ -2260,17 +2266,22 @@ impl<'a, 'db> Infer<'a, 'db> {
             self.resolve_try_boundary(body_result.clone(), &body_type, region)?;
             if alder_ast::flow::block(body).falls_through {
                 let expected = self.render(body_result.clone());
-                self.unify_return(body_type, body_result, region)
-                    .map_err(|error| {
-                        if body.value.tail.is_none() {
-                            Error {
-                                region: body.region,
-                                kind: ErrorKind::MissingReturn { expected },
-                            }
-                        } else {
-                            error
+                self.unify_return(
+                    body_type,
+                    body_result,
+                    body.value.tail.map_or(body.region, |tail| tail.region),
+                )
+                .map_err(|error| {
+                    if body.value.tail.is_none() {
+                        Error {
+                            expectation: None,
+                            region: body.region,
+                            kind: ErrorKind::MissingReturn { expected },
                         }
-                    })?;
+                    } else {
+                        error.expected_by(ExpectationKind::Return, ret.map(|ret| ret.region))
+                    }
+                })?;
             }
             let function_type = Ty::Fn(args, Box::new(self.prune(result)));
             Ok((function_type, predicates, local_projection_equations))
@@ -2375,7 +2386,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                     // enclosing contract. New names are local to this annotation;
                     // the let binding itself remains monomorphic.
                     let annotated = self.from_ast(annotation, &mut self.annotation_scope.clone());
-                    self.infer_checked_expr(env, decl.value, annotated, return_type.clone())?
+                    self.infer_checked_expr(env, decl.value, annotated, return_type.clone())
+                        .map_err(|error| {
+                            error.expected_by(ExpectationKind::Annotation, Some(annotation.region))
+                        })?
                 } else {
                     self.infer_expr(env, decl.value, return_type.clone())?
                 };
@@ -2404,7 +2418,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let actual = self.with_reachability(target_continues, |this| {
                     this.infer_expr(env, value, return_type.clone())
                 })?;
-                self.check_value(actual, expected.clone(), statement.region)?;
+                self.check_value(actual, expected.clone(), value.region)
+                    .map_err(|error| error.expected_by(ExpectationKind::Assignment, None))?;
                 if let Some(use_id) = use_id {
                     self.record_builtin_obligation(
                         *use_id,
@@ -2438,7 +2453,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                     condition_type,
                     self.named("Bool", Vec::new()),
                     condition.region,
-                )?;
+                )
+                .map_err(|error| error.expected_by(ExpectationKind::Condition, None))?;
                 self.with_reachability(
                     alder_ast::flow::expression(condition).falls_through
                         && !matches!(condition.value, Expr::Bool(false)),
@@ -2470,7 +2486,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                     // and `?` may contribute other errors to the same result.
                     self.require_result_parts(expected.clone(), statement.region)?;
                 }
-                self.unify_return(actual, expected, statement.region)?;
+                self.unify_return(actual, expected, statement.region)
+                    .map_err(|error| error.expected_by(ExpectationKind::Return, None))?;
             }
             Stmt::Break(value) => {
                 let actual = match value {
@@ -2492,7 +2509,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             Stmt::Continue => {}
             Stmt::Assert(expr) => {
                 let actual = self.infer_expr(env, expr, return_type)?;
-                self.unify(actual, self.named("Bool", Vec::new()), expr.region)?;
+                self.unify(actual, self.named("Bool", Vec::new()), expr.region)
+                    .map_err(|error| error.expected_by(ExpectationKind::Condition, None))?;
             }
             Stmt::Expr(expr) => {
                 self.infer_expr(env, expr, return_type)?;
@@ -2586,12 +2604,23 @@ impl<'a, 'db> Infer<'a, 'db> {
             Expr::Array(items) => {
                 let item_type = self.fresh();
                 let mut reachable = true;
-                for item in *items {
+                for (index, item) in items.iter().enumerate() {
                     let actual = self.with_reachability(reachable, |this| {
                         this.infer_expr(env, item, return_type.clone())
                     })?;
                     reachable &= alder_ast::flow::expression(item).falls_through;
-                    self.unify(actual, item_type.clone(), item.region)?;
+                    self.unify(actual, item_type.clone(), item.region)
+                        .map_err(|error| {
+                            error.expected_by(
+                                ExpectationKind::ArrayElement {
+                                    position: index + 1,
+                                },
+                                items
+                                    .first()
+                                    .filter(|first| first.region != item.region)
+                                    .map(|first| first.region),
+                            )
+                        })?;
                 }
                 let item_type = self.prune(item_type);
                 Ok(self.named("Array", vec![item_type]))
@@ -2683,10 +2712,12 @@ impl<'a, 'db> Infer<'a, 'db> {
             Expr::Await(expr) => {
                 let actual = self.infer_expr(env, expr, return_type)?;
                 self.infer_await_type(actual, region)
+                    .map_err(|error| error.expected_by(ExpectationKind::Await, None))
             }
             Expr::Try(expr) => {
                 let actual = self.infer_expr(env, expr, return_type.clone())?;
                 self.infer_try_type(actual, return_type, region)
+                    .map_err(|error| error.expected_by(ExpectationKind::Propagation, None))
             }
             Expr::Pin(expr) | Expr::State(expr) => self.infer_expr(env, expr, return_type),
             Expr::Negate { use_id, expr } => {
@@ -3154,6 +3185,18 @@ impl<'a, 'db> Infer<'a, 'db> {
         top_level: bool,
         return_type: Option<Ty<'a>>,
     ) -> Result<(), Error> {
+        self.infer_pattern_inner(env, pattern, expected, top_level, return_type)
+            .map_err(|error| error.expected_by(ExpectationKind::Pattern, None))
+    }
+
+    fn infer_pattern_inner(
+        &mut self,
+        env: &mut Env<'a>,
+        pattern: &'a Located<Pattern<'a>>,
+        expected: Ty<'a>,
+        top_level: bool,
+        return_type: Option<Ty<'a>>,
+    ) -> Result<(), Error> {
         let mut reachable = true;
         match &pattern.value {
             Pattern::Anything => {}
@@ -3195,18 +3238,18 @@ impl<'a, 'db> Infer<'a, 'db> {
                 );
             }
             Pattern::Number { .. } => {
-                self.unify(expected, self.named("Number", Vec::new()), pattern.region)?;
+                self.unify(self.named("Number", Vec::new()), expected, pattern.region)?;
             }
             Pattern::BigInt(_) => {
-                self.unify(expected, self.named("BigInt", Vec::new()), pattern.region)?;
+                self.unify(self.named("BigInt", Vec::new()), expected, pattern.region)?;
             }
             Pattern::Str(_) => {
-                self.unify(expected, self.named("String", Vec::new()), pattern.region)?;
+                self.unify(self.named("String", Vec::new()), expected, pattern.region)?;
             }
             Pattern::Bool(_) => {
-                self.unify(expected, self.named("Bool", Vec::new()), pattern.region)?;
+                self.unify(self.named("Bool", Vec::new()), expected, pattern.region)?;
             }
-            Pattern::Unit => self.unify(expected, Ty::Unit, pattern.region)?,
+            Pattern::Unit => self.unify(Ty::Unit, expected, pattern.region)?,
             Pattern::Constructor { constructor, args } => {
                 let constructor_type =
                     self.instantiate_annotation(constructor.annotation, pattern.region);
@@ -3292,6 +3335,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 if let Ty::ErrorRow { tags, tail: None } = self.prune(expected.clone()) {
                     let Some(payloads) = tags.get(name.value) else {
                         return Err(Error {
+                            expectation: None,
                             region: pattern.region,
                             kind: ErrorKind::ImpossibleErrorPattern {
                                 tag: name.value.to_owned(),
@@ -3300,6 +3344,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     };
                     if payloads.len() != args.len() {
                         return Err(Error {
+                            expectation: None,
                             region: pattern.region,
                             kind: ErrorKind::Arity {
                                 expected: payloads.len(),
@@ -3423,6 +3468,7 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<Ty<'a>, Error> {
         match self.prune(tuple) {
             Ty::Tuple(items) => items.get(index as usize).cloned().ok_or(Error {
+                expectation: None,
                 region,
                 kind: ErrorKind::TupleIndexOutOfBounds {
                     index,
@@ -3438,6 +3484,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     let length = self.tuple_shapes[slot].length;
                     if u64::from(index) >= length {
                         return Err(Error {
+                            expectation: None,
                             region,
                             kind: ErrorKind::TupleIndexOutOfBounds {
                                 index,
@@ -3555,6 +3602,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     for (index, expected) in shape.elements {
                         let Some(actual) = items.get(index as usize) else {
                             return Err(Error {
+                                expectation: None,
                                 region: shape.region,
                                 kind: ErrorKind::TupleIndexOutOfBounds {
                                     index,
@@ -3569,6 +3617,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     for element in shape.elements.values() {
                         if self.occurs(id, element) {
                             return Err(Error {
+                                expectation: None,
                                 region: shape.region,
                                 kind: ErrorKind::InfiniteType,
                             });
@@ -3577,6 +3626,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     if let Some(previous) = unresolved.get_mut(&id) {
                         if previous.length != shape.length {
                             return Err(Error {
+                                expectation: None,
                                 region: shape.region,
                                 kind: ErrorKind::Mismatch {
                                     actual: DiagnosticType::TupleShape(shape.length),
@@ -3597,6 +3647,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 actual => {
                     return Err(Error {
+                        expectation: None,
                         region: shape.region,
                         kind: ErrorKind::Mismatch {
                             actual: self.diagnostic_type(actual, &mut BTreeMap::new()),
@@ -3656,6 +3707,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 .expect("cyclic vertex")
                 .0;
             return Err(Error {
+                expectation: None,
                 region: regions[id],
                 kind: ErrorKind::InfiniteType,
             });
@@ -3776,6 +3828,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             self.unify(actual, self.named("Option", vec![value.clone()]), region)?;
             let Some(return_type) = return_type else {
                 return Err(Error {
+                    expectation: None,
                     region,
                     kind: ErrorKind::InvalidTry,
                 });
@@ -3802,6 +3855,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         };
         let Some(return_type) = return_type else {
             return Err(Error {
+                expectation: None,
                 region,
                 kind: ErrorKind::InvalidTry,
             });
@@ -3840,6 +3894,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let actual =
                     self.infer_pipe_destination(env, pipe_use_id, inner, leading, return_type)?;
                 self.infer_await_type(actual, destination.region)
+                    .map_err(|error| error.expected_by(ExpectationKind::Await, None))
             }
             Expr::Try(inner) => {
                 let actual = self.infer_pipe_destination(
@@ -3850,6 +3905,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     return_type.clone(),
                 )?;
                 self.infer_try_type(actual, return_type, destination.region)
+                    .map_err(|error| error.expected_by(ExpectationKind::Propagation, None))
             }
             _ => self.infer_call(
                 env,
@@ -4054,6 +4110,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     let constraint = &constraints[failure.edge];
                     match failure.kind {
                         crate::option_levels::Failure::Ambiguous => Error {
+                            expectation: None,
                             region: constraint.region,
                             kind: ErrorKind::AmbiguousOptionLifting,
                         },
@@ -4189,6 +4246,25 @@ impl<'a, 'db> Infer<'a, 'db> {
             self.unify(*result, expected, region)?;
         }
         let accepts_error_tag = is_result_err_expr(function);
+        let callee = match function.value {
+            Expr::Var {
+                reference:
+                    ValueRef::TopLevel(name)
+                    | ValueRef::Foreign {
+                        reference: name, ..
+                    },
+                ..
+            } => Some(name.name.to_owned()),
+            Expr::Var {
+                reference: ValueRef::Local(local),
+                ..
+            } => Some(local.text.to_owned()),
+            Expr::Var {
+                reference: ValueRef::TraitMethod { method, .. },
+                ..
+            } => Some(method.name.to_owned()),
+            _ => None,
+        };
         if accepts_error_tag {
             if let Some(argument) = leading {
                 self.legal_tag_sites.push(argument.region);
@@ -4209,29 +4285,39 @@ impl<'a, 'db> Infer<'a, 'db> {
             // Otherwise a later contextual literal can specialize shared type
             // variables before an earlier, already-typed argument is checked.
             let reachable = (leading.is_some() && index == 0) || destination_reachable;
-            let actual = self.with_reachability(reachable, |this| {
-                if let Some(expected) = expected {
-                    if this.option_spine(expected.clone()).0 > 0 {
-                        let actual = this.infer_lift_input(
-                            env,
-                            argument,
-                            expected.clone(),
-                            return_type.clone(),
-                        )?;
-                        this.option_lifts.push(OptionLift {
-                            actual,
-                            expected: expected.clone(),
-                            region: argument.region,
-                            site: OptionLiftSite::Argument(use_id, args.len()),
-                        });
-                        Ok(expected)
+            let actual = self
+                .with_reachability(reachable, |this| {
+                    if let Some(expected) = expected {
+                        if this.option_spine(expected.clone()).0 > 0 {
+                            let actual = this.infer_lift_input(
+                                env,
+                                argument,
+                                expected.clone(),
+                                return_type.clone(),
+                            )?;
+                            this.option_lifts.push(OptionLift {
+                                actual,
+                                expected: expected.clone(),
+                                region: argument.region,
+                                site: OptionLiftSite::Argument(use_id, args.len()),
+                            });
+                            Ok(expected)
+                        } else {
+                            this.infer_checked_expr(env, argument, expected, return_type.clone())
+                        }
                     } else {
-                        this.infer_checked_expr(env, argument, expected, return_type.clone())
+                        this.infer_expr(env, argument, return_type.clone())
                     }
-                } else {
-                    this.infer_expr(env, argument, return_type.clone())
-                }
-            })?;
+                })
+                .map_err(|error| {
+                    error.expected_by(
+                        ExpectationKind::Argument {
+                            position: index + 1,
+                            callee: callee.clone(),
+                        },
+                        None,
+                    )
+                })?;
             args.push(actual);
         }
         if let Ty::Fn(params, _) = self.prune(function_type.clone())
@@ -4248,10 +4334,24 @@ impl<'a, 'db> Infer<'a, 'db> {
                 .insert(use_id, params.len() - args.len());
             args.extend_from_slice(&params[args.len()..]);
         }
+        if let Ty::Fn(params, _) = self.prune(function_type.clone())
+            && args.len() != params.len()
+        {
+            return Err(Error {
+                region,
+                kind: ErrorKind::Arity {
+                    expected: params.len(),
+                    actual: args.len(),
+                },
+                expectation: None,
+            }
+            .expected_by(ExpectationKind::Call { callee }, None));
+        }
         let result = self.fresh();
         let call_type = Ty::Fn(args, Box::new(result.clone()));
         let call_region = leading.map_or(region, |argument| argument.region);
-        self.unify(call_type, function_type, call_region)?;
+        self.unify(call_type, function_type, call_region)
+            .map_err(|error| error.expected_by(ExpectationKind::Call { callee }, None))?;
         // Arguments can close an instantiated overlay. Resolve its shape
         // before a caller reads or destructures the result, so projection
         // checks the final rightmost field type rather than an earlier operand.
@@ -4377,6 +4477,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     Ok(result)
                 }
                 None => Err(Error {
+                    expectation: None,
                     region,
                     kind: ErrorKind::MissingField {
                         field: field.to_owned(),
@@ -4519,7 +4620,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                         condition,
                         self.named("Bool", Vec::new()),
                         branch.condition.region,
-                    )?;
+                    )
+                    .map_err(|error| error.expected_by(ExpectationKind::Condition, None))?;
                     self.infer_child_block(env, branch.body, return_type.clone())?;
                 }
                 if let Some(block) = final_else {
@@ -5071,6 +5173,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         .is_err()
                     {
                         return Err(Error {
+                            expectation: None,
                             region: *region,
                             kind: ErrorKind::AssocTypeMismatch {
                                 assoc: projection.assoc.name.to_owned(),
@@ -5399,6 +5502,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 if let Some(tags) = self.database.error_group(*reference) {
                     if !self.expanding_error_groups.insert(*reference) {
                         self.annotation_error.get_or_insert_with(|| Error {
+                            expectation: None,
                             region: typ.region,
                             kind: ErrorKind::RecursiveErrorGroup {
                                 name: reference.name.to_owned(),
@@ -5485,6 +5589,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         let Ty::Var(id) = self.prune(typ) else {
             return Err(Error {
+                expectation: None,
                 region,
                 kind: ErrorKind::InvalidTry,
             });
@@ -5588,6 +5693,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             };
             if source_payloads.len() != target_payloads.len() {
                 return Err(Error {
+                    expectation: None,
                     region,
                     kind: ErrorKind::Arity {
                         expected: target_payloads.len(),
@@ -5818,6 +5924,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             let open = open && !coverage.all_errors;
             if !missing.is_empty() || open {
                 return Err(Error {
+                    expectation: None,
                     region: site.region,
                     kind: ErrorKind::NonExhaustiveErrorMatch { missing, open },
                 });
@@ -5833,6 +5940,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             .find(|region| !self.legal_tag_sites.contains(region))
         {
             return Err(Error {
+                expectation: None,
                 region: *region,
                 kind: ErrorKind::InvalidErrorTagPlacement,
             });
@@ -5880,6 +5988,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let resolved = self.prune(variable);
                 let Ty::Var(id) = resolved else {
                     return Err(Error {
+                        expectation: None,
                         region: contract.region,
                         kind: ErrorKind::GenericSpecialization {
                             variable: name.to_owned(),
@@ -5890,6 +5999,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 for shape in self.tuple_shapes.clone() {
                     if self.prune(shape.tuple) == Ty::Var(id) {
                         return Err(Error {
+                            expectation: None,
                             region: contract.region,
                             kind: ErrorKind::GenericSpecialization {
                                 variable: name.to_owned(),
@@ -5900,6 +6010,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 if let Some(previous) = representatives.insert(id, name) {
                     return Err(Error {
+                        expectation: None,
                         region: contract.region,
                         kind: ErrorKind::GenericSpecialization {
                             variable: name.to_owned(),
@@ -5909,6 +6020,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 if escaped.contains(&id) {
                     return Err(Error {
+                        expectation: None,
                         region: contract.region,
                         kind: ErrorKind::GenericEscape {
                             variable: name.to_owned(),
@@ -6083,6 +6195,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                             .find_map(|id| universals.get(id))
                         {
                             return Err(Error {
+                                expectation: None,
                                 region: overlay.region,
                                 kind: ErrorKind::GenericSpecialization {
                                     variable: (*variable).to_owned(),
@@ -6110,6 +6223,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         self.free_vars(&tail, &mut variables);
                         if let Some(variable) = variables.iter().find_map(|id| universals.get(id)) {
                             return Err(Error {
+                                expectation: None,
                                 region: overlay.region,
                                 kind: ErrorKind::GenericSpecialization {
                                     variable: (*variable).to_owned(),
@@ -6286,7 +6400,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                         condition,
                         self.named("Bool", Vec::new()),
                         branch.condition.region,
-                    )?;
+                    )
+                    .map_err(|error| error.expected_by(ExpectationKind::Condition, None))?;
                     remaining &= alder_ast::flow::expression(branch.condition).falls_through;
                     let body = self.with_reachability(
                         remaining && !matches!(branch.condition.value, Expr::Bool(false)),
@@ -6299,7 +6414,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                             )
                         },
                     )?;
-                    result = self.join_values(result, body, branch.body.region)?;
+                    result = self
+                        .join_values(result, body, branch.body.region)
+                        .map_err(|error| error.expected_by(ExpectationKind::Branch, None))?;
                     remaining &= !matches!(branch.condition.value, Expr::Bool(true));
                 }
                 if let Some(final_else) = final_else {
@@ -6311,7 +6428,14 @@ impl<'a, 'db> Infer<'a, 'db> {
                             expected.clone(),
                         )
                     })?;
-                    result = self.join_values(result, body, final_else.region)?;
+                    result =
+                        self.join_values(result, body, final_else.region)
+                            .map_err(|error| {
+                                error.expected_by(
+                                    ExpectationKind::Branch,
+                                    branches.first().map(|branch| branch.body.region),
+                                )
+                            })?;
                 } else {
                     self.unify(Ty::Unit, result.clone(), region)?;
                 }
@@ -6365,7 +6489,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                             )
                         },
                     )?;
-                    result = self.join_values(result, body, arm.body.region)?;
+                    result = self
+                        .join_values(result, body, arm.body.region)
+                        .map_err(|error| error.expected_by(ExpectationKind::Branch, None))?;
                     remaining = alternative_reachable;
                 }
                 Ok(self.prune(result))
@@ -6889,12 +7015,14 @@ impl<'a, 'db> Infer<'a, 'db> {
         for argument in pattern_args {
             let Ty::Var(variable) = self.prune(argument.clone()) else {
                 return Some(Err(Error {
+                    expectation: None,
                     region,
                     kind: ErrorKind::UnsupportedHigherKindedUnification,
                 }));
             };
             if variable == head_var || !seen.insert(variable) {
                 return Some(Err(Error {
+                    expectation: None,
                     region,
                     kind: ErrorKind::UnsupportedHigherKindedUnification,
                 }));
@@ -6936,6 +7064,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 None if right_open.is_none() => {
                     return Err(Error {
+                        expectation: None,
                         region,
                         kind: ErrorKind::MissingField {
                             field: (*name).to_owned(),
@@ -6948,6 +7077,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         for name in right.keys() {
             if !left.contains_key(name) && left_open.is_none() {
                 return Err(Error {
+                    expectation: None,
                     region,
                     kind: ErrorKind::MissingField {
                         field: (*name).to_owned(),
@@ -6984,6 +7114,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         Ok(())
                     } else {
                         Err(Error {
+                            expectation: None,
                             region,
                             kind: ErrorKind::InfiniteType,
                         })
@@ -7030,6 +7161,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             let right_payloads = right.remove(name).expect("common right tag");
             if left_payloads.len() != right_payloads.len() {
                 return Err(Error {
+                    expectation: None,
                     region,
                     kind: ErrorKind::Arity {
                         expected: right_payloads.len(),
@@ -7127,6 +7259,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         if self.occurs(id, &typ) {
             return Err(Error {
+                expectation: None,
                 region,
                 kind: ErrorKind::InfiniteType,
             });
@@ -7720,6 +7853,7 @@ impl<'a, 'db> Infer<'a, 'db> {
     fn mismatch(&mut self, region: Region, actual: Ty<'a>, expected: Ty<'a>) -> Error {
         let mut names = BTreeMap::new();
         Error {
+            expectation: None,
             region,
             kind: ErrorKind::Mismatch {
                 actual: self.diagnostic_type(actual, &mut names),

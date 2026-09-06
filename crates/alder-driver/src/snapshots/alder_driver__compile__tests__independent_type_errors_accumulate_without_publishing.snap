@@ -5,19 +5,21 @@ description: "fn first() Number { \"wrong\" }\nfn second() Bool { 42 }\npub fn d
 alder::type::type_mismatch
 
   × type mismatch: expected `Number`, found `String`
-   ╭─[/app/src/main.ald:1:1]
+   ╭─[/app/src/main.ald:1:21]
  1 │ fn first() Number { "wrong" }
-   · ──────────────┬──────────────
-   ·               ╰── type requirement originates here
+   ·            ───┬──   ───┬───
+   ·               │        ╰── this return value has an incompatible type
+   ·               ╰── the declared return type
  2 │ fn second() Bool { 42 }
    ╰────
 alder::type::type_mismatch
 
   × type mismatch: expected `Bool`, found `Number`
-   ╭─[/app/src/main.ald:2:1]
+   ╭─[/app/src/main.ald:2:20]
  1 │ fn first() Number { "wrong" }
  2 │ fn second() Bool { 42 }
-   · ───────────┬───────────
-   ·            ╰── type requirement originates here
+   ·             ──┬─   ─┬
+   ·               │     ╰── this return value has an incompatible type
+   ·               ╰── the declared return type
  3 │ pub fn dependent() { first() + 1 }
    ╰────

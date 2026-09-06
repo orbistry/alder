@@ -9,15 +9,16 @@ alder::type::type_mismatch
  2 │ fn zzaccept(value: (Array[Number], Bool)) { () }
  3 │ fn zbroken() { zzaccept((shared, "wrong")) }
    ·                         ────────┬────────
-   ·                                 ╰── type requirement originates here
+   ·                                 ╰── argument 1 of `zzaccept` has an incompatible type
  4 │ fn avalid() { Array.push(shared, "text") }
    ╰────
 alder::type::type_mismatch
 
   × type mismatch: expected `Bool`, found `Number`
-   ╭─[/app/src/main.ald:5:1]
+   ╭─[/app/src/main.ald:5:23]
  4 │ fn avalid() { Array.push(shared, "text") }
  5 │ fn unrelated() Bool { 42 }
-   · ─────────────┬────────────
-   ·              ╰── type requirement originates here
+   ·                ──┬─   ─┬
+   ·                  │     ╰── this return value has an incompatible type
+   ·                  ╰── the declared return type
    ╰────

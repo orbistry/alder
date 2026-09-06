@@ -34,5 +34,16 @@ description: "fn combine(left: f[a], right: f[b]) f[a] { left }\nfn invalid(\n  
                 None,
             ),
         },
+        expectation: Some(
+            Expectation {
+                kind: Argument {
+                    position: 2,
+                    callee: Some(
+                        "combine",
+                    ),
+                },
+                origin: None,
+            },
+        ),
     },
 ]
