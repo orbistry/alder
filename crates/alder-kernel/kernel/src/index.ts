@@ -154,11 +154,11 @@ export function $arrayPure(value) {
 }
 
 export function $arrayApply(functions, values) {
-    return functions.flatMap((function_) => values.map(function_));
+    return functions.flatMap((function_) => values.map((value) => function_(value)));
 }
 
 export function $arrayFlatMap(values, transform) {
-    return values.flatMap(transform);
+    return values.flatMap((value) => transform(value));
 }
 
 export function $optionPure(value) {
@@ -425,8 +425,8 @@ export function $resultMap(value, transform) {
 }
 export function $arrayLength(values) { return values.length; }
 export function $arrayPush(values, value) { values.push(value); }
-export function $arrayMap(values, transform) { return values.map(transform); }
-export function $arrayFilter(values, predicate) { return values.filter(predicate); }
+export function $arrayMap(values, transform) { return values.map((value) => transform(value)); }
+export function $arrayFilter(values, predicate) { return values.filter((value) => predicate(value)); }
 export function $stringLength(value) { return [...value].length; }
 export function $stringConcat(left, right) { return left + right; }
 export function $numberParse(value) {

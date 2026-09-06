@@ -1,4 +1,5 @@
 export function answer() { return Promise.resolve(42); }
+export function numberParser() { return parseInt; }
 export function boundedIdentity(value) {
     if (arguments.length !== 1) throw new Error("hidden dictionaries leaked to JS");
     return value;

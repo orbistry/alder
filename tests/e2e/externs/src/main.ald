@@ -1,5 +1,8 @@
 import ~/nested/operations
 
+#[extern("./client.js", "numberParser")]
+fn number_parser() fn(String) Number
+
 #[extern("./client.js", "boundedIdentity")]
 fn bounded_identity(value: a) a where a: Show, a: Eq, a: Show
 
@@ -32,6 +35,8 @@ fn throws() Task[Number]
 fn rejects() Task[Number]
 
 pub async fn main() {
+    let parse_number = number_parser()
+    assert(Array.map(["10", "10", "10"], parse_number) == [10, 10, 10])
     assert(bounded_identity(42) == 42)
     let indirect = bounded_identity
     assert(indirect("hello") == "hello")

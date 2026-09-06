@@ -1610,6 +1610,70 @@ $assert(!$equalContainer(left, null, "option", [inner]));
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn array_callbacks_receive_only_the_declared_value_argument() {
+        let harness = indoc::indoc! {r#"
+            const values = ["10", "10", "10"];
+            $assert($equal($arrayMap(values, parseInt), [10, 10, 10]));
+            const observed = [];
+            function unary(value) {
+                observed.push(arguments.length);
+                return value;
+            }
+            $assert($equal($arrayMap([1, 2], unary), [1, 2]));
+            $assert($equal($arrayFilter([1, 2], unary), [1, 2]));
+            $assert($equal($arrayFlatMap([1, 2], function(value) {
+                observed.push(arguments.length);
+                return [value];
+            }), [1, 2]));
+            $assert($equal($arrayApply([unary], [1, 2]), [1, 2]));
+            $assert($equal(observed, [1, 1, 1, 1, 1, 1, 1, 1]));
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn unary_array_adapters_preserve_iteration_and_exceptions() {
+        let harness = indoc::indoc! {r#"
+            const operations = [
+                (values, callback) => $arrayMap(values, callback),
+                (values, callback) => $arrayFilter(values, callback),
+                (values, callback) => $arrayFlatMap(values, value => [callback(value)]),
+                (values, callback) => $arrayApply([callback], values),
+            ];
+            for (const operation of operations) {
+                const values = [1, 2];
+                const visited = [];
+                const result = operation(values, value => {
+                    visited.push(value);
+                    if (value === 1) {
+                        values[1] = 4;
+                        values.push(3);
+                    }
+                    return value;
+                });
+                $assert($equal(result, [1, 4]));
+                $assert($equal(visited, [1, 4]));
+                $assert($equal(values, [1, 4, 3]));
+                const marker = new Error("callback failure");
+                const beforeFailure = [];
+                let caught;
+                try {
+                    operation([1, 2, 3], value => {
+                        beforeFailure.push(value);
+                        if (value === 2) throw marker;
+                        return value;
+                    });
+                } catch (error) { caught = error; }
+                $assert(caught === marker);
+                $assert($equal(beforeFailure, [1, 2]));
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn option_map_and_map_lookup_preserve_present_none() {
         let harness = r#"
 const mapped = $optionMap($optionSome(42), () => null);
