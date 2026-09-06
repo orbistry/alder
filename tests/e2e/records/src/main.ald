@@ -1,5 +1,6 @@
 import ~/rows
 import ~/rows.{ OptionalName, Boxed }
+import ~/joint_constraints
 
 fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {
     { ..user, name }
@@ -71,6 +72,26 @@ fn spread_observation(record: { value: Number }, events: Array[Number]) Number {
 }
 
 pub fn main() {
+    let joint_pair = ({ value: Err(:saved([])) }, "kept")
+    let joint_result: Result[Number, [:saved(Array[Number])]] = joint_constraints.propagate(joint_pair, {})
+    match joint_result {
+        Err(:saved(values)) => Array.push(values, 7),
+        _ => { assert(false) },
+    }
+    assert(joint_constraints.shared == [42, 7])
+    assert(joint_pair.1 == "kept")
+    match joint_pair.0.value {
+        Err(:saved(values)) => { assert(values == [42, 7]) },
+        _ => { assert(false) },
+    }
+    let joint_override: Result[String, [:saved(Array[Number])]] = joint_constraints.propagate(
+        ({ value: Ok("before") }, false),
+        { value: Ok("after") },
+    )
+    match joint_override {
+        Ok(value) => { assert(value == "after") },
+        _ => { assert(false) },
+    }
     let spread_original = { value: 1 }
     let spread_events = []
     let spread_copy = {

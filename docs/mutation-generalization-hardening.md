@@ -1,5 +1,65 @@
 # Mutation and generalization acceptance evidence
 
+## Current acceptance reconciliation
+
+Requirement 2's value-restriction audit is complete for the integrated hardening
+tree. This is an implementation review with finite regression evidence, not a
+proof of general type soundness or final release approval. Historical open-audit
+notes below describe earlier checkpoints.
+
+The active path preserves shared variables through the entire boundary:
+
+- Canonical assignment tracking uses resolved global identities, including
+  write-only dependencies. SCC inference protects both the surrounding
+  environment and restricted peers before any member is generalized.
+- Free-variable traversal includes function arguments/results, constructor
+  arguments and fixed higher-kinded slots, record/error tails and payloads,
+  predicates, and associated projection equations. Scheme traversal also includes
+  sparse tuple shapes and ordered overlay/error-row relationships.
+- Generalization retains the connected deferred-constraint component before
+  excluding protected variables. Restricted values quantify nothing. A closure
+  factory is polymorphic; a stored result of calling it is not.
+- Instantiation copies all quantified variables with one map across the value
+  type and constraints, leaving unquantified identities shared. Unknown shapes
+  stay constrained, rather than becoming independent unconstrained results.
+- Error-row simplification protects visible/shared variables, universal
+  contracts, overlay operands/results, tuple elements, and error payloads. It
+  eliminates only hidden existential source tails. Final joint solving precedes
+  universal specialization/escape checks and public-export validation.
+- Export uses one type-variable name map for all relationships. Owned storage,
+  hydration, and arena copying preserve them; import recreates their identities
+  with one variable map. An unresolved monomorphic export is rejected.
+
+Three additional solver tests combine tuple assignment, an independently open
+record spread, and `?` propagation of an error carrying an array. They reject
+String use of captured Number state, accept independently allocated Number and
+String state, and verify that an uncalled export actually retains all three
+constraint families. The driver test
+`stored_joint_constraints_preserve_shared_error_payloads` then serializes and
+drops that producer, checks independent result/untouched-slot types in a fresh
+consumer, and rejects an incompatible captured payload. Failure publishes
+neither interfaces nor artifacts. Its colorless diagnostic snapshot contains the
+consumer source and the Number/String mismatch at the return contract.
+
+The actual CLI records fixture imports `joint_constraints.ald`, propagates the
+captured array through `?`, mutates it through the returned error, and verifies
+the module's shared binding and the caller's tuple observe the same mutation.
+It also checks an independent String-valued final overwrite and an untouched
+tuple slot. The standalone end-to-end suite passes; no compiler changes were
+needed for these probes.
+
+These checks supplement the array/map/set/record/cell/task, recursive capture,
+assignment, alias, re-export, and stored-interface cases mapped below. Mutation
+syntax cleanup is reconciled in `plans/mutation-syntax-hardening.md`; the wider
+dictionary/codegen audit and final clean-tree/package gates remain separate.
+
+Validation for this reconciliation: full workspace tests/doctests pass (including
+193 driver, 69 kernel, 17 CLI, 465 general inference, 13 local-annotation, and nine
+mutation-generalization tests). Strict all-target/all-feature Clippy, formatting,
+and whitespace checks pass. The new snapshot is reviewed and no pending snapshot
+files remain. This verifies the integrated worktree, not an isolated checkout of
+the focused test/documentation commit.
+
 ## Recursive capture follow-up
 
 The current integrated tree adds six focused regressions in

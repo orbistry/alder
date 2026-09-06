@@ -1,0 +1,11 @@
+pub let shared = [42]
+
+fn expose(pair, patch) {
+    pair.0 = { ..{ value: Err(:saved(shared)) }, ..patch }
+    pair
+}
+
+pub fn propagate(pair, patch) {
+    let value = expose(pair, patch).0.value?
+    Ok(value)
+}

@@ -1253,6 +1253,73 @@ mod tests {
     }
 
     #[test]
+    fn stored_joint_constraints_preserve_shared_error_payloads() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                let shared = [42]
+                fn expose(pair, patch) {
+                    pair.0 = { ..{ value: Err(:saved(shared)) }, ..patch }
+                    pair
+                }
+                pub fn propagate(pair, patch) {
+                    let value = expose(pair, patch).0.value?
+                    Ok(value)
+                }
+            "#},
+            &[],
+            &[],
+        );
+        let scheme = &producer.values[0].scheme;
+        assert!(!scheme.tuple_shapes.is_empty());
+        assert!(!scheme.record_overlays.is_empty());
+        assert!(!scheme.error_row_inclusions.is_empty());
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ propagate }
+            pub fn numbers() Result[Number, [:saved(Array[Number])]] {
+                propagate(({ value: Err(:saved([])) }, ()), {})
+            }
+            pub fn strings() Result[String, [:saved(Array[Number])]] {
+                propagate(({ value: Err(:saved([])) }, true), {})
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ propagate }
+            pub fn invalid() Result[Number, [:saved(Array[String])]] {
+                propagate(({ value: Err(:saved([])) }, ()), {})
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty());
+        assert!(result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("stored joint constraints must retain the captured Number array")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
     fn stored_assignment_contracts_preserve_safe_and_restricted_functions() {
         let producer = dependency_interface(
             indoc::indoc! {r#"

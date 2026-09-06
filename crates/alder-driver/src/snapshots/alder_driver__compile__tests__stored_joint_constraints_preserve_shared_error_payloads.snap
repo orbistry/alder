@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ propagate }\npub fn invalid() Result[Number, [:saved(Array[String])]] {\n    propagate(({ value: Err(:saved([])) }, ()), {})\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/project/src/main.ald:2:1]
+ 1 │     import @vendor/widgets.{ propagate }
+ 2 │ ╭─▶ pub fn invalid() Result[Number, [:saved(Array[String])]] {
+ 3 │ │       propagate(({ value: Err(:saved([])) }, ()), {})
+ 4 │ ├─▶ }
+   · ╰──── type requirement originates here
+   ╰────

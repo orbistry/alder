@@ -158,3 +158,76 @@ fn reusable_async_closure_cannot_regeneralize_captured_state() {
         }
     "#});
 }
+
+#[test]
+fn tuple_overlay_error_constraints_preserve_captured_payload_identity() {
+    assert_type_mismatch(indoc! {r#"
+        let shared = []
+        fn expose(pair, patch) {
+            pair.0 = { ..{ value: Err(:saved(shared)) }, ..patch }
+            pair
+        }
+        fn propagate(pair, patch) {
+            let value = expose(pair, patch).0.value?
+            Ok(value)
+        }
+        fn write() { Array.push(shared, 42) }
+        fn invalid() Result[Number, [:saved(Array[String])]] {
+            propagate(({ value: Err(:saved([])) }, ()), {})
+        }
+    "#});
+}
+
+#[test]
+fn tuple_overlay_error_constraints_allow_independent_allocations() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn expose(pair, patch) {
+            pair.0 = { ..{ value: Err(:saved([])) }, ..patch }
+            pair
+        }
+        fn propagate(pair, patch) {
+            let value = expose(pair, patch).0.value?
+            Ok(value)
+        }
+        fn numbers() Result[Number, [:saved(Array[Number])]] {
+            propagate(({ value: Err(:saved([])) }, ()), {})
+        }
+        fn strings() Result[String, [:saved(Array[String])]] {
+            propagate(({ value: Err(:saved([])) }, ()), {})
+        }
+    "#},
+    )
+    .expect("connected deferred constraints freshen together for independent allocations");
+}
+
+#[test]
+fn uncalled_export_retains_connected_tuple_overlay_error_constraints() {
+    let bump = Bump::new();
+    let output = solve_input(
+        &bump,
+        indoc! {r#"
+        let shared = [42]
+        fn expose(pair, patch) {
+            pair.0 = { ..{ value: Err(:saved(shared)) }, ..patch }
+            pair
+        }
+        pub fn propagate(pair, patch) {
+            let value = expose(pair, patch).0.value?
+            Ok(value)
+        }
+    "#},
+    )
+    .expect("an uncalled export can retain constraints and a concrete captured payload");
+    let annotation = output
+        .annotations
+        .iter()
+        .find(|(name, _)| name.name == "propagate")
+        .unwrap()
+        .1;
+    assert!(!annotation.tuple_shapes.is_empty());
+    assert!(!annotation.record_overlays.is_empty());
+    assert!(!annotation.error_row_inclusions.is_empty());
+}
