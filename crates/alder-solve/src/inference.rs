@@ -2397,12 +2397,30 @@ impl<'a, 'db> Infer<'a, 'db> {
             } else {
                 None
             };
-            let body_type = self.infer_block_with_expected(
-                &mut local,
-                body,
-                Some(body_result.clone()),
-                field_context,
-            )?;
+            let returned_record = field_context.is_some();
+            let body_type = self
+                .infer_block_with_expected(
+                    &mut local,
+                    body,
+                    Some(body_result.clone()),
+                    field_context,
+                )
+                .map_err(|error| {
+                    if returned_record
+                        && matches!(
+                            error.kind,
+                            ErrorKind::Mismatch { .. } | ErrorKind::RecordFieldsMismatch { .. }
+                        )
+                        && body
+                            .value
+                            .tail
+                            .is_some_and(|tail| tail.region.contains(&error.region))
+                    {
+                        error.expected_by(ExpectationKind::Return, ret.map(|ret| ret.region))
+                    } else {
+                        error
+                    }
+                })?;
             self.resolve_try_boundary(body_result.clone(), &body_type, region)?;
             if alder_ast::flow::block(body).falls_through {
                 let expected = self.render(body_result.clone());
@@ -2606,12 +2624,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let expected = return_type.unwrap_or(Ty::Unit);
                 let actual = match value {
                     Some(value) if matches!(self.prune(expected.clone()), Ty::Record(..)) => self
-                        .infer_checked_expr(
-                        env,
-                        value,
-                        expected.clone(),
-                        Some(expected.clone()),
-                    )?,
+                        .infer_checked_expr(env, value, expected.clone(), Some(expected.clone()))
+                        .map_err(|error| {
+                            if matches!(
+                                error.kind,
+                                ErrorKind::Mismatch { .. } | ErrorKind::RecordFieldsMismatch { .. }
+                            ) {
+                                error.expected_by(ExpectationKind::Return, self.return_origin)
+                            } else {
+                                error
+                            }
+                        })?,
                     Some(value) => self.infer_expr(env, value, Some(expected.clone()))?,
                     None => Ty::Unit,
                 };

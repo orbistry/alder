@@ -1222,6 +1222,101 @@ mod tests {
     }
 
     #[test]
+    fn transparent_alias_comparisons_keep_expanded_shapes_and_annotation_origins() {
+        let source = indoc::indoc! {r#"
+            type Named = { profile: { name: String } }
+            type Wrong = { profile: { name: Number } }
+            type Wrapped[a] = Option[Array[a]]
+            fn mismatch(value: Wrong) Named { value }
+            fn nested(value: Wrapped[Number]) Wrapped[String] { value }
+            fn early(value: Wrong) Named { return value }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("incompatible alias expansions must fail")
+        };
+        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "type mismatch: expected `{ profile: { name: String } }`, found `{ profile: { name: Number } }`"
+        );
+        assert_eq!(
+            diagnostics[1].message(),
+            "type mismatch: expected `Option[Array[String]]`, found `Option[Array[Number]]`"
+        );
+        for (diagnostic, annotation) in
+            diagnostics
+                .iter()
+                .zip(["Named", "Wrapped[String]", "Named"])
+        {
+            let labels = miette::Diagnostic::labels(diagnostic)
+                .unwrap()
+                .collect::<Vec<_>>();
+            let origin = labels
+                .iter()
+                .find(|label| label.label() == Some("the declared return type"))
+                .unwrap();
+            assert_eq!(
+                &source[origin.offset()..origin.offset() + origin.len()],
+                annotation
+            );
+        }
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = source
+            .replace("value: Wrong", "value: Named")
+            .replace("value: Wrapped[Number]", "value: Wrapped[String]");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(valid))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(matches!(result.modules[&uri], ModuleResult::Success { .. }));
+    }
+
+    #[test]
+    fn record_return_context_does_not_relabel_projection_errors() {
+        for source in [
+            indoc::indoc! {r#"
+            type Named = { name: String }
+            fn invalid(value: { present: Number }) Named {
+                let read = value.missing
+                { name: "valid return" }
+            }
+        "#},
+            indoc::indoc! {r#"
+            type Named = { name: String }
+            fn invalid(value: { present: Number }) Named { value.missing }
+        "#},
+            indoc::indoc! {r#"
+            type Named = { name: String }
+            fn invalid(value: { present: Number }) Named { return value.missing }
+        "#},
+        ] {
+            let uri = url("app/src/main.ald");
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("the field projection must fail")
+            };
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            assert!(diagnostics[0].message().contains("missing"));
+            assert!(
+                !miette::Diagnostic::labels(&diagnostics[0])
+                    .unwrap()
+                    .any(|label| label.label() == Some("the declared return type"))
+            );
+        }
+    }
+
+    #[test]
     fn nominal_type_names_follow_reexported_identities() {
         let source = indoc::indoc! {r#"
             import ~/api.{ PublicLeft as LeftToken, PublicRight as RightToken }

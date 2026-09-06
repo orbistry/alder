@@ -23,6 +23,25 @@ not a claim that historical Elm-port modules are active.
 
 ## Recovery invariants and implementation sequence
 
+### Current acceptance audit (not final completion)
+
+The baseline table above is historical. Current source evidence narrows the
+remaining work as follows; a passing test gate does not close the open reviews.
+
+| Requirement | Verified current evidence | Remaining review / policy |
+| --- | --- | --- |
+| Independent errors and safe recovery | Fresh retries in `infer_recovering`; `independent_type_errors_accumulate_without_publishing`, partial-shared-state and recursive-group tests; implementation/default/generic-method recovery snapshots | Non-callable metadata failures still stop; expression-level recovery within a failed callable is not implemented |
+| Dependent suppression and publication | Callable resolved-dependency traversal; cross-module re-export/invalid-impl publication tests; Check/Build/Test output gates | Final audit of all remaining metadata stop cases |
+| Context and source spans | `mismatch_explains_expectations_at_the_source`, innermost-context, return/lambda/async, optional argument and alias-return-origin tests | Deferred record/error-row paths and specialized errors still need a complete provenance audit |
+| Type comparisons | Structured records, functions, tuples, applications, dense variables, named generic restrictions; nominal import/re-export localization; expanded aliases retain source annotation labels | Specialized core/trait fields still stored as strings require review; compact reconstruction of source synonyms is not implemented |
+| Actionable explanations | Field typo/difference, arity, infinite-equation and generic-restriction source snapshots | Remaining specialized trait advice must be checked against implementation/bound rules |
+| Generated warnings | Actual canonical binding/import analysis; shadowing, alternatives, pins, exports, initializer effects and module-root tests | No blanket missing-annotation warning has been adopted; inferred-signature suggestions assessed separately |
+| CLI/editor delivery | Six subprocess tests in `crates/alder-cli/tests/diagnostics.rs`: warnings, dependency cascades, ordering, unsaved edits, stale versions, UTF-16, saved dependencies and clearing | Re-run with final tree |
+| Pattern diagnostics | Active `check_error_matches` handles Result error rows; ordinary refutable matches remain accepted | General coverage/redundancy policy requested, not resolved; no new acceptance rule or blanket warning may be inferred from Elm |
+| Validation/artifacts | Full tests and strict Clippy run at each implementation checkpoint; current snapshot-reference/package checks recorded below | Final package/CLI verification, current-tree matrix reconciliation and clean committed handoff remain required |
+
+### Implementation sequence
+
 1. Reproduce baseline gaps with real source input before changing behavior.
 2. Design recovery around complete inference-state isolation and explicit invalid
    dependencies, not catch-and-continue over partially changed substitutions.
@@ -604,3 +623,46 @@ Validation: full workspace tests passed (239 driver tests, 467 inference tests,
 six CLI subprocess tests and all other suites; two existing ignored doctests).
 Strict all-target/all-feature Clippy, formatting and diff checks passed. All four
 new source snapshots were reviewed; existing snapshots remained unchanged.
+
+## Alias expansion and record-return context checkpoint
+
+The alias audit reproduced a missing return-origin label. Canonical aliases
+retain their use-site region, but inference unfolds the target type; record
+returns can fail in contextual checking before the final return equation adds
+its explanation. Tail-record comparisons now retain the originating return
+annotation, as do explicit record returns. The added context is restricted to
+type/record-shape mismatches in the returned expression. Projection failures and
+earlier statements keep their own cause, and existing inner expectation labels
+are not replaced.
+
+`transparent_alias_comparisons_keep_expanded_shapes_and_annotation_origins`
+checks nested record aliases, a parameterized Option/Array alias, and an explicit
+return. It verifies the exact source slices labeled as the declared return type,
+snapshots the expanded comparisons, and accepts matching types as a positive
+control. `record_return_context_does_not_relabel_projection_errors` covers a
+preceding statement, tail projection and explicit-return projection. Its added
+tail cases first caught an over-broad version of the context fix.
+
+Expanded comparisons deliberately expose the incompatible structure while the
+source labels retain the written alias annotation. This does not reconstruct a
+compact synonym for arbitrary inferred types or change transparent alias
+semantics. Specialized diagnostic strings and the other open audit rows above
+remain separate work.
+
+Validation: formatting and strict all-target/all-feature Clippy passed. Full
+workspace tests passed through `cargo insta test --check --unreferenced reject
+--workspace --test-runner cargo-test` (241 driver tests, 467 inference tests,
+six CLI subprocess tests and all other suites; two existing ignored doctests),
+with no pending or unreferenced snapshots.
+
+Fresh extracted-archive verification passed for all 17 publishable crates using
+`cargo package --workspace --exclude stub --offline --allow-dirty --target-dir
+/tmp/alder-diagnostic-final.IOnkLo`. The unpublished stub was excluded; verification
+was not disabled. The resulting packaged CLI, invoked outside the repository,
+reported three independent alias-return/implementation-method errors in both
+`check` and `build`, with return-annotation labels and no ANSI escapes under
+`NO_COLOR=1`. Both commands exited 1; the failed fixture retained only its source
+and configuration. A positive packaged `run` exited 0, delivered three unused
+warnings, and executed import initialization, local initialization and main
+effects in order. This is local-host checkpoint evidence, not final completion
+of the open audit or cross-platform release verification.
