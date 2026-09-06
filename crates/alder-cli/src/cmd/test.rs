@@ -14,7 +14,7 @@ pub struct Args {
 impl Args {
     pub async fn exec(self) -> Result<()> {
         let compiled = super::build::compile(&self.path, BuildMode::Test).await?;
-        let bundle = super::build::bundle(&compiled.result, EntryKind::Test).await?;
+        let bundle = super::build::bundle(&compiled, EntryKind::Test).await?;
         let code = alder_runtime::execute(bundle, Vec::new())
             .await
             .map_err(|error| miette!(error.to_string()))?;

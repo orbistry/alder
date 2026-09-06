@@ -48,11 +48,44 @@ mod tests {
             .join(name)
     }
 
+    #[test]
+    fn diagnostic_paths_are_project_relative_and_decode_spaces() {
+        let root = std::env::temp_dir().join("alder diagnostic project");
+        let uri = url::Url::from_file_path(root.join("src").join("file name.ald")).unwrap();
+        let display = super::build::diagnostic_path_names_with_links(&root, false);
+        assert_eq!(
+            display(uri.path()),
+            PathBuf::from("src").join("file name.ald").to_string_lossy()
+        );
+        let external = url::Url::from_file_path(
+            root.with_file_name("alder diagnostic project-other")
+                .join("main.ald"),
+        )
+        .unwrap();
+        assert_eq!(display(external.path()), external.path());
+        assert_eq!(display("src/main.ald"), "src/main.ald");
+        assert_eq!(display("build"), "build");
+    }
+
+    #[test]
+    fn diagnostic_links_keep_absolute_targets_behind_relative_labels() {
+        let root = std::env::temp_dir().join("alder diagnostic project");
+        let uri = url::Url::from_file_path(root.join("src").join("file name.ald")).unwrap();
+        let display = super::build::diagnostic_path_names_with_links(&root, true);
+        let label = PathBuf::from("src").join("file name.ald");
+        assert_eq!(
+            display(uri.path()),
+            format!("\x1b]8;;{uri}\x1b\\{}\x1b]8;;\x1b\\", label.display())
+        );
+        assert_eq!(display("build"), "build");
+        assert_eq!(display("src/main.ald"), "src/main.ald");
+    }
+
     async fn execute(name: &str, mode: BuildMode, kind: EntryKind) -> i32 {
         let compiled = super::build::compile_ephemeral(&fixture(name), mode)
             .await
             .unwrap();
-        let bundle = super::build::bundle(&compiled.result, kind).await.unwrap();
+        let bundle = super::build::bundle(&compiled, kind).await.unwrap();
         tokio::time::timeout(
             std::time::Duration::from_secs(30),
             alder_runtime::execute(bundle, Vec::new()),
@@ -84,7 +117,7 @@ mod tests {
             super::build::compile_ephemeral(&fixture("pattern_bindings"), BuildMode::Build)
                 .await
                 .unwrap();
-        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+        let bundle = super::build::bundle(&compiled, EntryKind::Standalone)
             .await
             .unwrap();
         for argument in [
@@ -223,7 +256,7 @@ mod tests {
                 artifacts.reverse();
             }
             compiled.result.artifacts = artifacts.into_iter().collect();
-            let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+            let bundle = super::build::bundle(&compiled, EntryKind::Standalone)
                 .await
                 .unwrap();
             if let Some(previous) = &previous {
@@ -248,7 +281,7 @@ mod tests {
         let compiled = super::build::compile_ephemeral(&fixture("externs"), BuildMode::Build)
             .await
             .unwrap();
-        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+        let bundle = super::build::bundle(&compiled, EntryKind::Standalone)
             .await
             .unwrap();
         for (argument, symbol) in [("throw", "throws"), ("reject", "rejects")] {
@@ -349,13 +382,13 @@ mod tests {
         let compiled = super::build::compile_ephemeral(&app, BuildMode::Build)
             .await
             .unwrap();
-        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+        let bundle = super::build::bundle(&compiled, EntryKind::Standalone)
             .await
             .unwrap();
         assert_eq!(alder_runtime::execute(bundle, Vec::new()).await.unwrap(), 0);
 
         std::fs::remove_file(dependency.join("src/client.js")).unwrap();
-        let error = super::build::bundle(&compiled.result, EntryKind::Standalone)
+        let error = super::build::bundle(&compiled, EntryKind::Standalone)
             .await
             .unwrap_err();
         let mut rendered = String::new();
@@ -475,7 +508,7 @@ mod tests {
         let compiled = super::build::compile_ephemeral(&root, BuildMode::Build)
             .await
             .unwrap();
-        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+        let bundle = super::build::bundle(&compiled, EntryKind::Standalone)
             .await
             .unwrap();
         let exit = tokio::time::timeout(
@@ -526,7 +559,7 @@ mod tests {
         let compiled = super::build::compile_ephemeral(&root, BuildMode::Build)
             .await
             .expect("dependency imports must use the dependency's own configuration");
-        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+        let bundle = super::build::bundle(&compiled, EntryKind::Standalone)
             .await
             .unwrap();
         let exit = tokio::time::timeout(
@@ -766,7 +799,7 @@ mod tests {
                 .dependencies
                 .contains(&"alder://pkg/vendor/widgets/alternate.mjs".to_owned())
         );
-        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+        let bundle = super::build::bundle(&compiled, EntryKind::Standalone)
             .await
             .unwrap();
         assert_eq!(alder_runtime::execute(bundle, Vec::new()).await.unwrap(), 0);
@@ -799,7 +832,7 @@ mod tests {
         let rebuilt = super::build::compile_ephemeral(&application, BuildMode::Build)
             .await
             .unwrap();
-        let bundle = super::build::bundle(&rebuilt.result, EntryKind::Standalone)
+        let bundle = super::build::bundle(&rebuilt, EntryKind::Standalone)
             .await
             .unwrap();
         assert_eq!(

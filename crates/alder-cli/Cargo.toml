@@ -21,6 +21,8 @@ color-print.workspace = true
 dirs.workspace = true
 futures.workspace = true
 miette.workspace = true
+url.workspace = true
+supports-hyperlinks = "3.2"
 alder-config = { path = "../alder-config", version = "0.2.0" }
 alder-bundle = { path = "../alder-bundle", version = "0.3.0" }
 alder-driver = { path = "../alder-driver", version = "0.4.0" }
@@ -38,4 +40,3 @@ zip.workspace = true
 [dev-dependencies]
 indoc.workspace = true
 serde_json = "1"
-url.workspace = true

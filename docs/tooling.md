@@ -95,5 +95,16 @@ or unused-type analysis. Declaration warnings do not suggest invalid `_` functio
 names, and warnings never remove code.
 
 CLI diagnostics are ordered by source file and primary source location, not
-message text. The diagnostic-restoration acceptance matrix and remaining work
+message text. Source labels for files inside the project are relative to its
+root (for example, `src/main.ald:3:25`), including warnings and related reports.
+Files outside the project retain their full paths. This is presentation-only;
+editor URIs and internal source identities remain unchanged.
+On terminals supporting OSC 8 hyperlinks, the short source label links to the
+absolute `file://` URI, independent of the shell's working directory. Redirected
+output stays plain text. Interactive terminals without hyperlink support use
+shell-relative paths instead, so their automatic file detection still resolves
+correctly. `FORCE_HYPERLINK=1` enables links explicitly, and
+`FORCE_HYPERLINK=0` disables them. Line and column remain visible in the header;
+opening at that position depends on the terminal/editor integration.
+The diagnostic-restoration acceptance matrix and remaining work
 are tracked in `plans/diagnostic-ux.md`.

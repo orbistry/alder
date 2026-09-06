@@ -38,6 +38,7 @@ impl Project {
             .current_dir(&self.0)
             .env("ALDER_PROXY_VERSION", alder_cli::VERSION)
             .env("NO_COLOR", "1")
+            .env("FORCE_HYPERLINK", "0")
             .env("TERM", "dumb")
             .output()
             .unwrap()
@@ -48,6 +49,40 @@ impl Drop for Project {
     fn drop(&mut self) {
         // Only this test's exclusively-created directory is removed.
         std::fs::remove_dir_all(&self.0).unwrap();
+    }
+}
+
+#[test]
+fn diagnostic_terminal_links_target_real_files_from_another_working_directory() {
+    let project = Project::new();
+    project.source(
+        "main.ald",
+        indoc::indoc! {r#"
+        pub fn main() {
+            let count: Number = "three"
+            let enabled: Bool = 42
+        }
+    "#},
+    );
+    let expected_uri =
+        url::Url::from_file_path(project.0.canonicalize().unwrap().join("src/main.ald")).unwrap();
+    for command in ["check", "build", "test"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_alder"))
+            .arg(command)
+            .arg(&project.0)
+            .current_dir(project.0.parent().unwrap())
+            .env("ALDER_PROXY_VERSION", alder_cli::VERSION)
+            .env("NO_COLOR", "1")
+            .env("FORCE_HYPERLINK", "1")
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        let link = format!("\x1b]8;;{expected_uri}\x1b\\src/main.ald\x1b]8;;\x1b\\");
+        assert_eq!(stderr.matches(&link).count(), 2, "{command}: {stderr:?}");
+        assert!(expected_uri.to_file_path().unwrap().is_file());
+        assert!(stderr.contains(&format!("{link}:2:25]")), "{stderr:?}");
+        assert!(stderr.contains(&format!("{link}:3:25]")), "{stderr:?}");
     }
 }
 
@@ -341,7 +376,8 @@ fn cli_delivers_unused_warnings_without_removing_effects() {
             stderr.contains("unused binding `initialization`"),
             "{stderr}"
         );
-        assert!(stderr.contains("main.ald"), "{stderr}");
+        assert!(stderr.contains("[src/main.ald:"), "{stderr}");
+        assert!(stderr.contains("[src/library.ald:"), "{stderr}");
         assert!(!stderr.contains("\u{1b}["), "{stderr}");
         if command == "run" {
             let stdout = String::from_utf8(output.stdout).unwrap();
@@ -491,6 +527,7 @@ fn cli_and_editor_deliver_pattern_errors_and_clear_them() {
         let output = project.run(command);
         let stderr = String::from_utf8(output.stderr).unwrap();
         assert!(!output.status.success(), "{command}: {stderr}");
+        assert_eq!(stderr.matches("[src/main.ald:").count(), 2, "{stderr}");
         assert!(
             stderr.contains("uncovered patterns include Some(false)"),
             "{stderr}"

@@ -58,7 +58,14 @@ impl Args {
         eprintln!();
         if !result.warnings.is_empty() {
             for warning in &result.warnings {
-                eprintln!("{:?}", miette::Report::new(warning.clone()));
+                eprintln!(
+                    "{:?}",
+                    miette::Report::new(
+                        warning
+                            .clone()
+                            .map_source_names(&super::build::diagnostic_path_names(&project.root))
+                    )
+                );
             }
             eprintln!();
         }
@@ -108,7 +115,14 @@ impl Args {
             diagnostics.sort_by(|left, right| left.source_order(right));
             for diagnostic in diagnostics {
                 eprintln!();
-                eprintln!("{:?}", miette::Report::new(diagnostic.clone()));
+                eprintln!(
+                    "{:?}",
+                    miette::Report::new(
+                        diagnostic
+                            .clone()
+                            .map_source_names(&super::build::diagnostic_path_names(&project.root))
+                    )
+                );
             }
 
             std::process::exit(1);

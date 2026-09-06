@@ -104,6 +104,18 @@ impl Diagnostic {
         &self.source_code
     }
 
+    /// Rename source labels for presentation, including related reports.
+    /// Apply this to a clone when consumers still need the original identity.
+    pub fn map_source_names(mut self, rename: &impl Fn(&str) -> String) -> Self {
+        self.source_code = Source::new(rename(self.source_code.name()), self.source_code.text());
+        self.related = self
+            .related
+            .into_iter()
+            .map(|report| report.map_source_names(rename))
+            .collect();
+        self
+    }
+
     pub fn message(&self) -> &str {
         &self.message
     }
@@ -213,6 +225,25 @@ mod tests {
         let span = span_for_region(source, region);
         assert_eq!(span.offset(), source.find("\"hello\"").unwrap());
         assert_eq!(span.len(), 7);
+    }
+
+    #[test]
+    fn presentation_names_include_related_reports_without_changing_originals() {
+        let report = Diagnostic::error(Source::new("/project/src/main.ald", "42"), "primary")
+            .with_primary_label(Region::one(), "here")
+            .with_related(Diagnostic::error(
+                Source::new("/project/src/other.ald", "false"),
+                "related",
+            ));
+        let rendered = report
+            .clone()
+            .map_source_names(&|name| name.strip_prefix("/project/").unwrap_or(name).to_owned());
+        assert_eq!(rendered.source().name(), "src/main.ald");
+        assert_eq!(rendered.related[0].source().name(), "src/other.ald");
+        assert_eq!(rendered.source().text(), report.source().text());
+        assert_eq!(rendered.labels[0].offset(), report.labels[0].offset());
+        assert_eq!(report.source().name(), "/project/src/main.ald");
+        assert_eq!(report.related[0].source().name(), "/project/src/other.ald");
     }
 
     #[test]

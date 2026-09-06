@@ -143,6 +143,7 @@ dependencies = [
  "miette",
  "octocrab",
  "serde_json",
+ "supports-hyperlinks",
  "tar",
  "tokio",
  "tower-lsp-server",

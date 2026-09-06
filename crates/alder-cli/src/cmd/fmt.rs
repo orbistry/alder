@@ -120,10 +120,9 @@ mod tests {
                 .await
                 .unwrap();
         assert!(compiled.result.is_success());
-        let bundle =
-            super::super::build::bundle(&compiled.result, alder_bundle::EntryKind::Standalone)
-                .await
-                .unwrap();
+        let bundle = super::super::build::bundle(&compiled, alder_bundle::EntryKind::Standalone)
+            .await
+            .unwrap();
         assert_eq!(alder_runtime::execute(bundle, Vec::new()).await.unwrap(), 0);
         std::fs::remove_file(path).unwrap();
         std::fs::remove_file(root.join("alder.jsonc")).unwrap();

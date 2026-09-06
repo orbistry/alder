@@ -21,7 +21,7 @@ impl Args {
         if compiled.target != Target::Standalone {
             return Err(miette!("alder run requires target: standalone"));
         }
-        let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone).await?;
+        let bundle = super::build::bundle(&compiled, EntryKind::Standalone).await?;
         let code = alder_runtime::execute(bundle, self.args)
             .await
             .map_err(|error| miette!(error.to_string()))?;

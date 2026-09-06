@@ -8,6 +8,7 @@ _out
 /target
 target/
 .alder/
+dist/
 
 elm/
 polarity/

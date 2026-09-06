@@ -26,7 +26,7 @@ impl Args {
             Target::Standalone => EntryKind::Standalone,
             Target::Cloudflare => EntryKind::Cloudflare,
         };
-        let bundle = bundle(&compiled.result, kind).await?;
+        let bundle = bundle(&compiled, kind).await?;
         let output = if self.output.is_absolute() {
             self.output
         } else {
@@ -79,7 +79,14 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
         .into_diagnostic()?;
     let result = build_with_dependencies(db, &graph, mode, dependencies).await;
     for warning in &result.warnings {
-        eprintln!("{:?}", miette::Report::new(warning.clone()));
+        eprintln!(
+            "{:?}",
+            miette::Report::new(
+                warning
+                    .clone()
+                    .map_source_names(&diagnostic_path_names(&project.root))
+            )
+        );
     }
     if !result.is_success() {
         let mut errors = result
@@ -99,7 +106,9 @@ async fn compile_inner(path: &PathBuf, mode: BuildMode, persist: bool) -> Result
             return Err(miette!("compilation failed without a diagnostic"));
         };
         let primary = errors.fold(primary, |primary, related| primary.with_related(related));
-        return Err(miette::Report::new(primary));
+        return Err(miette::Report::new(
+            primary.map_source_names(&diagnostic_path_names(&project.root)),
+        ));
     }
     if persist {
         persist_semantic_artifacts(&project.root, &result)?;
@@ -125,12 +134,57 @@ pub(super) fn persist_semantic_artifacts(
     Ok(())
 }
 
-pub(super) async fn bundle(result: &BuildResult, kind: EntryKind) -> Result<String> {
+/// Compiler source names are URL paths. Decode them for display, but only
+/// shorten files inside this project; external dependencies keep their identity.
+pub(super) fn diagnostic_path_names(root: &std::path::Path) -> impl Fn(&str) -> String {
+    use std::io::IsTerminal;
+
+    let links = supports_hyperlinks::on(supports_hyperlinks::Stream::Stderr);
+    // Without explicit links, interactive terminals resolve detected paths
+    // against the shell directory. Keep that fallback navigable too.
+    let display_root = if !links && std::io::stderr().is_terminal() {
+        std::env::current_dir().unwrap_or_else(|_| root.to_owned())
+    } else {
+        root.to_owned()
+    };
+    move |name| diagnostic_path_names_with_links(&display_root, links)(name)
+}
+
+pub(super) fn diagnostic_path_names_with_links(
+    root: &std::path::Path,
+    links: bool,
+) -> impl Fn(&str) -> String + '_ {
+    move |name| {
+        let file = url::Url::parse(&format!("file://{name}"))
+            .ok()
+            .and_then(|uri| uri.to_file_path().ok().map(|path| (uri, path)));
+        let Some((uri, path)) = file else {
+            return name.to_owned();
+        };
+        let label = path
+            .strip_prefix(root)
+            .ok()
+            .map(|relative| relative.to_string_lossy().into_owned())
+            .filter(|label| !label.is_empty())
+            .unwrap_or_else(|| name.to_owned());
+        if links {
+            // OSC 8 separates the visible project-relative label from its
+            // absolute file URI. Never resolve the label against the shell CWD.
+            format!("\x1b]8;;{uri}\x1b\\{label}\x1b]8;;\x1b\\")
+        } else {
+            label
+        }
+    }
+}
+
+pub(super) async fn bundle(compiled: &Compiled, kind: EntryKind) -> Result<String> {
     let entry = "alder://app/main.mjs";
-    alder_bundle::bundle(result.artifacts.values().cloned(), entry, kind)
+    alder_bundle::bundle(compiled.result.artifacts.values().cloned(), entry, kind)
         .await
         .map_err(|error| match error {
-            alder_bundle::Error::Diagnostic(diagnostic) => miette::Report::new(*diagnostic),
+            alder_bundle::Error::Diagnostic(diagnostic) => miette::Report::new(
+                diagnostic.map_source_names(&diagnostic_path_names(&compiled.root)),
+            ),
             other => miette!(other.to_string()),
         })
 }
