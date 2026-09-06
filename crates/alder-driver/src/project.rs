@@ -129,7 +129,7 @@ impl Project {
                     // path segment in emitted URLs and interface caches. Hash
                     // the full relative path, not only its last component, and
                     // bound its length independently of member nesting depth.
-                    let relative = member.root.strip_prefix(&self.root).unwrap_or(&member.root);
+                    let relative = workspace_member_path(&self.root, &member.root);
                     let relative = relative
                         .components()
                         .map(|part| part.as_os_str().to_string_lossy())
@@ -290,6 +290,30 @@ impl Project {
         }
         Ok(result)
     }
+}
+
+/// Both paths come from canonical project loading. Preserve sibling members'
+/// relationship to the workspace, not the absolute checkout location. Distinct
+/// filesystem prefixes (for example Windows drives) have no relative path.
+fn workspace_member_path(workspace: &Path, member: &Path) -> PathBuf {
+    let workspace = workspace.components().collect::<Vec<_>>();
+    let member_components = member.components().collect::<Vec<_>>();
+    let common = workspace
+        .iter()
+        .zip(&member_components)
+        .take_while(|(left, right)| left == right)
+        .count();
+    if common == 0 {
+        return member.to_path_buf();
+    }
+    let mut relative = PathBuf::new();
+    for _ in &workspace[common..] {
+        relative.push("..");
+    }
+    for component in &member_components[common..] {
+        relative.push(component.as_os_str());
+    }
+    relative
 }
 
 /// Find the project root by searching for alder.jsonc.
@@ -542,6 +566,73 @@ mod tests {
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(paths.len(), 4);
         assert_eq!(result.package_instance_indexes.len(), 2);
+    }
+
+    #[test]
+    fn workspace_member_paths_keep_ancestor_and_sibling_relationships() {
+        for (workspace, member, expected) in [
+            ("/checkout/workspace", "/checkout/workspace", ""),
+            ("/checkout/workspace", "/checkout/workspace/app", "app"),
+            ("/checkout/workspace", "/checkout", ".."),
+            ("/checkout/workspace", "/checkout/client", "../client"),
+            (
+                "/checkout/workspace/deep",
+                "/checkout/client",
+                "../../client",
+            ),
+        ] {
+            assert_eq!(
+                workspace_member_path(Path::new(workspace), Path::new(member)),
+                PathBuf::from(expected),
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn workspace_members_on_another_drive_keep_an_absolute_identity_path() {
+        let member = Path::new(r"D:\client");
+        assert_eq!(
+            workspace_member_path(Path::new(r"C:\workspace"), member),
+            member
+        );
+    }
+
+    #[test]
+    fn external_workspace_member_identities_survive_joint_relocation() {
+        let mut previous = None;
+        for base in ["/checkout", "/relocated/src/checkout"] {
+            let base = PathBuf::from(base);
+            let app = Config::Application(alder_config::Application {
+                compiler: None,
+                target: alder_config::Target::Standalone,
+                dependencies: BTreeMap::new(),
+                test_dependencies: BTreeMap::new(),
+            });
+            let project = Project {
+                root: base.join("workspace"),
+                config: Config::Workspace(Workspace {
+                    compiler: None,
+                    members: vec![],
+                    dependencies: BTreeMap::new(),
+                }),
+                members: vec![
+                    make_member(&base.join("one/client"), app.clone()),
+                    make_member(&base.join("two/client"), app),
+                ],
+            };
+            let modules = [
+                Url::from_file_path(base.join("one/client/src/main.ald")).unwrap(),
+                Url::from_file_path(base.join("two/client/src/main.ald")).unwrap(),
+            ];
+            let packages = project.module_packages(&modules);
+            let identities = modules.map(|uri| packages[&uri].clone());
+            assert_ne!(identities[0], identities[1]);
+            if let Some(previous) = &previous {
+                assert_eq!(&identities, previous);
+            }
+            previous = Some(identities);
+        }
     }
 
     #[tokio::test]

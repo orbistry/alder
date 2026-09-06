@@ -37,10 +37,29 @@ production code.
 
 This is stronger evidence for this concrete nested-root build than the earlier
 warm-database comparison. It does not establish arbitrary downstream runtime
-initialization ordering or relocatability of external workspace members; those
-remain separate acceptance questions.
+initialization ordering. External-member relocation is covered separately below.
 
 Validation on the joint hardening worktree: full workspace tests and doctests,
 formatting, and strict all-target/all-feature Clippy pass (170 driver tests,
 436 solver integration tests; two existing ignored doctests). No pending
 snapshots were produced. This checkpoint changes tests and documentation only.
+
+## External-member relocation
+
+A regression moved a workspace and two external sibling application members
+together, preserving relative layout. Both members' identities changed because
+`strip_prefix` fell back to their absolute paths. Member keys now hash relative
+paths including parent components whenever filesystem prefixes agree. Distinct
+same-basename siblings still have distinct identities. The regression failed
+before this change and passes afterwards; path tests cover same-root, descendant,
+ancestor, sibling, and multiple-parent relationships.
+
+Different filesystem prefixes retain absolute paths; a Windows-only regression
+covers separate drives. That platform-specific test is not claimed as executed
+on the local macOS host. Moving a member independently so its relationship to
+the workspace changes intentionally changes its application-member identity.
+
+Full workspace tests and doctests, formatting, and strict Clippy pass after the
+fix: 172 driver tests, 436 solver integration tests, and 13 CLI tests, with the
+two existing ignored doctests. Release packaging must be refreshed for this
+new driver source before final acceptance.

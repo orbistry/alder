@@ -29,8 +29,10 @@ SHA-256 digest of the slash-separated workspace-relative member path. It is
 stable under member reordering and workspace relocation, distinguishes equal
 directory basenames, and occupies one fixed-length URL/cache path segment.
 Standalone application builds retain the `Application` identity. Members outside
-the workspace root currently use their full path as the key input; relocatability
-for those remains an audit item. When source roots nest, the most specific
+the workspace root use a relative path with parent components when they share
+a filesystem root, preserving identity when the workspace and its siblings move
+together. Different filesystem prefixes (such as different Windows drives)
+retain an absolute key input because no relative path exists. When source roots nest, the most specific
 containing source root owns the file. Package identity and module paths use the
 same ownership lookup; member ordering cannot move an inner member's files into
 an enclosing package.
@@ -67,6 +69,6 @@ interfaces or code are produced, without fabricated source labels. There are
 no metadata-free graph/build entry points or URI-based identity guesses.
 
 Remaining audits are tracked in `plans/compiler-hardening.md`, including
-external workspace members, cache consistency, and
+cache consistency and
 public re-exports. Deterministic graph traversal alone does not establish
 determinism of every downstream artifact or initialization order.
