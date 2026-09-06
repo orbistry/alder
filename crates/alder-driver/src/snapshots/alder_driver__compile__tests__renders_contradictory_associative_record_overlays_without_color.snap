@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn invalid(left, middle, right) {\n    let first = { ..{ ..left, ..middle }, ..right }\n    let second = { ..left, ..{ ..middle, ..right } }\n    let number: Number = first.value\n    let text: String = second.value\n    (number, text)\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/project/src/main.ald:3:30]
+ 2 │     let first = { ..{ ..left, ..middle }, ..right }
+ 3 │     let second = { ..left, ..{ ..middle, ..right } }
+   ·                              ──────────┬──────────
+   ·                                        ╰── type requirement originates here
+ 4 │     let number: Number = first.value
+   ╰────

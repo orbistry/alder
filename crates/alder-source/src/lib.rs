@@ -843,7 +843,7 @@ pub struct ChildBlock<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ChildItem<'a> {
-    /// Only `let` / `let mut` and `use` are recognized here.
+    /// Only `let` and `use` are recognized here.
     Stmt(&'a Located<Stmt<'a>>),
     Child(&'a Located<Child<'a>>),
 }

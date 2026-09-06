@@ -95,6 +95,7 @@ pub struct Env<'a> {
     pub associated_types: Vec<BTreeMap<&'a str, ProjectionType<'a>>>,
     pub control: ControlContext,
     builtin_annotations: BTreeMap<ModuleId<'a>, BTreeMap<&'a str, &'a Annotation<'a>>>,
+    builtin_interfaces: RefCell<BTreeMap<ModuleId<'a>, Option<&'a Interface<'a>>>>,
     next_local: Rc<Cell<u32>>,
     next_use: Rc<Cell<u32>>,
     assigned_bindings: Rc<RefCell<BTreeSet<QualifiedName<'a>>>>,
@@ -114,6 +115,7 @@ impl<'a> Env<'a> {
             associated_types: Vec::new(),
             control: ControlContext::default(),
             builtin_annotations: BTreeMap::new(),
+            builtin_interfaces: RefCell::new(BTreeMap::new()),
             next_local: Rc::new(Cell::new(0)),
             next_use: Rc::new(Cell::new(0)),
             assigned_bindings: Rc::new(RefCell::new(BTreeSet::new())),
@@ -176,6 +178,7 @@ impl<'a> Env<'a> {
         };
         let annotation = bump.alloc(Annotation {
             record_overlays: &[],
+            tuple_shapes: &[],
             error_row_inclusions: &[],
             params: &[],
             trait_predicates: &[],
@@ -250,6 +253,7 @@ impl<'a> Env<'a> {
                         payload: VariantPayload::Tuple(payloads),
                         annotation: bump.alloc(Annotation {
                             record_overlays: &[],
+                            tuple_shapes: &[],
                             error_row_inclusions: &[],
                             params,
                             trait_predicates: &[],
@@ -304,6 +308,7 @@ impl<'a> Env<'a> {
                     },
                     annotation: bump.alloc(Annotation {
                         record_overlays: &[],
+                        tuple_shapes: &[],
                         error_row_inclusions: &[],
                         params,
                         trait_predicates: &[],
@@ -372,6 +377,47 @@ impl<'a> Env<'a> {
         })
     }
 
+    fn builtin_interface(&self, bump: &'a Bump, module: ModuleId<'a>) -> Option<&'a Interface<'a>> {
+        if module.package != PackageId::Builtin {
+            return None;
+        }
+        if let Some(interface) = self.builtin_interfaces.borrow().get(&module) {
+            return *interface;
+        }
+        let interface = crate::interface::builtin_type_interface(bump, module);
+        self.builtin_interfaces
+            .borrow_mut()
+            .insert(module, interface);
+        interface
+    }
+
+    pub(crate) fn alias_definition(
+        &self,
+        bump: &'a Bump,
+        reference: QualifiedName<'a>,
+    ) -> Option<crate::aliases::Definition<'a>> {
+        if let Some(definition) = self.aliases.get(&reference) {
+            return Some(*definition);
+        }
+        let interface = self.builtin_interface(bump, reference.module)?;
+        let typ = interface
+            .types
+            .iter()
+            .find(|typ| typ.reference == reference)?;
+        let alder_ast::PublicTypeBody::Alias(body) = typ.body else {
+            return None;
+        };
+        Some(crate::aliases::Definition {
+            params: bump.alloc_slice_copy(
+                &typ.params
+                    .iter()
+                    .map(|param| param.name.value)
+                    .collect::<Vec<_>>(),
+            ),
+            body,
+        })
+    }
+
     fn add_builtin_traits(&mut self, bump: &'a Bump) {
         for name in ["Show", "Eq", "Ord", "Hash", "Json", "Num"] {
             let trait_id = alder_ast::TraitId(QualifiedName {
@@ -419,6 +465,7 @@ impl<'a> Env<'a> {
                     };
                     let annotation = bump.alloc(Annotation {
                         record_overlays: &[],
+                        tuple_shapes: &[],
                         error_row_inclusions: &[],
                         params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
                             name: Located::at_zero("a"),
@@ -529,6 +576,7 @@ impl<'a> Env<'a> {
         }));
         let annotation = bump.alloc(Annotation {
             record_overlays: &[],
+            tuple_shapes: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 alder_ast::TypeParam {
@@ -603,6 +651,7 @@ impl<'a> Env<'a> {
         };
         let pure = bump.alloc(Annotation {
             record_overlays: &[],
+            tuple_shapes: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 type_param("f", constructor_kind),
@@ -617,6 +666,7 @@ impl<'a> Env<'a> {
         });
         let apply = bump.alloc(Annotation {
             record_overlays: &[],
+            tuple_shapes: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 type_param("f", constructor_kind),
@@ -670,6 +720,7 @@ impl<'a> Env<'a> {
         }));
         let annotation = bump.alloc(Annotation {
             record_overlays: &[],
+            tuple_shapes: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 alder_ast::TypeParam {
@@ -722,6 +773,7 @@ impl<'a> Env<'a> {
         let t_of_b = applied_variable(bump, "t", b);
         let annotation = bump.alloc(Annotation {
             record_overlays: &[],
+            tuple_shapes: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[
                 alder_ast::TypeParam {
@@ -786,6 +838,7 @@ impl<'a> Env<'a> {
         ))) as &'a Located<Type<'a>>;
         let annotation = bump.alloc(Annotation {
             record_overlays: &[],
+            tuple_shapes: &[],
             error_row_inclusions: &[],
             params: bump.alloc_slice_copy(&[alder_ast::TypeParam {
                 name: Located::at_zero("i"),
@@ -1453,7 +1506,9 @@ impl<'a> Env<'a> {
     ) -> Result<TypeBinding<'a>, Error<'a>> {
         if let Some(qualifier) = qualifier {
             if let Some(module) = self.find_module(qualifier)
-                && let Some(interface) = module.interface
+                && let Some(interface) = module
+                    .interface
+                    .or_else(|| self.builtin_interface(bump, module.module))
             {
                 if let Some(typ) = interface.types.iter().find(|typ| typ.exported_as == name) {
                     return Ok(TypeBinding {
@@ -1583,6 +1638,7 @@ fn interface_constructor_annotation<'a>(
     };
     bump.alloc(Annotation {
         record_overlays: &[],
+        tuple_shapes: &[],
         error_row_inclusions: &[],
         params: enum_.params,
         trait_predicates: &[],

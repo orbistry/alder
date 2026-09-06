@@ -1,0 +1,2 @@
+pub fn describe(value: Result[Number, [:bad(a) | :missing]]) String
+    where a: Show { show(value) }

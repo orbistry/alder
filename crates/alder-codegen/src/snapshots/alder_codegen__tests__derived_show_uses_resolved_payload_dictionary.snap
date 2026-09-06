@@ -1,29 +1,8 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-description: "enum Secret { Secret }\nimpl Show[Secret] {\n    fn show(value: Secret) -> String { \"redacted\" }\n}\n#[derive(Show)]\nenum Wrapped { Wrapped(Secret) }\npub fn main() -> String { show(Wrapped::Wrapped(Secret::Secret)) }\n"
+description: "enum Secret { Secret }\nimpl Show[Secret] {\n    fn show(value: Secret) String { \"redacted\" }\n}\n#[derive(Show)]\nenum Wrapped { Wrapped(Secret) }\npub fn main() String { show(Wrapped::Wrapped(Secret::Secret)) }\n"
 ---
 import { $equalDerived, $showDerived } from "alder:kernel";
-const $dict$Eq$0 = {};
-$dict$Eq$0["eq"] = ($a0, $a1) => {
-	return $equalDerived($a0, $a1, { "Secret": {
-		"record": false,
-		"fields": [],
-		"optional": [],
-		"dictionaries": []
-	} });
-};
-Object["freeze"]($dict$Eq$0);
-const $dict$Eq$2 = {};
-$dict$Eq$2["eq"] = ($a0, $a1) => {
-	return $equalDerived($a0, $a1, { "Wrapped": {
-		"record": false,
-		"fields": ["_0"],
-		"optional": [],
-		"dictionaries": [$dict$Eq$0]
-	} });
-};
-Object["freeze"]($dict$Eq$2);
-const $c_Secret_Secret = Object["freeze"]({ "$": "Secret" });
 function $impl$1$show($self, $a0) {
 	let $l0_value = $a0;
 	return "redacted";
@@ -33,6 +12,34 @@ $dict$Show$1["show"] = ($a0) => {
 	return $impl$1$show($dict$Show$1, $a0);
 };
 Object["freeze"]($dict$Show$1);
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, { "Secret": {
+		"record": false,
+		"fields": [],
+		"dictionaries": []
+	} }, "alder://app/main.mjs::Secret");
+};
+Object["freeze"]($dict$Eq$0);
+const $dict$Eq$2 = {};
+$dict$Eq$2["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, { "Wrapped": {
+		"record": false,
+		"fields": ["_0"],
+		"dictionaries": [$dict$Eq$0]
+	} }, "alder://app/main.mjs::Wrapped");
+};
+Object["freeze"]($dict$Eq$2);
+const $dict$Show$2 = {};
+$dict$Show$2["show"] = ($a0) => {
+	return $showDerived($a0, { "Wrapped": {
+		"record": false,
+		"fields": ["_0"],
+		"dictionaries": [$dict$Show$1]
+	} });
+};
+Object["freeze"]($dict$Show$2);
+const $c_Secret_Secret = Object["freeze"]({ "$": "Secret" });
 function $c_Wrapped_Wrapped($a0) {
 	return {
 		"$": "Wrapped",
@@ -44,14 +51,4 @@ function $v_main() {
 	const $t1 = $c_Wrapped_Wrapped;
 	return $t0($t1($c_Secret_Secret));
 }
-const $dict$Show$2 = {};
-$dict$Show$2["show"] = ($a0) => {
-	return $showDerived($a0, { "Wrapped": {
-		"record": false,
-		"fields": ["_0"],
-		"optional": [],
-		"dictionaries": [$dict$Show$1]
-	} });
-};
-Object["freeze"]($dict$Show$2);
 export { $dict$Eq$0, $dict$Eq$2, $dict$Show$1, $dict$Show$2, $v_main as main };

@@ -1,7 +1,33 @@
 import ~/compare
+import ~/mutual
+import ~/cycles
+import ~/option_laws
 
 #[derive(Hash)]
 enum Box[a] { Value(a) }
+
+#[derive(Show, Hash)]
+enum Node { Links(Array[Option[Node]]) }
+
+#[derive(Eq)]
+enum Cycle { Link(Array[Option[Cycle]], Number) }
+
+#[derive(Eq)]
+enum GenericCycle[a] { Link(Array[GenericCycle[a]], a) }
+
+fn generic_cycle(value: a) GenericCycle[a] {
+    let children = []
+    let node = GenericCycle::Link(children, value)
+    Array.push(children, node)
+    node
+}
+
+fn cycle(value: Number) Cycle {
+    let children: Array[Option[Cycle]] = []
+    let node = Cycle::Link(children, value)
+    Array.push(children, Some(node))
+    node
+}
 
 fn equal(left: a, right: a) where a: Hash {
     assert compare.ordinary(left, right)
@@ -12,6 +38,25 @@ fn equal(left: a, right: a) where a: Hash {
 }
 
 pub fn main() {
+    option_laws.check()
+    cycles.check()
+    mutual.check()
+    assert generic_cycle(42) == generic_cycle(42)
+    assert generic_cycle("same") == generic_cycle("same")
+    assert !(generic_cycle("left") == generic_cycle("right"))
+    let left_cycle = cycle(42)
+    let right_cycle = cycle(42)
+    assert left_cycle == left_cycle
+    assert left_cycle == right_cycle
+    assert right_cycle == left_cycle
+    assert !(left_cycle == cycle(7))
+    let nan_cycle = cycle(0 / 0)
+    assert !(nan_cycle == nan_cycle)
+    let tree = Node::Links([Some(Node::Links([])), None])
+    let twin = Node::Links([Some(Node::Links([])), None])
+    equal(tree, twin)
+    assert show(tree) == "Links([Some(Links([])), None])"
+    assert !(tree == Node::Links([]))
     let text = "a😀"
     let count = 0
     while count < 16 {

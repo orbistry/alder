@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ last }\npub fn main() { last((1, 2)) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `tuple of length 4294967296`, found `(Number,
+  │ Number)`
+   ╭─[/project/src/main.ald:2:17]
+ 1 │ import @vendor/widgets.{ last }
+ 2 │ pub fn main() { last((1, 2)) }
+   ·                 ──┬─
+   ·                   ╰── type requirement originates here
+   ╰────

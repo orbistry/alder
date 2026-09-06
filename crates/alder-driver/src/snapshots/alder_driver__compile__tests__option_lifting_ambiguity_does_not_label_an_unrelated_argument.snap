@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn consume(value?: Number) {}\nfn relate(first?: a, second: a) {}\nfn conflict(first, second) {\n    consume(42)\n    relate(first, second)\n    relate(second, first)\n}\n"
+---
+alder::type::ambiguous_option_lifting
+
+  × I cannot choose consistent Option wrapping for these values
+   ╭─[/project/src/main.ald:5:12]
+ 4 │     consume(42)
+ 5 │     relate(first, second)
+   ·            ──┬──
+   ·              ╰── the intended Option layers are ambiguous here
+ 6 │     relate(second, first)
+   ╰────
+  help: add a type annotation or explicit Some wrappers to make the intended
+        Option layers clear

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "error Recursive { :nested(Result[Number, Recursive]) }\n"
+---
+alder::type::recursive_error_group
+
+  × the error group `Recursive` expands back into itself
+   ╭─[/project/src/main.ald:1:42]
+ 1 │ error Recursive { :nested(Result[Number, Recursive]) }
+   ·                                          ────┬────
+   ·                                              ╰── this reference creates a recursive error row
+   ╰────
+  help: error groups describe structural rows; use an enum for a recursive
+        payload instead

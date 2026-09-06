@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ describe }\npub fn main() String { describe(Err(:bad((value: Number) -> value))) }\n"
+---
+alder::trait::missing_instance
+
+  × no implementation of `Show[fn(Number) Number]` was found
+   ╭─[/project/src/main.ald:2:24]
+ 1 │ import @vendor/widgets.{ describe }
+ 2 │ pub fn main() String { describe(Err(:bad((value: Number) -> value))) }
+   ·                        ────┬───
+   ·                            ╰── this use needs trait evidence
+   ╰────
+  help: define an implementation of `Show[fn(Number) Number]`, or use a type
+        that already has one

@@ -1,0 +1,33 @@
+fn round_trip(value: a) Result[a, [:invalid_json(String)]] where a: Json {
+    Json.decode(Json.encode(value))
+}
+
+fn laws(values: Array[a]) where a: Hash + Json {
+    for value in values {
+        assert value == value
+        let decoded: Result[a, [:invalid_json(String)]] = round_trip(value)
+        match decoded {
+            Ok(copy) => {
+                assert value == copy
+                assert hash(value) == hash(copy)
+            },
+            Err(_) => { assert false },
+        }
+        for other in values {
+            assert (value == other) == (other == value)
+            if value == other { assert hash(value) == hash(other) }
+        }
+    }
+}
+
+pub fn check() {
+    let numbers: Array[Option[Option[Number]]] = [None, Some(None), Some(Some(0)), Some(Some(-0)), Some(Some(42))]
+    laws(numbers)
+    let units: Array[Option[Option[()]]] = [None, Some(None), Some(Some(()))]
+    laws(units)
+    let deeper = Array.map(numbers, value -> Some(Some(value)))
+    laws(deeper)
+    for value in deeper {
+        assert Option.map(value, payload -> payload) == value
+    }
+}

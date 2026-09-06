@@ -2,43 +2,47 @@
 source: crates/alder-codegen/src/lib.rs
 description: "error Failure {\n    :invalid(String),\n    :missing\n}\n\npub fn render(value: Result[Number, Failure]) String {\n    match value {\n        Ok(number) => \"ok\",\n        Err(:invalid(message)) => message,\n        Err(:missing) => \"missing\",\n    }\n}\n"
 ---
-import { $equalDerived, $matchFailure } from "alder:kernel";
-const $dict$Eq$0 = {};
-$dict$Eq$0["eq"] = ($a0, $a1) => {
-	return $equalDerived($a0, $a1, {
-		":invalid": {
-			"record": false,
-			"fields": ["_0"],
-			"optional": [],
-			"dictionaries": [{ "eq": ($a, $b) => {
-				return $a === $b;
-			} }]
-		},
-		":missing": {
-			"record": false,
-			"fields": [],
-			"optional": [],
-			"dictionaries": []
-		}
-	});
-};
-Object["freeze"]($dict$Eq$0);
+import { $matchFailure } from "alder:kernel";
 function $v_render($a0) {
 	let $l0_value = $a0;
 	const $t0 = $l0_value;
 	let $t1;
 	$match2: {
-		if ($t0 != null && $t0["$"] === "Ok" && true) {
-			let $l1_number = $t0["_0"];
+		let $t3;
+		let $t4 = $t0 != null && $t0["$"] === "Ok";
+		if ($t4) {
+			$t3 = $t0["_0"];
+			$t4 = true;
+		}
+		if ($t4) {
+			let $l1_number = $t3;
 			$t1 = "ok";
 			break $match2;
 		}
-		if ($t0 != null && $t0["$"] === "Err" && $t0["_0"] != null && $t0["_0"]["$"] === ":invalid" && true) {
-			let $l2_message = $t0["_0"]["_0"];
+		let $t5;
+		let $t6;
+		let $t8 = $t0 != null && $t0["$"] === "Err";
+		if ($t8) {
+			$t5 = $t0["_0"];
+			let $t7 = $t5 != null && $t5["$"] === ":invalid";
+			if ($t7) {
+				$t6 = $t5["_0"];
+				$t7 = true;
+			}
+			$t8 = $t7;
+		}
+		if ($t8) {
+			let $l2_message = $t6;
 			$t1 = $l2_message;
 			break $match2;
 		}
-		if ($t0 != null && $t0["$"] === "Err" && $t0["_0"] != null && $t0["_0"]["$"] === ":missing") {
+		let $t9;
+		let $t10 = $t0 != null && $t0["$"] === "Err";
+		if ($t10) {
+			$t9 = $t0["_0"];
+			$t10 = $t9 != null && $t9["$"] === ":missing";
+		}
+		if ($t10) {
 			$t1 = "missing";
 			break $match2;
 		}
@@ -46,4 +50,4 @@ function $v_render($a0) {
 	}
 	return $t1;
 }
-export { $dict$Eq$0, $v_render as render };
+export { $v_render as render };

@@ -1,3 +1,20 @@
+pub type MapOptions = { concurrency?: Number }
+
+// Explicitly request all input operations to be eligible to run concurrently.
+pub let unbounded: Number = 1 / 0
+
+#[extern("alder:kernel", "$fiberMapWithOptions")]
+pub fn map(values: Array[a], callback: fn(a) Task[b], options?: MapOptions) Task[Array[b]]
+
+#[extern("alder:kernel", "$fiberForEachWithOptions")]
+pub fn forEach(values: Array[a], callback: fn(a) Task[()], options?: MapOptions) Task[()]
+
+#[extern("alder:kernel", "$fiberTryMapWithOptions")]
+pub fn tryMap(values: Array[a], callback: fn(a) Task[Result[b, e]], options?: MapOptions) Task[Result[Array[b], e]]
+
+#[extern("alder:kernel", "$fiberTryForEachWithOptions")]
+pub fn tryForEach(values: Array[a], callback: fn(a) Task[Result[(), e]], options?: MapOptions) Task[Result[(), e]]
+
 #[extern("alder:kernel", "$fiberFork")]
 pub fn fork(task: Task[a]) Task[Fiber[a]]
 

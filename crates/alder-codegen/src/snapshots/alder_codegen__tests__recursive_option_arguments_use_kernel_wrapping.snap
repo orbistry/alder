@@ -1,0 +1,15 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "fn nested(value?: Option[Number]) Option[Option[Number]] { value }\npub fn main() Option[Option[Number]] { 42 |> nested() }\n"
+---
+import { $optionSome } from "alder:kernel";
+function $v_nested($a0) {
+	let $l0_value = $a0;
+	return $l0_value;
+}
+function $v_main() {
+	const $t0 = 42;
+	const $t1 = $v_nested;
+	return $t1($optionSome($optionSome($t0)));
+}
+export { $v_main as main };

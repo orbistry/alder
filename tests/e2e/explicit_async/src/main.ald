@@ -1,4 +1,29 @@
+import ~/option_flow
+import ~/dictionary_initialization
+import ~/function_instances
+import ~/dictionary_capture.{ Word, Code, Box, capture }
+import ~/foreign_format.{ Foreign, ForeignBox }
+import ~/traversals
+
 let calls = 0
+
+fn option_flatten(value: Option[Option[Number]]) Option[Number] {
+    let inner = value?
+    Some(inner?)
+}
+
+async fn option_start(value: Option[Number]) Option[Number] { value }
+
+async fn option_run(value: Option[Number]) Option[Number] {
+    Some(value |> option_start().await?)
+}
+
+fn option_once(value: Option[Number], visits: Array[Number]) Option[Number] {
+    Array.push(visits, 1)
+    let number = value?
+    Array.push(visits, 2)
+    Some(number)
+}
 
 #[extern("./client.js", "answer", "abort")]
 async fn foreign_answer(value: Number) Number
@@ -46,6 +71,150 @@ trait AsyncValue[a] {
 impl AsyncValue[Number] {}
 
 pub async fn main() {
+    dictionary_initialization.run()
+    let captured_default = capture([Word::Word])
+    let captured_override = capture(Box::Wrap(Code::Code))
+    let captured_first = captured_default(Code::Code, Word::Word)
+    let captured_second = captured_override(Word::Word, Code::Code)
+    assert(captured_first.await == "array-wordcodeword")
+    assert(captured_second.await == "box-codewordcode")
+    assert(captured_first.await == "array-wordcodeword")
+    let captured_foreign = capture(Foreign::Foreign)
+    assert(captured_foreign(Word::Word, Code::Code).await == "foreignwordcode")
+    let captured_foreign_factory = capture(ForeignBox::Wrap(Word::Word))
+    assert(captured_foreign_factory(Code::Code, Word::Word).await == "foreign-wordcodeword")
+    traversals.run().await
+    traversals.interruption_waits_for_cleanup().await
+    traversals.typed_failure_waits_for_sibling_cleanup().await
+    let callback_events: Array[Number] = []
+    let callback = (value: Number) Task[Number] -> async {
+        Array.push(callback_events, value)
+        Task.sleep(0).await
+        value + 1
+    }
+    let callback_task = function_instances.invoke(callback)
+    function_instances.generic_contracts().await
+    assert(callback_events == [])
+    assert(callback_task.await == 42)
+    assert(callback_events == [41])
+    assert(callback_task.await == 42)
+    assert(callback_events == [41, 41])
+    option_flow.interruption_waits_for_option_cleanup().await
+    assert(option_flow.preserve(Some(42)) == Some(42))
+    assert(option_flow.preserve(Some("text")) == Some("text"))
+    let nested_none: Option[Option[Number]] = Some(None)
+    assert(option_flow.preserve(nested_none) == Some(None))
+    assert(option_flow.recursive(Some(42), true) == Some(42))
+    assert(option_flow.recursive(Some("hello"), true) == Some("hello"))
+    assert(option_flow.recursive(nested_none, true) == Some(None))
+    let missing_number: Option[Number] = None
+    assert(option_flow.recursive(missing_number, true) == None)
+    assert(option_flow.explicit_exit(Some(42), false) == Some(42))
+    assert(option_flow.explicit_exit(Some(42), true) == None)
+    assert(option_flow.explicit_exit(missing_number, false) == None)
+    assert(option_flow.explicit_async_exit(nested_none).await == Some(None))
+    assert(option_flow.explicit_async_exit(missing_number).await == None)
+    assert(option_flow.unit(Some(())) == Some(()))
+    assert(option_flow.unit(None) == None)
+    assert(option_flow.nested(None).await == None)
+    assert(option_flow.nested(Some(42)).await == Some(42))
+    let mixed = match option_flow.mixed(None) {
+        Ok(task) => task,
+        Err(:outer) => async { Some(99) },
+    }
+    assert(mixed.await == None)
+    assert(option_flow.isolated_lambda(None) == 0)
+    assert(option_flow.isolated_lambda(Some(42)) == 42)
+    let operand_events = []
+    assert(option_flow.evaluate_once(None, operand_events) == None)
+    assert(operand_events == [1])
+    assert(option_flow.evaluate_once(Some(42), operand_events) == Some(42))
+    assert(operand_events == [1, 1, 2])
+
+    let cleanup_events: Array[Number] = []
+    let propagate_none = Fiber.scope(async {
+        Fiber.addFinalizer(async {
+            Task.sleep(0).await
+            Array.push(cleanup_events, 1)
+        }).await
+        let missing: Option[Number] = None
+        let number = missing?
+        Array.push(cleanup_events, 99)
+        Some(number)
+    })
+    assert(cleanup_events == [])
+    assert(propagate_none.await == None)
+    assert(cleanup_events == [1])
+    assert(propagate_none.await == None)
+    assert(cleanup_events == [1, 1])
+    assert(option_flatten(None) == None)
+    assert(option_flatten(Some(None)) == None)
+    assert(option_flatten(Some(Some(42))) == Some(42))
+    assert(option_run(None).await == None)
+    assert(option_run(Some(42)).await == Some(42))
+    let visits = []
+    assert(option_once(None, visits) == None)
+    assert(Array.length(visits) == 1)
+    assert(option_once(Some(42), visits) == Some(42))
+    assert(Array.length(visits) == 3)
+    let synchronized = SynchronizedRef.make(0).await
+    let transition = SynchronizedRef.update(synchronized, value -> async {
+        Task.sleep(0).await
+        value + 1
+    })
+    assert SynchronizedRef.get(synchronized).await == 0
+    Fiber.all([transition, transition, transition]).await
+    assert SynchronizedRef.get(synchronized).await == 3
+    let old = SynchronizedRef.modify(synchronized, value -> async {
+        Task.sleep(0).await
+        (value, 42)
+    }).await
+    assert old == 3
+    assert SynchronizedRef.get(synchronized).await == 42
+    SynchronizedRef.set(synchronized, 7).await
+    assert SynchronizedRef.get(synchronized).await == 7
+
+    let gate = Semaphore.make(1).await
+    let active = 0
+    let cleaned = 0
+    let protected = Semaphore.withPermits(gate, 1, async {
+        active += 1
+        assert active == 1
+        Fiber.addFinalizer(async {
+            Task.sleep(0).await
+            active -= 1
+            cleaned += 1
+        }).await
+        Task.sleep(0).await
+        42
+    })
+    assert active == 0
+    let results = Fiber.all([protected, protected, protected]).await
+    assert results == [42, 42, 42]
+    assert active == 0
+    assert cleaned == 3
+
+    let allocate = Ref.make(0)
+    let cell = allocate.await
+    let independent = allocate.await
+    assert !Ref.same(cell, independent)
+    let increment = Ref.update(cell, value -> value + 1)
+    assert Ref.get(cell).await == 0
+    increment.await
+    increment.await
+    assert Ref.get(cell).await == 2
+    assert Ref.get(independent).await == 0
+    let previous = Ref.modify(cell, value -> (value, 42)).await
+    assert previous == 2
+    assert Ref.get(cell).await == 42
+    Ref.set(cell, 0).await
+    Fiber.all(Array.map([1, 2, 3, 4], ignored -> async {
+        for index in [1, 2, 3, 4] {
+            Ref.update(cell, value -> value + 1).await
+        }
+    })).await
+    assert Ref.get(cell).await == 16
+
     let task = delayed(argument())
     assert calls == 1
     assert task.await == 1

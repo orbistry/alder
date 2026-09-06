@@ -239,6 +239,19 @@ fn copy_projection_equality<'a>(
 
 fn copy_annotation<'a>(bump: &'a Bump, annotation: &Annotation<'_>) -> &'a Annotation<'a> {
     bump.alloc(Annotation {
+        tuple_shapes: bump.alloc_slice_fill_iter(annotation.tuple_shapes.iter().map(|shape| {
+            crate::TupleShape {
+                tuple: copy_type_node(bump, shape.tuple),
+                length: shape.length,
+                elements: bump.alloc_slice_fill_iter(
+                    shape
+                        .elements
+                        .iter()
+                        .map(|(index, typ)| (*index, copy_type_node(bump, typ))),
+                ),
+                region: shape.region,
+            }
+        })),
         record_overlays: bump.alloc_slice_fill_iter(annotation.record_overlays.iter().map(
             |overlay| crate::RecordOverlay {
                 operands: copy_type_nodes(bump, overlay.operands),
@@ -305,7 +318,6 @@ fn copy_type<'a>(bump: &'a Bump, typ: &Type<'_>) -> Type<'a> {
             fields: bump.alloc_slice_fill_iter(fields.iter().map(|field| RecordTypeField {
                 index: field.index,
                 name: copy_str(bump, field.name),
-                presence: field.presence,
                 typ: copy_type_node(bump, field.typ),
             })),
             ext: copy_row_extension(bump, *ext),
@@ -356,7 +368,6 @@ fn copy_variant_payload<'a>(bump: &'a Bump, payload: VariantPayload<'_>) -> Vari
                 RecordTypeField {
                     index: field.index,
                     name: copy_str(bump, field.name),
-                    presence: field.presence,
                     typ: copy_type_node(bump, field.typ),
                 }
             })))

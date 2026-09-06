@@ -1,0 +1,42 @@
+pub enum Word { Word }
+pub enum Code { Code }
+pub enum Box[a] { Wrap(a) }
+
+pub trait Label[a] {
+    fn label(value: a) String
+}
+
+impl Label[Word] { fn label(value: Word) String { "word" } }
+impl Label[Code] { fn label(value: Code) String { "code" } }
+impl Label[Array[a]] where a: Label {
+    fn label(value: Array[a]) String { String.concat("array-", label(value[0])) }
+}
+impl Label[Box[a]] where a: Label {
+    fn label(value: Box[a]) String {
+        match value { Box::Wrap(inner) => String.concat("box-", label(inner)) }
+    }
+}
+
+pub trait Format[a] where a: Label {
+    async fn format(value: a, payload: b, suffix: c) String where b: Label, c: Label {
+        let prefix = label
+        let finish = () -> label(suffix)
+        Task.sleep(0).await
+        String.concat(prefix(value), String.concat(label(payload), finish()))
+    }
+}
+
+impl Format[Array[a]] where a: Label {}
+impl Format[Box[a]] where a: Label {
+    async fn format(value: Box[a], payload: b, suffix: c) String where c: Label, b: Label, c: Label {
+        let prefix = label
+        let finish = () -> label(suffix)
+        Task.sleep(0).await
+        String.concat(prefix(value), String.concat(label(payload), finish()))
+    }
+}
+
+pub fn capture(value: a) fn(b, c) Task[String] where a: Format, b: Label, c: Label {
+    let operation = format
+    (payload, suffix) -> operation(value, payload, suffix)
+}

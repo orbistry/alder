@@ -1,0 +1,21 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "fn equal_with_hash(left: a, right: a) Bool where a: Hash {\n    left == right\n}\npub fn check() Bool { equal_with_hash(0, -0) }\n"
+---
+import { $hash } from "alder:kernel";
+function $v_equal_with_hash($dict0, $a0, $a1) {
+	let $l0_left = $a0;
+	let $l1_right = $a1;
+	const $t0 = $l0_left;
+	return $dict0["$super0"]["eq"]($t0, $l1_right);
+}
+function $v_check() {
+	const $t1 = $v_equal_with_hash;
+	return $t1({
+		"$super0": { "eq": ($a, $b) => {
+			return $a === $b;
+		} },
+		"hash": $hash
+	}, 0, -0);
+}
+export { $v_check as check };

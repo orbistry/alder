@@ -279,6 +279,22 @@ mod tests {
     }
 
     #[test]
+    fn later_pin_mutation_cannot_invalidate_captured_payloads() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn read() Number {
+                let source = { item: Some(42), flag: 0 }
+                match source {
+                    { item: Some(value), flag: ^{
+                        source.item = None
+                        0
+                    } } => value
+                    _ => 0
+                }
+            }
+        "#};
+    }
+
+    #[test]
     fn alternative_patterns_share_guard_and_body_binding_identity() {
         assert_solved_emit_snapshot! {r#"
             enum Choice { Left(Number), Right(Number) }
@@ -316,6 +332,75 @@ mod tests {
             pub fn read(value: Option[Number]) Number {
                 let Some(number) = value
                 number
+            }
+        "#};
+    }
+
+    #[test]
+    fn recursive_option_fields_use_kernel_wrapping() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn main() {
+                let value: { nested: Option[Option[Number]] } = { nested: 42 }
+                value
+            }
+        "#};
+    }
+
+    #[test]
+    fn omitted_record_option_fields_emit_none() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn empty() {
+                let record: { value: Option[Number] } = {}
+                record
+            }
+            pub fn nested() {
+                let record: { value?: Option[Number] } = { value: Some(None) }
+                record
+            }
+        "#};
+    }
+
+    #[test]
+    fn enum_option_fields_default_and_read_without_presence_wrapping() {
+        assert_solved_emit_snapshot! {r#"
+            enum Config { Config { value?: Option[Number] } }
+            pub fn empty() { Config::Config {} }
+            pub fn nested() { Config::Config { value: Some(None) } }
+            pub fn read(config: Config) Option[Option[Number]] {
+                match config { Config::Config { value } => value }
+            }
+        "#};
+    }
+
+    #[test]
+    fn generic_option_lifting_keeps_a_universal_input_opaque() {
+        assert_solved_emit_snapshot!(
+            r#"
+            fn consume(value?: a) {}
+            pub fn relay(value: a) a {
+                consume(value)
+                value
+            }
+        "#
+        );
+    }
+
+    #[test]
+    fn recursive_option_arguments_use_kernel_wrapping() {
+        assert_solved_emit_snapshot! {r#"
+            fn nested(value?: Option[Number]) Option[Option[Number]] { value }
+            pub fn main() Option[Option[Number]] { 42 |> nested() }
+        "#};
+    }
+
+    #[test]
+    fn omitted_option_arguments_emit_explicit_none_values() {
+        assert_solved_emit_snapshot! {r#"
+            fn choose(value: Number, extra?: Number) Number { value }
+            pub fn main() Number {
+                let direct = choose(20)
+                let piped = 22 |> choose()
+                direct + piped
             }
         "#};
     }
@@ -420,6 +505,70 @@ mod tests {
     }
 
     #[test]
+    fn nested_json_dictionary_size_grows_linearly() {
+        let sizes = [2, 4, 8].map(|depth| {
+            let ty = format!("{}Number{}", "Array[".repeat(depth), "]".repeat(depth));
+            let source = format!("pub fn encode(value: {ty}) String {{ Json.encode(value) }}");
+            let code = emit_solved(&source);
+            assert_eq!(code.matches("$jsonEncodeContainer(").count(), depth);
+            assert_eq!(code.matches("$jsonDecodeContainer(").count(), depth);
+            code.len()
+        });
+        assert!(
+            sizes[2] < sizes[1] * 3 && sizes[1] < sizes[0] * 3,
+            "doubling codec depth must not cause exponential output growth: {sizes:?}"
+        );
+    }
+
+    #[test]
+    fn nested_hash_dictionary_emits_each_payload_once() {
+        for depth in [2, 4, 8] {
+            let ty = format!("{}Number{}", "Array[".repeat(depth), "]".repeat(depth));
+            let source = format!("pub fn fingerprint(value: {ty}) BigInt {{ hash(value) }}");
+            let code = emit_solved(&source);
+            assert_eq!(
+                code.matches("$hashContainer(").count(),
+                depth,
+                "each nested Hash dictionary must occur once (depth {depth}, {} bytes)",
+                code.len(),
+            );
+            assert_eq!(code.matches("$equalContainer(").count(), depth);
+        }
+    }
+
+    #[test]
+    fn primitive_hash_superclass_uses_primitive_equality() {
+        assert_solved_emit_snapshot! {r#"
+            fn equal_with_hash(left: a, right: a) Bool where a: Hash {
+                left == right
+            }
+            pub fn check() Bool { equal_with_hash(0, -0) }
+        "#};
+    }
+
+    #[test]
+    fn container_hash_shares_lazy_payloads_with_equality() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn fingerprint(value: Array[Option[Number]]) BigInt {
+                hash(value)
+            }
+        "#};
+    }
+
+    #[test]
+    fn nested_structural_json_dictionary_emits_each_payload_once() {
+        for depth in [2, 4, 8] {
+            let ty = (0..depth).fold("Number".to_owned(), |payload, _| {
+                format!("Result[Number, [:nested({payload})]]")
+            });
+            let source = format!("pub fn encode(value: {ty}) String {{ Json.encode(value) }}");
+            let code = emit_solved(&source);
+            assert_eq!(code.matches("$jsonEncodeDerived(").count(), depth);
+            assert_eq!(code.matches("$jsonDecodeDerived(").count(), depth);
+        }
+    }
+
+    #[test]
     fn function_and_block_lifting() {
         assert_emit_snapshot! {r#"
             pub fn answer() {
@@ -464,6 +613,18 @@ mod tests {
         "#};
     }
     #[test]
+    fn while_condition_break_preserves_outer_target() {
+        assert_emit_snapshot! {r#"
+            pub fn answer() Number {
+                loop {
+                    while { break 42 } {}
+                    break 0
+                }
+            }
+        "#};
+    }
+
+    #[test]
     fn mutable_loop_emission() {
         assert_emit_snapshot! {r#"
             pub fn sum() {
@@ -489,6 +650,26 @@ mod tests {
 
             #[extern("library", "pending", "abort")]
             pub fn pending(value: a) Task[a] where a: Show
+        "#};
+    }
+
+    #[test]
+    fn option_try_uses_null_check_and_representation_aware_unboxing() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn flatten(value: Option[Option[Number]]) Option[Number] {
+                let inner = value?
+                Some(inner?)
+            }
+        "#};
+    }
+
+    #[test]
+    fn option_try_in_pipe_await_uses_the_async_return_boundary() {
+        assert_solved_emit_snapshot! {r#"
+            async fn start(value: Option[Number]) Option[Number] { value }
+            pub async fn run(value: Option[Number]) Option[Number] {
+                Some(value |> start().await?)
+            }
         "#};
     }
 
@@ -608,17 +789,6 @@ mod tests {
             }
         "#};
     }
-    #[test]
-    fn while_condition_break_preserves_outer_target() {
-        assert_emit_snapshot! {r#"
-            pub fn answer() Number {
-                loop {
-                    while { break 42 } {}
-                    break 0
-                }
-            }
-        "#};
-    }
 
     #[test]
     fn generic_ordering_uses_the_compare_result_tag() {
@@ -708,7 +878,7 @@ mod tests {
 
     #[test]
     fn derived_json_marks_optional_record_fields() {
-        assert_emit_snapshot! {r#"
+        assert_solved_emit_snapshot! {r#"
             #[derive(Json)]
             pub enum Config {
                 Config { name: String, note?: String },
@@ -749,11 +919,61 @@ mod tests {
     }
 
     #[test]
-    fn error_group_ord_preserves_declaration_order() {
+    fn structural_error_json_emits_payload_codecs() {
         assert_solved_emit_snapshot! {r#"
-            #[derive(Ord)]
+            pub fn encode(value: Result[Number, [:missing | :bad(Number)]]) String {
+                Json.encode(value)
+            }
+        "#};
+    }
+
+    #[test]
+    fn structural_error_show_emits_payload_dictionaries() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn render(value: Result[Number, [:missing | :bad(Number)]]) String {
+                show(value)
+            }
+        "#};
+    }
+
+    #[test]
+    fn error_groups_emit_no_nominal_dictionaries() {
+        assert_solved_emit_snapshot! {r#"
             pub error Failure { :later, :first(Number) }
         "#};
+    }
+
+    #[test]
+    fn structural_hash_shares_payloads_with_equality() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn fingerprint(value: [:bad(Number) | :missing]) BigInt { hash(value) }
+        "#};
+    }
+
+    #[test]
+    fn nested_structural_hash_emits_each_payload_once() {
+        for depth in [2, 4, 8] {
+            let ty = (0..depth).fold("Number".to_owned(), |payload, _| {
+                format!("Result[Number, [:nested({payload})]]")
+            });
+            let source = format!("pub fn fingerprint(value: {ty}) BigInt {{ hash(value) }}");
+            let code = emit_solved(&source);
+            assert_eq!(code.matches("$hashErrorRow(").count(), depth);
+            assert_eq!(code.matches("$equalStructural(").count(), depth);
+        }
+    }
+
+    #[test]
+    fn nested_recursive_derived_evidence_uses_its_emitted_binding() {
+        let source = indoc::indoc! {r#"
+            #[derive(Show, Hash)]
+            pub enum Node { Link(Array[Node]) }
+            pub fn inspect(value: Node) (Bool, String, BigInt) {
+                (value == value, show(value), hash(value))
+            }
+        "#};
+        let emitted = emit_solved(source);
+        assert!(!emitted.contains("$self"), "{emitted}");
     }
 
     #[test]

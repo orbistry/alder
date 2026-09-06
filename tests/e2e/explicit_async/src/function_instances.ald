@@ -1,0 +1,30 @@
+pub trait Invoke[a] {
+    async fn invoke(value: a) Number
+}
+
+impl Invoke[fn(Number) Task[Number]] {
+    async fn invoke(value: fn(Number) Task[Number]) Number {
+        value(41).await
+    }
+}
+
+trait Keep[a] {
+    async fn keep(value: a, other: b) b
+    async fn fallback(value: a, other: b) b { return other }
+}
+
+impl Keep[Number] {
+    async fn keep(value: Number, other: b) b { other }
+}
+
+fn deferred(value: a) Task[a] { async { return value } }
+async fn nested(value: a) Task[a] { async { value } }
+
+pub async fn generic_contracts() {
+    assert(keep(0, 42).await == 42)
+    assert(keep(0, "text").await == "text")
+    assert(fallback(0, true).await)
+    assert(deferred("preserved").await == "preserved")
+    let inner: Task[Number] = nested(42).await
+    assert(inner.await == 42)
+}

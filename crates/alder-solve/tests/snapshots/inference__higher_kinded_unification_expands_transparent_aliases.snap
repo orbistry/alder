@@ -1,6 +1,6 @@
 ---
 source: crates/alder-solve/tests/inference.rs
-description: "type Wrapped[a, e] = Result[a, e]\n\nfn adapt(value: f[a]) f[a] { value }\nfn specialize(value: Wrapped[Number, String]) { adapt(value) }\n"
+description: "type Wrapped[a, e] = Result[a, e]\n\nfn adapt(value: f[a]) f[a] { value }\nfn specialize(value: Wrapped[Number, [:failed]]) { adapt(value) }\n"
 ---
 adapt: forall a, b. fn(a[b]) a[b]
-specialize: fn(Result[Number, String]) Result[Number, String]
+specialize: fn(Result[Number, [:failed]]) Result[Number, [:failed]]

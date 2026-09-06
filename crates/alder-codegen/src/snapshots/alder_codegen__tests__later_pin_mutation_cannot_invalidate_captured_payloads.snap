@@ -1,0 +1,51 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn read() Number {\n    let source = { item: Some(42), flag: 0 }\n    match source {\n        { item: Some(value), flag: ^{\n            source.item = None\n            0\n        } } => value\n        _ => 0\n    }\n}\n"
+---
+import { $matchFailure, $optionSome, $optionUnbox } from "alder:kernel";
+function $v_read() {
+	const $t0 = $optionSome;
+	const $t1 = {
+		"item": $t0(42),
+		"flag": 0
+	};
+	let $l0_source = $t1;
+	const $t2 = $l0_source;
+	let $t3;
+	$match4: {
+		let $t9;
+		let $t5;
+		let $t6;
+		let $t8 = $t2 != null && typeof $t2 === "object";
+		if ($t8) {
+			$t5 = $t2["item"];
+			let $t7 = $t5 !== null;
+			if ($t7) {
+				$t6 = $optionUnbox($t5);
+				$t7 = true;
+			}
+			$t8 = $t7;
+		}
+		let $t12 = $t8;
+		if ($t12) {
+			$t9 = $t2["flag"];
+			let $t10;
+			$l0_source["item"] = null;
+			$t10 = 0;
+			const $t11 = $t10;
+			$t12 = $t9 === $t11;
+		}
+		if ($t12) {
+			let $l1_value = $t6;
+			$t3 = $l1_value;
+			break $match4;
+		}
+		if (true) {
+			$t3 = 0;
+			break $match4;
+		}
+		$matchFailure("alder://app/main.mjs", "3:5", $t2);
+	}
+	return $t3;
+}
+export { $v_read as read };

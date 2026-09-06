@@ -6,10 +6,16 @@ import { $matchFailure, $optionUnbox } from "alder:kernel";
 function $v_read($a0) {
 	let $l0_value = $a0;
 	const $t0 = $l0_value;
-	if (!($t0 !== null && true)) {
+	let $t1;
+	let $t2 = $t0 !== null;
+	if ($t2) {
+		$t1 = $optionUnbox($t0);
+		$t2 = true;
+	}
+	if (!$t2) {
 		$matchFailure("alder://app/main.mjs", "2:9", $t0);
 	}
-	let $l1_number = $optionUnbox($t0);
+	let $l1_number = $t1;
 	return $l1_number;
 }
 export { $v_read as read };

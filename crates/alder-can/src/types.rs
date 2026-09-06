@@ -1,8 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use alder_ast::{
-    ErrorTagType, FieldPresence, RecordTypeField, RowExtension, Type as CanType, TypeSlot,
-};
+use alder_ast::{ErrorTagType, RecordTypeField, RowExtension, Type as CanType, TypeSlot};
 use alder_region::{Located, Region};
 use alder_source::Type as SourceType;
 use bumpalo::Bump;
@@ -133,11 +131,11 @@ pub fn canonicalize_type<'a>(
                     }),
                 )]);
             }
-            if let Some(alias) = env.aliases.get(&binding.reference) {
+            if let Some(alias) = env.alias_definition(bump, binding.reference) {
                 return crate::aliases::instantiate(
                     bump,
                     binding.reference,
-                    alias,
+                    &alias,
                     args,
                     source.region,
                 );
@@ -331,12 +329,7 @@ fn canonicalize_record_fields<'a>(
             Ok(typ) => fields.push(RecordTypeField {
                 index: index as u16,
                 name: field.field.value,
-                presence: if field.optional.is_some() {
-                    FieldPresence::Optional
-                } else {
-                    FieldPresence::Required
-                },
-                typ,
+                typ: crate::canonicalize::optional_annotation(bump, field.optional.is_some(), typ),
             }),
             Err(mut type_errors) => errors.append(&mut type_errors),
         }
@@ -402,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn optional_record_field_is_preserved() {
+    fn optional_record_field_canonicalizes_to_option() {
         let bump = Bump::new();
         let source = bump.alloc_str("{ name: String, nickname?: String }");
         let typ = canonicalize_type(
@@ -416,9 +409,16 @@ mod tests {
             panic!("expected record")
         };
         assert_eq!(fields[0].name, "name");
-        assert_eq!(fields[0].presence, FieldPresence::Required);
         assert_eq!(fields[1].name, "nickname");
-        assert_eq!(fields[1].presence, FieldPresence::Optional);
+        let CanType::Named { reference, args } = fields[1].typ.value else {
+            panic!("optional syntax must canonicalize to a named Option type")
+        };
+        assert_eq!(reference.module.package, PackageId::Builtin);
+        assert_eq!(reference.name, "Option");
+        assert_eq!(args.len(), 1);
+        assert!(
+            matches!(args[0].value, CanType::Named { reference, .. } if reference.name == "String")
+        );
     }
 
     #[test]

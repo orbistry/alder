@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub type Invalid = Result[Number, String]\n"
+---
+alder::type::invalid_result_error_type
+
+  × Result needs an error row, but this type is `String`
+   ╭─[/project/src/main.ald:1:35]
+ 1 │ pub type Invalid = Result[Number, String]
+   ·                                   ───┬──
+   ·                                      ╰── this is not an error row or named error group
+   ╰────
+  help: use a tagged error row such as `[:failed(String)]`, or declare a named
+        error group

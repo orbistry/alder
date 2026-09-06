@@ -1,0 +1,21 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn flatten(value: Option[Option[Number]]) Option[Number] {\n    let inner = value?\n    Some(inner?)\n}\n"
+---
+import { $optionSome, $optionUnbox } from "alder:kernel";
+function $v_flatten($a0) {
+	let $l0_value = $a0;
+	const $t0 = $l0_value;
+	if ($t0 === null) {
+		return $t0;
+	}
+	const $t1 = $optionUnbox($t0);
+	let $l1_inner = $t1;
+	const $t2 = $optionSome;
+	const $t3 = $l1_inner;
+	if ($t3 === null) {
+		return $t3;
+	}
+	return $t2($optionUnbox($t3));
+}
+export { $v_flatten as flatten };

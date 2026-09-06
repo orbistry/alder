@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ shared }\npub async fn main() {\n    let cell = shared().await\n    Ref.set(cell, [\"wrong\"]).await\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/project/src/main.ald:4:20]
+ 3 │     let cell = shared().await
+ 4 │     Ref.set(cell, ["wrong"]).await
+   ·                    ───┬───
+   ·                       ╰── type requirement originates here
+ 5 │ }
+   ╰────

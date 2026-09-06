@@ -1,0 +1,19 @@
+import ~/dictionary_capture.{ Label, Format, label }
+
+pub enum Foreign { Foreign }
+
+impl Label[Foreign] {
+    fn label(value: Foreign) String { "foreign" }
+}
+
+impl Format[Foreign] {}
+
+pub enum ForeignBox[a] { Wrap(a) }
+
+impl Label[ForeignBox[a]] where a: Label {
+    fn label(value: ForeignBox[a]) String {
+        match value { ForeignBox::Wrap(inner) => String.concat("foreign-", label(inner)) }
+    }
+}
+
+impl Format[ForeignBox[a]] where a: Label {}

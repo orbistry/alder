@@ -102,7 +102,16 @@ pub struct OwnedScheme {
     pub projection_equalities: Vec<OwnedProjectionEquality>,
     pub error_row_inclusions: Vec<OwnedErrorRowInclusion>,
     pub record_overlays: Vec<OwnedRecordOverlay>,
+    pub tuple_shapes: Vec<OwnedTupleShape>,
     pub typ: OwnedLocatedType,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnedTupleShape {
+    pub tuple: OwnedLocatedType,
+    pub length: u64,
+    pub elements: Vec<(u32, OwnedLocatedType)>,
+    pub region: Region,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,7 +188,6 @@ pub struct OwnedAliasArgument {
 pub struct OwnedRecordField {
     pub index: u16,
     pub name: String,
-    pub optional: bool,
     pub typ: OwnedLocatedType,
 }
 
@@ -517,6 +525,20 @@ fn own_impl(implementation: &ast::InterfaceImpl<'_>) -> OwnedImplHeader {
 
 fn own_scheme(annotation: &ast::Annotation<'_>) -> OwnedScheme {
     OwnedScheme {
+        tuple_shapes: annotation
+            .tuple_shapes
+            .iter()
+            .map(|shape| OwnedTupleShape {
+                tuple: own_type_node(shape.tuple),
+                length: shape.length,
+                elements: shape
+                    .elements
+                    .iter()
+                    .map(|(index, typ)| (*index, own_type_node(typ)))
+                    .collect(),
+                region: shape.region,
+            })
+            .collect(),
         record_overlays: annotation
             .record_overlays
             .iter()
@@ -636,7 +658,6 @@ fn own_record_field(field: &ast::RecordTypeField<'_>) -> OwnedRecordField {
     OwnedRecordField {
         index: field.index,
         name: field.name.to_owned(),
-        optional: field.presence == ast::FieldPresence::Optional,
         typ: own_type_node(field.typ),
     }
 }
@@ -1048,11 +1069,6 @@ fn hydrate_record_fields<'a>(
     bump.alloc_slice_fill_iter(fields.iter().map(|field| ast::RecordTypeField {
         index: field.index,
         name: bump.alloc_str(&field.name),
-        presence: if field.optional {
-            ast::FieldPresence::Optional
-        } else {
-            ast::FieldPresence::Required
-        },
         typ: hydrate_type_node(bump, &field.typ),
     }))
 }
@@ -1082,6 +1098,19 @@ fn hydrate_variant_payload<'a>(
 
 fn hydrate_scheme<'a>(bump: &'a Bump, scheme: &OwnedScheme) -> &'a ast::Annotation<'a> {
     bump.alloc(ast::Annotation {
+        tuple_shapes: bump.alloc_slice_fill_iter(scheme.tuple_shapes.iter().map(|shape| {
+            ast::TupleShape {
+                tuple: hydrate_type_node(bump, &shape.tuple),
+                length: shape.length,
+                elements: bump.alloc_slice_fill_iter(
+                    shape
+                        .elements
+                        .iter()
+                        .map(|(index, typ)| (*index, hydrate_type_node(bump, typ))),
+                ),
+                region: shape.region,
+            }
+        })),
         record_overlays: bump.alloc_slice_fill_iter(scheme.record_overlays.iter().map(|overlay| {
             ast::RecordOverlay {
                 operands: hydrate_type_nodes(bump, &overlay.operands),

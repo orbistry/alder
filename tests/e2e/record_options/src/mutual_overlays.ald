@@ -1,0 +1,13 @@
+fn merge(left, right) { { ..left, ..right } }
+
+pub fn even(count: Number, value, other) {
+    let merged = merge(value, other)
+    if count == 0 { merged }
+    else { odd(count - 1, { nested: merged }, other) }
+}
+
+pub fn odd(count: Number, value, other) {
+    let merged = merge(value, other)
+    if count == 0 { merged }
+    else { even(count - 1, { nested: merged }, other) }
+}

@@ -12,8 +12,20 @@ function $v_read($a0) {
 	const $t1 = $l0_value;
 	let $t2;
 	$match3: {
-		if ($t1 !== null && $optionUnbox($t1) !== null && true) {
-			let $l1_number = $optionUnbox($optionUnbox($t1));
+		let $t4;
+		let $t5;
+		let $t7 = $t1 !== null;
+		if ($t7) {
+			$t4 = $optionUnbox($t1);
+			let $t6 = $t4 !== null;
+			if ($t6) {
+				$t5 = $optionUnbox($t4);
+				$t6 = true;
+			}
+			$t7 = $t6;
+		}
+		if ($t7) {
+			let $l1_number = $t5;
 			$t2 = $l1_number;
 			break $match3;
 		}

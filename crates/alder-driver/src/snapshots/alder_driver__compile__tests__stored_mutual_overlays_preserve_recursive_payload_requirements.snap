@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+assertion_line: 2700
+description: "import @vendor/widgets.{ even }\npub fn run() { even(2, { nested: { nested: 0 } }, {}) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `{ nested: Number }`
+   ╭─[/project/src/main.ald:2:16]
+ 1 │ import @vendor/widgets.{ even }
+ 2 │ pub fn run() { even(2, { nested: { nested: 0 } }, {}) }
+   ·                ──┬─
+   ·                  ╰── type requirement originates here
+   ╰────

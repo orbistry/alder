@@ -1,6 +1,6 @@
 //! End-to-end Alder inference tests: parse → canonicalize → constrain → solve.
 
-use alder_ast::{Annotation, FieldPresence, Kind, ModuleId, PackageId, RowExtension, Type};
+use alder_ast::{Annotation, Kind, ModuleId, PackageId, RowExtension, Type};
 use alder_can::{Annotations, Context};
 use alder_constrain::{Error, ErrorKind};
 use alder_region::Located;
@@ -39,62 +39,2905 @@ fn coalesce_requires_an_option_and_a_matching_payload_default() {
 }
 
 #[test]
-fn synchronized_ref_accepts_task_callbacks_and_preserves_payload_types() {
+fn structural_error_hash_rejects_payloads_without_hash() {
     let bump = Bump::new();
-    let result = solve_input(
-        &bump,
-        indoc! {r#"
-        async fn fresh(value: a) SynchronizedRef[a] { SynchronizedRef.make(value).await }
-        async fn run() String {
-            let number = fresh(1).await
-            let text = fresh("text").await
-            SynchronizedRef.update(number, value -> async { value + 1 }).await
-            SynchronizedRef.modify(number, value -> async { ("previous", value + 1) }).await
-            SynchronizedRef.get(text).await
-        }
-    "#},
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn fingerprint(value: [:callback(fn(Number) Number)]) BigInt { hash(value) }
+    "#}
+        )
+        .is_err()
     );
-    assert!(result.is_ok(), "{result:?}");
 }
 
 #[test]
-fn semaphore_preserves_independent_protected_result_types() {
+fn structural_error_rows_do_not_provide_ord() {
     let bump = Bump::new();
-    let result = solve_input(
-        &bump,
-        indoc! {r#"
-        async fn protect(gate: Semaphore, task: Task[a]) a {
-            Semaphore.withPermits(gate, 1, task).await
-        }
-        async fn run() String {
-            let gate = Semaphore.make(2).await
-            let number = protect(gate, async { 42 }).await
-            let text = protect(gate, async { "text" }).await
-            text
-        }
-    "#},
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        error Failure { :later, :first(Number) }
+        fn order(left: Failure, right: Failure) Bool { left < right }
+    "#}
+        )
+        .is_err()
     );
-    assert!(result.is_ok(), "{result:?}");
 }
 
 #[test]
-fn ref_operations_preserve_payload_and_callback_result_types() {
+fn structural_error_hash_requires_payload_hash_without_group_derives() {
     let bump = Bump::new();
-    let result = solve_input(
+    solve_input(
         &bump,
         indoc! {r#"
-        async fn fresh(value: a) Ref[a] { Ref.make(value).await }
-        async fn run() String {
-            let number = fresh(1).await
-            let text = fresh("text").await
-            Ref.set(number, 2).await
-            Ref.update(number, value -> value + 1).await
-            Ref.modify(number, value -> (Ref.same(number, number), value + 1)).await
-            Ref.get(text).await
+        error First { :bad(Number), :missing }
+        error Second { :missing, :bad(Number) }
+        fn first(value: First) BigInt { hash(value) }
+        fn second(value: Second) BigInt { hash(value) }
+        fn literal(value: [:bad(Number)]) BigInt { hash(value) }
+    "#},
+    )
+    .expect("error hashing must depend on structural payload capabilities, not nominal derives");
+}
+
+#[test]
+fn direct_error_group_annotations_share_structural_identity() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error First { :bad(Number), :missing }
+        error Second { :missing, :bad(Number) }
+        fn relay(value: First) Second { value }
+        fn render(value: First) String { show(value) }
+        fn encode(value: Second) String { Json.encode(value) }
+        type Alias = First
+        fn array(values: Array[Alias]) Array[Second] { values }
+        fn record(value: { failure: First }) ({ failure: Second }) { value }
+    "#},
+    )
+    .expect("named error groups are structural aliases outside Result annotations too");
+}
+
+#[test]
+fn direct_error_group_annotations_reject_incompatible_payloads() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        error First { :bad(Number) }
+        error Second { :bad(String) }
+        fn relay(value: First) Second { value }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn structural_error_json_requires_only_payload_codecs() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error First { :bad(Number), :missing }
+        error Second { :missing, :bad(Number) }
+        fn first(value: Result[Number, First]) String { Json.encode(value) }
+        fn second(text: String) Result[Result[Number, Second], [:invalid_json(String)]] {
+            Json.decode(text)
         }
     "#},
+    )
+    .expect("equivalent closed error rows share structural Json capabilities");
+}
+
+#[test]
+fn structural_error_json_rejects_payloads_without_codecs() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn encode(value: Result[Number, [:callback(fn(Number) Number)]]) String {
+            Json.encode(value)
+        }
+    "#}
+        )
+        .is_err()
     );
-    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn structural_error_show_does_not_depend_on_group_names_or_derives() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error First { :bad(Number), :missing }
+        error Second { :missing, :bad(Number) }
+        fn first(value: Result[Number, First]) String { show(value) }
+        fn second(value: Result[Number, Second]) String { show(value) }
+        fn literal(value: Result[Number, [:missing | :bad(Number)]]) String { show(value) }
+    "#},
+    )
+    .expect("closed error rows provide Show from their payload capabilities");
+}
+
+#[test]
+fn structural_error_show_requires_payload_show() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        error Failed { :callback(fn(Number) Number) }
+        fn render(value: Result[Number, Failed]) String { show(value) }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn qualified_builtin_aliases_check_their_structural_payload() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn defaults() Fiber::MapOptions { {} }
+        fn bounded() Fiber::MapOptions { { concurrency: 8 } }
+        fn read(options: Fiber::MapOptions) Option[Number] { options.concurrency }
+    "#},
+    )
+    .expect("builtin alias must expand in caller annotations");
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn invalid() Fiber::MapOptions { { concurrency: "eight" } }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn sparse_tuple_constraints_do_not_generalize_captured_arrays() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        let shared = []
+        fn expose(value) {
+            value.0 = shared
+            value
+        }
+        fn numbers() {
+            let pair = expose(([], ()))
+            Array.push(pair.0, 42)
+        }
+        fn strings() {
+            let pair = expose(([], ()))
+            let invalid: Array[String] = pair.0
+            invalid
+        }
+    "#}
+        )
+        .is_err(),
+        "the sparse element relation must retain shared mutable payload types"
+    );
+}
+
+#[test]
+fn tuple_projection_maximum_index_is_stored_sparsely() {
+    let bump = Bump::new();
+    let solved = solve_input(&bump, "pub fn last(value) { value.4294967295 }").unwrap();
+    let annotation = solved.annotations.values().next().unwrap();
+    assert_eq!(annotation.tuple_shapes.len(), 1);
+    let shape = &annotation.tuple_shapes[0];
+    assert_eq!(shape.length, u64::from(u32::MAX) + 1);
+    assert_eq!(shape.elements.len(), 1);
+    assert_eq!(shape.elements[0].0, u32::MAX);
+    assert_eq!(
+        annotation.params.len(),
+        2,
+        "only operand and projected element are quantified"
+    );
+}
+
+#[test]
+fn open_spread_defaults_are_preserved_in_generic_call_constraints() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            type Config = { value: Option[Number] }
+            fn copy(record) Config { { ..record } }
+            fn check() {
+                let absent: Config = copy({})
+                let present: Config = copy({ value: Some(42) })
+            }
+        "#},
+    )
+    .expect("a fresh spread supplies None without requiring it from its input");
+}
+
+#[test]
+fn open_spread_defaults_use_later_callback_context() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            type Config = { value: Option[Number] }
+            fn apply(value: a, callback: fn(a) b) b { callback(value) }
+            fn identity(record: Config) Config { record }
+            fn copy(record) Config { apply({ ..record }, identity) }
+            fn check() Config { copy({}) }
+        "#},
+    )
+    .expect("open spreads retain fresh-construction context from later arguments");
+}
+
+#[test]
+fn open_spread_defaults_do_not_hide_incompatible_supplied_fields() {
+    for source in [
+        indoc! {r#"
+            type Config = { value: Option[Number] }
+            fn copy(record) Config { { ..record } }
+            fn invalid() { copy({ value: Some("wrong") }) }
+        "#},
+        indoc! {r#"
+            type Config = { value: Option[Number] }
+            fn copy(record) Config { { ..record } }
+            fn invalid() {
+                let record = { value: 42 }
+                copy(record)
+            }
+        "#},
+        indoc! {r#"
+            type Config = { required: Number, value: Option[Number] }
+            fn copy(record) Config { { ..record } }
+            fn invalid() { copy({}) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        solve_input(&bump, source)
+            .expect_err("defaults cannot replace a supplied field or invent a required field");
+    }
+}
+
+#[test]
+fn record_defaults_use_context_from_later_call_arguments() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn apply(value: a, callback: fn(a) b) b { callback(value) }
+            fn read(record: { value: Option[Number] }) Option[Number] { record.value }
+            fn check() Option[Number] { apply({}, read) }
+            fn spread() Option[Number] { apply({ ..{} }, read) }
+            fn branch(flag: Bool) Option[Number] { apply(if flag { {} } else { {} }, read) }
+        "#},
+    )
+    .expect("a later callback supplies the fresh record's field context");
+}
+
+#[test]
+fn late_record_context_cannot_invent_required_fields_or_convert_aliases() {
+    for source in [
+        indoc! {r#"
+            fn apply(value: a, callback: fn(a) b) b { callback(value) }
+            fn read(record: { value: Number }) Number { record.value }
+            fn invalid() Number { apply({}, read) }
+        "#},
+        indoc! {r#"
+            fn apply(value: a, callback: fn(a) b) b { callback(value) }
+            fn read(record: { value: Option[Number] }) Option[Number] { record.value }
+            fn invalid() Option[Number] {
+                let record = {}
+                apply(record, read)
+            }
+        "#},
+        indoc! {r#"
+            fn empty() { {} }
+            fn read(record: { value: Option[Number] }) Option[Number] { record.value }
+            fn invalid() Option[Number] { read(empty()) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source)
+            .expect_err("only a fresh contextual literal may acquire Option defaults");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                alder_solve::SolveError::Core(Error {
+                    kind: ErrorKind::MissingField { .. },
+                    ..
+                })
+            )),
+            "{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn omitted_generic_record_field_constrains_its_type_to_option() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn choose(record: { value: a }, fallback: a) a { fallback }
+            fn check() Option[Number] { choose({}, Some(42)) }
+            fn spread() Option[Number] { choose({ ..{} }, Some(42)) }
+            fn reverse(fallback: a, record: { value: a }) a { record.value }
+            fn reverse_check() Option[Number] { reverse(Some(42), {}) }
+        "#},
+    )
+    .expect("omission supplies None even when the field payload is inferred later");
+}
+
+#[test]
+fn omitted_generic_record_fields_cannot_satisfy_universal_or_concrete_payloads() {
+    for source in [
+        indoc! {r#"
+            type Record[a] = { value: a }
+            pub fn invalid() Record[a] { {} }
+        "#},
+        indoc! {r#"
+            fn choose(record: { value: a }, fallback: a) a { record.value }
+            fn invalid() Number { choose({}, 42) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source)
+            .expect_err("None cannot implement an arbitrary or non-Option field type");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                alder_solve::SolveError::Core(Error {
+                    kind: ErrorKind::GenericSpecialization { .. } | ErrorKind::Mismatch { .. },
+                    ..
+                })
+            )),
+            "{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn explicit_option_record_fields_accept_omission_like_shorthand() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn read(record: { value: Option[Number] }) Option[Number] { record.value }
+            fn shorthand(record: { value?: Number }) Option[Number] { read(record) }
+            fn check() {
+                let absent: { value: Option[Number] } = {}
+                let explicit: { value?: Number } = { value: None }
+                let first: Option[Number] = read({})
+                let second: Option[Number] = shorthand(absent)
+                let third: Option[Number] = read(explicit)
+            }
+        "#},
+    )
+    .expect("optional record spelling must not create a separate field-presence type");
+}
+
+#[test]
+fn sparse_tuple_shapes_reject_transitive_element_cycles() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        fn cycle(first, second) {
+            first.0 = second
+            second.0 = first
+        }
+    "#},
+    )
+    .expect_err("finite tuple types cannot contain each other recursively");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::InfiniteType,
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn contextual_block_preserves_its_enclosing_return_boundary() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn answer() Number {
+            let unused: String = { return 42 }
+            0
+        }
+    "#},
+    )
+    .expect("an exiting block does not need a value of the initializer type");
+}
+
+#[test]
+fn contextual_block_rejects_reachable_unit_fallthrough() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn answer(flag: Bool) Number {
+            let value: String = { if flag { return 42 } }
+            0
+        }
+    "#}
+        )
+        .is_err(),
+        "a reachable unit block cannot initialize a String"
+    );
+}
+
+#[test]
+fn singleton_error_constructor_keeps_context_through_block() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error Failure { :missing, :failed(Number) }
+        fn make() {
+            let failure: Result[Number, Failure] = {
+                let code = 7
+                Err(:failed(code))
+            }
+            failure
+        }
+    "#},
+    )
+    .expect("a block preserves contextual construction at its result expression");
+}
+
+#[test]
+fn singleton_error_constructor_keeps_context_through_branches() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error Failure { :missing, :failed(Number), :cancelled }
+        fn make(flag: Bool) {
+            let failure: Result[Number, Failure] = if flag {
+                Err(:failed(7))
+            } else {
+                Err(:missing)
+            }
+            failure
+        }
+    "#},
+    )
+    .expect("branches preserve contextual construction without requiring every tag");
+}
+
+#[test]
+fn singleton_error_constructor_fills_named_multi_tag_row() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error Failure { :missing, :failed(Number) }
+        fn make() {
+            let failure: Result[Number, Failure] = Err(:failed(7))
+            failure
+        }
+    "#},
+    )
+    .expect("constructing one permitted tag satisfies the declared error row");
+}
+
+#[test]
+fn singleton_error_constructors_fill_contextual_arrays_and_arguments() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error Failure { :missing, :failed(Number) }
+        fn accept(value: Result[Number, Failure]) { () }
+        fn make() {
+            let failures: Array[Result[Number, Failure]] = [
+                Err(:missing), Result.err(:failed(7)),
+            ]
+            accept(Err(:failed(8)))
+            failures
+        }
+    "#},
+    )
+    .expect("fresh error constructors use the expected row in nested contexts");
+}
+
+#[test]
+fn singleton_error_constructor_rejects_unlisted_tag() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        error Failure { :missing, :failed(Number) }
+        fn make() {
+            let failure: Result[Number, Failure] = Err(:other)
+            failure
+        }
+    "#}
+        )
+        .is_err(),
+        "contextual construction must not admit an unlisted error tag"
+    );
+}
+
+#[test]
+fn singleton_error_constructor_rejects_wrong_payload() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        error Failure { :missing, :failed(Number) }
+        fn make() {
+            let failure: Result[Number, Failure] = Err(:failed("wrong"))
+            failure
+        }
+    "#}
+        )
+        .is_err(),
+        "contextual construction preserves the tag payload contract"
+    );
+}
+
+#[test]
+fn result_instance_heads_ignore_error_group_names() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            error First { :failed(Number), :missing }
+            error Second { :missing, :failed(Number) }
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[Result[Number, First]] {}
+            impl Marker[Result[Number, Second]] {}
+        "#},
+    )
+    .expect_err("equivalent structural error rows make the Result heads overlap");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl { .. })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn partial_result_instance_heads_expand_error_group_aliases() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        error Failure { :failed(Number), :missing }
+        type Alias = Failure
+        trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+        impl Marker[Result[_, Alias]] {}
+        impl Marker[Result[_, [:missing | :failed(Number)]]] {}
+    "#},
+    )
+    .expect_err("a named error row and its structural spelling overlap");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl { .. })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn result_instance_heads_preserve_distinct_error_payloads() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error First { :failed(Number) }
+        error Second { :failed(String) }
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[Result[Number, First]] {}
+        impl Marker[Result[Number, Second]] {}
+    "#},
+    )
+    .expect("different error payload contracts keep these heads disjoint");
+}
+
+#[test]
+fn result_instance_selection_ignores_error_group_names() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error First { :failed(Number), :missing }
+        error Second { :missing, :failed(Number) }
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[Result[Number, First]] {}
+        fn consume(value: Result[Number, Second]) Result[Number, Second] { pass(value) }
+    "#},
+    )
+    .expect("structurally equivalent Result error rows select the same implementation");
+}
+
+#[test]
+fn named_error_groups_reject_custom_trait_implementations() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        error Failure { :failed }
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[Failure] {}
+    "#},
+    )
+    .expect_err("structural error-group aliases cannot own nominal custom implementations");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_))),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn named_error_group_aliases_reject_custom_trait_implementations() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        error Failure { :failed }
+        type Alias = Failure
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[Alias] {}
+    "#},
+    )
+    .expect_err("a transparent alias cannot hide the error-group implementation target");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Coherence(
+                alder_solve::CoherenceError::NamedErrorGroupImpl { .. }
+            )
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn nominal_wrappers_of_error_groups_can_have_custom_implementations() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        error Failure { :failed }
+        enum Wrapper { Wrapper(Result[Number, Failure]) }
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[Wrapper] {}
+    "#},
+    )
+    .expect("the wrapper is a distinct nominal type, not an error-group alias");
+}
+
+#[test]
+fn higher_kinded_coherence_honors_later_explicit_section() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        enum Pair[a, b] { Pair(a, b) }
+        trait Marker[a, f] { fn pass(value: a, other: fn(Number) f[Number]) a { value } }
+        impl Marker[f[a], f] {}
+        impl Marker[Pair[Number, String], Pair[Number, _]] {}
+    "#},
+    )
+    .expect_err("an explicit section in a later argument establishes overlapping heads");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl { .. })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn higher_kinded_coherence_honors_earlier_explicit_section() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        enum Pair[a, b] { Pair(a, b) }
+        trait Marker[f, a] { fn pass(value: a, other: fn(Number) f[Number]) a { value } }
+        impl Marker[f, f[a]] {}
+        impl Marker[Pair[Number, _], Pair[Number, String]] {}
+    "#},
+    )
+    .expect_err("reordering trait arguments preserves the explicit section overlap");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl { .. })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn higher_kinded_coherence_rejects_incompatible_explicit_fixed_slot() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        enum Pair[a, b] { Pair(a, b) }
+        trait Marker[a, f] { fn pass(value: a, other: fn(Number) f[Number]) a { value } }
+        impl Marker[f[a], f] {}
+        impl Marker[Pair[Bool, String], Pair[Number, _]] {}
+    "#},
+    )
+    .expect("a fixed Number slot cannot also satisfy Bool");
+}
+
+#[test]
+fn higher_kinded_instance_head_recovers_leftmost_result_section() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[Array[f[a]]] where f: Functor {}
+        fn use_results(value: Array[Result[Number, [:failed]]]) { pass(value) }
+    "#},
+    )
+    .expect("the constructor pattern recovers Result[_, [:failed]]");
+}
+
+#[test]
+fn higher_kinded_instance_coherence_detects_leftmost_section_overlap() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[Array[f[a]]] {}
+        impl Marker[Array[Result[Number, [:failed]]]] {}
+    "#},
+    )
+    .expect_err("partial recovery makes these implementation heads overlap");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl { .. })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn higher_kinded_instance_coherence_preserves_recovered_fixed_slots() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[(f[a], f[b])] {}
+        impl Marker[(Result[Number, [:left]], Result[String, [:right]])] {}
+    "#},
+    )
+    .expect("a shared recovered constructor cannot have two incompatible fixed error rows");
+}
+
+#[test]
+fn higher_kinded_instance_coherence_applies_recovered_section_again() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[(f[a], f[b])] {}
+        impl Marker[(Result[Number, [:failed]], Result[String, [:failed]])] {}
+    "#},
+    )
+    .expect_err("the recovered section must apply consistently to the second payload");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl { .. })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn higher_kinded_instance_head_matches_nested_constructor_application() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[Array[f[a]]] {}
+        fn use_options(value: Array[Option[Number]]) { pass(value) }
+        fn use_arrays(value: Array[Array[String]]) { pass(value) }
+    "#},
+    )
+    .expect("applied constructor variables in instance heads must match actual applications");
+}
+
+#[test]
+fn higher_kinded_instance_head_resolves_constructor_prerequisites() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[Array[f[a]]] where f: Functor {}
+        fn use_options(value: Array[Option[Number]]) { pass(value) }
+        fn use_arrays(value: Array[Array[String]]) { pass(value) }
+    "#},
+    )
+    .expect("constructor bindings must be available to prerequisite dictionary selection");
+}
+
+#[test]
+fn higher_kinded_instance_head_rejects_inconsistent_constructor_bindings() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[fn(f[a]) f[a]] {}
+        fn invalid(value: fn(Option[Number]) Array[Number]) { pass(value) }
+    "#},
+    )
+    .expect_err("the same constructor variable cannot mean both Option and Array");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Trait(_))),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn function_implementation_dispatch_matches_parameters_and_result() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Invoke[a] { fn invoke(value: a) Number }
+        impl Invoke[fn(Number) Number] {
+            fn invoke(value: fn(Number) Number) Number { value(41) }
+        }
+        fn increment(value: Number) Number { value + 1 }
+        fn use_function() Number { invoke(increment) }
+    "#},
+    )
+    .expect("function type implementations must participate in dictionary selection");
+}
+
+#[test]
+fn function_implementation_dispatch_rejects_mismatched_signatures() {
+    for source in [
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[fn(Number) Number] {}
+            fn invalid(value: fn(String) Number) { pass(value) }
+        "#},
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[fn(Number) Number] {}
+            fn invalid(value: fn(Number) String) { pass(value) }
+        "#},
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[fn(Number) Number] {}
+            fn invalid(value: fn(Number, Number) Number) { pass(value) }
+        "#},
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[fn(a) a] {}
+            fn invalid(value: fn(Number) String) { pass(value) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source).expect_err("function signature does not match");
+        assert!(
+            errors
+                .iter()
+                .any(|error| matches!(error, alder_solve::SolveError::Trait(_))),
+            "{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn function_implementation_dispatch_preserves_shared_type_parameters() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[fn(a) a] {}
+        fn number(value: fn(Number) Number) { pass(value) }
+        fn text(value: fn(String) String) { pass(value) }
+    "#},
+    )
+    .expect("one generic function head selects independently at different payloads");
+}
+
+#[test]
+fn function_implementation_dispatch_preserves_task_layers() {
+    for source in [
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[fn(Number) Task[Number]] {}
+            fn invalid(value: fn(Number) Number) { pass(value) }
+        "#},
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[fn(Number) Task[Number]] {}
+            fn invalid(value: fn(Number) Task[Task[Number]]) { pass(value) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source)
+            .expect_err("dictionary matching must not add or flatten Task layers");
+        assert!(
+            errors
+                .iter()
+                .any(|error| matches!(error, alder_solve::SolveError::Trait(_))),
+            "{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn record_coherence_treats_shorthand_and_explicit_option_as_identical() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[{ value?: Number }] {}
+            impl Marker[{ value: Option[Number] }] {}
+        "#},
+    )
+    .expect_err("equivalent Option spellings cannot define separate instances");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_)))
+    );
+}
+
+#[test]
+fn record_coherence_distinguishes_option_from_its_payload() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            trait Read[a] { fn read(record: a) Number }
+            impl Read[{ value: Number }] {
+                fn read(record: { value: Number }) Number { record.value }
+            }
+            impl Read[{ value?: Number }] {
+                fn read(record: { value: Option[Number] }) Number {
+                    match record.value { Some(value) => value, None => 0 }
+                }
+            }
+            fn plain(record: { value: Number }) Number { read(record) }
+            fn optional(record: { value: Option[Number] }) Number { read(record) }
+        "#},
+    )
+    .expect("Number and Option[Number] are distinct ordinary field types");
+}
+
+#[test]
+fn record_coherence_rejects_reordered_duplicate_fields() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[{ x: Number, y: String }] {}
+        impl Marker[{ y: String, x: Number }] {}
+    "#},
+    )
+    .expect_err("field declaration order cannot hide identical record instances");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_)))
+    );
+}
+
+#[test]
+fn record_coherence_rejects_open_closed_overlap() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[{ r | x: Number }] {}
+        impl Marker[{ x: Number, y: String }] {}
+    "#},
+    )
+    .expect_err("an open record implementation also matches its closed extension");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_)))
+    );
+}
+
+#[test]
+fn record_coherence_preserves_shared_tail_relationships() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a, b] { fn pass(value: a, other: b) a { value } }
+        impl Marker[{ r | x: Number }, { r | y: String }] {}
+        impl Marker[{ x: Number, extra: Bool }, { y: String, other: Bool }] {}
+    "#},
+    )
+    .expect("one shared tail cannot simultaneously contain two different field sets");
+}
+
+#[test]
+fn record_coherence_rejects_compatible_shared_tails() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a, b] { fn pass(value: a, other: b) a { value } }
+        impl Marker[{ r | x: Number }, { r | y: String }] {}
+        impl Marker[{ x: Number, extra: Bool }, { y: String, extra: Bool }] {}
+    "#},
+    )
+    .expect_err("the same residual fields satisfy both occurrences of the shared tail");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_)))
+    );
+}
+
+#[test]
+fn record_coherence_rejects_independent_open_overlap() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[{ r | x: Number }] {}
+        impl Marker[{ s | y: String }] {}
+    "#},
+    )
+    .expect_err("a record containing both required fields satisfies both implementations");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_)))
+    );
+}
+
+#[test]
+fn record_coherence_accepts_disjoint_required_field_types() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[{ r | x: Number }] {}
+        impl Marker[{ s | x: String }] {}
+    "#},
+    )
+    .expect("incompatible required payloads keep record implementations disjoint");
+}
+
+#[test]
+fn record_coherence_reuses_already_expanded_shared_tails() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a, b] { fn pass(value: a, other: b) a { value } }
+        impl Marker[{ r | x: Number }, { r | y: String }] {}
+        impl Marker[{ s | x: Number, extra: Bool }, { s | y: String, extra: Bool }] {}
+    "#},
+    )
+    .expect_err("the second argument must reuse the first argument's residual row equality");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Coherence(alder_solve::CoherenceError::OverlappingImpl { .. })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn record_implementation_dispatch_matches_open_required_fields() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] { fn pass(value: a) a { value } }
+        impl Marker[{ r | x: Number }] {}
+        fn use_record() { pass({ x: 42, label: "hello" }) }
+    "#},
+    )
+    .expect("a valid open-record implementation must actually be callable");
+}
+
+#[test]
+fn record_implementation_dispatch_rejects_incompatible_shapes() {
+    for source in [
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[{ r | x: Number }] {}
+            fn invalid() { pass({ x: "wrong" }) }
+        "#},
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[{ r | x: Number }] {}
+            fn invalid() { pass({ y: 42 }) }
+        "#},
+        indoc! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[{ x: Number }] {}
+            fn invalid() { pass({ x: 42, extra: true }) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source).expect_err("no record instance matches this shape");
+        assert!(
+            errors
+                .iter()
+                .any(|error| matches!(error, alder_solve::SolveError::Trait(_))),
+            "{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn record_implementation_dispatch_checks_shared_residual_rows() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a, b] { fn pass(value: a, other: b) a { value } }
+        impl Marker[{ r | x: Number }, { r | y: Number }] {}
+        fn valid() { pass({ x: 42, extra: true }, { y: 1, extra: true }) }
+    "#},
+    )
+    .expect("matching residual fields satisfy the implementation");
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a, b] { fn pass(value: a, other: b) a { value } }
+        impl Marker[{ r | x: Number }, { r | y: Number }] {}
+        fn invalid() { pass({ x: 42, extra: true }, { y: 1, other: true }) }
+    "#},
+    )
+    .expect_err("residual fields must agree across the two arguments");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Trait(_))),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn record_implementation_cannot_read_optional_field_as_required() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Read[a] { fn read(value: a) Number }
+        impl Read[{ value: Number }] {
+            fn read(record: { value: Number }) Number { record.value }
+        }
+        fn invalid(record: { value?: Number }) Number { read(record) }
+    "#},
+    )
+    .expect_err("required-field dictionary code cannot receive a possibly missing field");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Trait(_))),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn record_implementation_matches_explicit_optional_field_types() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Read[a] { fn read(value: a) Option[Number] }
+        impl Read[{ value?: Number }] {
+            fn read(record: { value?: Number }) Option[Number] { record.value }
+        }
+        fn valid(record: { value?: Number }) Option[Number] { read(record) }
+        fn explicit(record: { value: Option[Number] }) Option[Number] { read(record) }
+    "#},
+    )
+    .expect("an explicitly optional record selects its matching implementation");
+}
+
+#[test]
+fn option_try_propagates_in_option_returning_functions() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn read(value: Option[Number]) Option[Number] { Some(value? + 1) }
+        async fn read_async(value: Option[Number]) Option[Number] { Some(value?) }
+        fn inferred(value) { Some(value?) }
+    "#},
+    )
+    .expect("Option propagation works with explicit and inferred boundaries");
+}
+
+#[test]
+fn option_try_waits_for_mutually_recursive_return_constraints() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn first(value, again: Bool) {
+            let item = value?
+            second(Some(item), again)
+        }
+        fn second(value, again: Bool) {
+            if again { first(value, false) } else { Some(value?) }
+        }
+        fn number() Option[Number] { first(Some(42), true) }
+        fn text() Option[String] { first(Some("hello"), true) }
+    "#},
+    )
+    .expect("recursive peers must constrain propagation before selecting its carrier");
+}
+
+#[test]
+fn option_try_recursive_return_constraints_do_not_depend_on_declaration_order() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn second(value, again: Bool) {
+            if again { first(value, false) } else { Some(value?) }
+        }
+        fn first(value, again: Bool) {
+            let item = value?
+            second(Some(item), again)
+        }
+        fn number() Option[Number] { first(Some(42), true) }
+        fn text() Option[String] { first(Some("hello"), true) }
+    "#},
+    )
+    .expect("reordering recursive declarations preserves Option inference");
+}
+
+#[test]
+fn result_try_waits_for_mutually_recursive_return_constraints() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn first(value, again: Bool) {
+            let item = value?
+            second(Ok(item), again)
+        }
+        fn second(value, again: Bool) {
+            if again { first(value, false) } else { Ok(value?) }
+        }
+        fn number() Result[Number] { first(Ok(42), true) }
+        fn text() Result[String] { first(Ok("hello"), true) }
+    "#},
+    )
+    .expect("deferring carrier selection preserves recursive Result inference");
+}
+
+#[test]
+fn option_try_recursive_explicit_return_waits_for_peer() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn first(value, again: Bool) {
+            let item = value?
+            return second(Some(item), again)
+        }
+        fn second(value, again: Bool) {
+            if again { first(value, false) } else { Some(value?) }
+        }
+        fn number() Option[Number] { first(Some(42), true) }
+    "#},
+    )
+    .expect("an explicit recursive return must preserve deferred carrier selection");
+}
+
+#[test]
+fn option_try_infers_from_explicit_return_paths() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn read(value, stop: Bool) {
+            let item = value?
+            if stop { return None }
+            return Some(item)
+        }
+        fn lambda(value: Option[Number]) Option[Number] {
+            let run = item -> {
+                let found = item?
+                return Some(found)
+            }
+            run(value)
+        }
+        async fn delayed(value) {
+            let item = value?
+            return Some(item)
+        }
+        fn number() Option[Number] { read(Some(42), false) }
+        fn text() Task[Option[String]] { delayed(Some("hello")) }
+    "#},
+    )
+    .expect("explicit exits establish Option in function, lambda, and async boundaries");
+}
+
+#[test]
+fn option_try_does_not_hide_reachable_fallthrough() {
+    for source in [
+        "fn read(value: Option[Number]) Option[Number] { let item = value? }",
+        "async fn read(value: Option[Number]) Option[Number] { let item = value? }",
+        indoc! {r#"
+            fn read(value: Option[Number], stop: Bool) Option[Number] {
+                let item = value?
+                if stop { return Some(item) }
+            }
+        "#},
+    ] {
+        let bump = Bump::new();
+        assert!(
+            solve_input(&bump, source).is_err(),
+            "Some reaches an exit without an Option result: {source}"
+        );
+    }
+}
+
+#[test]
+fn option_try_does_not_convert_to_result_or_plain_values() {
+    for source in [
+        "fn invalid(value: Option[Number]) Result[Number] { Ok(value?) }",
+        "fn invalid(value: Result[Number]) Option[Number] { Some(value?) }",
+        "fn invalid(value: Option[Number]) Number { value? }",
+    ] {
+        let bump = Bump::new();
+        assert!(solve_input(&bump, source).is_err(), "must reject: {source}");
+    }
+}
+
+#[test]
+fn result_error_argument_rejects_ordinary_types_even_without_construction() {
+    for source in [
+        "fn identity(value: Result[Number, String]) { value }",
+        "fn identity(value: Result[Number, Bool]) { value }",
+        "fn identity(value: Result[Number, Array[String]]) { value }",
+        "fn identity(value: Result[Number, (Number, String)]) { value }",
+        "fn identity(value: Result[Number, { message: String }]) { value }",
+    ] {
+        let bump = Bump::new();
+        assert!(
+            solve_input(&bump, source).is_err(),
+            "Result must require an error row even when no constructor is used: {source}"
+        );
+    }
+}
+
+#[test]
+fn result_error_argument_rejects_fixed_partial_constructor_arguments() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+            trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+            impl Marker[Result[_, String]] {}
+        "#},
+        )
+        .is_err(),
+        "a partial Result must validate its fixed error argument"
+    );
+}
+
+#[test]
+fn result_row_coherence_rejects_reordered_duplicate_instances() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+        impl Marker[Result[_, [:left(Number) | :right]]] {}
+        impl Marker[Result[_, [:right | :left(Number)]]] {}
+    "#},
+    )
+    .expect_err("tag order must not hide duplicate instances");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_)))
+    );
+}
+
+#[test]
+fn result_row_coherence_rejects_open_and_closed_overlap() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+        impl Marker[Result[_, [:left | e]]] {}
+        impl Marker[Result[_, [:left | :right]]] {}
+    "#},
+    )
+    .expect_err("the open instance also matches the closed row");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_)))
+    );
+}
+
+#[test]
+fn result_row_coherence_rejects_independent_open_overlap() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+        impl Marker[Result[_, [:left | e]]] {}
+        impl Marker[Result[_, [:right | e]]] {}
+    "#},
+    )
+    .expect_err("both rows can include left and right");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_)))
+    );
+}
+
+#[test]
+fn result_row_coherence_accepts_disjoint_payloads() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+        impl Marker[Result[_, [:failed(Number) | e]]] {}
+        impl Marker[Result[_, [:failed(String) | e]]] {}
+    "#},
+    )
+    .expect("incompatible required payloads make the instances disjoint");
+}
+
+#[test]
+fn result_row_coherence_accepts_disjoint_closed_tags() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+        impl Marker[Result[_, [:left]]] {}
+        impl Marker[Result[_, [:right]]] {}
+    "#},
+    )
+    .expect("closed rows with different tags do not overlap");
+}
+
+#[test]
+fn error_row_coherence_preserves_shared_tail_constraints() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a, b] {}
+        impl Marker[Result[Number, [:left | e]], Result[Number, [:right | e]]] {}
+        impl Marker[Result[Number, [:left | :extra]], Result[Number, [:right | :other]]] {}
+    "#},
+    )
+    .expect("one shared tail cannot be both extra and other");
+}
+
+#[test]
+fn error_row_coherence_detects_compatible_shared_tail_constraints() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a, b] {}
+        impl Marker[Result[Number, [:left | e]], Result[Number, [:right | e]]] {}
+        impl Marker[Result[Number, [:left | :extra]], Result[Number, [:right | :extra]]] {}
+    "#},
+    )
+    .expect_err("both arguments admit the same extra tail");
+    assert!(
+        errors
+            .iter()
+            .any(|error| matches!(error, alder_solve::SolveError::Coherence(_)))
+    );
+}
+
+#[test]
+fn derived_equality_accepts_generic_result_with_structural_error_row() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        #[derive(Eq)]
+        enum Wrapper[a] { Wrapped(Result[a, [:failed]]) }
+        fn check(left: Wrapper[Number], right: Wrapper[Number]) Bool { left == right }
+    "#},
+    )
+    .expect("derived Eq handles a generic Result field with a structural error row");
+}
+
+#[test]
+fn result_partial_constructor_accepts_fixed_error_rows() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+            impl Marker[Result[_, [:failed]]] {}
+            fn check(value: Result[Number, [:failed]]) Result[Number, [:failed]] {
+                pass(value)
+            }
+        "#},
+    )
+    .expect("fixed structural error rows support higher-kinded dispatch");
+}
+
+#[test]
+fn result_partial_constructor_matches_rows_independent_of_tag_order() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+        impl Marker[Result[_, [:left(Number) | :right]]] {}
+        fn check(value: Result[Number, [:right | :left(Number)]]) {
+            pass(value)
+        }
+    "#},
+    )
+    .expect("structurally equal fixed rows must match");
+}
+
+#[test]
+fn result_partial_constructor_matches_an_open_error_row() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+        impl Marker[Result[_, [:failed | e]]] {}
+        fn check(value: Result[Number, [:failed | :other]]) {
+            pass(value)
+        }
+    "#},
+    )
+    .expect("an open implementation row retains residual tags");
+}
+
+#[test]
+fn result_partial_constructor_rejects_incompatible_fixed_rows() {
+    for error_type in [
+        "[:failed(String)]",
+        "[:other(Number)]",
+        "[:failed(Number) | :other]",
+    ] {
+        let source = format!(
+            indoc! {r#"
+            trait Marker[f] {{ fn pass(value: f[a]) f[a] {{ value }} }}
+            impl Marker[Result[_, [:failed(Number)]]] {{}}
+            fn check(value: Result[Number, {error_type}]) {{ pass(value) }}
+        "#},
+            error_type = error_type
+        );
+        let bump = Bump::new();
+        assert!(
+            solve_input(&bump, &source).is_err(),
+            "must reject {error_type}"
+        );
+    }
+}
+
+#[test]
+fn recursive_structural_error_groups_do_not_overflow() {
+    for source in [
+        "error Recursive { :nested(Result[Number, Recursive]) }",
+        "error Recursive { :nested(Array[Result[Number, Recursive]]) }",
+        indoc! {r#"
+            error First { :first(Result[Number, Second]) }
+            error Second { :second(Result[Number, First]) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source).expect_err("recursive row must fail");
+        assert!(
+            matches!(
+                errors.as_slice(),
+                [alder_solve::SolveError::Core(Error {
+                    kind: ErrorKind::RecursiveErrorGroup { .. },
+                    ..
+                })]
+            ),
+            "expected a cycle diagnostic for {source}: {errors:?}"
+        );
+    }
+}
+
+#[test]
+fn error_group_expansion_allows_shared_groups_and_recursive_enum_payloads() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            enum Tree { Leaf, Branch(Array[Tree]) }
+            error Inner { :tree(Tree) }
+            error Outer {
+                :left(Result[Number, Inner]),
+                :right(Result[String, Inner]),
+            }
+            fn identity(value: Result[Number, Outer]) { value }
+        "#},
+    )
+    .expect("shared acyclic groups and nominal recursion remain valid");
+}
+
+#[test]
+fn result_error_argument_rejects_unused_aliases() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(&bump, "type Invalid = Result[Number, String]").is_err(),
+        "an unused alias must not export an invalid Result error argument"
+    );
+}
+
+#[test]
+fn result_error_argument_rejects_unused_enum_payloads() {
+    for source in [
+        "enum Invalid { Value(Result[Number, String]) }",
+        "enum Invalid { Value { result: Result[Number, String] } }",
+    ] {
+        let bump = Bump::new();
+        assert!(
+            solve_input(&bump, source).is_err(),
+            "unused enum payloads must be validated: {source}"
+        );
+    }
+}
+
+#[test]
+fn result_error_argument_rejects_bodyless_trait_signatures() {
+    for source in [
+        "trait Read[a] { fn read(value: a) Result[Number, String] }",
+        "trait Read[a] { fn read(value: a, result: Result[Number, String]) Number }",
+    ] {
+        let bump = Bump::new();
+        assert!(solve_input(&bump, source).is_err(), "must reject: {source}");
+    }
+}
+
+#[test]
+fn result_error_argument_rejects_unused_error_group_payloads() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(&bump, "error Invalid { :failed(Result[Number, String]) }").is_err(),
+        "error-group payloads must be checked without a use site"
+    );
+}
+
+#[test]
+fn result_error_argument_rejects_unused_associated_binding() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+                trait Container[a] { type Item }
+                impl Container[Number] { type Item = Result[Number, String] }
+            "#},
+        )
+        .is_err(),
+        "associated type bindings must not publish an invalid Result"
+    );
+}
+
+#[test]
+fn result_error_argument_rejects_alias_substitution() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+                type Wrapped[a, e] = Result[a, e]
+                fn identity(value: Wrapped[Number, String]) { value }
+            "#},
+        )
+        .is_err(),
+        "alias substitution must preserve the Result error kind"
+    );
+}
+
+#[test]
+fn result_error_argument_accepts_rows_groups_and_generic_tails() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            error Failure { :failed(String) }
+            fn named(value: Result[Number, Failure]) { value }
+            fn structural(value: Result[Number, [:failed(String)]]) { value }
+            fn generic(value: Result[Number, e]) Result[Number, e] { value }
+            fn success() Result[Number, Failure] { Ok(42) }
+        "#},
+    )
+    .expect("supported error arguments must retain their contracts");
+}
+
+#[test]
+fn alternative_pattern_bindings_require_compatible_payload_types() {
+    for source in [
+        indoc! {r#"
+            enum Mixed { NumberValue(Number), TextValue(String) }
+            fn invalid(input: Mixed) Number {
+                match input { NumberValue(value) | TextValue(value) => value }
+            }
+        "#},
+        indoc! {r#"
+            enum Mixed { Numbers(Array[Number]), Texts(Array[String]) }
+            fn invalid(input: Mixed) Array[Number] {
+                match input { Numbers([..values]) | Texts([..values]) => values }
+            }
+        "#},
+        indoc! {r#"
+            enum Mixed { NumberValue(Number), TextValue(String) }
+            fn invalid(input: Mixed) Number {
+                match input { NumberValue(_ as value) | TextValue(_ as value) => value }
+            }
+        "#},
+    ] {
+        let bump = Bump::new();
+        assert!(
+            solve_input(&bump, source).is_err(),
+            "must reject incompatible alternatives: {source}"
+        );
+    }
+}
+
+#[test]
+fn annotated_lambda_record_returns_receive_field_context() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            type Payload = { value: Option[Option[Number]] }
+            fn check() {
+                let build = () Payload -> { { value: 42 } }
+                let result: Payload = build()
+            }
+        "#},
+    )
+    .expect("lambda record return annotations must contextualize fresh fields");
+}
+
+#[test]
+fn bare_pipe_destinations_use_optional_call_rules() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn nested(value?: Option[Number]) Option[Option[Number]] { value }
+            fn choose(value: Number, extra?: Number) Number { value }
+            fn check() {
+                let lifted: Option[Option[Number]] = 42 |> nested
+                let omitted: Number = 42 |> choose
+            }
+        "#},
+    )
+    .expect("bare pipes and explicit call destinations must share argument rules");
+}
+
+#[test]
+fn option_wrapping_does_not_rewrite_existing_record_payloads() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+            type Payload = { value: Option[Number] }
+            fn take(value?: Payload) Option[Payload] { value }
+            fn invalid() {
+                let original = { value: 42 }
+                take(original)
+            }
+        "#},
+        )
+        .is_err(),
+        "lifting the outer value cannot convert its mutable fields"
+    );
+}
+
+#[test]
+fn option_wrapping_preserves_context_for_fresh_record_payloads() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            type Payload = { value: Option[Number] }
+            fn take(value?: Payload) Option[Payload] { value }
+            fn take_many(value?: Array[Payload]) Option[Array[Payload]] { value }
+            fn check() {
+                let direct: Option[Payload] = take({ value: 42 })
+                let array: Option[Array[Payload]] = take_many([{ value: 42 }])
+                let field: { nested: Option[Payload] } = { nested: { value: 42 } }
+            }
+        "#},
+    )
+    .expect("outer lifting must retain fresh payload field contexts");
+}
+
+#[test]
+fn pipe_inputs_preserve_context_for_fresh_record_payloads() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            type Payload = { value: Option[Number] }
+            fn take(value?: Payload) Option[Payload] { value }
+            fn take_many(value?: Array[Payload]) Option[Array[Payload]] { value }
+            fn check() {
+                let bare: Option[Payload] = { value: 42 } |> take
+                let called: Option[Payload] = { value: 42 } |> take()
+                let array: Option[Array[Payload]] = [{ value: 42 }] |> take_many
+            }
+        "#},
+    )
+    .expect("piped fresh initializers need the same field context as direct arguments");
+}
+
+#[test]
+fn awaited_pipe_inputs_preserve_fresh_record_context() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        type Payload = { value: Option[Number] }
+        async fn take(value?: Payload) Result[Option[Payload], [:failed]] { Ok(value) }
+        async fn check() Result[Option[Payload], [:failed]] {
+            Ok({ value: 42 } |> take().await?)
+        }
+    "#},
+    )
+    .expect("await and propagation wrappers must preserve the pipe argument context");
+}
+
+#[test]
+fn pipe_field_context_does_not_convert_existing_mutable_aliases() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        type Payload = { value: Option[Number] }
+        fn take(value?: Payload) Option[Payload] { value }
+        fn invalid() {
+            let original = { value: 42 }
+            original |> take
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn pipe_input_returns_remain_reachable() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn take(value: Number) Number { value }
+        fn invalid() Number { { return "wrong" } |> take }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn pipe_destinations_after_a_break_remain_unreachable() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn take(value: Number, extra: Number) Number { value }
+        fn valid() Number {
+            loop {
+                { break 42 } |> ({
+                    break "unreachable"
+                    take
+                })({ break "also unreachable" })
+            }
+        }
+    "#},
+    )
+    .expect("unreachable pipe destinations cannot contribute loop result values");
+}
+
+#[test]
+fn explicit_some_preserves_fresh_record_payload_context() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        type Payload = { value: Option[Number] }
+        fn take(value?: Payload) Option[Payload] { value }
+        fn check() {
+            let annotated: Option[Payload] = Some({ value: 42 })
+            let argument: Option[Payload] = take(Some({ value: 42 }))
+        }
+    "#},
+    )
+    .expect("an explicit Some must preserve its fresh payload initializer context");
+}
+
+#[test]
+fn explicit_some_context_does_not_convert_mutable_payload_aliases() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        type Payload = { value: Option[Number] }
+        fn check() {
+            let original = { value: 42 }
+            let invalid: Option[Payload] = Some(original)
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn optional_record_arguments_preserve_branch_context() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        type Payload = { value: Option[Number] }
+        fn take(value?: Payload) Option[Payload] { value }
+        fn check(flag: Bool) {
+            take(if flag { { value: 42 } } else { { value: 7 } })
+        }
+    "#},
+    )
+    .expect("branch-local fresh fields need the argument payload context");
+}
+
+#[test]
+fn contextual_match_and_block_inputs_preserve_record_fields() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        type Payload = { value: Option[Number] }
+        fn take(value?: Payload) Option[Payload] { value }
+        fn direct(flag: Bool) Payload {
+            if flag { { value: 42 } } else { { value: 7 } }
+        }
+        fn check(flag: Bool) {
+            take({ let value = 42
+                { value }
+            })
+            take(match flag {
+                true => ({ value: 42 }),
+                false => ({ value: 7 }),
+            })
+            take(if flag { Some({ value: 42 }) } else { Some({ value: 7 }) })
+        }
+    "#},
+    )
+    .expect("context must reach block/match fields without removing explicit Some layers");
+}
+
+#[test]
+fn branch_context_does_not_wrap_function_returns() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn invalid(flag: Bool) Option[Number] {
+            if flag { 42 } else { 7 }
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn branch_context_does_not_convert_mutable_payload_aliases() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        type Payload = { value: Option[Number] }
+        fn take(value?: Payload) Option[Payload] { value }
+        fn invalid(flag: Bool) {
+            let original = { value: 42 }
+            take(if flag { original } else { { value: 7 } })
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn spread_record_initializers_preserve_written_field_context() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        type Payload = { label: String, value: Option[Number] }
+        fn take(value?: Payload) Option[Payload] { value }
+        fn check() {
+            let base = { label: "base" }
+            let annotated: Payload = { ..base, value: 42 }
+            take({ ..base, value: 42 })
+            take({ value: 42, ..base })
+        }
+    "#},
+    )
+    .expect("spread operands must not disable context for written fields");
+}
+
+#[test]
+fn contextual_spreads_preserve_nested_fresh_payloads_and_option_overwrites() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        type Payload = { value: Option[Number] }
+        fn check(later: { value?: Number }) {
+            let base = { label: "base" }
+            let nested: { label: String, nested: Option[Payload] } = {
+                ..base, nested: { value: 42 },
+            }
+            let explicit: { label: String, nested: Option[Payload] } = {
+                ..base, nested: Some({ value: 42 }),
+            }
+            let array: { label: String, items: Array[Payload] } = {
+                ..base, items: [{ value: 42 }],
+            }
+            let fallback: Payload = { value: 42, ..later }
+        }
+    "#},
+    )
+    .expect("nested initializers retain context and the final spread supplies an Option field");
+}
+
+#[test]
+fn contextual_spreads_discard_overwritten_field_expectations() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn check() {
+            let replacement = { value: Some(42) }
+            let result: { value: Option[Number] } = { value: true, ..replacement }
+        }
+    "#},
+    )
+    .expect("an overwritten field does not determine the final record's payload type");
+}
+
+#[test]
+fn spread_record_context_does_not_convert_inherited_payloads() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn invalid() {
+            let original = { nested: { value: 42 } }
+            let converted: { nested: { value: Option[Number] } } = { ..original }
+            original.nested.value = 7
+        }
+    "#}
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn record_field_lifting_does_not_convert_existing_mutable_records() {
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+            fn invalid() {
+                let original = { value: 42 }
+                let converted: { value: Option[Number] } = original
+                original.value = 7
+                converted
+            }
+        "#},
+        )
+        .is_err(),
+        "wrapping an initializer must not become invariant record subtyping"
+    );
+}
+
+#[test]
+fn record_return_initializers_receive_field_context() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            type NestedRecord = { value: Option[Option[Number]] }
+            fn tail() NestedRecord { { value: 42 } }
+            fn early() NestedRecord { return { value: 42 } }
+        "#},
+    )
+    .expect("record return annotations must reach their fresh field initializers");
+}
+
+#[test]
+fn record_initializers_recursively_lift_option_values() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn check() {
+                let bare: { value: Option[Option[Number]] } = { value: 42 }
+                let once: { value: Option[Option[Number]] } = { value: Some(42) }
+                let direct: { value: Option[Option[Number]] } = { value: Some(None) }
+                let absent: { value: Option[Option[Number]] } = { value: None }
+            }
+        "#},
+    )
+    .expect("contextual field initializers must use recursive Option lifting");
+}
+
+#[test]
+fn option_argument_lifting_reports_incompatible_inference_preferences() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            fn relate(first?: a, second: a) {}
+            fn conflict(first, second) {
+                relate(first, second)
+                relate(second, first)
+            }
+        "#},
+    )
+    .expect_err("competing direct matches must not choose source order");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Core(Error {
+            kind: ErrorKind::AmbiguousOptionLifting,
+            ..
+        })
+    )));
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn relate(first?: a, second: a) {}
+            fn resolved(first: Number, second: Number) {
+                relate(first, second)
+                relate(second, first)
+            }
+        "#},
+    )
+    .expect("explicit types fix both wrapping depths");
+}
+
+#[test]
+fn option_arguments_recursively_lift_concrete_values() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn nested(value?: Option[Number]) Option[Option[Number]] { value }
+            fn check() {
+                let bare: Option[Option[Number]] = nested(42)
+                let once: Option[Option[Number]] = nested(Some(42))
+                let twice: Option[Option[Number]] = nested(Some(Some(42)))
+                let outer_absent: Option[Option[Number]] = nested(None)
+                let inner_absent: Option[Option[Number]] = nested(Some(None))
+                let piped: Option[Option[Number]] = 42 |> nested()
+            }
+        "#},
+    )
+    .expect("calls must recursively lift values while preserving direct Option matches");
+}
+
+#[test]
+fn option_lifting_preserves_inferred_error_row_kinds() {
+    for source in [
+        indoc! {r#"
+            fn consume(value?: a) {}
+            fn relay(failure) {
+                let result = Err(failure)
+                consume(failure)
+                result
+            }
+            fn check(failure: [:bad]) Result[Number, [:bad]] { relay(failure) }
+        "#},
+        indoc! {r#"
+            fn consume(value?: a) {}
+            fn relay(failure) {
+                consume(failure)
+                Err(failure)
+            }
+            fn check(failure: [:bad]) Result[Number, [:bad]] { relay(failure) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        solve_input(&bump, source)
+            .expect("an inferred error row is opaque to outer Option-depth selection");
+    }
+}
+
+#[test]
+fn option_lifting_preserves_explicit_universal_contracts() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn consume(value?: a) {}
+            fn relay(value: a) a {
+                consume(value)
+                value
+            }
+            fn check() {
+                let number: Number = relay(42)
+                let text: String = relay("hello")
+                let nested: Option[Number] = relay(Some(42))
+            }
+        "#},
+    )
+    .expect("contextual Some insertion must preserve an explicitly universal input");
+}
+
+#[test]
+fn option_lifting_preserves_trait_method_universals() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn consume(value?: a) {}
+            trait Relay[a] {
+                fn relay(marker: a, value: b) b
+                fn fallback(marker: a, value: b) b {
+                    consume(value)
+                    value
+                }
+            }
+            impl Relay[Number] {
+                fn relay(marker: Number, value) {
+                    consume(value)
+                    value
+                }
+            }
+            fn check() {
+                let number: Number = relay(0, 42)
+                let text: String = relay(0, "hello")
+                let defaulted: String = fallback(0, "default")
+            }
+        "#},
+    )
+    .expect("trait promises must constrain lifting even without implementation annotations");
+}
+
+#[test]
+fn option_lifting_preserves_generic_lambda_and_field_contracts() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn consume(value?: a) {}
+            fn wrap_record(value: a) ({ value: Option[a] }) { { value } }
+            fn relay(value: a) a {
+                let forward = (argument: a) a -> {
+                    consume(argument)
+                    argument
+                }
+                let record = wrap_record(value)
+                forward(value)
+            }
+            fn check() {
+                let number: Number = relay(42)
+                let text: String = relay("hello")
+            }
+        "#},
+    )
+    .expect("lambda and fresh-field lifting must respect enclosing universals");
+}
+
+#[test]
+fn option_lifting_does_not_erase_incompatible_universal_payloads() {
+    for source in [
+        indoc! {r#"
+            fn consume(value?: Number) {}
+            fn invalid(value: a) a {
+                consume(value)
+                value
+            }
+        "#},
+        indoc! {r#"
+            fn consume(first?: a, second?: a) {}
+            fn invalid(first: a, second: b) a {
+                consume(first, second)
+                first
+            }
+        "#},
+    ] {
+        let bump = Bump::new();
+        assert!(solve_input(&bump, source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn option_argument_lifting_is_independent_of_shared_input_call_order() {
+    for source in [
+        indoc! {r#"
+            fn single(value?: Number) {}
+            fn double(value?: Option[Number]) {}
+            fn consume(value) {
+                single(value)
+                double(value)
+            }
+            fn check() { consume(Some(42)) }
+        "#},
+        indoc! {r#"
+            fn single(value?: Number) {}
+            fn double(value?: Option[Number]) {}
+            fn consume(value) {
+                double(value)
+                single(value)
+            }
+            fn check() { consume(Some(42)) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        solve_input(&bump, source).expect("shared actual types need joint wrapping constraints");
+    }
+}
+
+#[test]
+fn option_argument_lifting_is_independent_of_shared_payload_argument_order() {
+    for source in [
+        indoc! {r#"
+            fn choose(first?: a, second?: a) Option[a] { first }
+            fn check() Option[Option[Number]] { choose(42, Some(Some(7))) }
+        "#},
+        indoc! {r#"
+            fn choose(first?: a, second?: a) Option[a] { second }
+            fn check() Option[Option[Number]] { choose(Some(Some(7)), 42) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        solve_input(&bump, source)
+            .expect("shared expected payloads need joint wrapping constraints");
+    }
+}
+
+#[test]
+fn option_arguments_before_required_parameters_remain_required() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn read(first?: Number, second: String, third?: Number) String { second }
+            fn check() String { read(None, "present") }
+        "#},
+    )
+    .expect("Option before a non-Option slot is a required argument, not an invalid declaration");
+    for source in [
+        indoc! {r#"
+            fn read(first?: Number, second: String) {}
+            fn check() { read() }
+        "#},
+        indoc! {r#"
+            fn read(first?: Number, second: String) {}
+            fn check() { read(None) }
+        "#},
+        indoc! {r#"
+            fn read(first?: Number, second: String) {}
+            fn check() { read("skip") }
+        "#},
+        indoc! {r#"
+            fn read(first: Number, second?: Number) {}
+            fn check() { read() }
+        "#},
+        indoc! {r#"
+            fn read(first?: Number) {}
+            fn check() { read(None, None) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        assert!(solve_input(&bump, source).is_err(), "must reject: {source}");
+    }
+}
+
+#[test]
+fn trailing_option_arguments_can_be_omitted() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn choose(value: Number, first?: Number, second: Option[String]) Number {
+                value
+            }
+            fn nested(value?: Option[Number]) Option[Option[Number]] { value }
+            fn check() {
+                let first: Number = choose(42)
+                let second: Number = choose(42, Some(7))
+                let third: Number = 42 |> choose()
+                let function: fn(Number, Option[Number], Option[String]) Number = choose
+                let fourth: Number = function(42)
+                let absent: Option[Option[Number]] = nested()
+            }
+        "#},
+    )
+    .expect("trailing ordinary Option parameters must permit omission");
+}
+
+#[test]
+fn optional_parameter_shorthand_checks_as_ordinary_option() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn read(value?: Number) Option[Number] { value }
+            fn nested(value?: Option[Number]) Option[Option[Number]] { value }
+            fn check() {
+                let function: fn(Option[Number]) Option[Number] = read
+                let lambda: fn(Option[Number]) Option[Number] = (value?: Number) -> value
+                let first: Option[Number] = function(Some(42))
+                let second: Option[Number] = lambda(None)
+                let third: Option[Option[Number]] = nested(Some(None))
+            }
+        "#},
+    )
+    .expect("optional shorthand must expose ordinary, possibly nested Option types");
+}
+
+#[test]
+fn option_constructors_preserve_payload_types() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn read(value: Option[Number]) Number {
+            match value { Some(number) => number, None => 0 }
+        }
+        fn build() Option[Option[Number]] { Some(None) }
+    "#},
+    )
+    .expect("Option constructors and exhaustive patterns must typecheck");
+    for source in [
+        "fn invalid() Option[Number] { Some(\"wrong\") }",
+        "fn invalid(value: Option[Number]) String { match value { Some(text) => text, None => \"none\" } }",
+    ] {
+        let bump = Bump::new();
+        assert!(solve_input(&bump, source).is_err(), "must reject: {source}");
+    }
+}
+
+#[test]
+fn empty_record_overlay_inputs_cannot_hide_conflicting_result_fields() {
+    let source = indoc! {r#"
+        fn invalid(left, right) {
+            let padded = { ..{}, ..left, ..{}, ..right, ..{} }
+            let plain = { ..left, ..right }
+            let number: Number = padded.value
+            let text: String = plain.value
+            (number, text)
+        }
+    "#};
+    let bump = Bump::new();
+    assert!(
+        solve_input(&bump, source).is_err(),
+        "empty spreads must not create independent output contracts"
+    );
+}
+
+#[test]
+fn empty_record_overlay_inputs_do_not_erase_unknown_row_overwrites() {
+    let source = indoc! {r#"
+        pub fn padded(left, extra, right) {
+            { ..{}, ..left, ..extra, ..right, ..{} }
+        }
+        fn number() Number {
+            padded({ value: false }, { value: 42 }, {}).value
+        }
+        fn string() String {
+            padded({}, {}, { value: "last" }).value
+        }
+    "#};
+    let bump = Bump::new();
+    solve_input(&bump, source).expect("unknown rows remain ordered overlay operands");
+}
+
+#[test]
+fn repeated_record_overlay_inputs_cannot_hide_conflicting_result_fields() {
+    let source = indoc! {r#"
+        fn invalid(left, right) {
+            let repeated = { ..left, ..right, ..left }
+            let reduced = { ..right, ..left }
+            let number: Number = repeated.value
+            let text: String = reduced.value
+            (number, text)
+        }
+    "#};
+    let bump = Bump::new();
+    assert!(
+        solve_input(&bump, source).is_err(),
+        "rightmost repeated input must determine the same field contract"
+    );
+}
+
+#[test]
+fn repeated_record_overlay_inputs_preserve_rightmost_priority() {
+    let source = indoc! {r#"
+        pub fn both(left, right) {
+            ({ ..left, ..right, ..left }, { ..right, ..left, ..right })
+        }
+        fn run() (Number, String) {
+            let records = both({ value: 42 }, { value: "last" })
+            (records.0.value, records.1.value)
+        }
+    "#};
+    let bump = Bump::new();
+    solve_input(&bump, source).expect("deduplication must retain the rightmost input order");
+}
+
+#[test]
+fn adjacent_closed_overlay_operands_cannot_hide_conflicting_result_fields() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            fn split(record) { { ..record, x: 0, y: true } }
+            fn grouped(record) { { ..record, ..{ x: 0, y: true } } }
+            fn invalid(record) {
+                let first: Number = split(record).value
+                let second: String = grouped(record).value
+                (first, second)
+            }
+        "#},
+    )
+    .expect_err("equivalent closed-field grouping cannot hide contradictory field requirements");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn overwritten_closed_overlay_fields_cannot_hide_conflicting_result_fields() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+            fn padded(left, right) { { ..left, ..{ x: "discarded" }, ..right, x: 0 } }
+            fn plain(left, right) { { ..left, ..right, x: 0 } }
+            fn invalid(left, right) {
+                let first: Number = padded(left, right).value
+                let second: String = plain(left, right).value
+                (first, second)
+            }
+        "#},
+    )
+    .expect_err("overwritten fields cannot distinguish equivalent overlay contracts");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn guaranteed_open_overlay_fields_cannot_hide_conflicting_result_fields() {
+    let bump = Bump::new();
+    let source = indoc! {r#"
+        fn padded(left, right: { r | x: Number }) { { ..left, x: "discarded", ..right } }
+        fn plain(left, right: { r | x: Number }) { { ..left, ..right } }
+        fn invalid(left, right) {
+            let first: Number = padded(left, right).value
+            let second: String = plain(left, right).value
+            (first, second)
+        }
+    "#};
+    let errors = solve_input(&bump, source)
+        .expect_err("guaranteed overwrites preserve equivalent contracts");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{source}\n{errors:?}"
+    );
+}
+
+#[test]
+fn guaranteed_open_overlay_overwrites_preserve_other_fields_and_none() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn merge(left, right: { r | x: Option[Number] }) {
+            { ..left, x: "discarded", kept: true, ..right }
+        }
+        fn check() {
+            let first = merge({ value: 42 }, { x: None, kept: "right" })
+            let x: Option[Number] = first.x
+            let kept: String = first.kept
+            let value: Number = first.value
+            let second = merge({ value: "left" }, { x: Some(7) })
+            let other: String = second.value
+            let remaining: Bool = second.kept
+        }
+    "#},
+    )
+    .expect("known open fields overwrite without erasing other input requirements");
+}
+
+#[test]
+fn adjacent_closed_overlay_normalization_preserves_rightmost_writes_and_open_barriers() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn split(record) { { ..record, ..{ x: 0 }, ..{ x: "final", y: true } } }
+            fn grouped(record) { { ..record, ..{ x: "final", y: true } } }
+            fn before(left, right) { { ..left, value: 42, ..right } }
+            fn after(left, right) { { ..left, ..right, value: 42 } }
+            fn check() {
+                let first: String = split({ marker: true }).x
+                let second: String = grouped({ marker: true }).x
+                let third: String = before({}, { value: "right" }).value
+                let fourth: Number = after({}, { value: "right" }).value
+            }
+        "#},
+    )
+    .expect("normalization must respect overwrite order and intervening unknown rows");
+}
+
+#[test]
+fn associative_record_overlays_cannot_promise_incompatible_payloads() {
+    let source = indoc! {r#"
+        fn invalid(left, middle, right) {
+            let first = { ..{ ..left, ..middle }, ..right }
+            let second = { ..left, ..{ ..middle, ..right } }
+            let number: Number = first.value
+            let text: String = second.value
+            (number, text)
+        }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source).expect_err("equivalent overlays cannot disagree");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{source}\n{errors:?}"
+    );
+}
+
+#[test]
+fn associative_record_overlays_preserve_independent_right_biased_instantiations() {
+    let source = indoc! {r#"
+        pub fn both(left, middle, right) {
+            let first = { ..{ ..left, ..middle }, ..right }
+            let second = { ..left, ..{ ..middle, ..right } }
+            (first, second)
+        }
+        fn numbers() (Number, Number) {
+            let records = both({ value: "old" }, { value: true }, { value: 42 })
+            (records.0.value, records.1.value)
+        }
+        fn strings() (String, String) {
+            let records = both({ value: 42 }, { value: true }, { value: "last" })
+            (records.0.value, records.1.value)
+        }
+    "#};
+    let bump = Bump::new();
+    solve_input(&bump, source)
+        .expect("association preserves rightmost overrides and generalization");
+}
+
+#[test]
+fn associative_record_overlays_generalize_exports_without_local_calls() {
+    let source = indoc! {r#"
+        pub fn both(left, middle, right) {
+            ({ ..{ ..left, ..middle }, ..right }, { ..left, ..{ ..middle, ..right } })
+        }
+    "#};
+    let bump = Bump::new();
+    solve_input(&bump, source)
+        .expect("overlay residual tails must be quantified before publication");
+}
+
+#[test]
+fn associative_record_overlays_do_not_equate_distinct_final_overrides() {
+    let source = indoc! {r#"
+        fn both(left, middle, right) (Number, String) {
+            let first = { ..{ ..left, ..middle }, ..right, value: 42 }
+            let second = { ..left, ..{ ..middle, ..right }, value: "last" }
+            (first.value, second.value)
+        }
+        fn run() (Number, String) {
+            both({ x: 1 }, { y: true }, { value: false })
+        }
+    "#};
+    let bump = Bump::new();
+    solve_input(&bump, source).expect("different final writes must retain distinct result types");
+}
+
+#[test]
+fn associative_record_overlays_do_not_generalize_captured_shared_arrays() {
+    let source = indoc! {r#"
+        let shared = []
+        fn views(middle, right) {
+            let left = { items: shared }
+            ({ ..{ ..left, ..middle }, ..right }, { ..left, ..{ ..middle, ..right } })
+        }
+        fn write() {
+            let records = views({}, {})
+            Array.push(records.0.items, 42)
+        }
+        fn invalid() Array[String] {
+            let records = views({}, {})
+            records.1.items
+        }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source).expect_err("shared payloads cannot be re-instantiated");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{source}\n{errors:?}"
+    );
+}
+
+#[test]
+fn associative_record_overlays_allow_fresh_array_factories() {
+    let source = indoc! {r#"
+        fn views(middle, right) {
+            let left = { items: [] }
+            ({ ..{ ..left, ..middle }, ..right }, { ..left, ..{ ..middle, ..right } })
+        }
+        fn numbers() Array[Number] {
+            let records = views({}, {})
+            Array.push(records.0.items, 42)
+            records.1.items
+        }
+        fn strings() Array[String] {
+            let records = views({}, {})
+            Array.push(records.1.items, "fresh")
+            records.0.items
+        }
+    "#};
+    let bump = Bump::new();
+    solve_input(&bump, source).expect("each factory call owns its freshly allocated array");
+}
+
+#[test]
+fn call_arguments_constrain_later_literal_arguments_from_left_to_right() {
+    let source = indoc! {r#"
+        fn put(items: Array[a], value: Array[a]) {}
+        pub fn main() {
+            let numbers = [1]
+            put(numbers, ["wrong"])
+        }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source).unwrap_err();
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { actual, expected },
+                ..
+            }) if actual == "String" && expected == "Number"
+        )),
+        "{source}\n{errors:?}"
+    );
+}
+
+#[test]
+fn piped_argument_constrains_later_literal_arguments() {
+    let source = indoc! {r#"
+        fn put(items: Array[a], value: Array[a]) {}
+        pub fn main() {
+            let numbers = [1]
+            numbers |> put(["wrong"])
+        }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source).unwrap_err();
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { actual, expected },
+                ..
+            }) if actual == "String" && expected == "Number"
+        )),
+        "{source}\n{errors:?}"
+    );
 }
 
 #[test]
@@ -962,7 +3805,7 @@ fn record_aliases_expand_at_value_boundaries() {
     let source = indoc! {r#"
         type OptionalName = { name?: String }
         fn choose(flag: Bool, record: OptionalName) {
-            if flag { { name: "present" } } else { record }
+            if flag { { name: Some("present") } } else { record }
         }
         fn run() Option[String] { choose(false, {}).name }
     "#};
@@ -1009,7 +3852,7 @@ fn loop_results_preserve_optional_fields_in_both_break_orders() {
         indoc! {r#"
             fn choose(flag: Bool, record: { value?: Number }) {
                 loop {
-                    if flag { break { value: 42 } }
+                    if flag { break { value: Some(42) } }
                     break record
                 }
             }
@@ -1019,7 +3862,7 @@ fn loop_results_preserve_optional_fields_in_both_break_orders() {
             fn choose(flag: Bool, record: { value?: Number }) {
                 loop {
                     if flag { break record }
-                    break { value: 42 }
+                    break { value: Some(42) }
                 }
             }
             fn run() Option[Number] { choose(true, {}).value }
@@ -1074,6 +3917,38 @@ fn optional_constructor_record_patterns_bind_option_valued_reads() {
 }
 
 #[test]
+fn option_ordering_requires_payload_ordering() {
+    let source = indoc! {r#"
+        fn invalid(left: Option[fn(Number) Number], right: Option[fn(Number) Number]) Ordering {
+            compare(left, right)
+        }
+    "#};
+    assert!(solve_input(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn existing_record_aliases_cannot_gain_option_defaults_or_payload_lifts() {
+    for source in [
+        indoc! {r#"
+            fn read(record: { value?: Number }) Option[Number] { record.value }
+            fn invalid() {
+                let record = {}
+                read(record)
+            }
+        "#},
+        indoc! {r#"
+            fn read(record: { value?: Number }) Option[Number] { record.value }
+            fn invalid() {
+                let record = { value: 42 }
+                read(record)
+            }
+        "#},
+    ] {
+        assert!(solve_input(&Bump::new(), source).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn optional_record_patterns_cannot_extract_a_required_payload() {
     let source = indoc! {r#"
         fn read(record: { value?: Number }) Number {
@@ -1086,11 +3961,11 @@ fn optional_record_patterns_cannot_extract_a_required_payload() {
 }
 
 #[test]
-fn optional_record_assignment_stores_the_declared_payload() {
+fn optional_record_assignment_stores_an_option() {
     let source = indoc! {r#"
         fn run() Option[Number] {
             let record: { value?: Number } = {}
-            record.value = 42
+            record.value = Some(42)
             record.value
         }
     "#};
@@ -1100,11 +3975,11 @@ fn optional_record_assignment_stores_the_declared_payload() {
 }
 
 #[test]
-fn optional_record_assignment_rejects_an_option_instead_of_the_payload() {
+fn optional_record_assignment_does_not_lift_a_bare_payload() {
     let source = indoc! {r#"
         fn run() {
             let record: { value?: Number } = {}
-            record.value = Option.some(42)
+            record.value = 42
         }
     "#};
     assert!(infer(&Bump::new(), source).is_err());
@@ -1133,24 +4008,24 @@ fn optional_record_assignment_cannot_traverse_an_absent_parent() {
 }
 
 #[test]
-fn branch_results_preserve_optional_field_presence() {
+fn branch_results_preserve_option_fields() {
     for source in [
         indoc! {r#"
             fn choose(flag: Bool, user: { name?: String }) {
-                if flag { { name: "present" } } else { user }
+                if flag { { name: Some("present") } } else { user }
             }
             fn run() Option[String] { choose(false, {}).name }
         "#},
         indoc! {r#"
             fn choose(flag: Bool, user: { name?: String }) {
-                if flag { user } else { { name: "present" } }
+                if flag { user } else { { name: Some("present") } }
             }
             fn run() Option[String] { choose(false, {}).name }
         "#},
         indoc! {r#"
             fn choose(flag: Bool, user: { name?: String }) {
                 match flag {
-                    true => ({ name: "present" }),
+                    true => ({ name: Some("present") }),
                     false => user,
                 }
             }
@@ -1232,6 +4107,35 @@ fn optional_record_annotations_survive_local_and_global_construction() {
         }
     "#};
     assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn record_rows_reject_direct_and_mutual_payload_cycles() {
+    for source in [
+        indoc! {r#"
+            fn cycle(record) { record.next = record }
+        "#},
+        indoc! {r#"
+            fn cycle(left, right) {
+                left.next = right
+                right.next = left
+            }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source)
+            .expect_err("finite record types cannot contain themselves through fields");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                alder_solve::SolveError::Core(Error {
+                    kind: ErrorKind::InfiniteType,
+                    ..
+                })
+            )),
+            "{errors:?}"
+        );
+    }
 }
 
 #[test]
@@ -1533,24 +4437,24 @@ fn partial_overlay_preserves_optional_presence_with_an_unrelated_open_tail() {
 }
 
 #[test]
-fn partial_overlay_does_not_assume_an_unknown_optional_fallback() {
+fn partial_overlay_option_field_overwrites_an_unknown_row_field() {
     let source = indoc! {r#"
         fn merge(left, right) { { ..left, ..right } }
-        fn invalid(left: { r | marker: Bool }, right: { value?: Number }) Option[Number] {
+        fn replace(left: { r | marker: Bool }, right: { value?: Number }) Option[Number] {
             merge(left, right).value
         }
     "#};
-    assert!(solve_input(&Bump::new(), source).is_err());
+    assert!(solve_input(&Bump::new(), source).is_ok());
 }
 
 #[test]
-fn partial_overlay_preserves_required_fallback_with_an_open_tail() {
+fn partial_overlay_option_field_replaces_an_earlier_value_with_an_open_tail() {
     let source = indoc! {r#"
         fn merge(left, right) { { ..left, ..right } }
-        fn read(right: { r | value?: Number }) Number {
+        fn read(right: { r | value?: Number }) Option[Number] {
             merge({ value: 42, marker: true }, right).value
         }
-        fn run() Number { read({ marker: "overwritten" }) }
+        fn run() Option[Number] { read({ marker: "overwritten" }) }
     "#};
     let bump = Bump::new();
     let result = solve_input(&bump, source);
@@ -1586,11 +4490,16 @@ fn overlay_can_describe_a_known_overwrite_explicitly_in_its_result() {
 }
 
 #[test]
-fn composed_optional_result_unions_preserve_declared_generic_errors() {
+fn explicit_option_fallbacks_preserve_three_declared_generic_errors() {
     let source = indoc! {r#"
-        fn merge(left, right) { { ..left, ..right } }
         fn forward(left: { r | result: Result[Number, e] }, middle: { s | result?: Result[Number, f] }, right: { t | result?: Result[Number, g] }) {
-            let value = merge(merge(left, middle), right).result?
+            let value = match right.result {
+                Some(result) => result?,
+                None => match middle.result {
+                    Some(result) => result?,
+                    None => left.result?,
+                },
+            }
             Ok(value)
         }
         fn first() Result[Number, [:first]] { Err(:first) }
@@ -1611,11 +4520,16 @@ fn composed_optional_result_unions_preserve_declared_generic_errors() {
 }
 
 #[test]
-fn composed_optional_result_unions_reject_a_missing_third_error() {
+fn explicit_option_fallbacks_reject_a_missing_third_error() {
     let source = indoc! {r#"
-        fn merge(left, right) { { ..left, ..right } }
         fn invalid(left: { r | result: Result[Number, [:first]] }, middle: { s | result?: Result[Number, [:second]] }, right: { t | result?: Result[Number, [:third]] }) Result[Number, [:first | :second]] {
-            let value = merge(merge(left, middle), right).result?
+            let value = match right.result {
+                Some(result) => result?,
+                None => match middle.result {
+                    Some(result) => result?,
+                    None => left.result?,
+                },
+            }
             Ok(value)
         }
     "#};
@@ -1623,11 +4537,10 @@ fn composed_optional_result_unions_reject_a_missing_third_error() {
 }
 
 #[test]
-fn optional_result_union_instantiations_remain_independent() {
+fn explicit_option_fallback_instantiations_remain_independent() {
     let source = indoc! {r#"
-        fn merge(left, right) { { ..left, ..right } }
         fn forward(left: { result: Result[Number, e] }, right: { result?: Result[Number, f] }) {
-            let value = merge(left, right).result?
+            let value = match right.result { Some(result) => result?, None => left.result? }
             Ok(value)
         }
         fn first() Result[Number, [:first]] { Err(:first) }
@@ -1646,33 +4559,30 @@ fn optional_result_union_instantiations_remain_independent() {
 }
 
 #[test]
-fn optional_result_union_preserves_mutable_success_payload_types() {
+fn explicit_option_fallback_preserves_mutable_success_payload_types() {
     let source = indoc! {r#"
-        fn merge(left, right) { { ..left, ..right } }
         fn invalid(left: { result: Result[Array[Number], [:first]] }, right: { result?: Result[Array[String], [:second]] }) {
-            merge(left, right)
+            match right.result { Some(result) => result, None => left.result }
         }
     "#};
     assert!(solve_input(&Bump::new(), source).is_err());
 }
 
 #[test]
-fn optional_result_union_cannot_weaken_nested_mutable_field_presence() {
+fn explicit_option_fallback_cannot_change_nested_mutable_field_types() {
     let source = indoc! {r#"
-        fn merge(left, right) { { ..left, ..right } }
         fn invalid(left: { result: Result[Array[{ value: Number }], [:first]] }, right: { result?: Result[Array[{ value?: Number }], [:second]] }) {
-            merge(left, right)
+            match right.result { Some(result) => result, None => left.result }
         }
     "#};
     assert!(solve_input(&Bump::new(), source).is_err());
 }
 
 #[test]
-fn optional_overlay_generic_error_rows_preserve_both_sources() {
+fn explicit_option_fallback_generic_error_rows_preserve_both_sources() {
     let source = indoc! {r#"
-        fn merge(left, right) { { ..left, ..right } }
         fn forward(left: { result: Result[Number, e] }, right: { result?: Result[Number, f] }) {
-            let value = merge(left, right).result?
+            let value = match right.result { Some(result) => result?, None => left.result? }
             Ok(value)
         }
         fn first() Result[Number, [:first]] { Err(:first) }
@@ -1691,11 +4601,10 @@ fn optional_overlay_generic_error_rows_preserve_both_sources() {
 }
 
 #[test]
-fn optional_overlay_generic_error_rows_cannot_promise_only_one_source() {
+fn explicit_option_fallback_generic_error_rows_cannot_promise_only_one_source() {
     let source = indoc! {r#"
-        fn merge(left, right) { { ..left, ..right } }
         fn invalid(left: { result: Result[Number, e] }, right: { result?: Result[Number, f] }) Result[Number, e] {
-            let value = merge(left, right).result?
+            let value = match right.result { Some(result) => result?, None => left.result? }
             Ok(value)
         }
     "#};
@@ -1703,11 +4612,10 @@ fn optional_overlay_generic_error_rows_cannot_promise_only_one_source() {
 }
 
 #[test]
-fn optional_overlay_error_rows_include_both_fallbacks() {
+fn explicit_option_fallback_error_rows_include_both_sources() {
     let source = indoc! {r#"
-        fn merge(left, right) { { ..left, ..right } }
         fn forward(left: { result: Result[Number, [:first]] }, right: { result?: Result[Number, [:second]] }) {
-            let value = merge(left, right).result?
+            let value = match right.result { Some(result) => result?, None => left.result? }
             Ok(value)
         }
         fn first() Result[Number, [:first]] { Err(:first) }
@@ -1725,11 +4633,10 @@ fn optional_overlay_error_rows_include_both_fallbacks() {
 }
 
 #[test]
-fn optional_overlay_error_rows_cannot_drop_the_absent_field_fallback() {
+fn explicit_option_fallback_error_rows_cannot_drop_the_none_branch() {
     let source = indoc! {r#"
-        fn merge(left, right) { { ..left, ..right } }
         fn forward(left: { result: Result[Number, [:first]] }, right: { result?: Result[Number, [:second]] }) {
-            let value = merge(left, right).result?
+            let value = match right.result { Some(result) => result?, None => left.result? }
             Ok(value)
         }
         fn first() Result[Number, [:first]] { Err(:first) }
@@ -1820,6 +4727,143 @@ fn overlay_factory_cannot_regeneralize_captured_mutable_payloads() {
 }
 
 #[test]
+fn identity_overlays_cannot_hide_contradictory_field_reads() {
+    for source in [
+        indoc! {r#"
+            fn copy(value) { { ..value } }
+            fn invalid(value) {
+                let first: Number = copy(value).field
+                let second: String = value.field
+                (first, second)
+            }
+        "#},
+        indoc! {r#"
+            fn copy(value) { { ..value, ..value } }
+            fn invalid(value) {
+                let first: Number = copy(value).field
+                let second: String = value.field
+                (first, second)
+            }
+        "#},
+        indoc! {r#"
+            fn copy(value) { { ..{}, ..value, ..{} } }
+            fn invalid(value) {
+                let first: Number = copy(value).field
+                let second: String = value.field
+                (first, second)
+            }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source)
+            .expect_err("identity overlays cannot change inherited field types");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                alder_solve::SolveError::Core(Error {
+                    kind: ErrorKind::Mismatch { .. },
+                    ..
+                })
+            )),
+            "{source}\n{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn mutually_recursive_overlays_reject_unbroken_payload_growth() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn even(count: Number, value, other) {
+            let merged = merge(value, other)
+            if count == 0 { merged }
+            else { odd(count - 1, { nested: merged }, other) }
+        }
+        fn odd(count: Number, value, other) {
+            let merged = merge(value, other)
+            if count == 0 { merged }
+            else { even(count - 1, { nested: merged }, other) }
+        }
+        fn run() { even(2, { nested: { nested: 0 } }, {}) }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source)
+        .expect_err("mutual recursion cannot hide incompatible recursive payload growth");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::InfiniteType | ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn mutually_recursive_overlays_preserve_cycle_breaking_overwrites() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn even(count: Number, value, other) {
+            let merged = merge(value, other)
+            if count == 0 { merged }
+            else { odd(count - 1, { nested: merged }, other) }
+        }
+        fn odd(count: Number, value, other) {
+            let merged = merge(value, other)
+            if count == 0 { merged }
+            else { even(count - 1, { nested: merged }, other) }
+        }
+        fn number() Number { even(2, { nested: { nested: 0 } }, { nested: 42 }).nested }
+        fn text() String { odd(3, { nested: { nested: "seed" } }, { nested: "text" }).nested }
+    "#};
+    solve_input(&Bump::new(), source)
+        .expect("independent calls retain overwrites that break mutual payload recursion");
+}
+
+#[test]
+fn recursive_overlay_instantiation_rejects_an_unbroken_payload_cycle() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn repeat(count: Number, value, other) {
+            let merged = merge(value, other)
+            if count == 0 { merged }
+            else { repeat(count - 1, { nested: merged }, other) }
+        }
+        fn run() { repeat(2, { nested: { nested: 0 } }, {}) }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source)
+        .expect_err("a call cannot instantiate a recursive overlay with an infinite payload");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::InfiniteType | ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn recursive_overlay_instantiation_keeps_a_cycle_breaking_overwrite() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn repeat(count: Number, value, other) {
+            let merged = merge(value, other)
+            if count == 0 { merged }
+            else { repeat(count - 1, { nested: merged }, other) }
+        }
+        fn run() Number { repeat(2, { nested: { nested: 0 } }, { nested: 42 }).nested }
+    "#};
+    solve_input(&Bump::new(), source)
+        .expect("a guaranteed overwrite breaks the recursive payload equation");
+}
+
+#[test]
 fn recursive_overlay_rejects_an_infinite_nested_payload() {
     let source = indoc! {r#"
         fn merge(left, right) { { ..left, ..right } }
@@ -1854,6 +4898,51 @@ fn recursive_overlay_allows_a_required_override_to_break_payload_recursion() {
     let bump = Bump::new();
     let result = solve_input(&bump, source);
     assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn recursive_overlay_cannot_prove_a_universal_field_from_its_result_obligation() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn repeat(count: Number, left, right) {
+            let merged = merge(left, right)
+            if count == 0 { merged }
+            else { repeat(count - 1, merged, right) }
+        }
+        fn invalid(left: { r | value: Number }, right: { s | marker: Bool }) Number {
+            repeat(2, left, right).value
+        }
+    "#};
+    let bump = Bump::new();
+    let errors = solve_input(&bump, source)
+        .expect_err("recursive result requirements cannot prove an unknown overwrite is Number");
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::GenericSpecialization { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn recursive_overlay_preserves_a_final_field_with_a_shared_universal_tail() {
+    let source = indoc! {r#"
+        fn merge(left, right) { { ..left, ..right } }
+        fn repeat(count: Number, left, right) {
+            let merged = { ..merge(left, right), value: 42 }
+            if count == 0 { merged }
+            else { repeat(count - 1, merged, right) }
+        }
+        fn valid(left: { r | value: Number, marker: Bool }, right: { r | value: String, marker: Bool }) Number {
+            repeat(2, left, right).value
+        }
+    "#};
+    solve_input(&Bump::new(), source)
+        .expect("a final explicit overwrite proves the field regardless of recursive inputs");
 }
 
 #[test]
@@ -1957,7 +5046,7 @@ fn open_spread_accepts_absent_and_compatible_overwrites() {
 }
 
 #[test]
-fn optional_spread_checks_fallbacks_hidden_in_an_open_row() {
+fn option_field_spread_overwrites_fields_hidden_in_an_open_row() {
     let source = indoc! {r#"
         fn fallback(record, patch: { value?: String }) Option[String] {
             let result = { ..record, ..patch }
@@ -1965,7 +5054,7 @@ fn optional_spread_checks_fallbacks_hidden_in_an_open_row() {
         }
         fn run() Option[String] { fallback({ value: 42 }, {}) }
     "#};
-    assert!(solve_input(&Bump::new(), source).is_err());
+    assert!(solve_input(&Bump::new(), source).is_ok());
 }
 
 #[test]
@@ -1982,13 +5071,13 @@ fn final_required_override_does_not_constrain_hidden_row_payloads() {
 }
 
 #[test]
-fn optional_spread_preserves_a_required_fallback() {
+fn option_field_spread_replaces_an_earlier_required_value() {
     let source = indoc! {r#"
-        fn fallback(record: { value?: Number }) Number {
+        fn fallback(record: { value?: Number }) Option[Number] {
             let result = { value: 42, ..record }
             result.value
         }
-        fn run() Number { fallback({}) }
+        fn run() Option[Number] { fallback({}) }
     "#};
     let bump = Bump::new();
     let result = solve_input(&bump, source);
@@ -2029,14 +5118,14 @@ fn required_spread_can_replace_an_incompatible_earlier_payload() {
 }
 
 #[test]
-fn optional_spread_cannot_hide_an_incompatible_fallback() {
+fn option_field_spread_discards_an_incompatible_earlier_value() {
     let source = indoc! {r#"
         fn fallback(record: { value?: String }) Option[String] {
             let result = { value: 42, ..record }
             result.value
         }
     "#};
-    assert!(solve_input(&Bump::new(), source).is_err());
+    assert!(solve_input(&Bump::new(), source).is_ok());
 }
 
 #[test]
@@ -2150,6 +5239,103 @@ fn potentially_reached_conditional_breaks_must_agree() {
 }
 
 #[test]
+fn remaining_operands_after_an_exit_do_not_constrain_loop_results() {
+    for source in [
+        indoc! {r#"
+            fn answer() Number {
+                loop { Err(:pair({ break 42 }, { break "unreachable" })) }
+            }
+        "#},
+        indoc! {r#"
+            fn answer() Number {
+                loop { `${{ break 42 }}${{ break "unreachable" }}` }
+            }
+        "#},
+        indoc! {r#"
+            fn tag(parts: Array[String], a: Number, b: Number) String { "unused" }
+            fn answer() Number {
+                loop { tag`${{ break 42 }}${{ break "unreachable" }}` }
+            }
+        "#},
+        indoc! {r#"
+            fn answer() Number {
+                loop { ({ break 42 })[{ break "unreachable" }] }
+            }
+        "#},
+        indoc! {r#"
+            fn answer() Number {
+                loop { let ignored = { a: { break 42 }, b: { break "unreachable" } } }
+            }
+        "#},
+        indoc! {r#"
+            fn answer() Number {
+                loop {
+                    let ignored: { a: Number, b: Number } = {
+                        a: { break 42 }, b: { break "unreachable" }
+                    }
+                }
+            }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let result = infer(&bump, source);
+        assert!(result.is_ok(), "{source}: {result:?}");
+    }
+}
+
+#[test]
+fn assignment_operands_after_an_exit_do_not_constrain_loop_results() {
+    let source = indoc! {r#"
+        fn answer() Number {
+            let values = [[0]]
+            loop {
+                values[{ break 42 }][{ break "unreachable index" }] = { break "unreachable value" }
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn aggregate_operands_after_an_exit_do_not_constrain_loop_results() {
+    for source in [
+        indoc! {r#"
+            fn answer() Number {
+                loop { [{ break 42 }, { break "unreachable" }] }
+            }
+        "#},
+        indoc! {r#"
+            fn answer() Number {
+                loop { ({ break 42 }, { break "unreachable" }) }
+            }
+        "#},
+        indoc! {r#"
+            fn answer() Number {
+                loop {
+                    let values: Array[Number] = [{ break 42 }, { break "unreachable" }]
+                }
+            }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let result = infer(&bump, source);
+        assert!(result.is_ok(), "{source}: {result:?}");
+    }
+}
+
+#[test]
+fn potentially_reached_aggregate_exits_still_must_agree() {
+    let source = indoc! {r#"
+        fn answer(flag: Bool) Number {
+            loop { [if flag { break 42 } else { 0 }, { break "wrong" }] }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
 fn loop_break_values_determine_the_result_type() {
     let source = indoc! {r#"
         fn answer() Number { loop { break 42 } }
@@ -2213,6 +5399,233 @@ fn unreachable_breaks_do_not_constrain_a_live_loop_result() {
         }
     "#};
     assert!(infer(&Bump::new(), source).is_ok());
+}
+
+#[test]
+fn possibly_reached_sibling_pins_still_constrain_loop_results() {
+    let source = indoc! {r#"
+        fn invalid(flag: Bool) Number {
+            loop {
+                match (0, 0) {
+                    (^{ if flag { break 42 } else { 0 } }, ^{ break "wrong" }) => (),
+                    _ => (),
+                }
+            }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn exiting_nested_pins_skip_later_pattern_operands() {
+    for source in [
+        indoc! {r#"
+        fn answer() Number {
+            loop {
+                match (0, 0) {
+                    (^{ break 42 }, ^{ break "unreachable" }) => (),
+                    _ => (),
+                }
+            }
+        }
+    "#},
+        indoc! {r#"
+        fn answer() Number {
+            loop {
+                match [0, 0] {
+                    [^{ break 42 }, ^{ break "unreachable" }] => (),
+                    _ => (),
+                }
+            }
+        }
+    "#},
+        indoc! {r#"
+        fn answer() Number {
+            loop {
+                match { a: 0, b: 0 } {
+                    { a: ^{ break 42 }, b: ^{ break "unreachable" } } => (),
+                    _ => (),
+                }
+            }
+        }
+    "#},
+        indoc! {r#"
+        enum Pair { Both(Number, Number) }
+        fn answer() Number {
+            loop {
+                match Pair::Both(0, 0) {
+                    Pair::Both(^{ break 42 }, ^{ break "unreachable" }) => (),
+                    _ => (),
+                }
+            }
+        }
+    "#},
+        indoc! {r#"
+        enum Pair { Both { a: Number, b: Number } }
+        fn answer() Number {
+            loop {
+                    match (Pair::Both { a: 0, b: 0 }) {
+                    Pair::Both { a: ^{ break 42 }, b: ^{ break "unreachable" } } => (),
+                    _ => (),
+                }
+            }
+        }
+    "#},
+        indoc! {r#"
+        fn answer(input: Result[(), [:pair(Number, Number)]]) Number {
+            loop {
+                match input {
+                    Err(:pair(^{ break 42 }, ^{ break "unreachable" })) => (),
+                    _ => (),
+                }
+            }
+        }
+    "#},
+    ] {
+        let bump = Bump::new();
+        let result = infer(&bump, source);
+        assert!(result.is_ok(), "{source}: {result:?}");
+    }
+}
+
+#[test]
+fn exiting_pins_skip_guards_bodies_and_later_arms() {
+    let source = indoc! {r#"
+        fn answer() Number {
+            loop {
+                match 0 {
+                    ^{ break 42 } if { break "guard" } => { break "body" },
+                    ^{ break "later pin" } => { break "later body" },
+                    _ => { break "fallback" },
+                }
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn successful_guards_skip_later_alternative_pin_exits() {
+    let source = indoc! {r#"
+        fn answer() Number {
+            loop {
+                match (0, 0) {
+                    (_, _) | (^{ break "unreachable" }, _) if true => { break 42 },
+                    _ => { break "unreachable fallback" },
+                }
+            }
+        }
+    "#};
+    let bump = Bump::new();
+    let result = infer(&bump, source);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn failed_guards_reach_later_alternative_pin_exits() {
+    let source = indoc! {r#"
+        fn invalid() Number {
+            loop {
+                match (0, 0) {
+                    (_, _) | (^{ break "wrong" }, _) if false => (),
+                    _ => { break 42 },
+                }
+            }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn pin_breaks_cannot_disguise_a_loop_as_divergent() {
+    let source = indoc! {r#"
+        fn invalid() Number {
+            loop { match 0 { ^{ break "wrong" } => (), _ => () } }
+        }
+    "#};
+    assert!(infer(&Bump::new(), source).is_err());
+}
+
+#[test]
+fn pin_expression_returns_must_satisfy_the_enclosing_function() {
+    for source in [
+        indoc! {r#"
+        fn invalid() Number {
+            match 0 { ^{ return } => 42, _ => 42 }
+        }
+    "#},
+        indoc! {r#"
+        fn invalid() Number {
+            match (0, 1) { (^{ return }, _) => 42, _ => 42 }
+        }
+    "#},
+        indoc! {r#"
+        fn invalid() Number {
+            match [0] { [^{ return }] => 42, _ => 42 }
+        }
+    "#},
+        indoc! {r#"
+        fn invalid() Number {
+            match { value: 0 } { { value: ^{ return } } => 42, _ => 42 }
+        }
+    "#},
+        indoc! {r#"
+        fn invalid() Number {
+            match Some(0) { Some(^{ return }) => 42, _ => 42 }
+        }
+    "#},
+    ] {
+        assert!(infer(&Bump::new(), source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn method_bodies_reject_zero_iteration_return_paths() {
+    for source in [
+        indoc! {r#"
+            trait Read[a] {
+                fn read(value: a, flag: Bool) Number {
+                    while flag { return 42 }
+                }
+            }
+        "#},
+        indoc! {r#"
+            trait Read[a] { fn read(value: a, flag: Bool) Number }
+            impl Read[Number] {
+                fn read(value: Number, flag: Bool) Number {
+                    while flag { return 42 }
+                }
+            }
+        "#},
+        indoc! {r#"
+            trait Read[a] {
+                async fn read(value: a, flag: Bool) Number {
+                    Task.sleep(0).await
+                    while flag { return 42 }
+                }
+            }
+        "#},
+        indoc! {r#"
+            trait Read[a] { async fn read(value: a, flag: Bool) Number }
+            impl Read[Number] {
+                async fn read(value: Number, flag: Bool) Number {
+                    Task.sleep(0).await
+                    while flag { return 42 }
+                }
+            }
+        "#},
+    ] {
+        let bump = Bump::new();
+        let errors = infer(&bump, source).unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|error| matches!(error.kind, ErrorKind::MissingReturn { .. })),
+            "{source}: {errors:?}"
+        );
+    }
 }
 
 #[test]
@@ -2340,7 +5753,28 @@ fn render_annotations(annotations: &Annotations<'_>) -> String {
 }
 
 fn render_annotation(annotation: &Annotation<'_>) -> String {
-    let typ = render_type(annotation.typ);
+    let mut typ = render_type(annotation.typ);
+    if !annotation.tuple_shapes.is_empty() {
+        let constraints = annotation
+            .tuple_shapes
+            .iter()
+            .map(|shape| {
+                let elements = shape
+                    .elements
+                    .iter()
+                    .map(|(index, typ)| format!("{index}: {}", render_type(typ)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "tuple {} length {} {{{elements}}}",
+                    render_type(shape.tuple),
+                    shape.length
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        typ.push_str(&format!(" where {constraints}"));
+    }
     if annotation.params.is_empty() {
         typ
     } else {
@@ -2424,18 +5858,7 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
         Type::Record { fields, ext } => {
             let fields = fields
                 .iter()
-                .map(|field| {
-                    format!(
-                        "{}{}: {}",
-                        field.name,
-                        if field.presence == FieldPresence::Optional {
-                            "?"
-                        } else {
-                            ""
-                        },
-                        render_type(field.typ)
-                    )
-                })
+                .map(|field| format!("{}: {}", field.name, render_type(field.typ)))
                 .collect::<Vec<_>>()
                 .join(", ");
             match ext {
@@ -2469,6 +5892,205 @@ fn render_type(typ: &Located<Type<'_>>) -> String {
         }
         Type::Alias { reference, .. } => reference.name.to_owned(),
     }
+}
+
+#[test]
+fn synchronized_ref_accepts_task_callbacks_and_preserves_payload_types() {
+    let bump = Bump::new();
+    let result = solve_input(
+        &bump,
+        indoc! {r#"
+        async fn fresh(value: a) SynchronizedRef[a] { SynchronizedRef.make(value).await }
+        async fn run() String {
+            let number = fresh(1).await
+            let text = fresh("text").await
+            SynchronizedRef.update(number, value -> async { value + 1 }).await
+            SynchronizedRef.modify(number, value -> async { ("previous", value + 1) }).await
+            SynchronizedRef.get(text).await
+        }
+    "#},
+    );
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn synchronized_ref_rejects_synchronous_callback_and_incompatible_alias() {
+    for source in [
+        indoc! {r#"
+        async fn bad() {
+            let cell = SynchronizedRef.make(0).await
+            SynchronizedRef.update(cell, value -> value + 1).await
+        }
+    "#},
+        indoc! {r#"
+        async fn bad() String {
+            let cell = SynchronizedRef.make([]).await
+            let alias = cell
+            SynchronizedRef.set(cell, [42]).await
+            let strings: Array[String] = SynchronizedRef.get(alias).await
+            strings[0]
+        }
+    "#},
+    ] {
+        let bump = Bump::new();
+        let errors = solve_input(&bump, source).unwrap_err();
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                alder_solve::SolveError::Core(Error {
+                    kind: ErrorKind::Mismatch { .. },
+                    ..
+                })
+            )),
+            "{source}\n{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn semaphore_preserves_independent_protected_result_types() {
+    let bump = Bump::new();
+    let result = solve_input(
+        &bump,
+        indoc! {r#"
+        async fn protect(gate: Semaphore, task: Task[a]) a {
+            Semaphore.withPermits(gate, 1, task).await
+        }
+        async fn run() String {
+            let gate = Semaphore.make(2).await
+            let number = protect(gate, async { 42 }).await
+            let text = protect(gate, async { "text" }).await
+            text
+        }
+    "#},
+    );
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn ref_captured_function_cell_cannot_be_specialized_through_an_alias() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        async fn bad() String {
+            let cell = Ref.make(value -> value).await
+            let read = () -> async { Ref.get(cell).await }
+            Ref.set(cell, (value: Number) -> value + 1).await
+            let operation = read().await
+            operation("wrong")
+        }
+    "#},
+    )
+    .unwrap_err();
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn ref_reusable_allocation_task_keeps_shared_array_payload_monomorphic() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        let allocation = Ref.make([])
+        async fn write() {
+            let cell = allocation.await
+            Array.push(Ref.get(cell).await, 42)
+        }
+        async fn read() String {
+            let cell = allocation.await
+            let values: Array[String] = Ref.get(cell).await
+            values[0]
+        }
+    "#},
+    )
+    .unwrap_err();
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn ref_fresh_array_factory_retains_independent_instantiations() {
+    let bump = Bump::new();
+    let result = solve_input(
+        &bump,
+        indoc! {r#"
+        async fn fresh() { Ref.make([]).await }
+        async fn run() String {
+            let numbers = fresh().await
+            let strings = fresh().await
+            Ref.set(numbers, [42]).await
+            Ref.set(strings, ["text"]).await
+            Ref.get(strings).await[0]
+        }
+    "#},
+    );
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn ref_operations_preserve_payload_and_callback_result_types() {
+    let bump = Bump::new();
+    let result = solve_input(
+        &bump,
+        indoc! {r#"
+        async fn fresh(value: a) Ref[a] { Ref.make(value).await }
+        async fn run() String {
+            let number = fresh(1).await
+            let text = fresh("text").await
+            Ref.set(number, 2).await
+            Ref.update(number, value -> value + 1).await
+            Ref.modify(number, value -> (Ref.same(number, number), value + 1)).await
+            Ref.get(text).await
+        }
+    "#},
+    );
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn ref_shared_payload_cannot_be_instantiated_incompatibly() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        async fn bad() String {
+            let cell = Ref.make([]).await
+            let alias = cell
+            Ref.set(cell, [42]).await
+            let strings: Array[String] = Ref.get(alias).await
+            strings[0]
+        }
+    "#},
+    )
+    .unwrap_err();
+    assert!(
+        errors.iter().any(|error| matches!(
+            error,
+            alder_solve::SolveError::Core(Error {
+                kind: ErrorKind::Mismatch { .. },
+                ..
+            })
+        )),
+        "{errors:?}"
+    );
 }
 
 #[test]
@@ -2837,6 +6459,70 @@ fn generic_contract_rejects_a_specialized_method_body() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn generic_contract_rejects_specialization_across_explicit_async_boundaries() {
+    for source in [
+        indoc! {"
+            trait Convert[a] { async fn convert(value: a, other: b) b }
+            impl Convert[Number] {
+                async fn convert(value: Number, other: b) b { 42 }
+            }
+        "},
+        indoc! {"
+            trait Convert[a] {
+                async fn convert(value: a, other: b) b { return 42 }
+            }
+        "},
+        indoc! {"
+            fn invalid(value: a) Task[a] { async { return 42 } }
+        "},
+        indoc! {"
+            async fn invalid(value: a) Task[a] { async { 42 } }
+        "},
+    ] {
+        let bump = Bump::new();
+        let errors =
+            solve_input(&bump, source).expect_err("async wrappers cannot hide specialization");
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                alder_solve::SolveError::Core(Error {
+                    kind: ErrorKind::GenericSpecialization { .. },
+                    ..
+                })
+            )),
+            "{source}\n{errors:?}"
+        );
+    }
+}
+
+#[test]
+fn generic_contract_preserves_universals_across_explicit_async_boundaries() {
+    let source = indoc! {r#"
+        trait Keep[a] {
+            async fn keep(value: a, other: b) b
+            async fn fallback(value: a, other: b) b { return other }
+        }
+        impl Keep[Number] {
+            async fn keep(value: Number, other: b) b { other }
+        }
+        fn deferred(value: a) Task[a] { async { return value } }
+        async fn nested(value: a) Task[a] { async { value } }
+        pub async fn check() {
+            let number: Number = keep(0, 42).await
+            let text: String = keep(0, "text").await
+            let flag: Bool = fallback(0, true).await
+            let preserved: String = deferred(text).await
+            let inner: Task[Number] = nested(number).await
+            let result: Number = inner.await
+            (result, preserved, flag)
+        }
+    "#};
+    let bump = Bump::new();
+    solve_input(&bump, source)
+        .expect("task boundaries preserve universality and exactly one layer");
 }
 
 #[test]
@@ -4252,7 +7938,7 @@ fn higher_kinded_application_is_preserved_and_specialized() {
         &bump,
         indoc! {r#"
             fn adapt(value: f[a]) f[a] { value }
-            fn specialize(value: Result[Number, String]) { adapt(value) }
+            fn specialize(value: Result[Number, [:failed]]) { adapt(value) }
         "#},
     )
     .unwrap();
@@ -4261,7 +7947,7 @@ fn higher_kinded_application_is_preserved_and_specialized() {
         render_annotations(&annotations),
         concat!(
             "adapt: forall a, b. fn(a[b]) a[b]\n",
-            "specialize: fn(Result[Number, String]) Result[Number, String]"
+            "specialize: fn(Result[Number, [:failed]]) Result[Number, [:failed]]"
         )
     );
     let adapt = annotations
@@ -4276,7 +7962,7 @@ fn higher_kinded_application_is_preserved_and_specialized() {
 fn higher_kinded_unification_recovers_partial_result() {
     assert_inference_snapshot! {r#"
         fn adapt(value: f[a]) f[a] { value }
-        fn specialize(value: Result[Number, String]) { adapt(value) }
+        fn specialize(value: Result[Number, [:failed]]) { adapt(value) }
     "#};
 }
 
@@ -4284,7 +7970,8 @@ fn higher_kinded_unification_recovers_partial_result() {
 fn higher_kinded_unification_preserves_two_hole_order() {
     assert_inference_snapshot! {r#"
         fn adapt(value: f[a, b], first: a, second: b) f[a, b] { value }
-        fn specialize(value: Result[Number, String]) {
+        enum Pair[a, b] { Pair(a, b) }
+        fn specialize(value: Pair[Number, String]) {
             adapt(value, 1, "second")
         }
     "#};
@@ -4295,8 +7982,8 @@ fn higher_kinded_unification_rejects_inconsistent_partial_sections() {
     assert_inference_error_snapshot! {r#"
         fn combine(left: f[a], right: f[b]) f[a] { left }
         fn invalid(
-            left: Result[Number, String],
-            right: Result[Bool, Bool],
+            left: Result[Number, [:left]],
+            right: Result[Bool, [:right]],
         ) {
             combine(left, right)
         }
@@ -4316,7 +8003,7 @@ fn higher_kinded_unification_expands_transparent_aliases() {
         type Wrapped[a, e] = Result[a, e]
 
         fn adapt(value: f[a]) f[a] { value }
-        fn specialize(value: Wrapped[Number, String]) { adapt(value) }
+        fn specialize(value: Wrapped[Number, [:failed]]) { adapt(value) }
     "#};
 }
 
@@ -4425,7 +8112,7 @@ fn builtin_traversable_passes_method_level_applicative_evidence() {
             fn traverse_option(value: Option[Number]) Array[Option[String]] {
                 traverse(value, (item) -> { ["item"] })
             }
-            fn traverse_result(value: Result[Number, String]) Option[Result[String, String]] {
+            fn traverse_result(value: Result[Number, [:failed]]) Option[Result[String, [:failed]]] {
                 traverse(value, (item) -> { Option.some("item") })
             }
         "#},
@@ -4836,6 +8523,247 @@ fn explicit_async_infers_completed_value() {
         async fn wait() {
             sleep(1).await
         }
+    "#};
+}
+
+#[test]
+fn tuple_projections_accumulate_before_fixing_arity() {
+    assert_inference_snapshot! {r#"
+        fn sum(pair) Number { pair.0 + pair.1 }
+        fn run() Number { sum((20, 22)) }
+    "#};
+}
+
+#[test]
+fn recursive_tuple_projections_collect_across_the_whole_group() {
+    for source in [
+        indoc! {r#"
+            fn first(pair, remaining: Number) Number {
+                if remaining == 0 { pair.0 } else { last(pair, remaining - 1) }
+            }
+            fn last(pair, remaining: Number) Number {
+                if remaining == 0 { pair.3 } else { first(pair, remaining - 1) }
+            }
+            fn check() Number { first((20, false, "kept", 22), 1) }
+        "#},
+        indoc! {r#"
+            fn last(pair, remaining: Number) Number {
+                if remaining == 0 { pair.3 } else { first(pair, remaining - 1) }
+            }
+            fn first(pair, remaining: Number) Number {
+                if remaining == 0 { pair.0 } else { last(pair, remaining - 1) }
+            }
+            fn check() Number { first((20, false, "kept", 22), 1) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        solve_input(&bump, source)
+            .expect("all recursive projections contribute before fixing exact tuple length");
+    }
+}
+
+#[test]
+fn recursive_tuple_projections_preserve_whole_value_relationships() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+            fn first(pair, remaining: Number) {
+                let value: Number = pair.0
+                if remaining == 0 { pair } else { last(pair, remaining - 1) }
+            }
+            fn last(pair, remaining: Number) {
+                let value: Number = pair.3
+                if remaining == 0 { pair } else { first(pair, remaining - 1) }
+            }
+            fn strings() (Number, Bool, String, Number) {
+                first((20, false, "kept", 22), 1)
+            }
+            fn numbers() (Number, String, Number, Number) {
+                last((20, "independent", 7, 22), 2)
+            }
+        "#},
+    )
+    .expect("recursive schemes independently instantiate untouched slots and preserve returns");
+}
+
+#[test]
+fn recursive_tuple_projections_reject_incompatible_lengths() {
+    let bump = Bump::new();
+    let result = solve_input(
+        &bump,
+        indoc! {r#"
+            fn first(pair, remaining: Number) Number {
+                if remaining == 0 { pair.0 } else { last(pair, remaining - 1) }
+            }
+            fn last(pair, remaining: Number) Number {
+                if remaining == 0 { pair.3 } else { first(pair, remaining - 1) }
+            }
+            fn invalid() Number { first((20, 22), 1) }
+        "#},
+    );
+    assert!(
+        result.is_err(),
+        "recursive calls cannot drop later projection requirements"
+    );
+}
+
+#[test]
+fn tuple_projections_cannot_specialize_an_explicit_generic_contract() {
+    for source in [
+        "fn invalid(value: a) { value.0 }",
+        "fn invalid(value: a) { value.0 = 42 }",
+    ] {
+        let bump = Bump::new();
+        assert!(solve_input(&bump, source).is_err(), "must reject: {source}");
+    }
+}
+
+#[test]
+fn tuple_projections_preserve_whole_tuple_return_relationships() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn inspect(value) { let ignored = value.0
+            value
+        }
+        fn check() (Number, String) { inspect((42, "kept")) }
+    "#},
+    )
+    .expect("unprojected elements retain their types through return values");
+    let bump = Bump::new();
+    assert!(
+        solve_input(
+            &bump,
+            indoc! {r#"
+        fn inspect(value) { let ignored = value.0
+            value
+        }
+        fn invalid() (Number, Bool) { inspect((42, "kept")) }
+    "#}
+        )
+        .is_err(),
+        "unprojected slots cannot change type at a call"
+    );
+}
+
+#[test]
+fn tuple_projections_through_record_overlays_accumulate() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn read(left, right) Number {
+            let merged = { ..left, ..right }
+            merged.value.0 + merged.value.3
+        }
+        fn run() Number { read({}, { value: (20, false, "unused", 22) }) }
+    "#},
+    )
+    .expect("record overlays must retain tuple projection relationships");
+}
+
+#[test]
+fn tuple_shapes_survive_optional_argument_lifting_in_both_orders() {
+    for source in [
+        indoc! {r#"
+            fn consume(value?: a) {}
+            fn relay(pair) {
+                consume(pair)
+                let first: Number = pair.0
+                pair
+            }
+            fn numbers() (Number, Number) { relay((42, 7)) }
+            fn strings() (Number, String) { relay((42, "kept")) }
+        "#},
+        indoc! {r#"
+            fn consume(value?: a) {}
+            fn relay(pair) {
+                let first: Number = pair.0
+                consume(pair)
+                pair
+            }
+            fn numbers() (Number, Number) { relay((42, 7)) }
+            fn strings() (Number, String) { relay((42, "kept")) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        solve_input(&bump, source)
+            .expect("lifting preserves a fixed tuple shape and independent unobserved slots");
+    }
+}
+
+#[test]
+fn optional_argument_lifting_cannot_erase_tuple_shape_requirements() {
+    for source in [
+        indoc! {r#"
+            fn consume(value?: a) {}
+            fn relay(pair) {
+                consume(pair)
+                let first: Number = pair.0
+                pair
+            }
+            fn invalid() { relay((42, false, "extra")) }
+        "#},
+        indoc! {r#"
+            fn consume(value?: a) {}
+            fn relay(pair) {
+                let first: Number = pair.0
+                consume(pair)
+                pair
+            }
+            fn invalid() { relay(("wrong", false)) }
+        "#},
+        indoc! {r#"
+            fn consume(value?: a) {}
+            fn relay(pair) {
+                consume(pair)
+                let first: Number = pair.0
+                pair
+            }
+            fn invalid() (Number, Bool) { relay((42, "kept")) }
+        "#},
+    ] {
+        let bump = Bump::new();
+        assert!(solve_input(&bump, source).is_err(), "must reject: {source}");
+    }
+}
+
+#[test]
+fn tuple_projections_share_nested_aliases_before_fixing_arity() {
+    assert_inference_snapshot! {r#"
+        fn read(value) {
+            let first = value.0
+            let again = value.0
+            (first.0, again.3)
+        }
+        fn run() { read(((1, false, "unused", 42), ())) }
+    "#};
+}
+
+#[test]
+fn tuple_projections_accumulate_read_and_write_constraints() {
+    assert_inference_snapshot! {r#"
+        fn update(value) {
+            value.0 = 20
+            value.3 = 22
+            value.0 + value.3
+        }
+        fn run() Number { update((0, false, "unused", 0)) }
+    "#};
+}
+
+#[test]
+fn tuple_projections_infer_at_least_two_elements() {
+    assert_inference_snapshot!("fn first(value) { value.0 }");
+}
+
+#[test]
+fn tuple_projections_reverse_order_has_same_contract() {
+    assert_inference_snapshot! {r#"
+        fn sum(pair) Number { pair.1 + pair.0 }
+        fn run() Number { sum((20, 22)) }
     "#};
 }
 

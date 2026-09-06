@@ -9,7 +9,6 @@ $dict$Eq$0["eq"] = ($a0, $a1) => {
 		"Left": {
 			"record": false,
 			"fields": ["_0"],
-			"optional": [],
 			"dictionaries": [{ "eq": ($a, $b) => {
 				return $a === $b;
 			} }]
@@ -17,12 +16,11 @@ $dict$Eq$0["eq"] = ($a0, $a1) => {
 		"Right": {
 			"record": false,
 			"fields": ["_0"],
-			"optional": [],
 			"dictionaries": [{ "eq": ($a, $b) => {
 				return $a === $b;
 			} }]
 		}
-	});
+	}, "alder://app/main.mjs::Choice");
 };
 Object["freeze"]($dict$Eq$0);
 function $c_Choice_Left($a0) {
@@ -42,18 +40,30 @@ function $v_read($a0) {
 	const $t0 = $l0_input;
 	let $t1;
 	$match2: {
-		if ($t0 != null && $t0["$"] === "Left" && true) {
-			let $l1_value = $t0["_0"];
-			const $t3 = $l1_value;
-			if ($t3 > 0) {
+		let $t3;
+		let $t4 = $t0 != null && $t0["$"] === "Left";
+		if ($t4) {
+			$t3 = $t0["_0"];
+			$t4 = true;
+		}
+		if ($t4) {
+			let $l1_value = $t3;
+			const $t5 = $l1_value;
+			if ($t5 > 0) {
 				$t1 = $l1_value;
 				break $match2;
 			}
 		}
-		if ($t0 != null && $t0["$"] === "Right" && true) {
-			let $l1_value = $t0["_0"];
-			const $t4 = $l1_value;
-			if ($t4 > 0) {
+		let $t6;
+		let $t7 = $t0 != null && $t0["$"] === "Right";
+		if ($t7) {
+			$t6 = $t0["_0"];
+			$t7 = true;
+		}
+		if ($t7) {
+			let $l1_value = $t6;
+			const $t8 = $l1_value;
+			if ($t8 > 0) {
 				$t1 = $l1_value;
 				break $match2;
 			}

@@ -63,6 +63,14 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn test_runner_reports_failure_for_sync_and_async_tests() {
+        assert_eq!(
+            execute("test_failures", BuildMode::Test, EntryKind::Test).await,
+            1
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn hash_superclass_equality_agrees_with_ordinary_equality() {
         assert_eq!(
             execute("hash_equality", BuildMode::Build, EntryKind::Standalone).await,
@@ -147,6 +155,51 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn option_record_defaults_execute() {
+        assert_eq!(
+            execute("record_options", BuildMode::Build, EntryKind::Standalone).await,
+            0,
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn artifact_insertion_order_preserves_bundles_and_initialization() {
+        let mut previous = None;
+        for iteration in 0..6 {
+            let mut compiled =
+                super::build::compile_ephemeral(&fixture("traits"), BuildMode::Build)
+                    .await
+                    .unwrap();
+            let mut artifacts = compiled.result.artifacts.drain().collect::<Vec<_>>();
+            artifacts.sort_by(|(left, _), (right, _)| left.cmp(right));
+            let length = artifacts.len();
+            assert!(length > 1, "the fixture must exercise multiple modules");
+            artifacts.rotate_left(iteration % length);
+            if iteration % 2 == 0 {
+                artifacts.reverse();
+            }
+            compiled.result.artifacts = artifacts.into_iter().collect();
+            let bundle = super::build::bundle(&compiled.result, EntryKind::Standalone)
+                .await
+                .unwrap();
+            if let Some(previous) = &previous {
+                assert_eq!(&bundle, previous, "bundle changed on iteration {iteration}");
+            }
+            // The fixture asserts facade initialization occurs exactly once,
+            // including unused sibling imports in reverse filename order.
+            let exit = tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                alder_runtime::execute(bundle.clone(), Vec::new()),
+            )
+            .await
+            .expect("initialization regression exceeded its execution bound")
+            .unwrap();
+            assert_eq!(exit, 0);
+            previous = Some(bundle);
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn local_promise_extern_defects_retain_their_context() {
         let compiled = super::build::compile_ephemeral(&fixture("externs"), BuildMode::Build)
             .await
@@ -193,8 +246,25 @@ mod tests {
         let source = indoc::indoc! {r#"
             #[extern("./client.js", "answer")]
             pub fn answer() Task[Number]
+            pub let events: Array[Number] = []
         "#};
         std::fs::write(dependency.join("src/api.ald"), source).unwrap();
+        std::fs::write(
+            dependency.join("src/facade.ald"),
+            indoc::indoc! {r#"
+                pub import ~/api.{ answer as read, events as shared }
+                let initialized = Array.push(shared, 1)
+            "#},
+        )
+        .unwrap();
+        std::fs::write(
+            dependency.join("src/mod.ald"),
+            indoc::indoc! {r#"
+                pub import ~/facade.*
+                let initialized = Array.push(shared, 2)
+            "#},
+        )
+        .unwrap();
         std::fs::write(
             dependency.join("src/client.js"),
             "export function answer() { return Promise.resolve(42); }",
@@ -220,7 +290,15 @@ mod tests {
             app.join("src/main.ald"),
             indoc::indoc! {r#"
             import @vendor/wrapper/api
-            pub async fn main() { assert(api.answer().await == 42) }
+            import @vendor/wrapper.{ read, shared }
+            import @vendor/wrapper/facade
+            pub async fn main() {
+                assert(api.answer().await == 42)
+                assert(read().await == 42 && facade.read().await == 42)
+                assert(shared == [1, 2])
+                Array.push(shared, 3)
+                assert(api.events == [1, 2, 3] && facade.shared == [1, 2, 3])
+            }
         "#},
         )
         .unwrap();
@@ -573,6 +651,14 @@ mod tests {
             "#},
         )
         .unwrap();
+        std::fs::write(
+            dependency.join("src/facade.ald"),
+            indoc::indoc! {r#"
+                pub import ~/api.{ Token as Item, Badge, Display as Render, display as show }
+            "#},
+        )
+        .unwrap();
+        std::fs::write(dependency.join("src/mod.ald"), "pub import ~/facade.*").unwrap();
         super::build::compile(&dependency, BuildMode::Check)
             .await
             .unwrap();
@@ -594,11 +680,16 @@ mod tests {
             application.join("src/main.ald"),
             indoc::indoc! {r#"
                 import @vendor/widgets/api.{ Badge, Token, display }
+                import @vendor/widgets.{ Item, Render, show }
                 pub fn render(value: Array[Token]) String { display(value) }
                 pub fn render_badge(value: Badge) String { display(value) }
+                pub fn renamed(value: a) String where a: Render { Render::display(value) }
                 pub fn main() {
                     assert(render([Token::Token]) == "array")
                     assert(render_badge(Badge::Badge) == "badge")
+                    assert(show(Item::Token) == "token")
+                    assert(renamed([Item::Token]) == "array")
+                    assert(renamed(Badge::Badge) == "badge")
                 }
             "#},
         )

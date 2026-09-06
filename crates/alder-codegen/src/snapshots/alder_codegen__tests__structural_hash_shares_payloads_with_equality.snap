@@ -1,0 +1,41 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn fingerprint(value: [:bad(Number) | :missing]) BigInt { hash(value) }\n"
+---
+import { $equalStructural, $hash, $hashErrorRow } from "alder:kernel";
+function $v_fingerprint($a0) {
+	let $l0_value = $a0;
+	const $t0 = (($shape) => {
+		return {
+			"hash": ($value) => {
+				const $fields = $shape();
+				return $hashErrorRow($value, {
+					":bad": {
+						"record": false,
+						"fields": ["_0"],
+						"dictionaries": [$fields[0]]
+					},
+					":missing": {
+						"record": false,
+						"fields": [],
+						"dictionaries": []
+					}
+				});
+			},
+			"$super0": { "eq": ($left, $right) => {
+				return $equalStructural($left, $right, "error_row", [":bad:0"], $shape()["map"](($dictionary) => {
+					return $dictionary["$super0"];
+				}));
+			} }
+		};
+	})(() => {
+		return [{
+			"$super0": { "eq": ($a, $b) => {
+				return $a === $b;
+			} },
+			"hash": $hash
+		}];
+	})["hash"];
+	return $t0($l0_value);
+}
+export { $v_fingerprint as fingerprint };

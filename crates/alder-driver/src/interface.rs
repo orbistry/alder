@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::DriverError;
 
-pub const INTERFACE_FORMAT_VERSION: u32 = 4;
+pub const INTERFACE_FORMAT_VERSION: u32 = 7;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InterfaceFile {
@@ -464,6 +464,73 @@ mod tests {
     }
 
     #[test]
+    fn sparse_tuple_shape_metadata_survives_storage_and_arena_copy() {
+        let file = {
+            let source = Bump::new();
+            let interface = compile_interface(&source, "pub fn last(value) { value.4294967295 }");
+            InterfaceFile::dehydrate(&interface).unwrap()
+        };
+        let shapes = &file.values[0].scheme.tuple_shapes;
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].length, u64::from(u32::MAX) + 1);
+        assert_eq!(shapes[0].elements.len(), 1);
+        assert_eq!(shapes[0].elements[0].0, u32::MAX);
+        let bytes = bincode::serialize(&file).unwrap();
+        assert!(
+            bytes.len() < 4096,
+            "sparse metadata must not scale with tuple length"
+        );
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let destination = Bump::new();
+        let copied = {
+            let hydrated_arena = Bump::new();
+            let hydrated = stored.hydrate(&hydrated_arena);
+            alder_ast::copy_interface(&destination, &hydrated)
+        };
+        let restored = InterfaceFile::dehydrate(&copied).unwrap();
+        assert_eq!(file, restored);
+        let mut changed = restored.clone();
+        changed.values[0].scheme.tuple_shapes[0].length -= 1;
+        assert_ne!(file.fingerprint, changed.compute_fingerprint().unwrap());
+    }
+
+    #[test]
+    fn single_open_spread_preserves_overlay_without_inventing_optional_fields() {
+        let file = {
+            let source = Bump::new();
+            let interface = compile_interface(
+                &source,
+                indoc::indoc! {r#"
+                    pub fn overwrite(record) { { value: 42, ..record } }
+                "#},
+            );
+            InterfaceFile::dehydrate(&interface).unwrap()
+        };
+        let scheme = &file.values[0].scheme;
+        let OwnedType::Fn { params, .. } = &scheme.typ.typ else {
+            panic!("expected function");
+        };
+        let OwnedType::Record { fields, ext } = &params[0].typ else {
+            panic!("expected record parameter");
+        };
+        assert!(
+            fields.is_empty(),
+            "an unknown overwrite must not become a field requirement"
+        );
+        assert!(ext.is_some());
+        assert_eq!(scheme.record_overlays.len(), 1);
+        assert_eq!(scheme.record_overlays[0].operands.len(), 2);
+        let bytes = bincode::serialize(&file).unwrap();
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let destination = Bump::new();
+        let copied = {
+            let source = Bump::new();
+            alder_ast::copy_interface(&destination, &stored.hydrate(&source))
+        };
+        assert_eq!(file, InterfaceFile::dehydrate(&copied).unwrap());
+    }
+
+    #[test]
     fn error_row_inclusion_metadata_survives_storage_and_arena_copy() {
         let file = {
             let source = Bump::new();
@@ -555,7 +622,18 @@ mod tests {
         };
         assert!(left.is_some() && right.is_some());
         assert_ne!(left, right, "independent tails must not be conflated");
-        assert!(fields[0].optional);
+        let OwnedType::Named { reference, args } = &fields[0].typ.typ else {
+            panic!("optional shorthand must survive as an ordinary Option type");
+        };
+        assert_eq!(reference.name, "Option");
+        assert_eq!(reference.module.package, OwnedPackageId::Builtin);
+        assert_eq!(args.len(), 1);
+        let OwnedType::Named { reference, args } = &args[0].typ else {
+            panic!("expected the String payload");
+        };
+        assert_eq!(reference.name, "String");
+        assert_eq!(reference.module.package, OwnedPackageId::Builtin);
+        assert!(args.is_empty());
         let OwnedType::Tuple(items) = &ret.typ else {
             panic!("expected a tuple result");
         };

@@ -1,0 +1,69 @@
+import ~/codec
+
+enum Key { Value(Number) }
+
+impl Hash[Key] {
+    fn hash(value: Key) BigInt {
+        match value { Key::Value(number) => hash(number % 10) }
+    }
+}
+
+#[derive(Hash)]
+enum Tree[a] { Leaf(a), Branch(Array[Tree[a]]) }
+
+#[derive(Hash)]
+enum NumericRecord { Value { value: Option[Option[Number]] } }
+
+pub fn run() {
+    numeric_hash_laws()
+    let left: Array[Option[Option[Key]]] = [Some(Some(Key::Value(1))), Some(None), None]
+    let right: Array[Option[Option[Key]]] = [Some(Some(Key::Value(1))), Some(None), None]
+    assert codec.hash_equal(left, right)
+    let different: Array[Option[Option[Key]]] = [Some(Some(Key::Value(11))), Some(None), None]
+    assert hash(left) == hash(different)
+    assert !codec.hash_equal(left, different)
+    Array.push(left, None)
+    assert !codec.hash_equal(left, right)
+    Array.push(right, None)
+    assert codec.hash_equal(left, right)
+
+    let tree: Tree[Option[Option[Key]]] = Tree::Branch([
+        Tree::Leaf(Some(None)),
+        Tree::Branch([Tree::Leaf(Some(Some(Key::Value(1))))]),
+    ])
+    let twin: Tree[Option[Option[Key]]] = Tree::Branch([
+        Tree::Leaf(Some(None)),
+        Tree::Branch([Tree::Leaf(Some(Some(Key::Value(1))))]),
+    ])
+    assert codec.hash_equal(tree, twin)
+}
+
+fn numeric_hash_laws() {
+    assert codec.hash_equal((), ())
+    assert codec.hash_equal(true, true)
+    assert codec.hash_equal("same", "same")
+    assert codec.hash_equal(42n, 42n)
+    assert codec.hash_equal(0, -0)
+    assert codec.hash_equal(-0, 0)
+    let positive: Option[Option[Number]] = Some(Some(0))
+    let negative: Option[Option[Number]] = Some(Some(-0))
+    assert codec.hash_equal(positive, negative)
+    assert codec.hash_equal(negative, positive)
+    assert codec.hash_equal([positive, Some(None), None], [negative, Some(None), None])
+    assert codec.hash_equal(NumericRecord::Value { value: positive }, NumericRecord::Value { value: negative })
+    assert codec.hash_equal(Tree::Leaf(positive), Tree::Leaf(negative))
+
+    let infinity = 1 / 0
+    assert codec.hash_equal(infinity, infinity)
+    assert codec.hash_equal(-infinity, -infinity)
+    let nan = 0 / 0
+    assert !(nan == nan)
+    assert !codec.hash_equal(nan, nan)
+    let nested_nan: Option[Option[Number]] = Some(Some(nan))
+    assert !(nested_nan == nested_nan)
+    assert !codec.hash_equal(nested_nan, nested_nan)
+    assert !codec.hash_equal(Tree::Leaf(nested_nan), Tree::Leaf(nested_nan))
+    assert !([nested_nan] == [nested_nan])
+    assert !(Tree::Leaf(nested_nan) == Tree::Leaf(nested_nan))
+    assert hash(nan) == hash(0 / 0)
+}

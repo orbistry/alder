@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub async fn main() {\n    Fiber.forEach([1, 2], value -> async { value + 1 }).await\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `()`, found `Number`
+   ╭─[/project/src/main.ald:2:27]
+ 1 │ pub async fn main() {
+ 2 │     Fiber.forEach([1, 2], value -> async { value + 1 }).await
+   ·                           ──────────────┬─────────────
+   ·                                         ╰── type requirement originates here
+ 3 │ }
+   ╰────

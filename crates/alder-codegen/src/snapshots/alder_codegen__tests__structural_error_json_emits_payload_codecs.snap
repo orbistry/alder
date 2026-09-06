@@ -1,0 +1,59 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn encode(value: Result[Number, [:missing | :bad(Number)]]) String {\n    Json.encode(value)\n}\n"
+---
+import { $jsonDecodeContainer, $jsonDecodeDerived, $jsonDecodePrimitive, $jsonEncodeContainer, $jsonEncodeDerived, $jsonEncodePrimitive } from "alder:kernel";
+import { encode as $i_alder_3A_2F_2Fstd_2FJson_2Emjs_encode } from "alder://std/Json.mjs";
+function $v_encode($a0) {
+	let $l0_value = $a0;
+	const $t0 = $i_alder_3A_2F_2Fstd_2FJson_2Emjs_encode;
+	return $t0((($shape) => {
+		return {
+			"encode": ($value) => {
+				return $jsonEncodeContainer($value, "result", $shape());
+			},
+			"decode": ($value) => {
+				return $jsonDecodeContainer($value, "result", $shape());
+			}
+		};
+	})(() => {
+		return [{
+			"encode": ($value) => {
+				return $jsonEncodePrimitive($value, "number");
+			},
+			"decode": ($value) => {
+				return $jsonDecodePrimitive($value, "number");
+			}
+		}, (($shape) => {
+			return {
+				"encode": ($value) => {
+					return $jsonEncodeDerived($value, $shape());
+				},
+				"decode": ($value) => {
+					return $jsonDecodeDerived($value, $shape());
+				}
+			};
+		})(() => {
+			return {
+				":bad": {
+					"record": false,
+					"fields": ["_0"],
+					"dictionaries": [{
+						"encode": ($value) => {
+							return $jsonEncodePrimitive($value, "number");
+						},
+						"decode": ($value) => {
+							return $jsonDecodePrimitive($value, "number");
+						}
+					}]
+				},
+				":missing": {
+					"record": false,
+					"fields": [],
+					"dictionaries": []
+				}
+			};
+		})];
+	}), $l0_value);
+}
+export { $v_encode as encode };

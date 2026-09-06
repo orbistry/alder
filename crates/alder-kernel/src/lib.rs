@@ -20,6 +20,7 @@ mod tests {
             "$compare",
             "$compareEnum",
             "$compareDerived",
+            "$compareContainer",
             "$arrayApply",
             "$arrayFilter",
             "$optionFlatMap",
@@ -37,11 +38,11 @@ mod tests {
             "$jsonDecodeWith",
             "$hash",
             "$hashDerived",
+            "$hashErrorRow",
             "$hashContainer",
             "$refSame",
             "$matchFailure",
             "$optionBox",
-            "$optionalField",
             "$providerPush",
             "$registerTest",
             "$task",
@@ -51,6 +52,10 @@ mod tests {
             "$fiberFork",
             "$fiberJoin",
             "$fiberInterrupt",
+            "$fiberMapWithOptions",
+            "$fiberForEachWithOptions",
+            "$fiberTryMapWithOptions",
+            "$fiberTryForEachWithOptions",
             "$fiberAll",
             "$fiberRace",
             "$fiberScope",
@@ -1525,6 +1530,64 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn fiber_public_options_are_lazy_reusable_and_validated() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberMapWithOptions, $fiberForEachWithOptions,
+                                    $fiberTryMapWithOptions, $fiberTryForEachWithOptions]) {
+                const typed = traverse === $fiberTryMapWithOptions || traverse === $fiberTryForEachWithOptions;
+                const collect = traverse === $fiberMapWithOptions || traverse === $fiberTryMapWithOptions;
+                let active = 0, peak = 0, calls = 0, reads = 0, limit = 0;
+                const options = { get concurrency() { reads++; return limit; } };
+                const callback = (value) => $task(function* () {
+                    calls++; active++; peak = Math.max(peak, active);
+                    yield* $fiberAddFinalizer($task(function* () { active--; }));
+                    yield* $tryPromise(() => Promise.resolve());
+                    const result = collect ? value * 2 : undefined;
+                    return typed ? { $: "Ok", _0: result } : result;
+                });
+                const task = traverse([1, 2, 3], callback, $optionSome(options));
+                $assert(reads === 0 && calls === 0);
+                limit = 2;
+                let result = await $runTask(task);
+                if (typed) { $assert(result.$ === "Ok"); result = result._0; }
+                $assert(collect ? result.join(",") === "2,4,6" : result === undefined);
+                $assert(reads === 1 && calls === 3 && peak === 2 && active === 0);
+                limit = 1; peak = 0;
+                await $runTask(task);
+                $assert(reads === 2 && calls === 6 && peak === 1 && active === 0);
+                for (const missing of [undefined, null, { concurrency: null }]) {
+                    peak = 0;
+                    await $runTask(traverse([1, 2, 3], callback, missing));
+                    $assert(peak === 1 && active === 0);
+                }
+                for (const invalid of [0, -1, 1.5, NaN, -Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+                    limit = invalid;
+                    const before = calls;
+                    let rejected = false;
+                    try { await $runTask(task); }
+                    catch (error) { rejected = error instanceof RangeError; }
+                    $assert(rejected && calls === before);
+                }
+                $assert($fiberUnbounded === Infinity);
+                limit = $fiberUnbounded; peak = 0;
+                await $runTask(task);
+                $assert(peak === 3 && active === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("public traversal adapters must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn fiber_traversals_snapshot_membership_but_preserve_payload_aliases() {
         let harness = indoc::indoc! {r#"
             for (const traverse of [$fiberMap, $fiberForEach, $fiberTryMap, $fiberTryForEach]) {
@@ -1847,6 +1910,125 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn derived_equality_handles_cycles_without_skipping_payloads() {
+        let harness = indoc::indoc! {r#"
+            const number = { eq: (a, b) => a === b };
+            const node = { eq: (a, b) => $equalDerived(a, b, {
+                Link: { fields: ["_0", "_1"], dictionaries: [children, number] },
+            }, "probe::Node") };
+            const children = { eq: (a, b) => $equalContainer(a, b, "array", [node]) };
+            const make = value => {
+                const result = { $: "Link", _0: [], _1: value };
+                result._0.push(result);
+                return result;
+            };
+            const left = make(42), right = make(42), wrong = make(7);
+            $assert(node.eq(left, left));
+            $assert(node.eq(left, right) && node.eq(right, left));
+            $assert(!node.eq(left, wrong) && !node.eq(wrong, left));
+            const nan = make(NaN);
+            $assert(!node.eq(nan, nan));
+            right._1 = 7;
+            $assert(!node.eq(left, right));
+            right._1 = 42;
+            $assert(node.eq(left, right));
+            const payloadFailure = new Error("payload failure");
+            number.eq = () => { throw payloadFailure; };
+            let caught;
+            try { node.eq(left, wrong); } catch (error) { caught = error; }
+            $assert(caught === payloadFailure);
+            number.eq = (a, b) => a === b;
+            $assert(!node.eq(left, wrong));
+            const innerShape = { Link: { fields: ["_1"], dictionaries: [number] } };
+            const outerShape = { Link: { fields: ["_1"], dictionaries: [{
+                eq: () => $equalDerived(left, wrong, innerShape, "probe::Other"),
+            }] } };
+            $assert(!$equalDerived(left, wrong, outerShape, "probe::Node"));
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn option_record_equality_uses_option_dictionaries() {
+        let harness = indoc::indoc! {r#"
+            const child = { eq: (left, right) => {
+                $assert(Array.isArray(left) && Array.isArray(right));
+                return $equal(left, right);
+            }};
+            const option = { eq: (left, right) => $equalContainer(left, right, "option", [child]) };
+            const variants = { Value: { record: true, fields: ["items"], dictionaries: [option] } };
+            for (const equal of [
+                (left, right) => $equalStructural(left, right, "record", ["items"], [option]),
+                (left, right) => $equalDerived(left, right, variants, "probe::Value"),
+            ]) {
+                const absent = { $: "Value", items: null }, empty = { $: "Value", items: [] };
+                $assert(equal(absent, absent) && equal(absent, { $: "Value", items: null }));
+                $assert(!equal(absent, empty) && !equal(empty, absent));
+                $assert(equal(empty, { $: "Value", items: [] }));
+                $assert(!equal(empty, { $: "Value", items: [1] }));
+            }
+            const unit = { eq: (left, right) => left === right };
+            $assert($equalStructural({ value: undefined }, { value: undefined }, "record", ["value"], [unit]));
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn option_derived_ordering_delegates_to_field_dictionaries() {
+        let harness = indoc::indoc! {r#"
+            const variants = { Value: { record: true, fields: ["value"], dictionaries: [{ compare: (a, b) => {
+                if (a === null || b === null) return { $: a === b ? "Equal" : a === null ? "Less" : "Greater" };
+                $assert(typeof a === "number" && typeof b === "number");
+                return { $: a < b ? "Less" : a > b ? "Greater" : "Equal" };
+            }}] } };
+            const absent = { $: "Value", value: null }, present = { $: "Value", value: 1 };
+            $assert($compareDerived(absent, { $: "Value", value: null }, variants) === 0);
+            $assert($compareDerived(absent, present, variants) === -1);
+            $assert($compareDerived(present, absent, variants) === 1);
+            $assert($compareDerived(present, { $: "Value", value: 2 }, variants) === -1);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_runner_counts_failures_and_continues_after_async_exits() {
+        let harness = indoc::indoc! {r#"
+            const events = [], reports = [];
+            $registerTest("probe", "sync", () => {
+                events.push("sync");
+                return { $: "Err", _0: "sync failure" };
+            });
+            $registerTest("probe", "typed", () => $task(function* () {
+                yield* $tryPromise(() => Promise.resolve());
+                events.push("typed");
+                return { $: "Err", _0: "async failure" };
+            }));
+            $registerTest("probe", "defect", () => $task(function* () {
+                yield* $tryPromise(() => Promise.resolve());
+                events.push("defect");
+                throw new Error("async defect");
+            }));
+            $registerTest("probe", "success", () => $task(function* () {
+                yield* $tryPromise(() => Promise.resolve());
+                events.push("success");
+            }));
+            $assert(await $runTests(message => reports.push(message)) === 3);
+            $assert(JSON.stringify(events) === '["sync","typed","defect","success"]');
+            $assert(reports.length === 5);
+            $assert(reports[0].startsWith("fail probe — sync"));
+            $assert(reports[1].startsWith("fail probe — typed"));
+            $assert(reports[2].startsWith("fail probe — defect"));
+            $assert(reports[3] === "pass probe — success");
+            $assert(reports[4] === "\n1 passed; 3 failed");
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn large_string_hash_preserves_the_utf8_byte_stream() {
         let harness = indoc::indoc! {r#"
             const value = "a😀".repeat(50000);
@@ -1886,6 +2068,70 @@ mod tests {
                 }
                 $assert($hash(sign === 0 ? magnitude : -magnitude) === expected);
             }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn structural_error_hash_ignores_row_width_and_declaration_order() {
+        let harness = indoc::indoc! {r#"
+            let calls = 0;
+            const child = { hash: value => { calls++; return $hash(value % 10); } };
+            const failed = { fields: ["_0"], dictionaries: [child] };
+            const empty = { fields: [], dictionaries: [] };
+            const narrow = { ":failed": failed };
+            const wide = { ":absent": empty, ":failed": failed, ":other": empty };
+            const reordered = { ":other": empty, ":failed": failed, ":absent": empty };
+            const value = { $: ":failed", _0: 1 };
+            const expected = $hashErrorRow(value, narrow);
+            $assert($hashErrorRow(value, wide) === expected);
+            $assert($hashErrorRow(value, reordered) === expected);
+            $assert($hashErrorRow({ $: ":failed", _0: 11 }, wide) === expected);
+            $assert(calls === 4);
+            $assert($hashErrorRow({ $: ":absent" }, wide) === $hashErrorRow({ $: ":absent" }, reordered));
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn option_derived_hash_includes_none_and_retains_field_indices() {
+        let harness = indoc::indoc! {r#"
+            const payload = { hash: value => { $assert(Array.isArray(value)); return $hash(value); } };
+            const child = { hash: value => $hashContainer(value, "option", [payload]) };
+            const variants = { Value: { record: true, fields: ["left", "right"], dictionaries: [child, child] } };
+            const hash = value => $hashDerived(value, "Probe", variants);
+            $assert(hash({ $: "Value", left: null, right: null }) === hash({ $: "Value", left: null, right: null }));
+            $assert(hash({ $: "Value", left: [], right: null }) === hash({ $: "Value", left: [], right: null }));
+            $assert(hash({ $: "Value", left: null, right: null }) !== hash({ $: "Value", left: [], right: null }));
+            $assert(hash({ $: "Value", left: [], right: null }) !== hash({ $: "Value", left: null, right: [] }));
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn option_derived_json_defaults_missing_fields_and_preserves_nested_values() {
+        let harness = indoc::indoc! {r#"
+            const number = { encode: value => $jsonEncodePrimitive(value, "number"), decode: text => $jsonDecodePrimitive(text, "number") };
+            const optionOf = child => ({ $option: true, encode: value => $jsonEncodeContainer(value, "option", [child]), decode: text => $jsonDecodeContainer(text, "option", [child]) });
+            const option = optionOf(optionOf(number));
+            const unit = { encode: value => $jsonEncodePrimitive(value, "unit"), decode: text => $jsonDecodePrimitive(text, "unit") };
+            const variants = { Value: { record: true, fields: ["nested", "unit"], dictionaries: [option, optionOf(unit)] } };
+            const missing = $jsonDecodeDerived('{"tag":"Value","value":{}}', variants);
+            $assert(missing.$ === "Ok" && missing._0.nested === null && missing._0.unit === null);
+            for (const value of [{ $: "Value", nested: null, unit: null }, { $: "Value", nested: $optionSome(null), unit: undefined }]) {
+                const decoded = $jsonDecodeDerived($jsonEncodeDerived(value, variants), variants);
+                $assert(decoded.$ === "Ok");
+                for (const field of ["nested", "unit"]) {
+                    $assert(Object.hasOwn(decoded._0, field));
+                }
+                $assert($jsonEncodeDerived(value, variants) === $jsonEncodeDerived(decoded._0, variants));
+            }
+            const required = { Value: { record: true, fields: ["unit"], dictionaries: [unit] } };
+            const rejected = $jsonDecodeDerived('{"tag":"Value","value":{}}', required);
+            $assert(rejected.$ === "Err" && rejected._0._0 === "$.value.unit: missing field");
         "#};
         let code = format!("{KERNEL_JS}\n{harness}");
         assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
@@ -1951,25 +2197,6 @@ mod tests {
                 $assert(rejected);
             }
         "#};
-        let code = format!("{KERNEL_JS}\n{harness}");
-        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn optional_record_access_distinguishes_absence_and_nullable_payloads() {
-        let harness = r#"
-$assert($optionalField({}, "value") === $optionNone());
-const presentNone = $optionalField({ value: $optionNone() }, "value");
-$assert(presentNone !== $optionNone());
-$assert($optionUnbox(presentNone) === $optionNone());
-const presentUnit = $optionalField({ value: undefined }, "value");
-$assert(presentUnit !== $optionNone());
-$assert($optionUnbox(presentUnit) === undefined);
-let reads = 0;
-const record = { get value() { reads++; return 42; } };
-$assert($optionalField(record, "value") === 42);
-$assert(reads === 1);
-"#;
         let code = format!("{KERNEL_JS}\n{harness}");
         assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
     }

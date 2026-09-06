@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ read }\npub fn main() Option[Number] { read({ concurrency: \"eight\" }) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/project/src/main.ald:2:52]
+ 1 │ import @vendor/widgets.{ read }
+ 2 │ pub fn main() Option[Number] { read({ concurrency: "eight" }) }
+   ·                                                    ───┬───
+   ·                                                       ╰── type requirement originates here
+   ╰────

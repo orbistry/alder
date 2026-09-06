@@ -384,6 +384,12 @@ pub enum ImplItem<'a> {
         typ: Node<'a, Type<'a>>,
     },
     Fn(&'a ImplFn<'a>),
+    /// An omitted method inherited from a trait defined in another module.
+    Default {
+        method: MethodId<'a>,
+        scheme: &'a Annotation<'a>,
+        symbol: &'a str,
+    },
 }
 
 #[derive(Debug)]
@@ -753,7 +759,18 @@ pub struct Annotation<'a> {
     pub projection_equalities: &'a [ProjectionEquality<'a>],
     pub error_row_inclusions: &'a [ErrorRowInclusion<'a>],
     pub record_overlays: &'a [RecordOverlay<'a>],
+    pub tuple_shapes: &'a [TupleShape<'a>],
     pub typ: Node<'a, Type<'a>>,
+}
+
+/// An exact tuple length with only the constrained elements represented.
+/// Repeated uses of `tuple` preserve all unobserved element relationships.
+#[derive(Clone, Copy, Debug)]
+pub struct TupleShape<'a> {
+    pub tuple: Node<'a, Type<'a>>,
+    pub length: u64,
+    pub elements: &'a [(u32, Node<'a, Type<'a>>)],
+    pub region: Region,
 }
 
 /// The result of copying record operands in order, with later present fields
@@ -788,6 +805,9 @@ impl std::fmt::Debug for Annotation<'_> {
         }
         if !self.record_overlays.is_empty() {
             debug.field("record_overlays", &self.record_overlays);
+        }
+        if !self.tuple_shapes.is_empty() {
+            debug.field("tuple_shapes", &self.tuple_shapes);
         }
         debug.field("typ", &self.typ).finish()
     }
@@ -841,17 +861,10 @@ pub enum RowExtension<'a> {
     Open(&'a str),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FieldPresence {
-    Required,
-    Optional,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct RecordTypeField<'a> {
     pub index: u16,
     pub name: &'a str,
-    pub presence: FieldPresence,
     pub typ: Node<'a, Type<'a>>,
 }
 

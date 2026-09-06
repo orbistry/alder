@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "error Failure { :failed }\ntrait Marker[a] { fn pass(value: a) a { value } }\nimpl Marker[Failure] {}\n"
+---
+alder::trait::named_error_group_impl
+
+  × cannot define a custom trait implementation for error group `Failure`
+   ╭─[/project/src/main.ald:3:1]
+ 2 │ trait Marker[a] { fn pass(value: a) a { value } }
+ 3 │ impl Marker[Failure] {}
+   · ───────────┬───────────
+   ·            ╰── this error group names a structural row, not a distinct type
+   ╰────
+  help: define an enum wrapper if you need a distinct type with custom trait
+        behavior

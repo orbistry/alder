@@ -1,0 +1,34 @@
+trait Render[a] where a: Show {
+    fn render(value: a) String { show(value) }
+}
+
+trait Describe[a] where a: Render {
+    fn describe(value: a) String { Render::render(value) }
+}
+
+enum Manual { Manual }
+
+let captured: fn(Array[Manual]) String = Describe::describe
+let initialized = captured([Manual::Manual])
+
+impl Describe[Array[Manual]] {}
+
+impl Render[Array[a]] where a: Show {}
+
+#[derive(Show)]
+enum Derived { Derived }
+
+impl Render[Derived] {}
+
+impl Render[Manual] {}
+
+impl Show[Manual] {
+    fn show(value: Manual) String { "manual" }
+}
+
+pub fn run() {
+    assert(initialized == "[manual]")
+    assert(captured([Manual::Manual, Manual::Manual]) == "[manual, manual]")
+    assert(Render::render(Derived::Derived) == "Derived")
+    assert(Render::render(Manual::Manual) == "manual")
+}

@@ -1037,6 +1037,10 @@ mod tests {
         build_fixture_with_mode(db, graph, BuildMode::Check).await
     }
 
+    fn url(path: &str) -> Url {
+        Url::parse(&format!("file:///{}", path)).unwrap()
+    }
+
     #[tokio::test]
     async fn graph_requires_explicit_module_identity() {
         let uri = url("checkout/src/nested/src/main.ald");
@@ -1142,8 +1146,926 @@ mod tests {
         }
     }
 
-    fn url(path: &str) -> Url {
-        Url::parse(&format!("file:///{}", path)).unwrap()
+    #[tokio::test]
+    async fn option_lifting_ambiguity_does_not_label_an_unrelated_argument() {
+        let source = indoc::indoc! {r#"
+            fn consume(value?: Number) {}
+            fn relate(first?: a, second: a) {}
+            fn conflict(first, second) {
+                consume(42)
+                relate(first, second)
+                relate(second, first)
+            }
+        "#};
+        let diagnostic = compile_failure(source).await;
+        let label = miette::Diagnostic::labels(&diagnostic)
+            .unwrap()
+            .next()
+            .unwrap();
+        assert_eq!(
+            &source[label.offset()..label.offset() + label.len()],
+            "first"
+        );
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
+    }
+
+    #[tokio::test]
+    async fn option_lifting_mismatch_does_not_label_an_unrelated_argument() {
+        let source = indoc::indoc! {r#"
+            fn consume(value?: Number) {}
+            fn conflict() {
+                let nested = Some(Some(7))
+                consume(42)
+                consume(nested)
+            }
+        "#};
+        let diagnostic = compile_failure(source).await;
+        let label = miette::Diagnostic::labels(&diagnostic)
+            .unwrap()
+            .next()
+            .unwrap();
+        assert_eq!(
+            &source[label.offset()..label.offset() + label.len()],
+            "nested"
+        );
+        assert_rendered_diagnostic_snapshot!(source, diagnostic);
+    }
+
+    #[tokio::test]
+    async fn renders_ambiguous_option_lifting_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn relate(first?: a, second: a) {}
+            fn conflict(first, second) {
+                relate(first, second)
+                relate(second, first)
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_invalid_result_error_argument_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn identity(value: Result[Number, String]) { value }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_option_propagation_in_result_function_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn read(value: Option[Number]) Result[Number] { Ok(value?) }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_overlapping_open_result_rows_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+            impl Marker[Result[_, [:left | e]]] {}
+            impl Marker[Result[_, [:left | :right]]] {}
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_overlapping_open_record_rows_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[{ r | x: Number }] {}
+            impl Marker[{ x: Number, y: String }] {}
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_custom_error_group_impl_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            error Failure { :failed }
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[Failure] {}
+        "#};
+    }
+
+    #[test]
+    fn user_result_module_does_not_grant_error_tag_permission() {
+        let uri = url("project/src/Result.ald");
+        let source = indoc::indoc! {r#"
+            fn err(value: a) a { value }
+            pub fn main() { err(:failed) }
+        "#};
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("a user module named Result must not gain built-in error tag permission");
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "error tags are only values inside `Err`"
+        );
+    }
+
+    #[test]
+    fn imported_error_groups_reject_custom_implementations() {
+        assert_imported_error_group_impl_rejected(indoc::indoc! {r#"
+            import ~/model.{ Failure }
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[Failure] {}
+        "#});
+    }
+
+    #[test]
+    fn imported_error_group_aliases_reject_custom_implementations() {
+        assert_imported_error_group_impl_rejected(indoc::indoc! {r#"
+            import ~/model.{ Alias }
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[Alias] {}
+        "#});
+    }
+
+    #[test]
+    fn stored_error_group_alias_rejects_custom_implementation() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub error Failure { :failed }
+                pub type Alias = Failure
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ Alias }
+            fn unrelated() Number { 42 }
+            trait Marker[a] { fn pass(value: a) a { value } }
+            impl Marker[Alias] {}
+        "#};
+        let uri = url("project/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("custom stored error-group implementation unexpectedly compiled");
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "cannot define a custom trait implementation for error group `Failure`"
+        );
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_sparse_tuple_constraints_check_consumer_shapes() {
+        let mut producer = dependency_interface(
+            "pub fn accept(value: a, sample: Number) a { value }",
+            &[],
+            &[],
+        );
+        let crate::interface::OwnedType::Fn { params, .. } = &producer.values[0].scheme.typ.typ
+        else {
+            panic!("function");
+        };
+        let tuple = params[0].clone();
+        let element = params[1].clone();
+        producer.values[0]
+            .scheme
+            .tuple_shapes
+            .push(crate::interface::OwnedTupleShape {
+                tuple,
+                length: 2,
+                elements: vec![(1, element)],
+                region: alder_region::Region::zero(),
+            });
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let uri = url("project/src/main.ald");
+        for (source, accepted) in [
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ accept }
+                    pub fn main() {
+                        accept((true, 42), 0)
+                        accept(("independent", 42), 0)
+                    }
+            "#},
+                true,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ accept }
+                pub fn main() { accept((true, "wrong"), 0) }
+            "#},
+                false,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ accept }
+                pub fn main() { accept((true, 42, false), 0) }
+            "#},
+                false,
+            ),
+            (
+                indoc::indoc! {r#"
+                    import @vendor/widgets.{ accept }
+                    pub fn main() { accept(42, 0) }
+                "#},
+                false,
+            ),
+            (
+                indoc::indoc! {r#"
+                    import @vendor/widgets.{ accept }
+                    fn relay(value) { accept(value, 0) }
+                    pub fn main() { relay((true, "wrong")) }
+                "#},
+                false,
+            ),
+            (
+                indoc::indoc! {r#"
+                    import @vendor/widgets.{ accept }
+                    pub fn relay(value: a) a { accept(value, 0) }
+                "#},
+                false,
+            ),
+        ] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: vec![stored.clone()],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(
+                result.is_success(),
+                accepted,
+                "{source}\n{:#?}",
+                result.modules
+            );
+            if !accepted {
+                let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                    panic!("consumer diagnostic");
+                };
+                assert!(
+                    diagnostics
+                        .iter()
+                        .all(|diagnostic| diagnostic.source().text() == source)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn source_sparse_tuple_constraints_survive_stored_forwarders() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub fn preserve(value) {
+                    let first = value.0
+                    value
+                }
+            "#},
+            &["tuples"],
+            &[],
+        );
+        let relay = dependency_interface(
+            indoc::indoc! {r#"
+            import ~/tuples.{ preserve }
+            pub fn relay(value) { preserve(value) }
+        "#},
+            &[],
+            std::slice::from_ref(&producer),
+        );
+        assert!(!relay.values[0].scheme.tuple_shapes.is_empty());
+        let bytes = bincode::serialize(&vec![producer, relay]).unwrap();
+        let stored: Vec<InterfaceFile> = bincode::deserialize(&bytes).unwrap();
+        let uri = url("project/src/main.ald");
+        for (source, accepted) in [
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ relay }
+                pub fn main() {
+                    let first: (Number, String) = relay((42, "text"))
+                    let second: (Bool, Number) = relay((true, 7))
+                    (first, second)
+                }
+            "#},
+                true,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ relay }
+                pub fn main() { relay((42, "text", false)) }
+            "#},
+                false,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ relay }
+                pub fn main() {
+                    let wrong: (Number, Bool) = relay((42, "text"))
+                    wrong
+                }
+            "#},
+                false,
+            ),
+        ] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: stored.clone(),
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(
+                result.is_success(),
+                accepted,
+                "{source}\n{:#?}",
+                result.modules
+            );
+        }
+    }
+
+    #[test]
+    fn stored_maximum_tuple_projection_reports_compact_consumer_error() {
+        let producer = dependency_interface("pub fn last(value) { value.4294967295 }", &[], &[]);
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ last }
+            pub fn main() { last((1, 2)) }
+        "#};
+        let uri = url("project/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("wrong fixed tuple length must reject");
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert!(diagnostics[0].message().contains("4294967296"));
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    fn assert_imported_error_group_impl_rejected(source: &str) {
+        let model = url("project/src/model.ald");
+        let implementation = url("project/src/implementation.ald");
+        let sources = vec![
+            (
+                model,
+                Ok(indoc::indoc! {r#"
+                pub error Failure { :failed }
+                pub type Alias = Failure
+            "#}
+                .to_owned()),
+            ),
+            (implementation.clone(), Ok(source.to_owned())),
+        ];
+        for reverse in [false, true] {
+            let mut sources = sources.clone();
+            if reverse {
+                sources.reverse();
+            }
+            let result =
+                build_fixture_sync(sources, BuildMode::Check, BuildDependencies::default());
+            let ModuleResult::Failed { diagnostics } = &result.modules[&implementation] else {
+                panic!("custom imported error-group implementation unexpectedly compiled");
+            };
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            let diagnostic = &diagnostics[0];
+            assert_eq!(
+                diagnostic.message(),
+                "cannot define a custom trait implementation for error group `Failure`"
+            );
+            assert_eq!(diagnostic.source().text(), source);
+            assert!(diagnostic.source().name().ends_with("/implementation.ald"));
+            let labels = miette::Diagnostic::labels(diagnostic)
+                .expect("implementation has a source label")
+                .collect::<Vec<_>>();
+            assert_eq!(labels.len(), 1);
+            let label = &labels[0];
+            assert_eq!(
+                &source[label.offset()..label.offset() + label.len()],
+                source.lines().last().expect("implementation line")
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn renders_recursive_error_group_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            error Recursive { :nested(Result[Number, Recursive]) }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_bodyless_trait_invalid_result_error_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            pub trait Read[a] {
+                fn read(value: a) Result[Number, String]
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_unused_invalid_result_alias_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            pub type Invalid = Result[Number, String]
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_missing_alternative_binding_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn read(input: Option[Number]) Number {
+                match input { Some(value) | None => value }
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_extra_alternative_binding_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn read(input: Option[Number]) Number {
+                match input { None | Some(value) => 0 }
+            }
+        "#};
+    }
+
+    #[test]
+    fn synchronized_update_requires_a_task_returning_callback() {
+        let source = indoc::indoc! {r#"
+            pub async fn main() {
+                let cell = SynchronizedRef.make(0).await
+                SynchronizedRef.update(cell, value -> value + 1).await
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty() && result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("synchronous callback must not satisfy a task contract")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[tokio::test]
+    async fn structural_error_json_reports_missing_payload_codec() {
+        assert_diagnostic_snapshot! {r#"
+            pub fn encode(value: Result[Number, [:callback(fn(Number) Number)]]) String {
+                Json.encode(value)
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn structural_error_show_reports_missing_payload_capability() {
+        assert_diagnostic_snapshot! {r#"
+            error Failed { :callback(fn(Number) Number) }
+            pub fn render(value: Result[Number, Failed]) String { show(value) }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn fiber_for_each_requires_unit_callback_results() {
+        assert_diagnostic_snapshot! {r#"
+            pub async fn main() {
+                Fiber.forEach([1, 2], value -> async { value + 1 }).await
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn fiber_map_requires_task_callback_results() {
+        assert_diagnostic_snapshot! {r#"
+            pub async fn main() {
+                Fiber.map([1, 2], value -> value + 1).await
+            }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_contradictory_associative_record_overlays_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn invalid(left, middle, right) {
+                let first = { ..{ ..left, ..middle }, ..right }
+                let second = { ..left, ..{ ..middle, ..right } }
+                let number: Number = first.value
+                let text: String = second.value
+                (number, text)
+            }
+        "#};
+    }
+
+    #[test]
+    fn stored_synchronization_contracts_preserve_inference_and_reject_shared_writes() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub async fn fresh(value: a) SynchronizedRef[a] {
+                    SynchronizedRef.make(value).await
+                }
+                pub async fn gate() Semaphore { Semaphore.make(2).await }
+                pub fn protect(gate: Semaphore, task: Task[a]) Task[a] {
+                    Semaphore.withPermits(gate, 1, task)
+                }
+                let payload = []
+                pub fn shared() { SynchronizedRef.make(payload) }
+                pub async fn specialize() {
+                    let cell = shared().await
+                    Array.push(SynchronizedRef.get(cell).await, 42)
+                }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ fresh, gate, protect, shared }
+            pub async fn main() String {
+                let semaphore = gate().await
+                let number = protect(semaphore, fresh(42)).await
+                let text = protect(semaphore, fresh("hello")).await
+                SynchronizedRef.update(number, value -> async { value + 1 }).await
+                let cell = shared().await
+                Array.push(SynchronizedRef.get(cell).await, SynchronizedRef.get(number).await)
+                SynchronizedRef.get(text).await
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ shared }
+            pub async fn main() {
+                let cell = shared().await
+                SynchronizedRef.set(cell, ["wrong"]).await
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty() && result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("stored shared cell contract must reject String payloads")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_structural_error_show_preserves_generic_payload_bounds() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub fn describe(value: Result[Number, [:bad(a) | :missing]]) String
+                    where a: Show { show(value) }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ describe }
+            error Local { :missing, :bad(Number) }
+            pub fn main() {
+                let number: Result[Number, Local] = Err(:bad(42))
+                describe(number)
+                describe(Err(:bad("text")))
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ describe }
+            pub fn main() String { describe(Err(:bad((value: Number) -> value))) }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty() && result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("stored structural Show must retain its payload bound")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_structural_error_hash_preserves_generic_payload_bounds() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub fn fingerprint(value: Result[Number, [:bad(a) | :missing]]) BigInt
+                    where a: Hash { hash(value) }
+                pub fn equal(left: Result[Number, [:bad(a) | :missing]], right: Result[Number, [:bad(a) | :missing]]) Bool
+                    where a: Hash { left == right }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ fingerprint, equal }
+            error Local { :missing, :bad(Number) }
+            pub fn main() {
+                let number: Result[Number, Local] = Err(:bad(42))
+                fingerprint(number)
+                fingerprint(Err(:bad("text")))
+                equal(number, number)
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ fingerprint }
+            pub fn main() BigInt { fingerprint(Err(:bad((value: Number) -> value))) }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty() && result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("stored structural Hash must retain its payload bound")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_traversal_function_values_preserve_optional_slots_and_callback_types() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub fn mapping() { Fiber.map }
+                pub fn each() { Fiber.forEach }
+                pub fn trying() { Fiber.tryMap }
+                pub fn tryingEach() { Fiber.tryForEach }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ mapping, each, trying, tryingEach }
+            async fn checked(value: Number) Result[Number, [:bad]] { Ok(value) }
+            async fn checkedUnit(value: Number) Result[(), [:bad]] { Ok(()) }
+            pub async fn main() {
+                let mapper = mapping()
+                let numbers: Array[Number] = mapper([1], value -> async { value }).await
+                let texts: Array[String] = mapping()(["text"], value -> async { value }, { concurrency: 2 }).await
+                each()(numbers, value -> async { () }).await
+                each()(texts, value -> async { () }, None).await
+                let results: Result[Array[Number], [:bad]] = trying()(numbers, checked, {}).await
+                let done: Result[(), [:bad]] = tryingEach()(numbers, checkedUnit).await
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ each }
+            pub async fn main() {
+                each()([1], value -> async { value }).await
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty() && result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("stored forEach must retain its unit callback requirement")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_builtin_alias_contracts_preserve_record_payloads() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub type Config = Fiber::MapOptions
+                pub fn read(options: Config) Option[Number] { options.concurrency }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ Config, read }
+            pub fn main() Option[Number] {
+                let options: Config = { concurrency: 8 }
+                read({})
+                read(options)
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ read }
+            pub fn main() Option[Number] { read({ concurrency: "eight" }) }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty());
+        assert!(result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("stored builtin alias must retain its numeric payload")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_ref_contracts_preserve_generic_allocations_and_restrict_shared_payloads() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub async fn fresh(value: a) Ref[a] { Ref.make(value).await }
+                let payload = []
+                pub fn shared() { Ref.make(payload) }
+                pub async fn specialize() {
+                    let cell = shared().await
+                    Array.push(Ref.get(cell).await, 42)
+                }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ fresh, shared }
+            pub async fn main() String {
+                let number = fresh(42).await
+                let text = fresh("hello").await
+                let cell = shared().await
+                Array.push(Ref.get(cell).await, Ref.get(number).await)
+                Ref.get(text).await
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ shared }
+            pub async fn main() {
+                let cell = shared().await
+                Ref.set(cell, ["wrong"]).await
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty());
+        assert!(result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("shared Ref payload must retain its checked type")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_option_lifting_preserves_a_universal_relay_contract() {
+        let bytes = {
+            let producer = dependency_interface(
+                indoc::indoc! {r#"
+                    fn consume(value?: a) {}
+                    pub fn relay(value: a) a {
+                        consume(value)
+                        value
+                    }
+                "#},
+                &[],
+                &[],
+            );
+            bincode::serialize(&producer).unwrap()
+        };
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ relay }
+            pub fn main() (Number, String, Option[Number]) {
+                (relay(42), relay("hello"), relay(None))
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
     }
 
     #[test]
@@ -1177,6 +2099,83 @@ mod tests {
                 (
                     read(0, { value: 0, extra: true }, { value: "discarded", other: false }),
                     read("marker", { value: 1, extra: "text" }, { value: false, other: true }),
+                )
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+    }
+
+    #[test]
+    fn stored_local_annotation_contracts_preserve_recursive_polymorphism() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub fn first(value: a, count: Number) a {
+                    let local: a = value
+                    if count == 0 { local } else { second(local, count - 1) }
+                }
+                pub fn second(value: b, count: Number) b {
+                    let local: b = value
+                    if count == 0 { local } else { first(local, count - 1) }
+                }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ first, second }
+            pub fn main() (Number, String) {
+                (first(42, 3), second("text", 4))
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+    }
+
+    #[test]
+    fn stored_method_contract_preserves_independent_universals() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub trait Select[a] {
+                    fn select(value: a, other: b) b { other }
+                }
+                impl Select[Number] {
+                    fn select(value: Number, other: b) b { other }
+                }
+                impl Select[String] {}
+                pub fn identity(value: a) a { value }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ select, identity }
+            pub fn main() (Number, String, Number, String) {
+                (
+                    identity(select(0, 42)),
+                    identity(select(0, "hello")),
+                    select("default", 7),
+                    select("default", "world"),
                 )
             }
         "#};
@@ -1253,6 +2252,65 @@ mod tests {
     }
 
     #[test]
+    fn stored_sparse_tuple_capture_keeps_shared_payload_monomorphic() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                let shared: Array[Number] = []
+                pub fn expose(pair) {
+                    pair.0 = shared
+                    pair
+                }
+            "#},
+            &[],
+            &[],
+        );
+        assert!(!producer.values[0].scheme.tuple_shapes.is_empty());
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        for (source, valid) in [
+            (
+                indoc::indoc! {r#"
+                    import @vendor/widgets.{ expose }
+                    pub fn check() {
+                        let first = expose(([], "kept"))
+                        let second = expose(([], true))
+                        Array.push(first.0, 42)
+                        Array.push(second.0, 7)
+                        let text: String = first.1
+                        let flag: Bool = second.1
+                    }
+                "#},
+                true,
+            ),
+            (
+                indoc::indoc! {r#"
+                    import @vendor/widgets.{ expose }
+                    pub fn invalid() {
+                        let pair = expose(([], "kept"))
+                        Array.push(pair.0, "wrong")
+                    }
+                "#},
+                false,
+            ),
+        ] {
+            let result = build_fixture_sync(
+                vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: vec![stored.clone()],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(result.is_success(), valid, "{:#?}", result.modules);
+            if !valid {
+                assert!(result.interfaces.is_empty());
+                assert!(result.artifacts.is_empty());
+            }
+        }
+    }
+
+    #[test]
     fn stored_joint_constraints_preserve_shared_error_payloads() {
         let producer = dependency_interface(
             indoc::indoc! {r#"
@@ -1320,6 +2378,67 @@ mod tests {
     }
 
     #[test]
+    fn stored_traits_supply_default_helpers_to_new_implementations() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub trait Format[a] where a: Show {
+                    async fn format(value: a, other: b) String where b: Show {
+                        Task.sleep(0).await
+                        String.concat(show(value), show(other))
+                    }
+                }
+            "#},
+            &[],
+            &[],
+        );
+        assert_eq!(
+            producer.traits[0].methods[0].default_symbol.as_deref(),
+            Some("$default$Format$format")
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ Format }
+            #[derive(Show)]
+            pub enum Local { Local }
+            impl Format[Local] {}
+            pub async fn main() String { Format::format(Local::Local, 42).await }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Build,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let code = result.artifacts[&url("project/src/main.ald")].code();
+        assert!(
+            code.contains("import { $default$Format$format as "),
+            "{code}"
+        );
+        assert!(
+            code.contains("[\"format\"] = ($methodDict0, $a0, $a1)"),
+            "{code}"
+        );
+        assert!(result.interfaces.iter().any(|interface| {
+            interface.instances.iter().any(|implementation| {
+                implementation
+                    .methods
+                    .iter()
+                    .any(|(method, implementation)| {
+                        method.name == "format"
+                            && matches!(implementation,
+                            crate::interface::OwnedMethodImplementation::Default { symbol }
+                            if symbol == "$default$Format$format")
+                    })
+            })
+        }));
+    }
+
+    #[test]
     fn stored_assignment_contracts_preserve_safe_and_restricted_functions() {
         let producer = dependency_interface(
             indoc::indoc! {r#"
@@ -1379,6 +2498,89 @@ mod tests {
     }
 
     #[test]
+    fn stored_reexport_aliases_preserve_shared_state_and_safe_polymorphism() {
+        let leaf = dependency_interface(
+            indoc::indoc! {"
+                pub let shared: Array[Number] = []
+                pub let identity = value -> value
+                let operation = value -> value
+                pub fn forward(value) { operation(value) }
+                pub let forwarded = forward
+                pub fn specialize() { operation = (value: Number) -> value + 1 }
+            "},
+            &["leaf"],
+            &[],
+        );
+        let named = dependency_interface(
+            "pub import ~/leaf.{ shared as storage, identity as same, forwarded as call, specialize }",
+            &["named"],
+            &[leaf],
+        );
+        let facade = dependency_interface("pub import ~/named.*", &["facade"], &[named]);
+        let bytes = bincode::serialize(&facade).unwrap();
+        drop(facade);
+        for (source, valid) in [
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets/facade.{ storage, same, call, specialize }
+                pub fn valid() {
+                    Array.push(storage, 42)
+                    let number: Number = same(42)
+                    let text: String = same("text")
+                    specialize()
+                    let result: Number = call(number)
+                    (result, text)
+                }
+            "#},
+                true,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets/facade.{ storage }
+                pub fn invalid() { Array.push(storage, "wrong") }
+            "#},
+                false,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets/facade.{ call }
+                pub fn invalid() String { call("wrong") }
+            "#},
+                false,
+            ),
+        ] {
+            let result = build_fixture_sync(
+                vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: vec![bincode::deserialize(&bytes).unwrap()],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(
+                result.is_success(),
+                valid,
+                "{source}\n{:#?}",
+                result.modules
+            );
+            if !valid {
+                assert!(result.interfaces.is_empty());
+                assert!(result.artifacts.is_empty());
+                let ModuleResult::Failed { diagnostics } =
+                    &result.modules[&url("project/src/main.ald")]
+                else {
+                    panic!("invalid alias consumer must fail")
+                };
+                assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+                assert!(
+                    diagnostics[0].to_string().contains("type mismatch"),
+                    "{diagnostics:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn stored_tag_functions_check_consumer_contracts() {
         let producer = dependency_interface(
             indoc::indoc! {r#"
@@ -1430,6 +2632,341 @@ mod tests {
         let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
         else {
             panic!("invalid tag consumer must fail")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_open_spread_defaults_accept_absence_and_check_overwrites() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                type Config = { value: Option[Number] }
+                pub fn copy(record) Config { { ..record } }
+            "#},
+            &[],
+            &[],
+        );
+        assert!(!producer.values[0].scheme.record_overlays.is_empty());
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let copied = {
+            let destination = Bump::new();
+            let interface = {
+                let source = Bump::new();
+                alder_ast::copy_interface(&destination, &stored.hydrate(&source))
+            };
+            InterfaceFile::dehydrate(&interface).unwrap()
+        };
+        drop(stored);
+        for (source, expected_success) in [
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ copy }
+                pub fn main() {
+                    let absent = copy({})
+                    let present = copy({ value: Some(42) })
+                    assert(absent.value == None)
+                    assert(present.value == Some(42))
+                }
+            "#},
+                true,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ copy }
+                pub fn main() { copy({ value: Some("wrong") }) }
+            "#},
+                false,
+            ),
+        ] {
+            let result = build_fixture_sync(
+                vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: vec![copied.clone()],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(
+                result.is_success(),
+                expected_success,
+                "{:#?}",
+                result.modules
+            );
+        }
+    }
+
+    #[test]
+    fn stored_closed_overlay_grouping_cannot_hide_contradictory_consumer_contracts() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub fn split(record) { { ..record, x: 0, y: true } }
+                pub fn grouped(record) { { ..record, ..{ x: 0, y: true } } }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ split, grouped }
+            pub fn invalid(record) {
+                let first: Number = split(record).value
+                let second: String = grouped(record).value
+                (first, second)
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(
+            !result.is_success(),
+            "contradictory consumer contract was accepted"
+        );
+        assert!(result.interfaces.is_empty());
+        assert!(result.artifacts.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("invalid consumer must fail")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_overwritten_overlay_fields_preserve_consumer_constraints() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub fn padded(left, right) { { ..left, ..{ x: "discarded", kept: true }, ..right, x: 0 } }
+                pub fn plain(left, right) { { ..left, kept: true, ..right, x: 0 } }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        for (source, expected_success) in [
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ padded, plain }
+                pub fn invalid(left, right) {
+                    let first: Number = padded(left, right).value
+                    let second: String = plain(left, right).value
+                    (first, second)
+                }
+            "#},
+                false,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ padded, plain }
+                pub fn valid() {
+                    let first = padded({ value: false }, { value: "right", kept: 42 })
+                    let second = plain({ value: false }, { value: "right", kept: 42 })
+                    let value: String = first.value
+                    let kept: Number = first.kept
+                    let x: Number = second.x
+                    (value, kept, x)
+                }
+            "#},
+                true,
+            ),
+        ] {
+            let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+            let result = build_fixture_sync(
+                vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: vec![stored],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(
+                result.is_success(),
+                expected_success,
+                "{:#?}",
+                result.modules
+            );
+            if !expected_success {
+                assert!(result.interfaces.is_empty());
+                assert!(result.artifacts.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn stored_mutual_overlays_preserve_recursive_payload_requirements() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                fn merge(left, right) { { ..left, ..right } }
+                pub fn even(count: Number, value, other) {
+                    let merged = merge(value, other)
+                    if count == 0 { merged }
+                    else { odd(count - 1, { nested: merged }, other) }
+                }
+                pub fn odd(count: Number, value, other) {
+                    let merged = merge(value, other)
+                    if count == 0 { merged }
+                    else { even(count - 1, { nested: merged }, other) }
+                }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        for (source, valid) in [
+            (
+                indoc::indoc! {r#"
+                    import @vendor/widgets.{ even, odd }
+                    pub fn run() {
+                        let number: Number = even(2, { nested: { nested: 0 } }, { nested: 42 }).nested
+                        let text: String = odd(3, { nested: { nested: "seed" } }, { nested: "text" }).nested
+                        (number, text)
+                    }
+                "#},
+                true,
+            ),
+            (
+                indoc::indoc! {r#"
+                    import @vendor/widgets.{ even }
+                    pub fn run() { even(2, { nested: { nested: 0 } }, {}) }
+                "#},
+                false,
+            ),
+        ] {
+            let result = build_fixture_sync(
+                vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: vec![bincode::deserialize(&bytes).unwrap()],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(
+                result.is_success(),
+                valid,
+                "{source}\n{:#?}",
+                result.modules
+            );
+            if !valid {
+                assert!(result.interfaces.is_empty());
+                assert!(result.artifacts.is_empty());
+                let ModuleResult::Failed { diagnostics } =
+                    &result.modules[&url("project/src/main.ald")]
+                else {
+                    panic!("invalid mutual overlay consumer must fail")
+                };
+                assert_eq!(diagnostics.len(), 1);
+                assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+            }
+        }
+    }
+
+    #[test]
+    fn stored_recursive_overlays_preserve_cycle_breaking_requirements() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                fn merge(left, right) { { ..left, ..right } }
+                pub fn repeat(count: Number, value, other) {
+                    let merged = merge(value, other)
+                    if count == 0 { merged }
+                    else { repeat(count - 1, { nested: merged }, other) }
+                }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        for (source, valid) in [
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ repeat }
+                pub fn run() Number {
+                    repeat(2, { nested: { nested: 0 } }, { nested: 42 }).nested
+                }
+            "#},
+                true,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ repeat }
+                pub fn run() {
+                    repeat(2, { nested: { nested: 0 } }, {})
+                }
+            "#},
+                false,
+            ),
+        ] {
+            let result = build_fixture_sync(
+                vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: vec![bincode::deserialize(&bytes).unwrap()],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(result.is_success(), valid, "{source}");
+            if !valid {
+                assert!(result.interfaces.is_empty());
+                assert!(result.artifacts.is_empty());
+                let ModuleResult::Failed { diagnostics } =
+                    &result.modules[&url("project/src/main.ald")]
+                else {
+                    panic!("invalid recursive overlay consumer must fail")
+                };
+                assert_eq!(diagnostics.len(), 1);
+                assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+            }
+        }
+    }
+
+    #[test]
+    fn stored_known_open_overwrites_cannot_hide_contradictory_contracts() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub fn padded(left, right: { r | x: Number }) { { ..left, x: "discarded", ..right } }
+                pub fn plain(left, right: { r | x: Number }) { { ..left, ..right } }
+            "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let source = indoc::indoc! {"
+            import @vendor/widgets.{ padded, plain }
+            pub fn invalid(left, right) {
+                let first: Number = padded(left, right).value
+                let second: String = plain(left, right).value
+                (first, second)
+            }
+        "};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![bincode::deserialize(&bytes).unwrap()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(
+            !result.is_success(),
+            "contradictory imported overlays accepted"
+        );
+        assert!(result.interfaces.is_empty());
+        assert!(result.artifacts.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("invalid consumer must fail")
         };
         assert_eq!(diagnostics.len(), 1);
         assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
@@ -1492,6 +3029,66 @@ mod tests {
         let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
         else {
             panic!("invalid consumer must fail")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+    }
+
+    #[test]
+    fn stored_associative_overlays_preserve_result_relationships() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+                pub fn both(left, middle, right) {
+                    ({ ..{ ..left, ..middle }, ..right }, { ..left, ..{ ..middle, ..right } })
+                }
+            "#},
+            &[],
+            &[],
+        );
+        assert!(!producer.values[0].scheme.record_overlays.is_empty());
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ both }
+            pub fn numbers() (Number, Number) {
+                let records = both({ value: "old" }, { value: true }, { value: 42 })
+                (records.0.value, records.1.value)
+            }
+            pub fn strings() (String, String) {
+                let records = both({ value: 42 }, { value: true }, { value: "last" })
+                (records.0.value, records.1.value)
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ both }
+            pub fn invalid(left, middle, right) (Number, String) {
+                let records = both(left, middle, right)
+                (records.0.value, records.1.value)
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(!result.is_success());
+        assert!(result.artifacts.is_empty() && result.interfaces.is_empty());
+        let ModuleResult::Failed { diagnostics } = &result.modules[&url("project/src/main.ald")]
+        else {
+            panic!("equivalent stored results must not acquire contradictory fields")
         };
         assert_eq!(diagnostics.len(), 1);
         assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
@@ -3372,6 +4969,59 @@ mod tests {
     }
 
     #[test]
+    fn stored_direct_error_group_annotations_preserve_structural_identity() {
+        let bytes = {
+            let producer = dependency_interface(
+                indoc::indoc! {r#"
+                pub error Failure { :bad(Number), :missing }
+                pub fn relay(value: Failure) Failure { value }
+                pub fn render(value: Failure) String { show(value) }
+            "#},
+                &[],
+                &[],
+            );
+            bincode::serialize(&producer).unwrap()
+        };
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let uri = url("project/src/main.ald");
+        for (source, accepted) in [
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ relay, render }
+                error Local { :missing, :bad(Number) }
+                pub fn describe(value: Local) String { render(relay(value)) }
+            "#},
+                true,
+            ),
+            (
+                indoc::indoc! {r#"
+                import @vendor/widgets.{ relay, render }
+                error Local { :missing, :bad(String) }
+                pub fn describe(value: Local) String { render(relay(value)) }
+            "#},
+                false,
+            ),
+        ] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies {
+                    interfaces: vec![stored.clone()],
+                    ..BuildDependencies::default()
+                },
+            );
+            assert_eq!(result.is_success(), accepted, "{:?}", result.modules);
+            if !accepted {
+                let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                    panic!("incompatible payloads must be diagnosed in the consumer");
+                };
+                assert_eq!(diagnostics.len(), 1);
+                assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+            }
+        }
+    }
+
+    #[test]
     fn stored_projection_cycle_is_rejected_without_application_source() {
         let valid = dependency_interface(
             indoc::indoc! {r#"
@@ -4143,6 +5793,22 @@ mod tests {
     async fn renders_tuple_index_overflow_without_color() {
         assert_diagnostic_snapshot! {r#"
             fn read(pair) { pair.4294967296 }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_tuple_read_out_of_bounds_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn read(pair: (Number, String)) { pair.2 }
+        "#};
+    }
+
+    #[tokio::test]
+    async fn renders_tuple_write_out_of_bounds_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn write(pair: (Number, String)) {
+                pair.2 = 42
+            }
         "#};
     }
 

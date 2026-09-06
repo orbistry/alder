@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ repeat }\npub fn run() {\n    repeat(2, { nested: { nested: 0 } }, {})\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `{ nested: Number }`
+   ╭─[/project/src/main.ald:3:5]
+ 2 │ pub fn run() {
+ 3 │     repeat(2, { nested: { nested: 0 } }, {})
+   ·     ───┬──
+   ·        ╰── type requirement originates here
+ 4 │ }
+   ╰────

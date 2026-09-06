@@ -9,22 +9,19 @@ $dict$Eq$0["eq"] = ($a0, $a1) => {
 		"Point": {
 			"record": false,
 			"fields": [],
-			"optional": [],
 			"dictionaries": []
 		},
 		"Circle": {
 			"record": false,
 			"fields": ["_0"],
-			"optional": [],
 			"dictionaries": [undefined]
 		},
 		"Rect": {
 			"record": true,
 			"fields": ["width", "height"],
-			"optional": [],
 			"dictionaries": [undefined, undefined]
 		}
-	});
+	}, "alder://app/main.mjs::Shape");
 };
 Object["freeze"]($dict$Eq$0);
 const $c_Shape_Point = Object["freeze"]({ "$": "Point" });

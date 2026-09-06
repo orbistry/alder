@@ -1,0 +1,26 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn render(value: Result[Number, [:missing | :bad(Number)]]) String {\n    show(value)\n}\n"
+---
+import { $show, $showContainer, $showDerived } from "alder:kernel";
+function $v_render($a0) {
+	let $l0_value = $a0;
+	const $t0 = { "show": ($a0) => {
+		return $showContainer($a0, "result", [{ "show": $show }, { "show": ($value) => {
+			return $showDerived($value, {
+				":bad": {
+					"record": false,
+					"fields": ["_0"],
+					"dictionaries": [{ "show": $show }]
+				},
+				":missing": {
+					"record": false,
+					"fields": [],
+					"dictionaries": []
+				}
+			});
+		} }]);
+	} }["show"];
+	return $t0($l0_value);
+}
+export { $v_render as render };

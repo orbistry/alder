@@ -5,8 +5,8 @@ description: "fn bad() Number { String.length(42) }\n"
 alder::type::type_mismatch
 
   × type mismatch: expected `String`, found `Number`
-   ╭─[/project/src/main.ald:1:19]
+   ╭─[/project/src/main.ald:1:33]
  1 │ fn bad() Number { String.length(42) }
-   ·                   ────────┬────────
-   ·                           ╰── type requirement originates here
+   ·                                 ─┬
+   ·                                  ╰── type requirement originates here
    ╰────

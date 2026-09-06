@@ -7,12 +7,12 @@ fn rename(user: { r | name: String }, name: String) ({ r | name: String }) {
 }
 
 fn choose(flag: Bool, user: { name?: String }) {
-    if flag { { name: "present" } } else { user }
+    if flag { { name: Some("present") } } else { user }
 }
 
 fn choose_loop(flag: Bool, user: { name?: String }) {
     loop {
-        if flag { break { name: "present" } }
+        if flag { break { name: Some("present") } }
         break user
     }
 }
@@ -20,7 +20,7 @@ fn choose_loop(flag: Bool, user: { name?: String }) {
 fn choose_loop_reversed(flag: Bool, user: { name?: String }) {
     loop {
         if flag { break user }
-        break loop { break { name: "present" } }
+        break loop { break { name: Some("present") } }
     }
 }
 
@@ -92,6 +92,26 @@ pub fn main() {
         Ok(value) => { assert(value == "after") },
         _ => { assert(false) },
     }
+    assert(rows.tuple_first((20, false, "kept", 22), 3) == (20, false, "kept", 22))
+    assert(rows.tuple_last((20, "independent", 7, 22), 4) == (20, "independent", 7, 22))
+    assert(rows.tuple_sum((20, 22)) == 42)
+    let tuple = (0, false, "untouched", 0)
+    assert(rows.tuple_update(tuple) == 42)
+    assert(tuple.0 == 20)
+    assert(tuple.1 == false)
+    assert(tuple.2 == "untouched")
+    assert(tuple.3 == 22)
+    let numbers = rows.associated_merges({ value: "old" }, { value: true }, { value: 42 })
+    assert(numbers.0.value == 42 && numbers.1.value == 42)
+    let strings = rows.associated_merges({ value: 42 }, { value: true }, { value: "last" })
+    assert(strings.0.value == "last" && strings.1.value == "last")
+    let number_arrays = rows.associated_merges({ items: [] }, {}, {})
+    Array.push(number_arrays.0.items, 42)
+    assert(number_arrays.1.items[0] == 42)
+    let string_arrays = rows.associated_merges({ items: [] }, {}, {})
+    Array.push(string_arrays.1.items, "fresh")
+    assert(string_arrays.0.items[0] == "fresh")
+    assert(Array.length(number_arrays.1.items) == 1 && number_arrays.1.items[0] == 42)
     let spread_original = { value: 1 }
     let spread_events = []
     let spread_copy = {
@@ -139,11 +159,11 @@ pub fn main() {
     assert(Array.length(overlay_captured) == 2)
     assert(overlay_captured[1] == 2)
     let overlay_absent: { value?: Option[Number] } = {}
-    let overlay_nested: { value?: Option[Number] } = { value: Option.none() }
+    let overlay_nested: { value?: Option[Number] } = { value: Some(None) }
     assert(rows.merge(overlay_absent, { marker: true }).value == Option.none())
     assert(rows.merge(overlay_nested, { marker: true }).value == Option.some(Option.none()))
     assert(rows.read_merged_optional({ marker: "overwritten" }) == Option.none())
-    assert(rows.read_merged_optional({ value: Option.none() }) == Option.some(Option.none()))
+    assert(rows.read_merged_optional({ value: Some(None) }) == Option.some(Option.none()))
     assert(rows.read_merged_optional({ value: Option.some(42) }) == Option.some(Option.some(42)))
     let outcome = rows.preserve_outcome(rows.failure())
     let error_value = match outcome {
@@ -175,12 +195,12 @@ pub fn main() {
     let present_spread: { value?: Number } = { value: 7 }
     let fallback = { value: 42, ..absent_spread }
     let overridden = { value: 42, ..present_spread }
-    assert(fallback.value == 42)
-    assert(overridden.value == 7)
+    assert(fallback.value == None)
+    assert(overridden.value == Some(7))
     let still_absent = { ..absent_spread, ..absent_spread }
     let retained = { ..present_spread, ..absent_spread }
     assert(still_absent.value == Option.none())
-    assert(retained.value == Option.some(7))
+    assert(retained.value == None)
     let replaced = { value: 42, ..{ value: "text" } }
     assert(replaced.value == "text")
     let maybe_text: { value?: String } = {}
@@ -202,11 +222,11 @@ pub fn main() {
     assert(choose_loop_reversed(true, {}).name == Option.none())
     assert(choose_loop_reversed(false, {}).name == Option.some("present"))
     let absent: { value?: Option[Number] } = {}
-    let present: { value?: Option[Number] } = { value: Option.none() }
+    let present: { value?: Option[Number] } = { value: Some(None) }
     assert(absent.value == Option.none())
     assert(present.value == Option.some(Option.none()))
     assert(destructure({}) == Option.none())
-    assert(destructure({ value: Option.none() }) == Option.some(Option.none()))
+    assert(destructure({ value: Some(None) }) == Option.some(Option.none()))
     assert(destructure({ value: Option.some(42) }) == Option.some(Option.some(42)))
     assert(match_field({}) == Option.none())
     assert(match_field({ value: 42 }) == Option.some(42))
@@ -214,15 +234,17 @@ pub fn main() {
     assert(field_matches({ value: 42 }, Option.some(42)))
     assert(!field_matches({}, Option.some(42)))
     assert(config_field(Config::Config {}) == Option.none())
-    assert(config_field(Config::Config { value: Option.none() }) == Option.some(Option.none()))
+    assert(config_field(Config::Config { value: Some(None) }) == Option.some(Option.none()))
     let assigned: { value?: Option[Number] } = {}
     assert(assigned.value == Option.none())
     assigned.value = Option.none()
+    assert(assigned.value == None)
+    assigned.value = Some(None)
     assert(assigned.value == Option.some(Option.none()))
-    assigned.value = Option.some(42)
+    assigned.value = Some(Some(42))
     assert(assigned.value == Option.some(Option.some(42)))
     let nested: { child: { value?: Number } } = { child: {} }
-    nested.child.value = 42
+    nested.child.value = Some(42)
     assert(nested.child.value == Option.some(42))
     let counter = []
     assert(counted(counter).value == Option.some(42))

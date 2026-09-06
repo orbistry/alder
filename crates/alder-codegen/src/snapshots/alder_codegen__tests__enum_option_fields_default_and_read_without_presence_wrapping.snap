@@ -1,0 +1,60 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "enum Config { Config { value?: Option[Number] } }\npub fn empty() { Config::Config {} }\npub fn nested() { Config::Config { value: Some(None) } }\npub fn read(config: Config) Option[Option[Number]] {\n    match config { Config::Config { value } => value }\n}\n"
+---
+import { $equalDerived, $equalStructural, $matchFailure, $optionSome } from "alder:kernel";
+const $dict$Eq$0 = {};
+$dict$Eq$0["eq"] = ($a0, $a1) => {
+	return $equalDerived($a0, $a1, { "Config": {
+		"record": true,
+		"fields": ["value"],
+		"dictionaries": [{ "eq": ($a, $b) => {
+			return $equalStructural($a, $b, "option", [], [{ "eq": ($a, $b) => {
+				return $equalStructural($a, $b, "option", [], [{ "eq": ($a, $b) => {
+					return $a === $b;
+				} }]);
+			} }]);
+		} }]
+	} }, "alder://app/main.mjs::Config");
+};
+Object["freeze"]($dict$Eq$0);
+function $c_Config_Config(value) {
+	return {
+		"$": "Config",
+		"value": value
+	};
+}
+function $v_empty() {
+	return {
+		"value": null,
+		"$": "Config"
+	};
+}
+function $v_nested() {
+	const $t0 = $optionSome;
+	return {
+		"$": "Config",
+		"value": $t0(null)
+	};
+}
+function $v_read($a0) {
+	let $l0_config = $a0;
+	const $t1 = $l0_config;
+	let $t2;
+	$match3: {
+		let $t4;
+		let $t5 = $t1 != null && $t1["$"] === "Config";
+		if ($t5) {
+			$t4 = $t1["value"];
+			$t5 = true;
+		}
+		if ($t5) {
+			let $l1_value = $t4;
+			$t2 = $l1_value;
+			break $match3;
+		}
+		$matchFailure("alder://app/main.mjs", "5:5", $t1);
+	}
+	return $t2;
+}
+export { $dict$Eq$0, $v_empty as empty, $v_nested as nested, $v_read as read };

@@ -1,0 +1,42 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn fingerprint(value: Array[Option[Number]]) BigInt {\n    hash(value)\n}\n"
+---
+import { $equalContainer, $hash, $hashContainer } from "alder:kernel";
+function $v_fingerprint($a0) {
+	let $l0_value = $a0;
+	const $t0 = (($shape) => {
+		return {
+			"hash": ($a0) => {
+				return $hashContainer($a0, "array", $shape());
+			},
+			"$super0": { "eq": ($a0, $a1) => {
+				return $equalContainer($a0, $a1, "array", $shape()["map"](($dictionary) => {
+					return $dictionary["$super0"];
+				}));
+			} }
+		};
+	})(() => {
+		return [(($shape) => {
+			return {
+				"hash": ($a0) => {
+					return $hashContainer($a0, "option", $shape());
+				},
+				"$super0": { "eq": ($a0, $a1) => {
+					return $equalContainer($a0, $a1, "option", $shape()["map"](($dictionary) => {
+						return $dictionary["$super0"];
+					}));
+				} }
+			};
+		})(() => {
+			return [{
+				"$super0": { "eq": ($a, $b) => {
+					return $a === $b;
+				} },
+				"hash": $hash
+			}];
+		})];
+	})["hash"];
+	return $t0($l0_value);
+}
+export { $v_fingerprint as fingerprint };

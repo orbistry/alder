@@ -79,6 +79,10 @@ impl Ord[String] {
 impl Ord[BigInt] {
     fn compare(left: BigInt, right: BigInt) Ordering
 }
+impl Ord[()] { fn compare(left: (), right: ()) Ordering }
+impl Ord[Option[a]] where a: Ord {
+    fn compare(left: Option[a], right: Option[a]) Ordering
+}
 
 impl Hash[Number] { fn hash(value: Number) BigInt }
 impl Hash[String] { fn hash(value: String) BigInt }

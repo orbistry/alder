@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ each }\npub async fn main() {\n    each()([1], value -> async { value }).await\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `()`, found `Number`
+   ╭─[/project/src/main.ald:3:17]
+ 2 │ pub async fn main() {
+ 3 │     each()([1], value -> async { value }).await
+   ·                 ────────────┬───────────
+   ·                             ╰── type requirement originates here
+ 4 │ }
+   ╰────

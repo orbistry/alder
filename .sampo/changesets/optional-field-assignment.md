@@ -2,6 +2,6 @@
 cargo/alder-solve: patch
 ---
 
-Check optional record-field assignments against their stored payload type,
-while preserving Option-valued reads and rejecting traversal through absent
-optional parents.
+Check record-field assignments against their ordinary stored type, requiring
+Option values for Option fields and rejecting implicit payload lifting or
+traversal through an Option parent.

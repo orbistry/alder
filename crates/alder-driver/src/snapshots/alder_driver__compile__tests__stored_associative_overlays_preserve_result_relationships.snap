@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ both }\npub fn invalid(left, middle, right) (Number, String) {\n    let records = both(left, middle, right)\n    (records.0.value, records.1.value)\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/project/src/main.ald:2:1]
+ 1 │     import @vendor/widgets.{ both }
+ 2 │ ╭─▶ pub fn invalid(left, middle, right) (Number, String) {
+ 3 │ │       let records = both(left, middle, right)
+ 4 │ │       (records.0.value, records.1.value)
+ 5 │ ├─▶ }
+   · ╰──── type requirement originates here
+   ╰────

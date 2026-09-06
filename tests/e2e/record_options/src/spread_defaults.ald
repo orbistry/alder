@@ -1,0 +1,39 @@
+type Config = { value: Option[Number] }
+
+pub fn repeat(count: Number, value, other) {
+    let merged = { ..value, ..other }
+    if count == 0 { merged }
+    else { repeat(count - 1, { nested: merged }, other) }
+}
+
+pub fn copy(record) Config { { ..record } }
+
+fn apply(value: a, callback: fn(a) b) b { callback(value) }
+fn identity(record: Config) Config { record }
+
+pub fn delayed(record) Config { apply({ ..record }, identity) }
+
+type Nested = { value: Option[Option[Number]] }
+
+pub fn nested(record) Nested { { ..record } }
+
+pub fn grouping(record) {
+    ({ ..record, x: 0, y: true }, { ..record, ..{ x: 0, y: true } })
+}
+
+pub fn known_overwrite(left, right: { r | x: Option[Number] }, trace) {
+    { ..left, x: {
+        Array.push(trace, 1)
+        "discarded"
+    }, kept: true, ..right }
+}
+
+pub fn overwritten(left, right, trace) {
+    { ..left, ..{ x: {
+        Array.push(trace, 1)
+        "discarded"
+    }, kept: true }, ..right, x: {
+        Array.push(trace, 2)
+        0
+    } }
+}

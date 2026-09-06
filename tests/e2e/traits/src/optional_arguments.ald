@@ -1,0 +1,199 @@
+pub fn preserve(value?: Option[Number]) Option[Option[Number]] { value }
+
+fn consume_present(value?: a) {
+    assert(match value { Some(_) => true, None => false })
+}
+
+pub fn relay_universal(value: a) a {
+    consume_present(value)
+    value
+}
+
+pub fn relay_tuple_before(pair) {
+    consume_present(pair)
+    let first: Number = pair.0
+    assert(first == 42)
+    pair
+}
+
+pub fn relay_tuple_after(pair) {
+    let first: Number = pair.0
+    assert(first == 42)
+    consume_present(pair)
+    pair
+}
+
+pub fn relay_failure(failure) {
+    let result = Err(failure)
+    consume_present(failure)
+    result
+}
+
+type NestedRecord = { value: Option[Option[Number]] }
+fn record_tail() NestedRecord { { value: 42 } }
+fn record_early() NestedRecord { return { value: 42 } }
+
+type RecordPayload = { value: Option[Number] }
+fn take_record(value?: RecordPayload) Option[RecordPayload] { value }
+fn take_records(value?: Array[RecordPayload]) Option[Array[RecordPayload]] { value }
+fn spread_overwrite(later: { value?: Number }) RecordPayload {
+    { value: 42, ..later }
+}
+
+fn choose(value: Number, extra?: Number, label: Option[String]) Number {
+    assert(extra == None)
+    assert(label == None)
+    value
+}
+
+fn required_before_suffix(first?: Number, second: String, third?: Number) String {
+    assert(first == None)
+    assert(third == None)
+    second
+}
+
+fn single(value?: Number) { assert(value == Some(42)) }
+fn double(value?: Option[Number]) { assert(value == Some(Some(42))) }
+
+fn shared_forward(value) {
+    single(value)
+    double(value)
+}
+
+fn shared_reverse(value) {
+    double(value)
+    single(value)
+}
+
+fn generic_wrap(value: a) Option[a] {
+    let identity = (argument?: a) -> argument
+    identity(value)
+}
+
+pub fn check() {
+    let record_lambda = () NestedRecord -> { { value: 42 } }
+    assert(record_lambda().value == Some(Some(42)))
+    assert((42 |> preserve) == Some(Some(42)))
+    assert((42 |> choose) == 42)
+    assert((42 |> show) == "42")
+    assert(take_record({ value: 42 }) == Some({ value: Some(42) }))
+    assert(take_record(Some({ value: 42 })) == Some({ value: Some(42) }))
+    assert(take_record(Option.some({ value: 42 })) == Some({ value: Some(42) }))
+    let explicit_record: Option[RecordPayload] = Some({ value: 42 })
+    assert(explicit_record == Some({ value: Some(42) }))
+    let branch_events = []
+    for flag in [true, false] {
+        let expected = if flag { 42 } else { 7 }
+        let branched = take_record(if flag {
+            Array.push(branch_events, 1)
+            { value: 42 }
+        } else {
+            Array.push(branch_events, 2)
+            { value: 7 }
+        })
+        assert(branched == Some({ value: Some(expected) }))
+        assert(take_record(match flag {
+            true => ({ value: 42 }),
+            false => ({ value: 7 }),
+        }) == branched)
+        assert(take_record(if flag {
+            Some({ value: 42 })
+        } else {
+            Some({ value: 7 })
+        }) == branched)
+        let field: { payload: Option[RecordPayload] } = {
+            payload: if flag { { value: 42 } } else { { value: 7 } },
+        }
+        assert(field.payload == branched)
+    }
+    assert(branch_events == [1, 2])
+    let base = { label: "base" }
+    let spread_record: { label: String, value: Option[Number] } = { ..base, value: 42 }
+    let reversed: { label: String, value: Option[Number] } = { value: 42, ..base }
+    assert(spread_record == reversed)
+    assert(spread_record.value == Some(42))
+    let nested_spread: { label: String, nested: Option[RecordPayload] } = {
+        ..base, nested: { value: 42 },
+    }
+    assert(nested_spread.nested == Some({ value: Some(42) }))
+    let overwrite_events = []
+    let replacement = { value: Some(42) }
+    let overwritten: RecordPayload = { value: {
+        Array.push(overwrite_events, 1)
+        true
+    }, ..{
+        Array.push(overwrite_events, 2)
+        replacement
+    } }
+    assert(overwritten.value == Some(42))
+    assert(overwrite_events == [1, 2])
+    assert(spread_overwrite({}).value == None)
+    assert(spread_overwrite({ value: Some(99) }).value == Some(99))
+    assert(spread_overwrite({ value: None }).value == None)
+    assert(take_records([{ value: 42 }]) == Some([{ value: Some(42) }]))
+    assert(({ value: 42 } |> take_record) == Some({ value: Some(42) }))
+    assert(({ value: 42 } |> take_record()) == Some({ value: Some(42) }))
+    assert(([{ value: 42 }] |> take_records) == Some([{ value: Some(42) }]))
+    let pipe_events = []
+    let piped = { value: {
+        Array.push(pipe_events, 1)
+        42
+    } } |> ({
+        Array.push(pipe_events, 2)
+        take_record
+    })
+    assert(piped == Some({ value: Some(42) }))
+    assert(pipe_events == [1, 2])
+    let nested_field: { nested: Option[RecordPayload] } = { nested: { value: 42 } }
+    assert(nested_field.nested == Some({ value: Some(42) }))
+    assert(record_tail().value == Some(Some(42)))
+    assert(record_early().value == Some(Some(42)))
+    let record_bare: { value: Option[Option[Number]] } = { value: 42 }
+    let record_once: { value: Option[Option[Number]] } = { value: Some(42) }
+    let record_outer: { value: Option[Option[Number]] } = { value: None }
+    let record_inner: { value: Option[Option[Number]] } = { value: Some(None) }
+    assert(record_bare.value == Some(Some(42)))
+    assert(record_once.value == Some(Some(42)))
+    assert(record_outer.value == None)
+    assert(record_inner.value == Some(None))
+    assert(record_outer.value != record_inner.value)
+    let field_events = []
+    let ordered: { first: Option[Number], second: Option[Number] } = {
+        first: {
+            Array.push(field_events, 1)
+            20
+        },
+        second: {
+            Array.push(field_events, 2)
+            22
+        },
+    }
+    assert(ordered.first == Some(20))
+    assert(ordered.second == Some(22))
+    assert(field_events == [1, 2])
+    shared_forward(42)
+    shared_reverse(42)
+    assert(generic_wrap(42) == Some(42))
+    let absent: Option[Number] = None
+    assert(generic_wrap(absent) == Some(None))
+    assert(preserve(42) == Some(Some(42)))
+    assert(preserve(Some(42)) == Some(Some(42)))
+    assert((42 |> preserve()) == Some(Some(42)))
+    let events = []
+    assert(preserve({
+        Array.push(events, 1)
+        42
+    }) == Some(Some(42)))
+    assert(events == [1])
+    assert(preserve() == None)
+    assert(preserve(None) == None)
+    assert(preserve(Some(None)) == Some(None))
+    assert(preserve(Some(Some(42))) == Some(Some(42)))
+    assert(choose(42) == 42)
+    assert((42 |> choose()) == 42)
+    let function: fn(Number, Option[Number], Option[String]) Number = choose
+    assert(function(42) == 42)
+    let lambda = (value?: Number) -> value
+    assert(lambda() == None)
+    assert(required_before_suffix(None, "present") == "present")
+}

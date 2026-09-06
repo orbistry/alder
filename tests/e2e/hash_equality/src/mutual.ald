@@ -1,0 +1,29 @@
+#[derive(Eq)]
+enum Left[a] { Value(a, Array[Right[a]]) }
+
+#[derive(Eq)]
+enum Right[a] { Back(Array[Left[a]]) }
+
+fn make(value: a) Left[a] {
+    let children = []
+    let left = Left::Value(value, children)
+    let right = Right::Back([left])
+    Array.push(children, right)
+    left
+}
+
+pub fn check() {
+    let first = make(42)
+    let second = make(42)
+    assert first == first
+    assert first == second
+    assert second == first
+    assert !(first == make(7))
+    assert make("same") == make("same")
+    assert !(make("left") == make("right"))
+    match second {
+        Left::Value(_, children) => { Array.push(children, Right::Back([])) }
+    }
+    assert !(first == second)
+    assert !(second == first)
+}

@@ -6,6 +6,10 @@ pub fn capture_order(left: a) fn(a) (Ordering, Bool) where a: Ord {
     right -> (ordering(left, right), equality(right))
 }
 
+pub fn hash_equal(left: a, right: a) Bool where a: Hash {
+    left == right && hash(left) == hash(right)
+}
+
 pub fn describe(value: a) String where a: Show, a: Eq, a: Show {
     if value == value { show(value) } else { "not equal" }
 }

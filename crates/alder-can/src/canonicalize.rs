@@ -177,60 +177,6 @@ fn canonicalize_mode<'a>(
                         }
                     }
                 }
-                if let ItemKind::ErrorGroup(group) = &canonical_item.value.kind {
-                    if error_group_supports_structural_derive(group) {
-                        automatic_impls.push(error_group_derive_impl(
-                            bump,
-                            context.home,
-                            group,
-                            canonical_item.region,
-                            alder_ast::DeriveKind::Eq,
-                            alder_ast::ImplOrigin::AutomaticEq {
-                                type_ordinal: item_ordinal as u32,
-                            },
-                        ));
-                    }
-                    for attribute in canonical_item.value.attributes {
-                        let Attribute::Derive { region, names } = attribute else {
-                            continue;
-                        };
-                        for (derive_index, name) in names.iter().enumerate() {
-                            let kind = derive_kind(name.name)
-                                .expect("derive attributes contain validated built-in names");
-                            if kind == alder_ast::DeriveKind::Eq {
-                                if !error_group_supports_structural_derive(group) {
-                                    errors.push(Error::new(
-                                        *region,
-                                        ErrorKind::Attribute(AttributeError::InvalidDerive {
-                                            reason: "function-valued fields cannot derive Eq",
-                                        }),
-                                    ));
-                                }
-                                continue;
-                            }
-                            if !error_group_supports_structural_derive(group) {
-                                errors.push(Error::new(
-                                    *region,
-                                    ErrorKind::Attribute(AttributeError::InvalidDerive {
-                                        reason: "function-valued fields cannot use built-in derives",
-                                    }),
-                                ));
-                                continue;
-                            }
-                            automatic_impls.push(error_group_derive_impl(
-                                bump,
-                                context.home,
-                                group,
-                                canonical_item.region,
-                                kind,
-                                alder_ast::ImplOrigin::Derived {
-                                    type_ordinal: item_ordinal as u32,
-                                    derive_index: derive_index as u16,
-                                },
-                            ));
-                        }
-                    }
-                }
             }
             Err(mut item_errors) => errors.append(&mut item_errors),
         }
@@ -279,14 +225,6 @@ fn enum_supports_structural_derive(enum_: &EnumDecl<'_>) -> bool {
         VariantPayload::Record(fields) => fields
             .iter()
             .all(|field| type_supports_structural_derive(field.typ)),
-    })
-}
-
-fn error_group_supports_structural_derive(group: &ErrorGroup<'_>) -> bool {
-    group.tags.iter().all(|tag| {
-        tag.args
-            .iter()
-            .all(|typ| type_supports_structural_derive(typ))
     })
 }
 
@@ -403,64 +341,6 @@ fn enum_derive_impl<'a>(
                 params,
                 constraints: &[],
                 trait_predicates,
-                projection_equalities: &[],
-                assoc_bindings: &[],
-                items: &[],
-                synthetic: Some(kind),
-                region,
-            })),
-        },
-    ))
-}
-
-fn error_group_derive_impl<'a>(
-    bump: &'a Bump,
-    home: ModuleId<'a>,
-    group: &'a ErrorGroup<'a>,
-    region: Region,
-    kind: alder_ast::DeriveKind,
-    origin: alder_ast::ImplOrigin,
-) -> &'a Located<Item<'a>> {
-    let subject = bump.alloc(Located::at(
-        region,
-        Type::Named {
-            reference: group.name,
-            args: &[],
-        },
-    ));
-    let trait_ = alder_ast::TraitId(QualifiedName {
-        module: ModuleId {
-            package: alder_ast::PackageId::Builtin,
-            path: &[],
-        },
-        name: match kind {
-            alder_ast::DeriveKind::Show => "Show",
-            alder_ast::DeriveKind::Eq => "Eq",
-            alder_ast::DeriveKind::Ord => "Ord",
-            alder_ast::DeriveKind::Hash => "Hash",
-            alder_ast::DeriveKind::Json => "Json",
-        },
-    });
-    let trait_ref = alder_ast::TraitRef {
-        trait_,
-        args: bump.alloc_slice_copy(&[subject as &Located<Type<'a>>]),
-    };
-    bump.alloc(Located::at(
-        region,
-        Item {
-            visibility: Visibility::Private,
-            attributes: &[],
-            kind: ItemKind::Impl(bump.alloc(ImplDecl {
-                id: alder_ast::ImplId {
-                    module: home,
-                    origin,
-                },
-                trait_: trait_.0,
-                args: trait_ref.args,
-                trait_ref,
-                params: &[],
-                constraints: &[],
-                trait_predicates: &[],
                 projection_equalities: &[],
                 assoc_bindings: &[],
                 items: &[],
@@ -1054,7 +934,7 @@ pub(crate) fn trait_method_annotation<'a>(
             )]);
         };
         let annotation = canonicalize_type(bump, env, &variables, annotation)?;
-        params.push(parameter_annotation(bump, param.optional, annotation));
+        params.push(optional_annotation(bump, param.optional, annotation));
     }
     let Some(ret) = source.ret else {
         return Err(vec![Error::new(
@@ -1100,6 +980,7 @@ pub(crate) fn trait_method_annotation<'a>(
         }));
     Ok(bump.alloc(Annotation {
         record_overlays: &[],
+        tuple_shapes: &[],
         error_row_inclusions: &[],
         params: type_params,
         trait_predicates: bump.alloc_slice_copy(&predicates),
@@ -1217,12 +1098,11 @@ fn canonicalize_enum<'a>(
                     canonical.push(alder_ast::RecordTypeField {
                         index: field_index as u16,
                         name: field.field.value,
-                        presence: if field.optional.is_some() {
-                            alder_ast::FieldPresence::Optional
-                        } else {
-                            alder_ast::FieldPresence::Required
-                        },
-                        typ: canonicalize_type(bump, env, &variables, field.typ)?,
+                        typ: optional_annotation(
+                            bump,
+                            field.optional.is_some(),
+                            canonicalize_type(bump, env, &variables, field.typ)?,
+                        ),
                     });
                 }
                 VariantPayload::Record(bump.alloc_slice_copy(&canonical))
@@ -1286,6 +1166,7 @@ fn constructor_annotation<'a>(
     };
     bump.alloc(Annotation {
         record_overlays: &[],
+        tuple_shapes: &[],
         error_row_inclusions: &[],
         params: bump.alloc_slice_fill_iter(enum_.params.iter().map(|param| alder_ast::TypeParam {
             name: *param,
@@ -1338,6 +1219,7 @@ fn interface_constructor_annotation<'a>(
     };
     bump.alloc(Annotation {
         record_overlays: &[],
+        tuple_shapes: &[],
         error_row_inclusions: &[],
         params: enum_.params,
         trait_predicates: &[],
@@ -1543,12 +1425,12 @@ fn canonicalize_item<'a>(
     if attributes
         .iter()
         .any(|attribute| matches!(attribute, Attribute::Derive { .. }))
-        && !matches!(kind, ItemKind::Enum(_) | ItemKind::ErrorGroup(_))
+        && !matches!(kind, ItemKind::Enum(_))
     {
         return Err(vec![Error::new(
             item.region,
             ErrorKind::Attribute(AttributeError::InvalidDerive {
-                reason: "built-in derives are only available on enums and error groups",
+                reason: "built-in derives are only available on enums",
             }),
         )]);
     }
@@ -1962,6 +1844,19 @@ fn canonicalize_impl<'a>(
                         item_kind: "method",
                     }),
                 )]);
+            }
+            if method.has_default
+                && !seen_methods.contains_key(method.id.name)
+                && trait_.module != env.home
+            {
+                items.push(ImplItem::Default {
+                    method: method.id,
+                    scheme: method.annotation,
+                    symbol: bump.alloc_str(&format!(
+                        "$default${}${}",
+                        method.id.trait_.0.name, method.id.name
+                    )),
+                });
             }
         }
         Ok::<_, Vec<Error<'a>>>((items, assoc_bindings))
@@ -2407,7 +2302,7 @@ fn canonicalize_fn<'a>(
     }))
 }
 
-pub(crate) fn parameter_annotation<'a>(
+pub(crate) fn optional_annotation<'a>(
     bump: &'a Bump,
     optional: bool,
     annotation: &'a Located<Type<'a>>,
@@ -2439,7 +2334,7 @@ fn canonicalize_params<'a>(
     let mut params = Vec::with_capacity(source.len());
     for param in source {
         let annotation = match param.annotation {
-            Some(typ) => Some(parameter_annotation(
+            Some(typ) => Some(optional_annotation(
                 bump,
                 param.optional,
                 canonicalize_type(bump, env, variables, typ)?,
@@ -3550,7 +3445,7 @@ mod tests {
     }
 
     #[test]
-    fn enum_record_payload_preserves_optional_fields() {
+    fn enum_record_payload_canonicalizes_optional_fields_to_option() {
         let bump = Bump::new();
         let result = can(
             &bump,
@@ -3566,46 +3461,25 @@ mod tests {
         let alder_ast::VariantPayload::Record(fields) = enum_.variants[0].payload else {
             panic!("expected record payload");
         };
-        assert_eq!(fields[0].presence, alder_ast::FieldPresence::Required);
-        assert_eq!(fields[1].presence, alder_ast::FieldPresence::Optional);
+        let alder_ast::Type::Named { reference, args } = fields[1].typ.value else {
+            panic!("expected Option field type");
+        };
+        assert_eq!(reference.name, "Option");
+        assert_eq!(reference.module.package, alder_ast::PackageId::Builtin);
+        assert_eq!(args.len(), 1);
     }
 
     #[test]
-    fn error_groups_receive_automatic_and_explicit_derives() {
+    fn error_groups_emit_no_nominal_implementations() {
         let bump = Bump::new();
-        let result = can(
-            &bump,
-            "#[derive(Show, Eq, Ord, Hash, Json)]\nerror Failure { :later, :first(Number) }",
-        );
-        let implementations = result
-            .module
-            .items
-            .iter()
-            .filter_map(|item| match item.value.kind {
-                ItemKind::Impl(implementation) => Some(implementation),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(implementations.len(), 5);
-        assert_eq!(
-            implementations
+        let result = can(&bump, "error Failure { :later, :first(Number) }");
+        assert!(
+            result
+                .module
+                .items
                 .iter()
-                .map(|implementation| implementation.synthetic.unwrap())
-                .collect::<Vec<_>>(),
-            vec![
-                alder_ast::DeriveKind::Eq,
-                alder_ast::DeriveKind::Show,
-                alder_ast::DeriveKind::Ord,
-                alder_ast::DeriveKind::Hash,
-                alder_ast::DeriveKind::Json,
-            ]
+                .all(|item| !matches!(item.value.kind, ItemKind::Impl(_)))
         );
-        assert!(implementations.iter().all(|implementation| {
-            matches!(
-                implementation.trait_ref.args[0].value,
-                Type::Named { reference, args: [] } if reference.name == "Failure"
-            )
-        }));
     }
 
     #[test]

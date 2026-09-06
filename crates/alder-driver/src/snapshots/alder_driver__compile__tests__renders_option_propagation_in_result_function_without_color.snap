@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn read(value: Option[Number]) Result[Number] { Ok(value?) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Option[a]`, found `Result[Number, [_]]`
+   ╭─[/project/src/main.ald:1:52]
+ 1 │ fn read(value: Option[Number]) Result[Number] { Ok(value?) }
+   ·                                                    ───┬──
+   ·                                                       ╰── type requirement originates here
+   ╰────

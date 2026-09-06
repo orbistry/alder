@@ -1,0 +1,16 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "fn consume(value?: a) {}\npub fn relay(value: a) a {\n    consume(value)\n    value\n}\n"
+---
+import { $optionSome } from "alder:kernel";
+function $v_consume($a0) {
+	let $l0_value = $a0;
+	return undefined;
+}
+function $v_relay($a0) {
+	let $l1_value = $a0;
+	const $t0 = $v_consume;
+	$t0($optionSome($l1_value));
+	return $l1_value;
+}
+export { $v_relay as relay };

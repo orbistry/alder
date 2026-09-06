@@ -10,10 +10,11 @@ function $v_subtract($a0, $a1) {
 }
 function $v_answer() {
 	const $t1 = 2;
-	return (($a0) => {
+	const $t3 = ($a0) => {
 		let $l2__0 = $a0;
 		const $t2 = $v_subtract;
 		return $t2(44, $l2__0);
-	})($t1);
+	};
+	return $t3($t1);
 }
 export { $v_answer as answer };

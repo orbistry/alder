@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn consume(value?: Number) {}\nfn conflict() {\n    let nested = Some(Some(7))\n    consume(42)\n    consume(nested)\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Option[Number]`, found `Option[Option[Number]]`
+   ╭─[/project/src/main.ald:5:13]
+ 4 │     consume(42)
+ 5 │     consume(nested)
+   ·             ───┬──
+   ·                ╰── type requirement originates here
+ 6 │ }
+   ╰────

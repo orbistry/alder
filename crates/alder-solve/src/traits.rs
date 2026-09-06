@@ -93,6 +93,10 @@ pub struct TraitDatabase<'a> {
 
 #[derive(Clone, Debug)]
 pub enum CoherenceError<'a> {
+    NamedErrorGroupImpl {
+        implementation: ImplId<'a>,
+        group: QualifiedName<'a>,
+    },
     SuperclassCycle {
         traits: &'a [TraitId<'a>],
     },
@@ -134,7 +138,8 @@ impl<'a> CoherenceError<'a> {
             Self::OverlappingImpl { first, second, .. } => {
                 [first.module, second.module].into_iter().collect()
             }
-            Self::OrphanImpl { implementation, .. }
+            Self::NamedErrorGroupImpl { implementation, .. }
+            | Self::OrphanImpl { implementation, .. }
             | Self::InvalidTermination { implementation, .. }
             | Self::KindMismatch { implementation, .. }
             | Self::ProjectionCycle { implementation, .. } => {
@@ -248,6 +253,21 @@ impl<'a> TraitDatabase<'a> {
         for (trait_, instances) in &self.instances {
             for implementation in instances {
                 let trait_ref = implementation.trait_ref();
+                if matches!(
+                    implementation.id().origin,
+                    alder_ast::ImplOrigin::Source { .. }
+                ) {
+                    for argument in trait_ref.args {
+                        if let Some(group) = named_error_group_subject(&argument.value)
+                            && self.error_groups.contains_key(&group)
+                        {
+                            errors.push(CoherenceError::NamedErrorGroupImpl {
+                                implementation: implementation.id(),
+                                group,
+                            });
+                        }
+                    }
+                }
                 if let Some(header) = self.trait_(*trait_) {
                     for (index, (parameter, argument)) in
                         header.params.iter().zip(trait_ref.args).enumerate()
@@ -315,7 +335,7 @@ impl<'a> TraitDatabase<'a> {
             }
             for (index, first) in instances.iter().enumerate() {
                 for second in &instances[index + 1..] {
-                    if heads_overlap(first.trait_ref(), second.trait_ref()) {
+                    if heads_overlap(first.trait_ref(), second.trait_ref(), &self.error_groups) {
                         errors.push(CoherenceError::OverlappingImpl {
                             first: first.id(),
                             second: second.id(),
@@ -385,7 +405,12 @@ impl<'a> TraitDatabase<'a> {
                     exported_as: method.name.value,
                     scheme: method.scheme,
                     has_default: method.body.is_some(),
-                    default_symbol: method.body.is_some().then_some(method.name.value),
+                    default_symbol: method.body.is_some().then(|| {
+                        &*bump.alloc_str(&format!(
+                            "$default${}${}",
+                            method.id.trait_.0.name, method.id.name
+                        ))
+                    }),
                 }),
             })
             .collect::<Vec<_>>();
@@ -454,6 +479,21 @@ fn projection_cycles<'a>(bindings: &[AssocBinding<'a>]) -> Vec<Vec<alder_ast::As
         visit(assoc, &edges, &mut states, &mut stack, &mut cycles);
     }
     cycles.into_iter().collect()
+}
+
+fn named_error_group_subject<'a>(typ: &Type<'a>) -> Option<QualifiedName<'a>> {
+    match typ {
+        Type::Named {
+            reference,
+            args: [],
+        } => Some(*reference),
+        Type::Alias { target, .. } => match target {
+            alder_ast::AliasType::Open(typ) | alder_ast::AliasType::Filled(typ) => {
+                named_error_group_subject(&typ.value)
+            }
+        },
+        _ => None,
+    }
 }
 
 fn collect_associated_projections<'a>(
@@ -689,15 +729,25 @@ enum HeadType<'a> {
     Var(usize),
     Con(QualifiedName<'a>),
     App(Box<Self>, Vec<Self>),
+    Section(QualifiedName<'a>, Vec<Option<Self>>),
     Projection(TraitId<'a>, &'a str, Vec<Self>),
     Fn(Vec<Self>, Box<Self>),
     Unit,
     Tuple(Vec<Self>),
-    Record(Vec<(&'a str, Self)>),
-    ErrorRow(Vec<(&'a str, Vec<Self>)>),
+    Record(Vec<(&'a str, Self)>, Option<Box<Self>>),
+    ErrorRow(Vec<(&'a str, Vec<Self>)>, Option<Box<Self>>),
 }
 
-fn heads_overlap<'a>(first: TraitRef<'a>, second: TraitRef<'a>) -> bool {
+struct HeadSubstitutions<'a> {
+    bindings: BTreeMap<usize, HeadType<'a>>,
+    next: usize,
+}
+
+fn heads_overlap<'a>(
+    first: TraitRef<'a>,
+    second: TraitRef<'a>,
+    groups: &BTreeMap<QualifiedName<'a>, &'a [ErrorTagType<'a>]>,
+) -> bool {
     if first.args.len() != second.args.len() {
         return false;
     }
@@ -707,24 +757,104 @@ fn heads_overlap<'a>(first: TraitRef<'a>, second: TraitRef<'a>) -> bool {
     let first = first
         .args
         .iter()
-        .map(|typ| head_type(typ, &mut first_vars, &mut next))
+        .map(|typ| head_type(typ, &mut first_vars, &mut next, groups))
         .collect::<Vec<_>>();
     let second = second
         .args
         .iter()
-        .map(|typ| head_type(typ, &mut second_vars, &mut next))
+        .map(|typ| head_type(typ, &mut second_vars, &mut next, groups))
         .collect::<Vec<_>>();
-    let mut substitutions = BTreeMap::new();
+    let mut substitutions = HeadSubstitutions {
+        bindings: BTreeMap::new(),
+        next,
+    };
+    if !first
+        .iter()
+        .zip(&second)
+        .all(|(left, right)| bind_explicit_sections(left, right, &mut substitutions))
+    {
+        return false;
+    }
     first
         .into_iter()
         .zip(second)
         .all(|(left, right)| unify_head(left, right, &mut substitutions))
 }
 
+// Collect supplied constructor sections before defaulting an application to
+// the leftmost section. A later trait argument may fix a non-leftmost hole.
+fn bind_explicit_sections<'a>(
+    left: &HeadType<'a>,
+    right: &HeadType<'a>,
+    substitutions: &mut HeadSubstitutions<'a>,
+) -> bool {
+    match (left, right) {
+        (HeadType::Var(_), HeadType::Section(..))
+        | (HeadType::Section(..), HeadType::Var(_))
+        | (HeadType::Var(_), HeadType::Var(_)) => {
+            unify_head(left.clone(), right.clone(), substitutions)
+        }
+        (HeadType::App(left_head, left_args), HeadType::App(right_head, right_args))
+            if left_head == right_head && left_args.len() == right_args.len() =>
+        {
+            left_args
+                .iter()
+                .zip(right_args)
+                .all(|(left, right)| bind_explicit_sections(left, right, substitutions))
+        }
+        (HeadType::Tuple(left), HeadType::Tuple(right)) if left.len() == right.len() => left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| bind_explicit_sections(left, right, substitutions)),
+        (HeadType::Fn(left, left_ret), HeadType::Fn(right, right_ret))
+            if left.len() == right.len() =>
+        {
+            left.iter()
+                .zip(right)
+                .all(|(left, right)| bind_explicit_sections(left, right, substitutions))
+                && bind_explicit_sections(left_ret, right_ret, substitutions)
+        }
+        (HeadType::Record(left, _), HeadType::Record(right, _)) => {
+            left.iter().all(|(name, typ)| {
+                right
+                    .iter()
+                    .find(|(other, _)| name == other)
+                    .is_none_or(|(_, other)| bind_explicit_sections(typ, other, substitutions))
+            })
+        }
+        (HeadType::ErrorRow(left, _), HeadType::ErrorRow(right, _)) => {
+            left.iter().all(|(name, args)| {
+                right
+                    .iter()
+                    .find(|(other, _)| name == other)
+                    .is_none_or(|(_, other)| {
+                        args.len() != other.len()
+                            || args.iter().zip(other).all(|(left, right)| {
+                                bind_explicit_sections(left, right, substitutions)
+                            })
+                    })
+            })
+        }
+        (HeadType::Section(left, left_slots), HeadType::Section(right, right_slots))
+            if left == right && left_slots.len() == right_slots.len() =>
+        {
+            left_slots
+                .iter()
+                .zip(right_slots)
+                .all(|(left, right)| match (left, right) {
+                    (Some(left), Some(right)) => bind_explicit_sections(left, right, substitutions),
+                    _ => true,
+                })
+        }
+        _ => true,
+    }
+}
+
 fn head_type<'a>(
     typ: &'a Located<Type<'a>>,
     variables: &mut BTreeMap<&'a str, usize>,
     next: &mut usize,
+    groups: &BTreeMap<QualifiedName<'a>, &'a [ErrorTagType<'a>]>,
 ) -> HeadType<'a> {
     let apply = |head, args: &'a [&'a Located<Type<'a>>], variables: &mut _, next: &mut _| {
         if args.is_empty() {
@@ -733,7 +863,7 @@ fn head_type<'a>(
             HeadType::App(
                 Box::new(head),
                 args.iter()
-                    .map(|argument| head_type(argument, variables, next))
+                    .map(|argument| head_type(argument, variables, next, groups))
                     .collect(),
             )
         }
@@ -747,18 +877,35 @@ fn head_type<'a>(
             });
             apply(HeadType::Var(variable), args, variables, next)
         }
+        Type::Named { reference, args }
+            if reference.module.package == PackageId::Builtin
+                && reference.name == "Result"
+                && args.len() == 2 =>
+        {
+            HeadType::App(
+                Box::new(HeadType::Con(*reference)),
+                vec![
+                    head_type(args[0], variables, next, groups),
+                    error_head_type(args[1], variables, next, groups),
+                ],
+            )
+        }
         Type::Named { reference, args } => apply(HeadType::Con(*reference), args, variables, next),
-        Type::Partial { constructor, slots } => HeadType::App(
-            Box::new(HeadType::Con(*constructor)),
+        Type::Partial { constructor, slots } => HeadType::Section(
+            *constructor,
             slots
                 .iter()
-                .map(|slot| match slot {
-                    TypeSlot::Hole(_) => {
-                        let id = *next;
-                        *next += 1;
-                        HeadType::Var(id)
+                .enumerate()
+                .map(|(index, slot)| match slot {
+                    TypeSlot::Hole(_) => None,
+                    TypeSlot::Fixed(typ)
+                        if constructor.module.package == PackageId::Builtin
+                            && constructor.name == "Result"
+                            && index == 1 =>
+                    {
+                        Some(error_head_type(typ, variables, next, groups))
                     }
-                    TypeSlot::Fixed(typ) => head_type(typ, variables, next),
+                    TypeSlot::Fixed(typ) => Some(head_type(typ, variables, next, groups)),
                 })
                 .collect(),
         ),
@@ -769,74 +916,138 @@ fn head_type<'a>(
                 .trait_ref
                 .args
                 .iter()
-                .map(|argument| head_type(argument, variables, next))
+                .map(|argument| head_type(argument, variables, next, groups))
                 .collect(),
         ),
         Type::Fn { params, ret } => HeadType::Fn(
             params
                 .iter()
-                .map(|param| head_type(param, variables, next))
+                .map(|param| head_type(param, variables, next, groups))
                 .collect(),
-            Box::new(head_type(ret, variables, next)),
+            Box::new(head_type(ret, variables, next, groups)),
         ),
         Type::Unit => HeadType::Unit,
         Type::Tuple(items) => HeadType::Tuple(
             items
                 .iter()
-                .map(|item| head_type(item, variables, next))
+                .map(|item| head_type(item, variables, next, groups))
                 .collect(),
         ),
-        Type::Record { fields, .. } => HeadType::Record(
+        Type::Record { fields, ext } => HeadType::Record(
             fields
                 .iter()
-                .map(|field| (field.name, head_type(field.typ, variables, next)))
+                .map(|field| (field.name, head_type(field.typ, variables, next, groups)))
                 .collect(),
+            match ext {
+                alder_ast::RowExtension::Closed => None,
+                alder_ast::RowExtension::Open(name) => {
+                    let id = *variables.entry(name).or_insert_with(|| {
+                        let id = *next;
+                        *next += 1;
+                        id
+                    });
+                    Some(Box::new(HeadType::Var(id)))
+                }
+            },
         ),
-        Type::ErrorRow { tags, .. } => HeadType::ErrorRow(
+        Type::ErrorRow { tags, ext } => HeadType::ErrorRow(
             tags.iter()
                 .map(|tag| {
                     (
                         tag.name,
                         tag.args
                             .iter()
-                            .map(|arg| head_type(arg, variables, next))
+                            .map(|arg| head_type(arg, variables, next, groups))
                             .collect(),
                     )
                 })
                 .collect(),
+            match ext {
+                alder_ast::RowExtension::Closed => None,
+                alder_ast::RowExtension::Open(name) => {
+                    let id = *variables.entry(name).or_insert_with(|| {
+                        let id = *next;
+                        *next += 1;
+                        id
+                    });
+                    Some(Box::new(HeadType::Var(id)))
+                }
+            },
         ),
         Type::Alias { target, .. } => match target {
             alder_ast::AliasType::Open(target) | alder_ast::AliasType::Filled(target) => {
-                head_type(target, variables, next)
+                head_type(target, variables, next, groups)
             }
         },
     }
 }
 
-fn prune_head<'a>(
-    typ: HeadType<'a>,
-    substitutions: &BTreeMap<usize, HeadType<'a>>,
+fn error_head_type<'a>(
+    typ: &'a Located<Type<'a>>,
+    variables: &mut BTreeMap<&'a str, usize>,
+    next: &mut usize,
+    groups: &BTreeMap<QualifiedName<'a>, &'a [ErrorTagType<'a>]>,
 ) -> HeadType<'a> {
+    if let Some(name) = named_error_group_subject(&typ.value)
+        && let Some(tags) = groups.get(&name)
+    {
+        return HeadType::ErrorRow(
+            tags.iter()
+                .map(|tag| {
+                    (
+                        tag.name,
+                        tag.args
+                            .iter()
+                            .map(|arg| head_type(arg, variables, next, groups))
+                            .collect(),
+                    )
+                })
+                .collect(),
+            None,
+        );
+    }
+    head_type(typ, variables, next, groups)
+}
+
+fn prune_head<'a>(typ: HeadType<'a>, substitutions: &HeadSubstitutions<'a>) -> HeadType<'a> {
     match typ {
         HeadType::Var(id) => substitutions
+            .bindings
             .get(&id)
             .cloned()
             .map_or(HeadType::Var(id), |bound| prune_head(bound, substitutions)),
+        HeadType::App(head, args) => {
+            let head = prune_head(*head, substitutions);
+            if let HeadType::Section(constructor, slots) = &head
+                && slots.iter().filter(|slot| slot.is_none()).count() == args.len()
+            {
+                let mut args = args.into_iter();
+                let filled = slots
+                    .iter()
+                    .map(|slot| {
+                        slot.clone()
+                            .unwrap_or_else(|| args.next().expect("section arity checked"))
+                    })
+                    .collect();
+                return HeadType::App(Box::new(HeadType::Con(*constructor)), filled);
+            }
+            HeadType::App(Box::new(head), args)
+        }
         other => other,
     }
 }
 
-fn occurs_head(
-    id: usize,
-    typ: &HeadType<'_>,
-    substitutions: &BTreeMap<usize, HeadType<'_>>,
-) -> bool {
+fn occurs_head(id: usize, typ: &HeadType<'_>, substitutions: &HeadSubstitutions<'_>) -> bool {
     match prune_head(typ.clone(), substitutions) {
         HeadType::Var(other) => id == other,
         HeadType::App(head, args) => {
             occurs_head(id, &head, substitutions)
                 || args.iter().any(|arg| occurs_head(id, arg, substitutions))
         }
+        HeadType::Section(_, slots) => slots
+            .iter()
+            .flatten()
+            .any(|typ| occurs_head(id, typ, substitutions)),
         HeadType::Projection(_, _, args) | HeadType::Tuple(args) => {
             args.iter().any(|arg| occurs_head(id, arg, substitutions))
         }
@@ -844,12 +1055,21 @@ fn occurs_head(
             args.iter().any(|arg| occurs_head(id, arg, substitutions))
                 || occurs_head(id, &ret, substitutions)
         }
-        HeadType::Record(fields) => fields
-            .iter()
-            .any(|(_, typ)| occurs_head(id, typ, substitutions)),
-        HeadType::ErrorRow(tags) => tags
-            .iter()
-            .any(|(_, args)| args.iter().any(|arg| occurs_head(id, arg, substitutions))),
+        HeadType::Record(fields, tail) => {
+            fields
+                .iter()
+                .any(|(_, typ)| occurs_head(id, typ, substitutions))
+                || tail
+                    .as_ref()
+                    .is_some_and(|tail| occurs_head(id, tail, substitutions))
+        }
+        HeadType::ErrorRow(tags, tail) => {
+            tags.iter()
+                .any(|(_, args)| args.iter().any(|arg| occurs_head(id, arg, substitutions)))
+                || tail
+                    .as_ref()
+                    .is_some_and(|tail| occurs_head(id, tail, substitutions))
+        }
         HeadType::Con(_) | HeadType::Unit => false,
     }
 }
@@ -857,7 +1077,7 @@ fn occurs_head(
 fn unify_head<'a>(
     left: HeadType<'a>,
     right: HeadType<'a>,
-    substitutions: &mut BTreeMap<usize, HeadType<'a>>,
+    substitutions: &mut HeadSubstitutions<'a>,
 ) -> bool {
     let left = prune_head(left, substitutions);
     let right = prune_head(right, substitutions);
@@ -867,13 +1087,47 @@ fn unify_head<'a>(
             if occurs_head(id, &typ, substitutions) {
                 false
             } else {
-                substitutions.insert(id, typ);
+                substitutions.bindings.insert(id, typ);
                 true
             }
         }
         (HeadType::Con(left), HeadType::Con(right)) => left == right,
         (HeadType::Unit, HeadType::Unit) => true,
+        (HeadType::Section(left, left_slots), HeadType::Section(right, right_slots)) => {
+            left == right
+                && left_slots.len() == right_slots.len()
+                && left_slots
+                    .into_iter()
+                    .zip(right_slots)
+                    .all(|(left, right)| match (left, right) {
+                        (None, None) => true,
+                        (Some(left), Some(right)) => unify_head(left, right, substitutions),
+                        _ => false,
+                    })
+        }
+        (HeadType::Con(left), HeadType::Section(right, slots))
+        | (HeadType::Section(right, slots), HeadType::Con(left)) => {
+            left == right && slots.iter().all(Option::is_none)
+        }
         (HeadType::App(left_head, left_args), HeadType::App(right_head, right_args)) => {
+            if left_args.len() < right_args.len() {
+                return unify_head_section(
+                    *left_head,
+                    left_args,
+                    *right_head,
+                    right_args,
+                    substitutions,
+                );
+            }
+            if right_args.len() < left_args.len() {
+                return unify_head_section(
+                    *right_head,
+                    right_args,
+                    *left_head,
+                    left_args,
+                    substitutions,
+                );
+            }
             left_args.len() == right_args.len()
                 && unify_head(*left_head, *right_head, substitutions)
                 && left_args
@@ -908,30 +1162,159 @@ fn unify_head<'a>(
                     .zip(right)
                     .all(|(left, right)| unify_head(left, right, substitutions))
         }
-        (HeadType::Record(left), HeadType::Record(right)) => {
-            left.len() == right.len()
-                && left
-                    .into_iter()
-                    .zip(right)
-                    .all(|((left_name, left), (right_name, right))| {
-                        left_name == right_name && unify_head(left, right, substitutions)
-                    })
+        (HeadType::Record(left, left_tail), HeadType::Record(right, right_tail)) => {
+            unify_head_record_rows(left, left_tail, right, right_tail, substitutions)
         }
-        (HeadType::ErrorRow(left), HeadType::ErrorRow(right)) => {
-            left.len() == right.len()
-                && left
-                    .into_iter()
-                    .zip(right)
-                    .all(|((left_name, left), (right_name, right))| {
-                        left_name == right_name
-                            && left.len() == right.len()
-                            && left
-                                .into_iter()
-                                .zip(right)
-                                .all(|(left, right)| unify_head(left, right, substitutions))
-                    })
+        (HeadType::ErrorRow(left, left_tail), HeadType::ErrorRow(right, right_tail)) => {
+            unify_head_error_rows(left, left_tail, right, right_tail, substitutions)
         }
         _ => false,
+    }
+}
+
+fn unify_head_section<'a>(
+    pattern_head: HeadType<'a>,
+    pattern_args: Vec<HeadType<'a>>,
+    actual_head: HeadType<'a>,
+    actual_args: Vec<HeadType<'a>>,
+    substitutions: &mut HeadSubstitutions<'a>,
+) -> bool {
+    let HeadType::Var(id) = prune_head(pattern_head, substitutions) else {
+        return false;
+    };
+    let HeadType::Con(constructor) = prune_head(actual_head, substitutions) else {
+        return false;
+    };
+    let count = pattern_args.len();
+    let slots = actual_args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            if index < count {
+                None
+            } else {
+                Some(arg.clone())
+            }
+        })
+        .collect();
+    unify_head(
+        HeadType::Var(id),
+        HeadType::Section(constructor, slots),
+        substitutions,
+    ) && pattern_args
+        .into_iter()
+        .zip(actual_args)
+        .all(|(left, right)| unify_head(left, right, substitutions))
+}
+
+fn unify_head_record_rows<'a>(
+    left: Vec<(&'a str, HeadType<'a>)>,
+    left_tail: Option<Box<HeadType<'a>>>,
+    right: Vec<(&'a str, HeadType<'a>)>,
+    right_tail: Option<Box<HeadType<'a>>>,
+    substitutions: &mut HeadSubstitutions<'a>,
+) -> bool {
+    let mut right = right.into_iter().collect::<BTreeMap<_, _>>();
+    let mut left_only = Vec::new();
+    for (name, typ) in left {
+        if let Some(other) = right.remove(name) {
+            if !unify_head(typ, other, substitutions) {
+                return false;
+            }
+        } else {
+            left_only.push((name, typ));
+        }
+    }
+    let right_only = right.into_iter().collect::<Vec<_>>();
+    match (left_tail, right_tail) {
+        (None, None) => left_only.is_empty() && right_only.is_empty(),
+        (Some(tail), None) => {
+            left_only.is_empty()
+                && unify_head(*tail, HeadType::Record(right_only, None), substitutions)
+        }
+        (None, Some(tail)) => {
+            right_only.is_empty()
+                && unify_head(*tail, HeadType::Record(left_only, None), substitutions)
+        }
+        (Some(left), Some(right)) => {
+            let left = prune_head(*left, substitutions);
+            let right = prune_head(*right, substitutions);
+            if left_only.is_empty() && right_only.is_empty() {
+                return unify_head(left, right, substitutions);
+            }
+            if left == right {
+                return false;
+            }
+            let shared = HeadType::Var(substitutions.next);
+            substitutions.next += 1;
+            unify_head(
+                left,
+                HeadType::Record(right_only, Some(Box::new(shared.clone()))),
+                substitutions,
+            ) && unify_head(
+                right,
+                HeadType::Record(left_only, Some(Box::new(shared))),
+                substitutions,
+            )
+        }
+    }
+}
+
+fn unify_head_error_rows<'a>(
+    left: Vec<(&'a str, Vec<HeadType<'a>>)>,
+    left_tail: Option<Box<HeadType<'a>>>,
+    right: Vec<(&'a str, Vec<HeadType<'a>>)>,
+    right_tail: Option<Box<HeadType<'a>>>,
+    substitutions: &mut HeadSubstitutions<'a>,
+) -> bool {
+    let mut right = right.into_iter().collect::<BTreeMap<_, _>>();
+    let mut left_only = Vec::new();
+    for (name, payload) in left {
+        if let Some(other) = right.remove(name) {
+            if payload.len() != other.len()
+                || !payload
+                    .into_iter()
+                    .zip(other)
+                    .all(|(left, right)| unify_head(left, right, substitutions))
+            {
+                return false;
+            }
+        } else {
+            left_only.push((name, payload));
+        }
+    }
+    let right_only = right.into_iter().collect::<Vec<_>>();
+    match (left_tail, right_tail) {
+        (None, None) => left_only.is_empty() && right_only.is_empty(),
+        (Some(tail), None) => {
+            left_only.is_empty()
+                && unify_head(*tail, HeadType::ErrorRow(right_only, None), substitutions)
+        }
+        (None, Some(tail)) => {
+            right_only.is_empty()
+                && unify_head(*tail, HeadType::ErrorRow(left_only, None), substitutions)
+        }
+        (Some(left), Some(right)) => {
+            let left = prune_head(*left, substitutions);
+            let right = prune_head(*right, substitutions);
+            if left_only.is_empty() && right_only.is_empty() {
+                return unify_head(left, right, substitutions);
+            }
+            if left == right {
+                return false;
+            }
+            let shared = HeadType::Var(substitutions.next);
+            substitutions.next += 1;
+            unify_head(
+                left,
+                HeadType::ErrorRow(right_only, Some(Box::new(shared.clone()))),
+                substitutions,
+            ) && unify_head(
+                right,
+                HeadType::ErrorRow(left_only, Some(Box::new(shared))),
+                substitutions,
+            )
+        }
     }
 }
 
@@ -1044,7 +1427,7 @@ mod tests {
         for (trait_name, instances) in [
             ("Show", 8),
             ("Eq", 9),
-            ("Ord", 3),
+            ("Ord", 5),
             ("Hash", 8),
             ("Json", 8),
             ("Num", 2),

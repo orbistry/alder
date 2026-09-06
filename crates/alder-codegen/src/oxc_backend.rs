@@ -1,6 +1,9 @@
 //! Direct canonical-AST to Oxc-AST lowering.
 
-use std::{cell::RefCell, collections::BTreeSet};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use alder_ast::{Expr, ItemKind, Module, ModuleId, Pattern, RecordField, ValueRef, Visibility};
 use alder_region::Located;
@@ -100,15 +103,22 @@ struct Emitter<'src, 'js> {
     imports: BTreeSet<Import>,
     kernel: BTreeSet<&'static str>,
     loop_results: Vec<(String, Option<String>)>,
+    self_dictionary: Option<String>,
+    pattern_captures: Option<PatternCaptures>,
     solved: Option<&'src SolveOutput<'src>>,
 }
 
-#[derive(Clone)]
+struct PatternCaptures {
+    root: String,
+    paths: BTreeMap<Vec<PatternStep>, String>,
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum PatternStep {
     Field(String),
-    OptionalField(String),
     OptionPayload,
     Index(usize),
+    Rest(usize),
 }
 
 pub(crate) fn emit_module_ast(
@@ -129,6 +139,8 @@ pub(crate) fn emit_module_ast(
             imports: BTreeSet::new(),
             kernel: BTreeSet::new(),
             loop_results: Vec::new(),
+            self_dictionary: None,
+            pattern_captures: None,
             solved,
         };
         match emitter.module(module, options) {
@@ -150,6 +162,101 @@ pub(crate) fn emit_module_ast(
 }
 
 impl<'src, 'js> Emitter<'src, 'js> {
+    fn ordered_implementations(
+        &self,
+        module: &Module<'src>,
+    ) -> Result<Vec<&'src Located<alder_ast::Item<'src>>>, Error> {
+        let implementations = module
+            .items
+            .iter()
+            .copied()
+            .filter_map(|item| match &item.value.kind {
+                ItemKind::Impl(implementation) => Some((item, *implementation)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let mut dependencies = Vec::new();
+        for (_, implementation) in &implementations {
+            let mut required = BTreeSet::new();
+            let mut pending = self
+                .solved
+                .into_iter()
+                .flat_map(|solved| &solved.impl_superclasses)
+                .filter_map(|((candidate, _), evidence)| {
+                    (*candidate == implementation.id).then_some(evidence)
+                })
+                .collect::<Vec<_>>();
+            while let Some(evidence) = pending.pop() {
+                match evidence {
+                    Evidence::Impl {
+                        impl_id, arguments, ..
+                    } => {
+                        if implementations
+                            .iter()
+                            .any(|(_, local)| local.id == *impl_id)
+                        {
+                            required.insert(*impl_id);
+                        }
+                        pending.extend(arguments);
+                    }
+                    Evidence::IntrinsicContainer { arguments, .. } => pending.extend(arguments),
+                    Evidence::StructuralEq { fields, .. } => pending.extend(fields),
+                    Evidence::StructuralError { tags, .. } => {
+                        pending.extend(tags.iter().flat_map(|(_, fields)| fields));
+                    }
+                    Evidence::Param(_)
+                    | Evidence::ParamSuper { .. }
+                    | Evidence::ParamSuperPath { .. }
+                    | Evidence::SelfDictionary
+                    | Evidence::Super(_)
+                    | Evidence::SuperPath(_)
+                    | Evidence::Intrinsic(_) => {}
+                }
+            }
+            // Unsolved AST snapshot lowering synthesizes Ord's Eq superclass.
+            if implementation.synthetic == Some(alder_ast::DeriveKind::Ord)
+                && !self.solved.is_some_and(|solved| {
+                    solved
+                        .impl_superclasses
+                        .contains_key(&(implementation.id, 0))
+                })
+                && let Some((_, equality)) = implementations.iter().find(|(_, candidate)| {
+                    candidate.synthetic == Some(alder_ast::DeriveKind::Eq)
+                        && candidate.id.origin == implementation.id.origin
+                })
+            {
+                required.insert(equality.id);
+            }
+            dependencies.push(required);
+        }
+        let mut ordered = Vec::new();
+        let mut emitted = BTreeSet::new();
+        while ordered.len() < implementations.len() {
+            let Some(index) =
+                implementations
+                    .iter()
+                    .enumerate()
+                    .position(|(index, (_, implementation))| {
+                        !emitted.contains(&implementation.id)
+                            && dependencies[index].is_subset(&emitted)
+                    })
+            else {
+                let (item, _) = implementations
+                    .iter()
+                    .find(|(_, implementation)| !emitted.contains(&implementation.id))
+                    .unwrap();
+                return Err(Error {
+                    region: item.region,
+                    message: "trait dictionaries have cyclic initialization dependencies",
+                });
+            };
+            let (item, implementation) = implementations[index];
+            emitted.insert(implementation.id);
+            ordered.push(item);
+        }
+        Ok(ordered)
+    }
+
     fn module(
         mut self,
         module: &Module<'src>,
@@ -159,19 +266,16 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let mut declarations = self.js.vec();
         let mut exports = Vec::new();
 
-        let is_synthetic_eq = |item: &&Located<alder_ast::Item<'src>>| {
-            matches!(
-                &item.value.kind,
-                ItemKind::Impl(implementation)
-                    if implementation.synthetic == Some(alder_ast::DeriveKind::Eq)
-            )
-        };
-        let ordered_items = module.items.iter().copied().filter(is_synthetic_eq).chain(
+        // Dictionary construction has no user effects. Finish it before source
+        // initializers can call functions or capture first-class trait methods.
+        // Factory dependencies participate too: constructing a superclass may
+        // call a factory whose own superclass reads a local singleton.
+        let ordered_items = self.ordered_implementations(module)?.into_iter().chain(
             module
                 .items
                 .iter()
                 .copied()
-                .filter(|item| !is_synthetic_eq(item)),
+                .filter(|item| !matches!(item.value.kind, ItemKind::Impl(_))),
         );
         for item in ordered_items {
             let public = matches!(item.value.visibility, Visibility::Public(_));
@@ -616,6 +720,31 @@ impl<'src, 'js> Emitter<'src, 'js> {
             }
         } else {
             for item in implementation.items {
+                if let alder_ast::ImplItem::Default {
+                    method,
+                    scheme,
+                    symbol,
+                } = item
+                {
+                    let alder_ast::Type::Fn { params, .. } = scheme.typ.value else {
+                        unreachable!("default methods have function signatures")
+                    };
+                    let helper = self.value_import(
+                        alder_ast::QualifiedName {
+                            module: method.trait_.0.module,
+                            name: symbol,
+                        },
+                        (*symbol).to_owned(),
+                    );
+                    methods.push((
+                        *method,
+                        params.len(),
+                        scheme.trait_predicates.len(),
+                        helper,
+                        false,
+                    ));
+                    continue;
+                }
                 let alder_ast::ImplItem::Fn(method) = item else {
                     continue;
                 };
@@ -911,23 +1040,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 match &item.value.kind {
                     ItemKind::Enum(enum_) if enum_.name == reference => {
                         for variant in enum_.variants {
-                            let (record, fields, optional) = match variant.payload {
-                                alder_ast::VariantPayload::Unit => (false, Vec::new(), Vec::new()),
+                            let (record, fields) = match variant.payload {
+                                alder_ast::VariantPayload::Unit => (false, Vec::new()),
                                 alder_ast::VariantPayload::Tuple(types) => (
                                     false,
                                     (0..types.len()).map(|index| format!("_{index}")).collect(),
-                                    Vec::new(),
                                 ),
                                 alder_ast::VariantPayload::Record(fields) => (
                                     true,
                                     fields.iter().map(|field| field.name.to_owned()).collect(),
-                                    fields
-                                        .iter()
-                                        .filter(|field| {
-                                            field.presence == alder_ast::FieldPresence::Optional
-                                        })
-                                        .map(|field| field.name.to_owned())
-                                        .collect(),
                                 ),
                             };
                             let dictionaries = self.derived_field_dictionaries(
@@ -938,24 +1059,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                             );
                             variants.push(self.js.property(
                                 variant.name.variant,
-                                self.variant_shape(record, &fields, &optional, dictionaries),
-                            ));
-                        }
-                    }
-                    ItemKind::ErrorGroup(group) if group.name == reference => {
-                        for tag in group.tags {
-                            let fields = (0..tag.args.len())
-                                .map(|index| format!("_{index}"))
-                                .collect::<Vec<_>>();
-                            let dictionaries = self.derived_field_dictionaries(
-                                implementation,
-                                tag.index,
-                                fields.len(),
-                                dictionary,
-                            );
-                            variants.push(self.js.property(
-                                &format!(":{}", tag.name),
-                                self.variant_shape(false, &fields, &[], dictionaries),
+                                self.variant_shape(record, &fields, dictionaries),
                             ));
                         }
                     }
@@ -970,7 +1074,6 @@ impl<'src, 'js> Emitter<'src, 'js> {
         &self,
         record: bool,
         fields: &[String],
-        optional: &[String],
         dictionaries: Vec<Expression<'js>>,
     ) -> Expression<'js> {
         let mut properties = self.js.vec();
@@ -980,13 +1083,6 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 "fields",
                 self.js
                     .array(fields.iter().map(|field| self.js.string(field))),
-            ),
-        );
-        properties.push(
-            self.js.property(
-                "optional",
-                self.js
-                    .array(optional.iter().map(|field| self.js.string(field))),
             ),
         );
         properties.push(
@@ -1017,22 +1113,19 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 })
             })
             .collect::<Vec<_>>();
-        evidence
+        // Recursive references can occur inside container and structural
+        // evidence, not just at the field's root. Keep the emitted dictionary
+        // binding in scope throughout recursive evidence lowering.
+        let previous = self.self_dictionary.replace(dictionary.to_owned());
+        let dictionaries = evidence
             .iter()
             .map(|evidence| match evidence {
-                Some(Evidence::SelfDictionary) => self.js.identifier(dictionary),
-                Some(Evidence::Super(index)) => self
-                    .js
-                    .member(self.js.identifier(dictionary), &format!("$super{index}")),
-                Some(Evidence::SuperPath(path)) => path
-                    .iter()
-                    .fold(self.js.identifier(dictionary), |dictionary, slot| {
-                        self.js.member(dictionary, &format!("$super{slot}"))
-                    }),
                 Some(evidence) => self.evidence(evidence),
                 None => self.js.undefined(),
             })
-            .collect()
+            .collect();
+        self.self_dictionary = previous;
+        dictionaries
     }
 
     fn derived_shaped_binary_method(
@@ -1047,12 +1140,22 @@ impl<'src, 'js> Emitter<'src, 'js> {
         self.kernel.insert(kernel);
         let args = vec!["$a0".to_owned(), "$a1".to_owned()];
         let shape = self.derived_variant_shape(module, implementation, dictionary);
+        let type_name = implementation
+            .trait_ref
+            .args
+            .first()
+            .and_then(|subject| match subject.value {
+                alder_ast::Type::Named { reference, .. } => Some(qualified_key(reference)),
+                _ => None,
+            })
+            .expect("derived equality has a nominal subject");
         let call = self.js.call(
             self.js.identifier(kernel),
             [
                 self.js.identifier(&args[0]),
                 self.js.identifier(&args[1]),
                 shape,
+                self.js.string(&type_name),
             ],
         );
         let mut method_body = self.js.vec();
@@ -1219,11 +1322,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     expr: self.js.array(values),
                 }
             }
-            Expr::Record(fields) => self.record(fields, None)?,
+            Expr::Record(fields) => self.record(fields, None, node.region)?,
             Expr::RecordConstructor {
                 constructor,
                 fields,
-            } => self.record(fields, Some(*constructor))?,
+            } => self.record(fields, Some(*constructor), node.region)?,
             Expr::Call {
                 use_id,
                 function,
@@ -1231,18 +1334,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             } => self.call(*use_id, function, arguments, self.js.vec(), None)?,
             Expr::Access { record, field } => {
                 let record = self.expr(record)?;
-                let expr = if self
-                    .solved
-                    .is_some_and(|solved| solved.optional_accesses.contains(&node.region))
-                {
-                    self.kernel.insert("$optionalField");
-                    self.js.call(
-                        self.js.identifier("$optionalField"),
-                        [record.expr, self.js.string(field.value)],
-                    )
-                } else {
-                    self.js.member(record.expr, field.value)
-                };
+                let expr = self.js.member(record.expr, field.value);
                 Value {
                     prefix: record.prefix,
                     expr,
@@ -1274,7 +1366,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             }
             Expr::Try(expression) => {
                 let value = self.expr(expression)?;
-                self.try_value(value)
+                self.try_value(value, node.region)
             }
             Expr::Pin(expression) => self.expr(expression)?,
             Expr::State(_) => {
@@ -1440,8 +1532,26 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 .iter()
                 .map(|dictionary| self.evidence(dictionary)),
         );
-        call_arguments.extend(leading);
-        call_arguments.extend(arguments);
+        for (index, mut argument) in leading.into_iter().chain(arguments).enumerate() {
+            let depth = self
+                .solved
+                .and_then(|solved| solved.argument_lifts.get(&(use_id, index)))
+                .copied()
+                .unwrap_or_default();
+            for _ in 0..depth {
+                self.kernel.insert("$optionSome");
+                argument = self.js.call(self.js.identifier("$optionSome"), [argument]);
+            }
+            call_arguments.push(argument);
+        }
+        let omitted = self
+            .solved
+            .and_then(|solved| solved.omitted_arguments.get(&use_id))
+            .copied()
+            .unwrap_or_default();
+        for _ in 0..omitted {
+            call_arguments.push(self.js.builder.expression_null_literal(oxc_span::SPAN));
+        }
         Ok(Value {
             prefix,
             expr: self.js.call(function, call_arguments),
@@ -1452,9 +1562,21 @@ impl<'src, 'js> Emitter<'src, 'js> {
         &mut self,
         fields: &[RecordField<'src>],
         constructor: Option<alder_ast::ConstructorRef<'src>>,
+        region: alder_region::Region,
     ) -> Result<Value<'js>, Error> {
         let mut prefix = self.js.vec();
         let mut properties: ArenaVec<'js, ObjectPropertyKind<'js>> = self.js.vec();
+        if let Some(defaults) = self
+            .solved
+            .and_then(|solved| solved.omitted_record_fields.get(&region))
+        {
+            for name in defaults {
+                properties.push(self.js.property(
+                    name,
+                    self.js.builder.expression_null_literal(oxc_span::SPAN),
+                ));
+            }
+        }
         if let Some(constructor) = constructor {
             properties.push(
                 self.js
@@ -1474,6 +1596,19 @@ impl<'src, 'js> Emitter<'src, 'js> {
         for (index, (field, value)) in values.into_iter().enumerate() {
             prefix.extend(value.prefix);
             let mut expression = value.expr;
+            if let RecordField::Field { name, .. } = field {
+                let depth = self
+                    .solved
+                    .and_then(|solved| solved.field_lifts.get(&name.region))
+                    .copied()
+                    .unwrap_or_default();
+                for _ in 0..depth {
+                    self.kernel.insert("$optionSome");
+                    expression = self
+                        .js
+                        .call(self.js.identifier("$optionSome"), [expression]);
+                }
+            }
             if last_setup.is_some_and(|last| index < last) {
                 // A later operand's setup must not run before this property is
                 // evaluated. Spreads also need a shallow copy here: retaining
@@ -1548,7 +1683,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let mut prefix = left.prefix;
         let left = self.materialize(left.expr, &mut prefix);
         if op == alder_ast::BinOp::Pipe {
-            return self.pipe_destination(right, left, prefix);
+            return self.pipe_destination(use_id, right, left, prefix);
         }
         if matches!(
             op,
@@ -1700,6 +1835,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
 
     fn pipe_destination(
         &mut self,
+        pipe_use_id: alder_ast::UseId,
         destination: &Located<Expr<'src>>,
         leading: Expression<'js>,
         prefix: ArenaVec<'js, Statement<'js>>,
@@ -1711,22 +1847,14 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 arguments,
             } => self.call(use_id, function, arguments, prefix, Some(leading)),
             Expr::Await(inner) => {
-                let value = self.pipe_destination(inner, leading, prefix)?;
+                let value = self.pipe_destination(pipe_use_id, inner, leading, prefix)?;
                 Ok(self.await_value(value))
             }
             Expr::Try(inner) => {
-                let value = self.pipe_destination(inner, leading, prefix)?;
-                Ok(self.try_value(value))
+                let value = self.pipe_destination(pipe_use_id, inner, leading, prefix)?;
+                Ok(self.try_value(value, destination.region))
             }
-            _ => {
-                let destination = self.expr(destination)?;
-                let mut prefix = prefix;
-                prefix.extend(destination.prefix);
-                Ok(Value {
-                    prefix,
-                    expr: self.js.call(destination.expr, [leading]),
-                })
-            }
+            _ => self.call(pipe_use_id, destination, &[], prefix, Some(leading)),
         }
     }
 
@@ -1737,24 +1865,43 @@ impl<'src, 'js> Emitter<'src, 'js> {
         }
     }
 
-    fn try_value(&mut self, value: Value<'js>) -> Value<'js> {
+    fn try_value(&mut self, value: Value<'js>, region: alder_region::Region) -> Value<'js> {
         let mut prefix = value.prefix;
         let temp = self.temp();
         prefix.push(
             self.js
                 .variable(VariableDeclarationKind::Const, &temp, Some(value.expr)),
         );
-        let is_error = self.js.binary(
-            self.js.member(self.js.identifier(&temp), "$"),
-            BinaryOperator::StrictEquality,
-            self.js.string("Err"),
-        );
+        let is_option = self
+            .solved
+            .is_some_and(|solved| solved.option_tries.contains(&region));
+        let is_error = if is_option {
+            self.js.binary(
+                self.js.identifier(&temp),
+                BinaryOperator::StrictEquality,
+                self.js.builder.expression_null_literal(oxc_span::SPAN),
+            )
+        } else {
+            self.js.binary(
+                self.js.member(self.js.identifier(&temp), "$"),
+                BinaryOperator::StrictEquality,
+                self.js.string("Err"),
+            )
+        };
         let mut consequent = self.js.vec();
         consequent.push(self.js.return_statement(self.js.identifier(&temp)));
         prefix.push(self.js.if_statement(is_error, consequent, None));
         Value {
             prefix,
-            expr: self.js.member(self.js.identifier(&temp), "_0"),
+            expr: if is_option {
+                self.kernel.insert("$optionUnbox");
+                self.js.call(
+                    self.js.identifier("$optionUnbox"),
+                    [self.js.identifier(&temp)],
+                )
+            } else {
+                self.js.member(self.js.identifier(&temp), "_0")
+            },
         }
     }
 
@@ -1948,16 +2095,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
         result: &str,
         label: &str,
     ) -> Result<ArenaVec<'js, Statement<'js>>, Error> {
-        let test = match pattern {
-            Some(pattern) => self.pattern_test(pattern, value, &[]),
-            None => Ok(self.pure(self.js.boolean(true))),
+        let (test, mut body) = match pattern {
+            Some(pattern) => self.prepare_pattern(pattern, value)?,
+            None => (self.pure(self.js.boolean(true)), self.js.vec()),
         };
-        let test = test?;
         let mut branch = test.prefix;
-        let mut body = self.js.vec();
-        if let Some(pattern) = pattern {
-            self.bind_pattern(pattern, value, &[], &mut body);
-        }
         if let Some(guard) = guard {
             let guard = self.expr(guard)?;
             body.extend(guard.prefix);
@@ -2330,7 +2472,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         statements: &mut ArenaVec<'js, Statement<'js>>,
     ) -> Result<(), Error> {
         if pattern_needs_check(&pattern.value) {
-            let test = self.pattern_test(pattern, root, &[])?;
+            let (test, bindings) = self.prepare_pattern(pattern, root)?;
             statements.extend(test.prefix);
             self.kernel.insert("$matchFailure");
             let failure = self.js.call(
@@ -2351,9 +2493,64 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 failed,
                 None,
             ));
+            statements.extend(bindings);
+        } else {
+            let outer = self.pattern_captures.take();
+            self.bind_pattern(pattern, root, &[], statements);
+            self.pattern_captures = outer;
         }
-        self.bind_pattern(pattern, root, &[], statements);
         Ok(())
+    }
+
+    fn prepare_pattern(
+        &mut self,
+        pattern: &Located<Pattern<'src>>,
+        root: &str,
+    ) -> Result<(Value<'js>, ArenaVec<'js, Statement<'js>>), Error> {
+        let outer = self.pattern_captures.replace(PatternCaptures {
+            root: root.to_owned(),
+            paths: BTreeMap::new(),
+        });
+        let checked = self.pattern_test(pattern, root, &[]);
+        let mut bindings = self.js.vec();
+        if checked.is_ok() {
+            self.bind_pattern(pattern, root, &[], &mut bindings);
+        }
+        let captures = self
+            .pattern_captures
+            .take()
+            .expect("active pattern captures");
+        self.pattern_captures = outer;
+        let mut checked = checked?;
+        let mut declarations = self.js.vec();
+        for name in captures.paths.values() {
+            declarations.push(self.js.variable(VariableDeclarationKind::Let, name, None));
+        }
+        declarations.extend(checked.prefix);
+        checked.prefix = declarations;
+        Ok((checked, bindings))
+    }
+
+    fn capture_pattern_place(
+        &mut self,
+        root: &str,
+        steps: &[PatternStep],
+    ) -> Option<Statement<'js>> {
+        let captures = self.pattern_captures.as_ref()?;
+        if steps.is_empty() || captures.root != root || captures.paths.contains_key(steps) {
+            return None;
+        }
+        let value = self.pattern_place(root, steps);
+        let name = self.temp();
+        self.pattern_captures
+            .as_mut()
+            .unwrap()
+            .paths
+            .insert(steps.to_vec(), name.clone());
+        Some(
+            self.js
+                .expression_statement(self.js.assign_identifier(&name, value)),
+        )
     }
 
     fn bind_pattern(
@@ -2404,8 +2601,9 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     self.bind_pattern(item, root, &nested, statements);
                 }
                 if let Some(name) = rest.and_then(|rest| rest.name) {
-                    let slice = self.js.member(self.pattern_place(root, steps), "slice");
-                    let value = self.js.call(slice, [self.js.number(elements.len() as f64)]);
+                    let mut nested = steps.to_vec();
+                    nested.push(PatternStep::Rest(elements.len()));
+                    let value = self.pattern_place(root, &nested);
                     statements.push(self.js.variable(
                         VariableDeclarationKind::Let,
                         &binding_name(name),
@@ -2431,36 +2629,58 @@ impl<'src, 'js> Emitter<'src, 'js> {
     }
 
     fn record_pattern_step(&mut self, field: &Located<&str>) -> PatternStep {
-        if self
-            .solved
-            .is_some_and(|solved| solved.optional_accesses.contains(&field.region))
-        {
-            self.kernel.insert("$optionalField");
-            PatternStep::OptionalField(field.value.to_owned())
-        } else {
-            PatternStep::Field(field.value.to_owned())
-        }
+        PatternStep::Field(field.value.to_owned())
     }
 
     fn pattern_place(&self, root: &str, steps: &[PatternStep]) -> Expression<'js> {
         let mut value = self.js.identifier(root);
-        for step in steps {
+        let mut remaining = steps;
+        if let Some(captures) = &self.pattern_captures
+            && captures.root == root
+        {
+            for length in (1..=steps.len()).rev() {
+                if let Some(name) = captures.paths.get(&steps[..length]) {
+                    value = self.js.identifier(name);
+                    remaining = &steps[length..];
+                    break;
+                }
+            }
+        }
+        for step in remaining {
             value = match step {
                 PatternStep::Field(field) => self.js.member(value, field),
-                PatternStep::OptionalField(field) => self.js.call(
-                    self.js.identifier("$optionalField"),
-                    [value, self.js.string(field)],
-                ),
                 PatternStep::Index(index) => self.js.index(value, self.js.number(*index as f64)),
                 PatternStep::OptionPayload => {
                     self.js.call(self.js.identifier("$optionUnbox"), [value])
                 }
+                PatternStep::Rest(index) => self.js.call(
+                    self.js.member(value, "slice"),
+                    [self.js.number(*index as f64)],
+                ),
             };
         }
         value
     }
 
     fn pattern_test(
+        &mut self,
+        pattern: &Located<Pattern<'src>>,
+        root: &str,
+        steps: &[PatternStep],
+    ) -> Result<Value<'js>, Error> {
+        let capture = if matches!(pattern.value, Pattern::Anything) {
+            None
+        } else {
+            self.capture_pattern_place(root, steps)
+        };
+        let mut value = self.pattern_test_inner(pattern, root, steps)?;
+        if let Some(capture) = capture {
+            value.prefix.insert(0, capture);
+        }
+        Ok(value)
+    }
+
+    fn pattern_test_inner(
         &mut self,
         pattern: &Located<Pattern<'src>>,
         root: &str,
@@ -2667,6 +2887,15 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     let test = self.pattern_test(pattern, root, &nested)?;
                     self.append_pattern_test(&mut prefix, &mut tests, test);
                 }
+                if rest.is_some_and(|rest| rest.name.is_some()) {
+                    let mut nested = steps.to_vec();
+                    nested.push(PatternStep::Rest(elements.len()));
+                    if let Some(capture) = self.capture_pattern_place(root, &nested) {
+                        let mut captured = self.pure(self.js.boolean(true));
+                        captured.prefix.push(capture);
+                        self.append_pattern_test(&mut prefix, &mut tests, captured);
+                    }
+                }
                 Value {
                     prefix,
                     expr: self.and_all(tests),
@@ -2781,15 +3010,19 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.js.identifier(&format!("$dict{param}")),
                 |dictionary, slot| self.js.member(dictionary, &format!("$super{slot}")),
             ),
-            Evidence::SelfDictionary => self.js.identifier("$self"),
-            Evidence::Super(index) => self
+            Evidence::SelfDictionary => self
                 .js
-                .member(self.js.identifier("$self"), &format!("$super{index}")),
-            Evidence::SuperPath(path) => path
-                .iter()
-                .fold(self.js.identifier("$self"), |dictionary, slot| {
-                    self.js.member(dictionary, &format!("$super{slot}"))
-                }),
+                .identifier(self.self_dictionary.as_deref().unwrap_or("$self")),
+            Evidence::Super(index) => self.js.member(
+                self.js
+                    .identifier(self.self_dictionary.as_deref().unwrap_or("$self")),
+                &format!("$super{index}"),
+            ),
+            Evidence::SuperPath(path) => path.iter().fold(
+                self.js
+                    .identifier(self.self_dictionary.as_deref().unwrap_or("$self")),
+                |dictionary, slot| self.js.member(dictionary, &format!("$super{slot}")),
+            ),
             Evidence::Impl {
                 module,
                 symbol,
@@ -2823,6 +3056,45 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 container,
                 arguments,
             } => self.intrinsic_container_dictionary(*intrinsic, *container, arguments),
+            Evidence::StructuralError { capability, tags } => {
+                if *capability == alder_solve::StructuralErrorCapability::Hash {
+                    return self.structural_error_hash(tags);
+                }
+                let mut variants = self.js.vec();
+                for (name, fields) in tags {
+                    let dictionaries = fields.iter().map(|field| self.evidence(field)).collect();
+                    let names = (0..fields.len())
+                        .map(|index| format!("_{index}"))
+                        .collect::<Vec<_>>();
+                    variants.push(self.js.property(
+                        &format!(":{name}"),
+                        self.variant_shape(false, &names, dictionaries),
+                    ));
+                }
+                if *capability == alder_solve::StructuralErrorCapability::Json {
+                    return self.lazy_codec_dictionary(
+                        &[
+                            ("encode", "$jsonEncodeDerived"),
+                            ("decode", "$jsonDecodeDerived"),
+                        ],
+                        self.js.object(variants),
+                        None,
+                    );
+                }
+                self.kernel.insert("$showDerived");
+                let call = self.js.call(
+                    self.js.identifier("$showDerived"),
+                    [self.js.identifier("$value"), self.js.object(variants)],
+                );
+                let mut body = self.js.vec();
+                body.push(self.js.return_statement(call));
+                let mut properties = self.js.vec();
+                properties.push(
+                    self.js
+                        .property("show", self.js.arrow(&["$value".to_owned()], body, false)),
+                );
+                self.js.object(properties)
+            }
             Evidence::StructuralEq { shape, fields } => {
                 self.kernel.insert("$equalStructural");
                 let args = vec!["$a".to_owned(), "$b".to_owned()];
@@ -2865,6 +3137,84 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 self.js.object(properties)
             }
         }
+    }
+
+    fn structural_error_hash(&mut self, tags: &[(&str, Vec<Evidence<'src>>)]) -> Expression<'js> {
+        self.kernel.insert("$hashErrorRow");
+        self.kernel.insert("$equalStructural");
+        let mut children = Vec::new();
+        let mut equality_fields = Vec::new();
+        let mut variants = self.js.vec();
+        for (tag, fields) in tags {
+            let mut dictionaries = Vec::new();
+            let mut names = Vec::new();
+            for (index, field) in fields.iter().enumerate() {
+                dictionaries.push(self.js.index(
+                    self.js.identifier("$fields"),
+                    self.js.number(children.len() as f64),
+                ));
+                children.push(self.evidence(field));
+                names.push(format!("_{index}"));
+                equality_fields.push(format!(":{tag}:{index}"));
+            }
+            variants.push(self.js.property(
+                &format!(":{tag}"),
+                self.variant_shape(false, &names, dictionaries),
+            ));
+        }
+        let mut hash_body = self.js.vec();
+        hash_body.push(self.js.variable(
+            VariableDeclarationKind::Const,
+            "$fields",
+            Some(self.js.call(self.js.identifier("$shape"), [])),
+        ));
+        hash_body.push(self.js.return_statement(self.js.call(
+            self.js.identifier("$hashErrorRow"),
+            [self.js.identifier("$value"), self.js.object(variants)],
+        )));
+        let mut projection_body = self.js.vec();
+        projection_body.push(
+            self.js
+                .return_statement(self.js.member(self.js.identifier("$dictionary"), "$super0")),
+        );
+        let equalities = self.js.call(
+            self.js
+                .member(self.js.call(self.js.identifier("$shape"), []), "map"),
+            [self
+                .js
+                .arrow(&["$dictionary".to_owned()], projection_body, false)],
+        );
+        let mut eq_body = self.js.vec();
+        eq_body.push(
+            self.js.return_statement(
+                self.js.call(
+                    self.js.identifier("$equalStructural"),
+                    [
+                        self.js.identifier("$left"),
+                        self.js.identifier("$right"),
+                        self.js.string("error_row"),
+                        self.js
+                            .array(equality_fields.iter().map(|field| self.js.string(field))),
+                        equalities,
+                    ],
+                ),
+            ),
+        );
+        let mut superclass = self.js.vec();
+        superclass.push(
+            self.js.property(
+                "eq",
+                self.js
+                    .arrow(&["$left".to_owned(), "$right".to_owned()], eq_body, false),
+            ),
+        );
+        let mut properties = self.js.vec();
+        properties.push(self.js.property(
+            "hash",
+            self.js.arrow(&["$value".to_owned()], hash_body, false),
+        ));
+        properties.push(self.js.property("$super0", self.js.object(superclass)));
+        self.with_lazy_descriptor(self.js.object(properties), self.js.array(children))
     }
 
     fn assign_superclasses(
@@ -2931,7 +3281,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 body.push(self.js.return_statement(equal));
                 properties.push(self.js.property("eq", self.js.arrow(&args, body, false)));
             }
-            Intrinsic::OrdNumber | Intrinsic::OrdString | Intrinsic::OrdBigInt => {
+            Intrinsic::OrdOption => unreachable!("Option ordering requires payload evidence"),
+            Intrinsic::OrdNumber
+            | Intrinsic::OrdString
+            | Intrinsic::OrdBigInt
+            | Intrinsic::OrdUnit => {
                 let args = vec!["$a".to_owned(), "$b".to_owned()];
                 let left = self.js.identifier(&args[0]);
                 let right = self.js.identifier(&args[1]);
@@ -2955,6 +3309,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     Intrinsic::OrdNumber => Intrinsic::EqNumber,
                     Intrinsic::OrdString => Intrinsic::EqString,
                     Intrinsic::OrdBigInt => Intrinsic::EqBigInt,
+                    Intrinsic::OrdUnit => Intrinsic::EqUnit,
                     _ => unreachable!(),
                 };
                 let equality = self.intrinsic_dictionary(equality);
@@ -3114,6 +3469,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
             IntrinsicContainer::Option => "option",
             IntrinsicContainer::Result => "result",
         };
+        let dictionaries = arguments
+            .iter()
+            .map(|argument| self.evidence(argument))
+            .collect::<Vec<_>>();
+        let descriptor = self.js.array(dictionaries);
         let mut properties = self.js.vec();
         match intrinsic {
             Intrinsic::ShowKernel => {
@@ -3121,27 +3481,47 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     "show",
                     "$showContainer",
                     kind,
-                    arguments,
+                    descriptor,
                     1,
-                    false,
                 ));
             }
-            Intrinsic::HashKernel => {
+            Intrinsic::HashKernel | Intrinsic::OrdOption => {
                 properties.push(self.intrinsic_container_property(
-                    "hash",
-                    "$hashContainer",
+                    if intrinsic == Intrinsic::OrdOption {
+                        "compare"
+                    } else {
+                        "hash"
+                    },
+                    if intrinsic == Intrinsic::OrdOption {
+                        "$compareContainer"
+                    } else {
+                        "$hashContainer"
+                    },
                     kind,
-                    arguments,
-                    1,
-                    false,
+                    self.js.call(self.js.identifier("$shape"), []),
+                    if intrinsic == Intrinsic::OrdOption {
+                        2
+                    } else {
+                        1
+                    },
                 ));
+                let mut superclass_body = self.js.vec();
+                superclass_body.push(self.js.return_statement(
+                    self.js.member(self.js.identifier("$dictionary"), "$super0"),
+                ));
+                let superclasses = self.js.call(
+                    self.js
+                        .member(self.js.call(self.js.identifier("$shape"), []), "map"),
+                    [self
+                        .js
+                        .arrow(&["$dictionary".to_owned()], superclass_body, false)],
+                );
                 properties.push(self.intrinsic_container_property(
                     "eq",
                     "$equalContainer",
                     kind,
-                    arguments,
+                    superclasses,
                     2,
-                    true,
                 ));
                 let equality = properties
                     .pop()
@@ -3152,28 +3532,67 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     self.js
                         .property("$super0", self.js.object(equality_properties)),
                 );
+                return self.with_lazy_descriptor(self.js.object(properties), descriptor);
             }
             Intrinsic::JsonKernel => {
-                properties.push(self.intrinsic_container_property(
-                    "encode",
-                    "$jsonEncodeContainer",
-                    kind,
-                    arguments,
-                    1,
-                    false,
-                ));
-                properties.push(self.intrinsic_container_property(
-                    "decode",
-                    "$jsonDecodeContainer",
-                    kind,
-                    arguments,
-                    1,
-                    false,
-                ));
+                return self.lazy_codec_dictionary(
+                    &[
+                        ("encode", "$jsonEncodeContainer"),
+                        ("decode", "$jsonDecodeContainer"),
+                    ],
+                    descriptor,
+                    Some(kind),
+                );
             }
             _ => unreachable!("only recursive kernel traits use container evidence"),
         }
         self.js.object(properties)
+    }
+
+    /// Emit the descriptor once, without evaluating recursive dictionary references
+    /// during initialization. Both methods close over the same descriptor thunk.
+    fn lazy_codec_dictionary(
+        &mut self,
+        methods: &[(&str, &'static str)],
+        descriptor: Expression<'js>,
+        kind: Option<&str>,
+    ) -> Expression<'js> {
+        let mut properties = self.js.vec();
+        if kind == Some("option") {
+            properties.push(self.js.property("$option", self.js.boolean(true)));
+        }
+        for &(method, kernel) in methods {
+            self.kernel.insert(kernel);
+            let mut arguments = vec![self.js.identifier("$value")];
+            if let Some(kind) = kind {
+                arguments.push(self.js.string(kind));
+            }
+            arguments.push(self.js.call(self.js.identifier("$shape"), []));
+            let mut body = self.js.vec();
+            body.push(
+                self.js
+                    .return_statement(self.js.call(self.js.identifier(kernel), arguments)),
+            );
+            properties.push(
+                self.js
+                    .property(method, self.js.arrow(&["$value".to_owned()], body, false)),
+            );
+        }
+        self.with_lazy_descriptor(self.js.object(properties), descriptor)
+    }
+
+    fn with_lazy_descriptor(
+        &self,
+        dictionary: Expression<'js>,
+        descriptor: Expression<'js>,
+    ) -> Expression<'js> {
+        let mut factory_body = self.js.vec();
+        factory_body.push(self.js.return_statement(dictionary));
+        let factory = self.js.arrow(&["$shape".to_owned()], factory_body, false);
+        let mut descriptor_body = self.js.vec();
+        descriptor_body.push(self.js.return_statement(descriptor));
+        self.js
+            .call(factory, [self.js.arrow(&[], descriptor_body, false)])
     }
 
     fn intrinsic_container_property(
@@ -3181,31 +3600,19 @@ impl<'src, 'js> Emitter<'src, 'js> {
         method: &str,
         kernel: &'static str,
         kind: &str,
-        arguments: &[Evidence<'src>],
+        dictionaries: Expression<'js>,
         arity: usize,
-        superclasses: bool,
     ) -> ObjectPropertyKind<'js> {
         self.kernel.insert(kernel);
         let params = (0..arity)
             .map(|index| format!("$a{index}"))
-            .collect::<Vec<_>>();
-        let dictionaries = arguments
-            .iter()
-            .map(|argument| {
-                let dictionary = self.evidence(argument);
-                if superclasses {
-                    self.js.member(dictionary, "$super0")
-                } else {
-                    dictionary
-                }
-            })
             .collect::<Vec<_>>();
         let mut call_arguments = params
             .iter()
             .map(|param| self.js.identifier(param))
             .collect::<Vec<_>>();
         call_arguments.push(self.js.string(kind));
-        call_arguments.push(self.js.array(dictionaries));
+        call_arguments.push(dictionaries);
         let call = self.js.call(self.js.identifier(kernel), call_arguments);
         let mut body = self.js.vec();
         body.push(self.js.return_statement(call));

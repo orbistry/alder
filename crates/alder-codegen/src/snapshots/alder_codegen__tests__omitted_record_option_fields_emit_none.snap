@@ -1,0 +1,17 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub fn empty() { \n    let record: { value: Option[Number] } = {}\n    record\n}\npub fn nested() {\n    let record: { value?: Option[Number] } = { value: Some(None) }\n    record\n}\n"
+---
+import { $optionSome } from "alder:kernel";
+function $v_empty() {
+	const $t0 = { "value": null };
+	let $l0_record = $t0;
+	return $l0_record;
+}
+function $v_nested() {
+	const $t1 = $optionSome;
+	const $t2 = { "value": $t1(null) };
+	let $l1_record = $t2;
+	return $l1_record;
+}
+export { $v_empty as empty, $v_nested as nested };

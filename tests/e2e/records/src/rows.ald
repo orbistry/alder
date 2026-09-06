@@ -21,13 +21,17 @@ pub fn preserve_outcome(value: Outcome[e]) Outcome[e] { value }
 pub fn boxed(value: a) Boxed[a] { { value } }
 
 pub fn choose(flag: Bool, record: OptionalName) {
-    if flag { { name: "present" } } else { record }
+    if flag { { name: Some("present") } } else { record }
 }
 pub fn fallback(record) Number {
     let result = { value: 42, ..record }
     result.value
 }
 pub fn merge(left, right) { { ..left, ..right } }
+
+pub fn associated_merges(left, middle, right) {
+    ({ ..{ ..left, ..middle }, ..right }, { ..left, ..{ ..middle, ..right } })
+}
 
 pub fn merger(left) { right -> merge(left, right) }
 
@@ -37,10 +41,27 @@ pub fn forward_merged(left, right) {
 }
 
 pub fn forward_optional(left: { result: Result[Number, e] }, right: { result?: Result[Number, f] }) {
-    let value = merge(left, right).result?
+    let value = match right.result { Some(result) => result?, None => left.result? }
     Ok(value)
 }
 
 pub fn read_merged_optional(record: { r | value?: Option[Number] }) Option[Option[Number]] {
     merge({ marker: true }, record).value
+}
+pub fn tuple_sum(pair) Number { pair.0 + pair.1 }
+
+pub fn tuple_first(pair, remaining: Number) {
+    let value: Number = pair.0
+    if remaining == 0 { pair } else { tuple_last(pair, remaining - 1) }
+}
+
+pub fn tuple_last(pair, remaining: Number) {
+    let value: Number = pair.3
+    if remaining == 0 { pair } else { tuple_first(pair, remaining - 1) }
+}
+
+pub fn tuple_update(value) Number {
+    value.0 = 20
+    value.3 = 22
+    value.0 + value.3
 }

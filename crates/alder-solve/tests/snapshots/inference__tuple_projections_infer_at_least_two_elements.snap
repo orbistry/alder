@@ -1,0 +1,5 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn first(value) { value.0 }"
+---
+first: forall a, b. fn(a) b where tuple a length 2 {0: b}

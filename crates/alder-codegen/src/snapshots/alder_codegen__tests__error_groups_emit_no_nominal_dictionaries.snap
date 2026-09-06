@@ -1,0 +1,5 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "pub error Failure { :later, :first(Number) }\n"
+---
+

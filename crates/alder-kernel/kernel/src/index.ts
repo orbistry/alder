@@ -4,14 +4,34 @@ export function $equal(left, right) {
     return equalInner(left, right, new WeakMap());
 }
 
-export function $equalDerived(left, right, variants) {
+let derivedEqualityPairs = null;
+
+export function $equalDerived(left, right, variants, typeName) {
     if (left?.$ !== right?.$) return false;
     const shape = left && variants[left.$];
     if (!shape) throw new TypeError("$: unknown derived Eq variant");
-    return shape.fields.every((field, index) => {
-        const dictionary = shape.dictionaries?.[index];
-        return dictionary ? dictionary.eq(left[field], right[field]) : $equal(left[field], right[field]);
-    });
+    // Only active nominal comparisons close a recursive cycle. Do not memoize
+    // erased Option/container pairs or shortcut identical objects: payload
+    // dictionaries still decide equality (including Number NaN).
+    const root = derivedEqualityPairs === null;
+    if (root) derivedEqualityPairs = new Map();
+    let pairs = derivedEqualityPairs.get(typeName);
+    if (!pairs) derivedEqualityPairs.set(typeName, pairs = new WeakMap());
+    let rights = pairs.get(left);
+    if (!rights) pairs.set(left, rights = new WeakSet());
+    if (rights.has(right)) return true;
+    rights.add(right);
+    try {
+        return shape.fields.every((field, index) => {
+            const dictionary = shape.dictionaries?.[index];
+            return dictionary ? dictionary.eq(left[field], right[field]) : $equal(left[field], right[field]);
+        });
+    } finally {
+        // No result survives a comparison, a thrown payload callback, or a
+        // subsequent mutation. Eq callbacks are synchronous.
+        rights.delete(right);
+        if (root) derivedEqualityPairs = null;
+    }
 }
 
 export function $equalContainer(left, right, kind, dictionaries) {
@@ -109,11 +129,10 @@ function showDerivedValue(value, variants) {
     const shape = value && variants[value.$];
     if (!shape) throw new TypeError("$: unknown derived Show variant");
     if (shape.record) {
-        const fields = shape.fields.flatMap((field, index) => {
-                if (!Object.hasOwn(value, field)) return [];
-                const dictionary = shape.dictionaries?.[index];
-                return [`${field}: ${dictionary ? dictionary.show(value[field]) : $show(value[field])}`];
-            });
+        const fields = shape.fields.map((field, index) => {
+            const dictionary = shape.dictionaries?.[index];
+            return `${field}: ${dictionary ? dictionary.show(value[field]) : $show(value[field])}`;
+        });
         return `${value.$} { ${fields.join(", ")} }`;
     }
     const fields = shape.fields.map((field, index) => {
@@ -179,6 +198,14 @@ function compareDerivedValues(left, right, variants) {
         if (ordering !== 0) return ordering;
     }
     return 0;
+}
+
+export function $compareContainer(left, right, kind, dictionaries) {
+    if (kind !== "option") throw new TypeError(`unknown Ord container: ${kind}`);
+    if (left === null || right === null) {
+        return { $: left === right ? "Equal" : left === null ? "Less" : "Greater" };
+    }
+    return dictionaries[0].compare(optionValue(left), optionValue(right));
 }
 
 export function $arrayPure(value) {
@@ -267,6 +294,20 @@ function hashDerivedValue(value, typeName, variants) {
     fields.forEach((field, index) => {
         const dictionary = variants[value.$].dictionaries?.[index];
         pushChildHashValue(bytes, index, dictionary ? dictionary.hash(value[field]) : $hash(value[field]));
+    });
+    return hashBytes(bytes);
+}
+
+export function $hashErrorRow(value, variants) {
+    if (!Object.hasOwn(variants, value?.$)) throw new TypeError("$: unknown structural Hash error tag");
+    const shape = variants[value.$];
+    const bytes = [0x12];
+    // A row can widen without changing its value: never hash the group name,
+    // declaration order, or the tag's position among statically possible tags.
+    pushText(bytes, value.$);
+    pushU64(bytes, BigInt(shape.fields.length));
+    shape.fields.forEach((field, index) => {
+        pushChildHashValue(bytes, index, shape.dictionaries[index].hash(value[field]));
     });
     return hashBytes(bytes);
 }
@@ -453,9 +494,6 @@ export function $optionSome(value) {
     return value === null || optionBoxes.has(value) ? $optionBox(value) : value;
 }
 export function $optionNone() { return null; }
-export function $optionalField(record, field) {
-    return Object.hasOwn(record, field) ? $optionSome(record[field]) : null;
-}
 export function $optionMap(value, transform) {
     return value === null ? null : $optionSome(transform(optionValue(value)));
 }
@@ -579,9 +617,7 @@ function jsonEncodeDerivedValue(value, variants) {
     if (!shape) throw new TypeError("$: unknown derived JSON variant");
     if (shape.record) {
         const record = {};
-        const optional = new Set(shape.optional ?? []);
         for (const field of shape.fields) {
-            if (optional.has(field) && (!Object.hasOwn(value, field) || value[field] === null)) continue;
             const index = shape.fields.indexOf(field);
             const dictionary = shape.dictionaries?.[index];
             record[field] = dictionary ? JSON.parse(dictionary.encode(value[field])) : value[field];
@@ -614,18 +650,20 @@ export function $jsonDecodeDerived(value, variants) {
             if (!parsed.value || typeof parsed.value !== "object" || Array.isArray(parsed.value)) {
                 return $jsonErr("$.value: expected an object");
             }
-            const optional = new Set(shape.optional ?? []);
             const expected = new Set(shape.fields);
             for (const field of Object.keys(parsed.value)) {
                 if (!expected.has(field)) return $jsonErr(`$.value.${field}: unexpected field`);
             }
             for (const field of shape.fields) {
-                if (!Object.hasOwn(parsed.value, field)) {
-                    if (optional.has(field)) continue;
-                    return $jsonErr(`$.value.${field}: missing field`);
-                }
                 const index = shape.fields.indexOf(field);
                 const dictionary = shape.dictionaries?.[index];
+                if (!Object.hasOwn(parsed.value, field)) {
+                    if (dictionary?.$option === true) {
+                        result[field] = null;
+                        continue;
+                    }
+                    return $jsonErr(`$.value.${field}: missing field`);
+                }
                 if (!dictionary) {
                     result[field] = parsed.value[field];
                     continue;
@@ -1442,6 +1480,39 @@ export function $fiberInterrupt(fiber) {
 
 export function $fiberMap(values, transform, concurrency = 1) {
     return fiberTraverse(values, transform, concurrency, true);
+}
+
+export const $fiberUnbounded = Infinity;
+
+export function $fiberMapWithOptions(values, transform, options = null) {
+    return fiberTraverseWithOptions(values, transform, options, true);
+}
+
+export function $fiberForEachWithOptions(values, transform, options = null) {
+    return fiberTraverseWithOptions(values, transform, options, false);
+}
+
+export function $fiberTryMapWithOptions(values, transform, options = null) {
+    return fiberTraverseWithOptions(values, transform, options, true, true);
+}
+
+export function $fiberTryForEachWithOptions(values, transform, options = null) {
+    return fiberTraverseWithOptions(values, transform, options, false, true);
+}
+
+function fiberTraverseWithOptions(values, transform, options, collect, fallible = false) {
+    return $task(function* () {
+        let concurrency = 1;
+        if (options !== null) {
+            const config = optionValue(options);
+            if (config === null || typeof config !== "object" || Array.isArray(config)) {
+                throw new TypeError("Fiber traversal options must be a MapOptions record");
+            }
+            const configured = config.concurrency;
+            if (configured !== null) concurrency = optionValue(configured);
+        }
+        return yield* fiberTraverse(values, transform, concurrency, collect, fallible);
+    });
 }
 
 export function $fiberForEach(values, transform, concurrency = 1) {

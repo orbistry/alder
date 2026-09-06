@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn sum(pair) Number { pair.0 + pair.1 }\nfn run() Number { sum((20, 22)) }\n"
+---
+run: fn() Number
+sum: forall a. fn(a) Number where tuple a length 2 {0: Number, 1: Number}

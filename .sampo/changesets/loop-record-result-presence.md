@@ -2,5 +2,5 @@
 cargo/alder-solve: patch
 ---
 
-Preserve optional record fields across reachable loop exits independently of
-break order, preventing absent fields from acquiring required payload types.
+Check ordinary record field types across reachable loop exits independently of
+break order, rejecting incompatible result alternatives.

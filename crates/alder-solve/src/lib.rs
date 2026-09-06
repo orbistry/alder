@@ -1,6 +1,7 @@
 //! Alder type inference over the canonical AST.
 
 mod inference;
+mod option_levels;
 mod traits;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -20,8 +21,16 @@ pub struct SolveOutput<'a> {
     pub uses: BTreeMap<UseId, UseAction<'a>>,
     pub impl_superclasses: BTreeMap<(ImplId<'a>, u16), Evidence<'a>>,
     pub derived_fields: BTreeMap<DerivedFieldKey<'a>, Evidence<'a>>,
-    /// Optional reads, keyed by access-expression or pattern-field-name region.
-    pub optional_accesses: BTreeSet<Region>,
+    /// Propagation expressions checked against Option rather than Result.
+    pub option_tries: BTreeSet<Region>,
+    /// Trailing None arguments inserted at each call, excluding dictionaries.
+    pub omitted_arguments: BTreeMap<UseId, usize>,
+    /// Contextual Some layers by call and source-argument index (pipe first).
+    pub argument_lifts: BTreeMap<(UseId, usize), usize>,
+    /// Contextual Some layers by record initializer field-name region.
+    pub field_lifts: BTreeMap<Region, usize>,
+    /// Omitted Option fields materialized as None at a record construction site.
+    pub omitted_record_fields: BTreeMap<Region, Vec<&'a str>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -104,6 +113,17 @@ pub enum Evidence<'a> {
         shape: StructuralEqShape<'a>,
         fields: Vec<Evidence<'a>>,
     },
+    StructuralError {
+        capability: StructuralErrorCapability,
+        tags: Vec<(&'a str, Vec<Evidence<'a>>)>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StructuralErrorCapability {
+    Show,
+    Json,
+    Hash,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -134,6 +154,8 @@ pub enum Intrinsic {
     OrdNumber,
     OrdString,
     OrdBigInt,
+    OrdUnit,
+    OrdOption,
     NumNumber,
     NumBigInt,
     FunctorArray,

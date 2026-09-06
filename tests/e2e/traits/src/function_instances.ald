@@ -1,0 +1,29 @@
+pub trait Invoke[a] {
+    fn invoke(value: a) Number
+}
+
+impl Invoke[fn(Number) Number] {
+    fn invoke(value: fn(Number) Number) Number { value(41) }
+}
+
+pub trait Preserve[a] {
+    fn preserve(value: a) a { value }
+}
+
+impl Preserve[fn(a) a] {}
+
+pub trait Nested[a] {
+    fn nested(value: a) a { value }
+}
+
+impl Nested[Array[f[a]]] where f: Functor {}
+
+pub trait Select[a] {
+    fn select(value: a, other: b) b { other }
+}
+
+impl Select[Number] {
+    fn select(value: Number, other: b) b { other }
+}
+
+impl Select[String] {}

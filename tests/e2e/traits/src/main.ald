@@ -2,7 +2,14 @@ import ~/codec
 import ~/ordering_evidence
 import ~/array_iterators
 import ~/overlay_contracts
+import ~/record_instances
+import ~/result_instances
+import ~/result_instances.{ Second }
+import ~/function_instances
 import ~/option_constructors
+import ~/optional_arguments
+import ~/structural_errors
+import ~/hash_dictionaries
 import ~/facade
 import ~/facade.{ Parcel, Wrap, Extract, extract }
 import ~/facade.{ read_value as read }
@@ -21,6 +28,12 @@ enum Status {
 enum Config {
     Config { name: String, note?: String },
 }
+
+#[derive(Show, Hash, Json)]
+enum OptionalPayload { Value { items?: Array[Number], nested?: Option[Number], unit?: () } }
+
+#[derive(Ord)]
+enum OptionalOrder { Value { value?: Number } }
 
 #[derive(Ord)]
 enum OrderProbe {
@@ -99,7 +112,6 @@ impl Json[JsonSecret] {
 #[derive(Json)]
 enum JsonSecretBox { JsonSecretBox(JsonSecret) }
 
-#[derive(Show, Ord, Hash, Json)]
 error Failure {
     :later,
     :first(Number),
@@ -168,12 +180,12 @@ fn less_than(left: a, right: a) Bool where a: Ord {
     left < right
 }
 
-fn verify_error_group_derives() Result[(), [:invalid_json(String)]] {
+fn verify_error_group_capabilities() Result[(), [:invalid_json(String)]] {
     let failure: Failure = decode("{\"tag\":\":first\",\"fields\":[42]}")?
     let same_failure: Failure = decode("{\"tag\":\":first\",\"fields\":[42]}")?
     let later: Failure = decode("{\"tag\":\":later\",\"fields\":[]}")?
     assert(failure == same_failure)
-    assert(later < failure)
+    assert(later != failure)
     assert(show(failure) == ":first(42)")
     assert(hash(failure) == hash(same_failure))
     assert(encode(failure) == "{\"tag\":\":first\",\"fields\":[42]}")
@@ -202,6 +214,37 @@ fn verify_option_representation() {
     assert(Option.map(named, x -> x) == named)
 }
 
+fn same_optional_arrays(left: { items?: Array[Number] }, right: { items?: Array[Number] }) Bool {
+    left == right
+}
+
+fn verify_optional_payload_operations() {
+    assert(same_optional_arrays({}, {}))
+    assert(!same_optional_arrays({}, { items: [] }))
+    assert(same_optional_arrays({ items: [1] }, { items: [1] }))
+    let absent = OptionalPayload::Value {}
+    let present_none = OptionalPayload::Value { nested: Option.some(Option.none()) }
+    let present_unit = OptionalPayload::Value { unit: () }
+    assert(absent == OptionalPayload::Value {})
+    assert(absent == OptionalPayload::Value { nested: Option.none() })
+    assert(absent != present_none && present_none != absent)
+    assert(absent != present_unit && present_unit != absent)
+    assert(hash(absent) == hash(OptionalPayload::Value {}))
+    assert(hash(present_none) == hash(OptionalPayload::Value { nested: Option.some(Option.none()) }))
+    assert(show(present_none) == "Value { items: None, nested: Some(None), unit: None }")
+    let none_json = Json.encode(present_none)
+    assert(none_json == "{\"tag\":\"Value\",\"value\":{\"items\":null,\"nested\":{\"$alderSome\":null},\"unit\":null}}")
+    let decoded_none: Result[OptionalPayload, [:invalid_json(String)]] = Json.decode(none_json)
+    assert(decoded_none == Ok(present_none))
+    let decoded_unit: Result[OptionalPayload, [:invalid_json(String)]] = Json.decode(Json.encode(present_unit))
+    assert(decoded_unit == Ok(present_unit))
+    let imported_none: Result[OptionalPayload, [:invalid_json(String)]] = codec.decode_value(codec.encode_value(present_none))
+    assert(imported_none == Ok(present_none))
+    assert(OptionalOrder::Value {} == OptionalOrder::Value {})
+    assert(OptionalOrder::Value {} < OptionalOrder::Value { value: 1 })
+    assert(OptionalOrder::Value { value: 1 } > OptionalOrder::Value {})
+}
+
 pub fn main() {
     ordering_evidence.run()
     array_iterators.run()
@@ -214,7 +257,54 @@ pub fn main() {
     assert(overlay_contracts.overlay_read("marker", { value: 1, extra: "text" }, { value: false, other: true }) == 7)
     assert(overlay_left.value == 0)
     assert(overlay_right.value == "discarded")
+    structural_errors.run()
+    hash_dictionaries.run()
+    optional_arguments.check()
+    assert(optional_arguments.relay_universal(42) == 42)
+    assert(optional_arguments.relay_tuple_before((42, 7)) == (42, 7))
+    assert(optional_arguments.relay_tuple_before((42, "kept")) == (42, "kept"))
+    assert(optional_arguments.relay_tuple_after((42, 7)) == (42, 7))
+    assert(optional_arguments.relay_tuple_after((42, "kept")) == (42, "kept"))
+    assert(optional_arguments.relay_universal("hello") == "hello")
+    let absent_universal: Option[Number] = None
+    assert(optional_arguments.relay_universal(absent_universal) == None)
+    let original_failure: Result[Number, [:bad]] = Err(:bad)
+    let lifted_failure = match original_failure {
+        Err(failure) => optional_arguments.relay_failure(failure),
+        Ok(value) => Ok(value),
+    }
+    assert(lifted_failure == Err(:bad))
+    assert(optional_arguments.preserve() == None)
+    assert(optional_arguments.preserve(Option.some(None)) == Option.some(None))
+    result_instances.check()
+    let imported_result: Result[Number, Second] = Err(:failed(9))
+    assert(result_instances.preserve_result(imported_result) == imported_result)
+    let increment = (value: Number) Number -> value + 1
+    assert(function_instances.invoke(increment) == 42)
+    assert(function_instances.select(0, 42) == 42)
+    assert(function_instances.select(0, "hello") == "hello")
+    assert(function_instances.select("default", 7) == 7)
+    assert(function_instances.select("default", "world") == "world")
+    let same_number = function_instances.preserve(increment)
+    let same_text = function_instances.preserve((value: String) String -> value)
+    assert(same_number(41) == 42)
+    assert(same_text("hello") == "hello")
+    assert(function_instances.nested([Option.some(42)]) == [Option.some(42)])
+    assert(function_instances.nested([["hello"]]) == [["hello"]])
+    let nested_results: Array[Result[Number, [:failed]]] = [Ok(42), Err(:failed)]
+    assert(function_instances.nested(nested_results) == nested_results)
+    assert(record_instances.read_x({ x: 42, label: "extra" }) == 42)
+    assert(record_instances.read_x({ x: 7 }) == 7)
+    let omitted: { value?: Option[Number] } = {}
+    let present_none: { value?: Option[Number] } = { value: Option.some(None) }
+    let present_number: { value?: Option[Number] } = { value: Option.some(42) }
+    assert(record_instances.read_optional(omitted) == None)
+    assert(record_instances.read_optional(present_none) == Option.some(None))
+    assert(record_instances.read_optional(present_number) == Option.some(Option.some(42)))
     option_constructors.verify()
+    let wrapped_named_some: Option[NamedSome] = Option::Some(NamedSome::Some(42))
+    assert(match wrapped_named_some { Option::Some(NamedSome::Some(42)) => true, _ => false })
+    verify_optional_payload_operations()
     let first_error: Result[Number, [:payload(Number, String)]] = Err(:payload(1, "first"))
     let different_number: Result[Number, [:payload(Number, String)]] = Err(:payload(2, "first"))
     let different_text: Result[Number, [:payload(Number, String)]] = Err(:payload(1, "second"))
@@ -249,6 +339,8 @@ pub fn main() {
     assert(Json.encode(JsonSecret::JsonSecret) == "\"secret\"")
     let custom_json: Result[JsonSecret, [:invalid_json(String)]] = codec.decode_value(codec.encode_value(JsonSecret::JsonSecret))
     assert(custom_json == Ok(JsonSecret::JsonSecret))
+    let inherited_json_tag: Result[Config, [:invalid_json(String)]] = Json.decode("{\"tag\":\"toString\",\"fields\":[]}")
+    assert(inherited_json_tag == Err(:invalid_json("$.tag: unknown variant \"toString\"")))
     let module_nested: Result[Array[Number], [:invalid_json(String)]] = Json.decode("[1,\"bad\"]")
     assert(module_nested == Err(:invalid_json("$[1]: expected a JSON number")))
     let wrong_number: Result[Number, [:invalid_json(String)]] = decode("\"not a number\"")
@@ -317,7 +409,7 @@ pub fn main() {
     let decoded_secret: Result[JsonSecretBox, [:invalid_json(String)]] = decode(secret_json)
     assert(decoded_secret == Result.ok(JsonSecretBox::JsonSecretBox(JsonSecret::JsonSecret)))
 
-    assert(verify_error_group_derives() == Result.ok(()))
+    assert(verify_error_group_capabilities() == Result.ok(()))
 
     let chain = Chain::Link(1, Chain::Link(2, Chain::End))
     let same_chain = Chain::Link(1, Chain::Link(2, Chain::End))
@@ -334,7 +426,7 @@ pub fn main() {
 
     let config = Config::Config { name: "alder" }
     let config_json = encode(config)
-    assert(config_json == "{\"tag\":\"Config\",\"value\":{\"name\":\"alder\"}}")
+    assert(config_json == "{\"tag\":\"Config\",\"value\":{\"name\":\"alder\",\"note\":null}}")
     let decoded_config: Result[Config, [:invalid_json(String)]] = decode(config_json)
     assert(decoded_config == Result.ok(config))
     let extra_config_field: Result[Config, [:invalid_json(String)]] = decode("{\"tag\":\"Config\",\"value\":{\"name\":\"alder\",\"extra\":true}}")

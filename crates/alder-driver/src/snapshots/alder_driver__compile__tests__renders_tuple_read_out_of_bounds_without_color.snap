@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn read(pair: (Number, String)) { pair.2 }\n"
+---
+alder::type::tuple_index_out_of_bounds
+
+  × index 2 is outside this 2-element tuple
+   ╭─[/project/src/main.ald:1:40]
+ 1 │ fn read(pair: (Number, String)) { pair.2 }
+   ·                                        ┬
+   ·                                        ╰── there is no element at this index
+   ╰────
+  help: tuple indices start at zero; valid indices are 0 through 1

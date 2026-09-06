@@ -9,15 +9,23 @@ function $v_same($a0, $a1) {
 	const $t0 = $l1_input;
 	let $t1;
 	$match2: {
-		let $t4 = Array["isArray"]($t0) && $t0["length"] === 2 && true;
+		let $t3;
+		let $t5;
+		let $t4 = Array["isArray"]($t0) && $t0["length"] === 2;
 		if ($t4) {
-			const $t3 = $l0_expected;
-			$t4 = $t0[1] === $t3;
+			$t3 = $t0[0];
+			$t4 = true;
 		}
-		if ($t4) {
-			let $l2_expected = $t0[0];
-			const $t5 = $l2_expected;
-			$t1 = $t5 === 1;
+		let $t7 = $t4;
+		if ($t7) {
+			$t5 = $t0[1];
+			const $t6 = $l0_expected;
+			$t7 = $t5 === $t6;
+		}
+		if ($t7) {
+			let $l2_expected = $t3;
+			const $t8 = $l2_expected;
+			$t1 = $t8 === 1;
 			break $match2;
 		}
 		if (true) {

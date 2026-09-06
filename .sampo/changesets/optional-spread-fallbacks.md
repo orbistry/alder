@@ -2,4 +2,4 @@
 cargo/alder-solve: patch
 ---
 
-Preserve fallback payload types and required presence when optional record spreads omit a field, while allowing later required fields to overwrite all earlier alternatives.
+Infer right-biased record spreads using ordinary field types. A later Option field overwrites earlier values even when it contains None.

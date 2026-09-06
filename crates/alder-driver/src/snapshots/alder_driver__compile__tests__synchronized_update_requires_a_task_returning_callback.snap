@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub async fn main() {\n    let cell = SynchronizedRef.make(0).await\n    SynchronizedRef.update(cell, value -> value + 1).await\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Task[Number]`, found `Number`
+   ╭─[/project/src/main.ald:3:34]
+ 2 │     let cell = SynchronizedRef.make(0).await
+ 3 │     SynchronizedRef.update(cell, value -> value + 1).await
+   ·                                  ─────────┬────────
+   ·                                           ╰── type requirement originates here
+ 4 │ }
+   ╰────

@@ -1,0 +1,85 @@
+pub fn preserve(value) { Some(value?) }
+
+pub fn explicit_exit(value, stop: Bool) {
+    let item = value?
+    if stop { return None }
+    return Some(item)
+}
+
+pub async fn explicit_async_exit(value) {
+    let item = value?
+    return Some(item)
+}
+
+pub fn recursive(value, again: Bool) {
+    let item = value?
+    recursive_peer(Some(item), again)
+}
+
+fn recursive_peer(value, again: Bool) {
+    if again { recursive(value, false) } else { Some(value?) }
+}
+
+pub fn unit(value: Option[()]) Option[()] { Some(value?) }
+
+pub fn nested(value: Option[Number]) Task[Option[Number]] {
+    let run = item -> async { Some(item?) }
+    run(value)
+}
+
+pub fn mixed(value: Option[Number]) Result[Task[Option[Number]], [:outer]] {
+    Ok(async { Some(value?) })
+}
+
+pub fn isolated_lambda(value: Option[Number]) Number {
+    let run = item -> { Some(item?) }
+    let result = run(value)
+    match result { None => 0, Some(number) => number }
+}
+
+fn operand(value: Option[Number], events: Array[Number]) Option[Number] {
+    Array.push(events, 1)
+    value
+}
+
+pub fn evaluate_once(value: Option[Number], events: Array[Number]) Option[Number] {
+    let number = operand(value, events)?
+    Array.push(events, 2)
+    Some(number)
+}
+
+pub async fn interruption_waits_for_option_cleanup() {
+    let entered = false
+    let release = false
+    let requested = 0
+    let completed = 0
+    let events: Array[Number] = []
+    let child = Fiber.fork(Fiber.scope(async {
+        Fiber.addFinalizer(async {
+            entered = true
+            while !release { Task.sleep(0).await }
+            Array.push(events, 1)
+        }).await
+        let missing: Option[Number] = None
+        let number = missing?
+        Array.push(events, 99)
+        Some(number)
+    })).await
+    while !entered { Task.sleep(0).await }
+    let interrupt = async {
+        requested += 1
+        Fiber.interrupt(child).await
+        completed += 1
+    }
+    let first = Fiber.fork(interrupt).await
+    let second = Fiber.fork(interrupt).await
+    while requested != 2 { Task.sleep(0).await }
+    Task.sleep(0).await
+    assert(completed == 0)
+    assert(events == [])
+    release = true
+    Fiber.join(first).await
+    Fiber.join(second).await
+    assert(completed == 2)
+    assert(events == [1])
+}

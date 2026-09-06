@@ -1,0 +1,17 @@
+pub trait ReadX[a] {
+    fn read_x(value: a) Number
+}
+
+impl ReadX[{ r | x: Number }] {
+    fn read_x(value: { r | x: Number }) Number { value.x }
+}
+
+pub trait ReadOptional[a] {
+    fn read_optional(value: a) Option[Option[Number]]
+}
+
+impl ReadOptional[{ value?: Option[Number] }] {
+    fn read_optional(record: { value?: Option[Number] }) Option[Option[Number]] {
+        record.value
+    }
+}

@@ -1,0 +1,56 @@
+pub fn run() {
+    let source = { item: Some(42), flag: 0 }
+    let result = match source {
+        { item: Some(value), flag: ^{
+            source.item = None
+            0
+        } } => value
+        _ => 0
+    }
+    assert(result == 42)
+    assert(source.item == None)
+
+    let arrays = { items: [1, 2, 3], flag: 0 }
+    let tail = match arrays {
+        { items: [first, ..rest], flag: ^{
+            arrays.items[1] = 99
+            Array.push(arrays.items, 4)
+            0
+        } } => {
+            assert(first == 1)
+            rest
+        }
+        _ => []
+    }
+    assert(tail == [2, 3])
+    assert(arrays.items == [1, 99, 3, 4])
+
+    let records = { nested: { value: 42 }, flag: 0 }
+    let original = records.nested
+    let captured = match records {
+        { nested: { value } as alias, flag: ^{
+            records.nested = { value: 99 }
+            0
+        } } => {
+            alias.value = value + 1
+            value
+        }
+    }
+    assert(captured == 42)
+    assert(original.value == 43)
+    assert(records.nested.value == 99)
+}
+
+pub async fn verify_async() {
+    let source = { item: Some(42), flag: 0 }
+    let result = match source {
+        { item: Some(value), flag: ^{
+            Task.sleep(0).await
+            source.item = None
+            0
+        } } => value
+        _ => 0
+    }
+    assert(result == 42)
+    assert(source.item == None)
+}

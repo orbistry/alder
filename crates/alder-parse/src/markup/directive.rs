@@ -5,7 +5,7 @@
 //! Directive heads are code mode (`chomp` between tokens) and are parsed
 //! under `with_record_ctor(false, …)` like `if` / `for` / `match` heads
 //! (§2.3), so `@if s == Shape::Empty { … }` reads the `{` as the body.
-//! A `child_block` is `{` items `}`: at an item start `let` / `let mut` and
+//! A `child_block` is `{` items `}`: at an item start `let` and
 //! `use` are statements (setup, not rendered; §10.23); everything else is a
 //! child in text mode. `@else` / `@empty` may follow the previous block on
 //! a later line: the parser looks past whitespace for them
@@ -267,7 +267,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// At `{`: `let` / `let mut` / `use` statements and children until `}`.
+    /// At `{`: `let` / `use` statements and children until `}`.
     pub(crate) fn child_block(
         &mut self,
     ) -> Result<&'a Located<ChildBlock<'a>>, error::ChildBlock<'a>> {

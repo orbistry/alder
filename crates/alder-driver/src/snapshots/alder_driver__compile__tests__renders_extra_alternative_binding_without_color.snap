@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn read(input: Option[Number]) Number {\n    match input { None | Some(value) => 0 }\n}\n"
+---
+alder::canonicalize::alternative_bindings
+
+  × match alternatives must bind the same names
+   ╭─[/project/src/main.ald:2:26]
+ 1 │ fn read(input: Option[Number]) Number {
+ 2 │     match input { None | Some(value) => 0 }
+   ·                          ─────┬─────
+   ·                               ╰── reported here
+ 3 │ }
+   ╰────
+  help: the first alternative binds []; this one binds [value]

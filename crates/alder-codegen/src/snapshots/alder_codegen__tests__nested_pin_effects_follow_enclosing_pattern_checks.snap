@@ -16,17 +16,27 @@ function $v_same($a0, $a1) {
 	const $t1 = $l1_input;
 	let $t2;
 	$match3: {
-		let $t7 = $t1 !== null;
-		if ($t7) {
-			let $t6 = Array["isArray"]($optionUnbox($t1)) && $optionUnbox($t1)["length"] === 2 && $optionUnbox($t1)[0] === 0;
+		let $t4;
+		let $t5;
+		let $t7;
+		let $t11 = $t1 !== null;
+		if ($t11) {
+			$t4 = $optionUnbox($t1);
+			let $t6 = Array["isArray"]($t4) && $t4["length"] === 2;
 			if ($t6) {
-				const $t4 = $v_expected;
-				const $t5 = $t4($l2_events);
-				$t6 = $optionUnbox($t1)[1] === $t5;
+				$t5 = $t4[0];
+				$t6 = $t5 === 0;
 			}
-			$t7 = $t6;
+			let $t10 = $t6;
+			if ($t10) {
+				$t7 = $t4[1];
+				const $t8 = $v_expected;
+				const $t9 = $t8($l2_events);
+				$t10 = $t7 === $t9;
+			}
+			$t11 = $t10;
 		}
-		if ($t7) {
+		if ($t11) {
 			$t2 = true;
 			break $match3;
 		}

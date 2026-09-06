@@ -258,6 +258,11 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
         (
             "Fiber",
             exports(&[
+                ("$fiberUnbounded", "unbounded"),
+                ("$fiberMapWithOptions", "map"),
+                ("$fiberForEachWithOptions", "forEach"),
+                ("$fiberTryMapWithOptions", "tryMap"),
+                ("$fiberTryForEachWithOptions", "tryForEach"),
                 ("$fiberFork", "fork"),
                 ("$fiberJoin", "join"),
                 ("$fiberInterrupt", "interrupt"),

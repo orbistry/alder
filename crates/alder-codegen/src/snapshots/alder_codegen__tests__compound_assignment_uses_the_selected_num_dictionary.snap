@@ -8,12 +8,10 @@ $dict$Eq$0["eq"] = ($a0, $a1) => {
 	return $equalDerived($a0, $a1, { "Token": {
 		"record": false,
 		"fields": [],
-		"optional": [],
 		"dictionaries": []
-	} });
+	} }, "alder://app/main.mjs::Token");
 };
 Object["freeze"]($dict$Eq$0);
-const $c_Token_Token = Object["freeze"]({ "$": "Token" });
 function $impl$1$compare($self, $a0, $a1) {
 	let $l0_left = $a0;
 	let $l1_right = $a1;
@@ -76,6 +74,7 @@ $dict$Num$2["negate"] = ($a0) => {
 	return $impl$2$negate($dict$Num$2, $a0);
 };
 Object["freeze"]($dict$Num$2);
+const $c_Token_Token = Object["freeze"]({ "$": "Token" });
 function $v_update() {
 	const $t0 = $c_Token_Token;
 	let $l13_value = $t0;

@@ -1,0 +1,18 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Marker[f] { fn pass(value: f[a]) f[a] { value } }\nimpl Marker[Result[_, [:left | e]]] {}\nimpl Marker[Result[_, [:left | :right]]] {}\n"
+---
+alder::trait::overlapping_impl
+
+  × overlapping implementations of `Marker` are not allowed
+   ╭─[/project/src/main.ald:3:1]
+ 1 │ trait Marker[f] { fn pass(value: f[a]) f[a] { value } }
+ 2 │ impl Marker[Result[_, [:left | e]]] {}
+   · ───────────────────┬──────────────────
+   ·                    ╰── first implementation is here
+ 3 │ impl Marker[Result[_, [:left | :right]]] {}
+   · ─────────────────────┬─────────────────────
+   ·                      ╰── this implementation overlaps the first
+   ╰────
+  help: remove one impl or introduce a distinct wrapper type; Alder has no
+        specialization

@@ -8,11 +8,19 @@ $dict$Eq$0["eq"] = ($a0, $a1) => {
 	return $equalDerived($a0, $a1, { "Meta": {
 		"record": true,
 		"fields": ["code", "note"],
-		"optional": [],
+		"dictionaries": [undefined, undefined]
+	} }, "alder://app/main.mjs::Status");
+};
+Object["freeze"]($dict$Eq$0);
+const $dict$Show$0 = {};
+$dict$Show$0["show"] = ($a0) => {
+	return $showDerived($a0, { "Meta": {
+		"record": true,
+		"fields": ["code", "note"],
 		"dictionaries": [undefined, undefined]
 	} });
 };
-Object["freeze"]($dict$Eq$0);
+Object["freeze"]($dict$Show$0);
 function $c_Status_Meta(code, note) {
 	return {
 		"$": "Meta",
@@ -20,14 +28,4 @@ function $c_Status_Meta(code, note) {
 		"note": note
 	};
 }
-const $dict$Show$0 = {};
-$dict$Show$0["show"] = ($a0) => {
-	return $showDerived($a0, { "Meta": {
-		"record": true,
-		"fields": ["code", "note"],
-		"optional": [],
-		"dictionaries": [undefined, undefined]
-	} });
-};
-Object["freeze"]($dict$Show$0);
 export { $c_Status_Meta, $dict$Eq$0, $dict$Show$0 };

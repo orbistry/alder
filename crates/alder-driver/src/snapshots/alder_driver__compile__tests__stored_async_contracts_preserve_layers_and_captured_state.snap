@@ -5,10 +5,10 @@ description: "import @vendor/widgets.{ deferred, specialize }\npub async fn main
 alder::type::type_mismatch
 
   × type mismatch: expected `Number`, found `String`
-   ╭─[/project/src/main.ald:4:5]
+   ╭─[/project/src/main.ald:4:14]
  3 │     specialize().await
  4 │     deferred("wrong").await
-   ·     ────────┬────────
-   ·             ╰── type requirement originates here
+   ·              ───┬───
+   ·                 ╰── type requirement originates here
  5 │ }
    ╰────

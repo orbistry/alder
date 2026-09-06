@@ -1,6 +1,9 @@
 import ~/tags
 import ~/call_order
 import ~/assignments
+import ~/methods
+import ~/pins
+import ~/pattern_capture
 
 fn choose(flag: Bool) Number {
     if flag { return 42 } else { return 43 }
@@ -81,6 +84,57 @@ fn while_condition_exits_enclosing_loop() Number {
     loop {
         while { break 42 } {}
         break 0
+    }
+}
+
+fn array_operand_exit() Number {
+    loop { [{ break 42 }, { break "unreachable" }] }
+}
+
+fn annotated_array_operand_exit() Number {
+    loop {
+        let values: Array[Number] = [{ break 42 }, { break "unreachable" }]
+    }
+}
+
+fn tuple_operand_exit() Number {
+    loop { ({ break 42 }, { break "unreachable" }) }
+}
+
+fn tag_operand_exit() Number {
+    loop { Err(:pair({ break 42 }, { break "unreachable" })) }
+}
+
+fn template_operand_exit() Number {
+    loop { `${{ break 42 }}${{ break "unreachable" }}` }
+}
+
+fn unused_tag(parts: Array[String], a: Number, b: Number) String { "unused" }
+
+fn tagged_template_operand_exit() Number {
+    loop { unused_tag`${{ break 42 }}${{ break "unreachable" }}` }
+}
+
+fn index_operand_exit() Number {
+    loop { ({ break 42 })[{ break "unreachable" }] }
+}
+
+fn assignment_operand_exit() Number {
+    let values = [[0]]
+    loop {
+        values[{ break 42 }][{ break "unreachable index" }] = { break "unreachable value" }
+    }
+}
+
+fn record_operand_exit() Number {
+    loop { let ignored = { a: { break 42 }, b: { break "unreachable" } } }
+}
+
+fn annotated_record_operand_exit() Number {
+    loop {
+        let ignored: { a: Number, b: Number } = {
+            a: { break 42 }, b: { break "unreachable" }
+        }
     }
 }
 
@@ -178,7 +232,7 @@ fn template_order() {
     let merged = tags.overlay`${{ x: 20 }}${{ y: 22 }}`
     assert(merged.x + merged.y == 42)
     let absent: { value?: Option[Number] } = {}
-    let present: { value?: Option[Number] } = { value: Option.none() }
+    let present: { value?: Option[Number] } = { value: Some(None) }
     assert(((absent, {}) |> tags.merge_pair).value == Option.none())
     assert(((present, {}) |> tags.merge_pair).value == Option.some(Option.none()))
     assert(tags.overlay_value(0, { other: true, value: "old" }, { value: 42 }) == 42)
@@ -315,6 +369,8 @@ pub async fn main() {
     assert(call_order.with_default(Some(42), 0) == 42)
     assert(call_order.with_default(None, "fallback") == "fallback")
     call_order.verify_async().await
+    pattern_capture.run()
+    pattern_capture.verify_async().await
     expression_order()
     template_order()
     assert(assignments.identity(42) == 42)
@@ -361,6 +417,18 @@ pub async fn main() {
     assert(awaited_loop_value().await == 42)
     assert(loop_payload_once() == 1)
     assert(while_condition_exits_enclosing_loop() == 42)
+    assert(array_operand_exit() == 42)
+    assert(annotated_array_operand_exit() == 42)
+    assert(tuple_operand_exit() == 42)
+    assert(tag_operand_exit() == 42)
+    assert(template_operand_exit() == 42)
+    assert(tagged_template_operand_exit() == 42)
+    assert(index_operand_exit() == 42)
+    assert(assignment_operand_exit() == 42)
+    assert(record_operand_exit() == 42)
+    assert(annotated_record_operand_exit() == 42)
+    methods.verify().await
+    pins.verify()
     assert(while_condition_continues_enclosing_loop().await == 2)
     let unit = loop { break }
     assert(unit == ())

@@ -32,6 +32,31 @@ const BUILTIN_VALUE_SOURCES: &[(&str, &str)] = &[
     ("Task", include_str!("../stdlib/Task.ald")),
 ];
 
+pub(crate) fn builtin_type_interface<'a>(
+    bump: &'a Bump,
+    module: alder_ast::ModuleId<'a>,
+) -> Option<&'a Interface<'a>> {
+    if module.package != alder_ast::PackageId::Builtin {
+        return None;
+    }
+    let (_, source) = BUILTIN_VALUE_SOURCES
+        .iter()
+        .find(|(name, _)| module.path == [*name])?;
+    let parsed =
+        alder_parse::parse_module(bump, source).expect("packaged stdlib declarations must parse");
+    let headers = crate::canonicalize_headers(
+        bump,
+        crate::Context {
+            home: module,
+            imports: &[],
+            interfaces: &[],
+        },
+        &parsed,
+    )
+    .expect("packaged stdlib type declarations must canonicalize");
+    Some(bump.alloc(headers_from_module(bump, headers.module, &[])))
+}
+
 pub(crate) fn builtin_value_annotations<'a>(
     bump: &'a Bump,
     module: alder_ast::ModuleId<'a>,
@@ -42,16 +67,90 @@ pub(crate) fn builtin_value_annotations<'a>(
     else {
         return Default::default();
     };
+    builtin_value_annotations_from_source(bump, module, source)
+}
+
+fn builtin_value_annotations_from_source<'a>(
+    bump: &'a Bump,
+    module: alder_ast::ModuleId<'a>,
+    source: &'a str,
+) -> std::collections::BTreeMap<&'a str, &'a alder_ast::Annotation<'a>> {
     let parsed =
         alder_parse::parse_module(bump, source).expect("packaged stdlib declarations must parse");
     // Use the builtin environment, never the importing module's shadowed names.
-    let env = crate::environment::Env::new(bump, module);
+    let mut env = crate::environment::Env::new(bump, module);
+    if parsed
+        .items
+        .iter()
+        .any(|item| matches!(item.value.kind, alder_source::ItemKind::TypeAlias(_)))
+    {
+        let headers = crate::canonicalize_headers(
+            bump,
+            crate::Context {
+                home: module,
+                imports: &[],
+                interfaces: &[],
+            },
+            &parsed,
+        )
+        .expect("packaged stdlib type declarations must canonicalize");
+        for item in headers.module.items {
+            let ItemKind::TypeAlias(alias) = &item.value.kind else {
+                continue;
+            };
+            // Headers have already checked local name collisions and alias cycles.
+            // Private aliases are available inside signatures too.
+            env.types.insert(
+                alias.name.name,
+                crate::environment::Candidate::Unique(crate::environment::TypeBinding {
+                    reference: alias.name,
+                    arity: alias.params.len(),
+                    region: item.region,
+                }),
+            );
+            env.aliases.insert(
+                alias.name,
+                crate::aliases::Definition {
+                    params: bump.alloc_slice_copy(
+                        &alias
+                            .params
+                            .iter()
+                            .map(|param| param.value)
+                            .collect::<Vec<_>>(),
+                    ),
+                    body: alias.typ,
+                },
+            );
+        }
+    }
     parsed
         .items
         .iter()
         .filter_map(|item| {
             if !matches!(item.value.visibility, alder_source::Visibility::Pub(_)) {
                 return None;
+            }
+            if let alder_source::ItemKind::Let(binding) = &item.value.kind {
+                let alder_source::Pattern::Var(name) = binding.pattern.value else {
+                    panic!("packaged stdlib values must have simple names");
+                };
+                let source = binding
+                    .annotation
+                    .expect("packaged stdlib values must be annotated");
+                // Builtin values are shared, not factories: never quantify their
+                // payloads. Function declarations use the separate path below.
+                let typ = crate::types::canonicalize_type(bump, &env, &Default::default(), source)
+                    .expect("packaged stdlib value types must canonicalize");
+                let annotation = bump.alloc(alder_ast::Annotation {
+                    params: &[],
+                    trait_predicates: &[],
+                    projection_equalities: &[],
+                    error_row_inclusions: &[],
+                    record_overlays: &[],
+                    tuple_shapes: &[],
+                    typ,
+                });
+                return Some((name, &*annotation));
             }
             let alder_source::ItemKind::Fn(function) = &item.value.kind else {
                 return None;
@@ -217,7 +316,12 @@ fn interface_from_module<'a>(
                                 exported_as: method.name.value,
                                 scheme: method.scheme,
                                 has_default: method.body.is_some(),
-                                default_symbol: method.body.is_some().then_some(method.name.value),
+                                default_symbol: method.body.is_some().then(|| {
+                                    &*bump.alloc_str(&format!(
+                                        "$default${}${}",
+                                        method.id.trait_.0.name, method.id.name
+                                    ))
+                                }),
                             }),
                         })
                         .collect::<Vec<_>>();
@@ -318,6 +422,25 @@ fn interface_from_module<'a>(
                             }
                         };
                         methods.push((trait_method.id, method));
+                    }
+                } else {
+                    for item in implementation.items {
+                        match item {
+                            alder_ast::ImplItem::Fn(method) => methods.push((
+                                method.method,
+                                MethodImplementation::Provided {
+                                    symbol: bump.alloc_str(&format!(
+                                        "$impl${}${}",
+                                        impl_origin_index(implementation.id.origin),
+                                        method.method.name
+                                    )),
+                                },
+                            )),
+                            alder_ast::ImplItem::Default { method, symbol, .. } => {
+                                methods.push((*method, MethodImplementation::Default { symbol }));
+                            }
+                            alder_ast::ImplItem::AssocType { .. } => {}
+                        }
                     }
                 }
                 instances.push(InterfaceImpl {
@@ -634,6 +757,110 @@ mod tests {
                 !super::builtin_value_annotations(&bump, module).is_empty(),
                 "{name}"
             );
+        }
+    }
+
+    #[test]
+    fn builtin_unbounded_is_a_monomorphic_number_value() {
+        let bump = bumpalo::Bump::new();
+        let module = alder_ast::ModuleId {
+            package: alder_ast::PackageId::Builtin,
+            path: &["Fiber"],
+        };
+        let annotations = super::builtin_value_annotations(&bump, module);
+        let annotation = annotations["unbounded"];
+        assert!(annotation.params.is_empty());
+        let alder_ast::Type::Named { reference, args } = annotation.typ.value else {
+            panic!("unbounded must be a Number value, not a function or options record");
+        };
+        assert_eq!(reference.name, "Number");
+        assert_eq!(reference.module.package, alder_ast::PackageId::Builtin);
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn builtin_type_interfaces_require_builtin_package_identity() {
+        let bump = bumpalo::Bump::new();
+        let module = alder_ast::ModuleId {
+            package: alder_ast::PackageId::Builtin,
+            path: &["Fiber"],
+        };
+        let interface = super::builtin_type_interface(&bump, module).unwrap();
+        let options = interface
+            .types
+            .iter()
+            .find(|typ| typ.exported_as == "MapOptions")
+            .unwrap();
+        assert_eq!(options.reference.module, module);
+        assert!(matches!(options.body, alder_ast::PublicTypeBody::Alias(_)));
+        assert!(
+            super::builtin_type_interface(
+                &bump,
+                alder_ast::ModuleId {
+                    package: alder_ast::PackageId::Application,
+                    path: module.path,
+                }
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn builtin_signatures_expand_source_local_aliases() {
+        let bump = bumpalo::Bump::new();
+        let module = alder_ast::ModuleId {
+            package: alder_ast::PackageId::Builtin,
+            path: &["Fixture"],
+        };
+        let source = indoc::indoc! {r#"
+            pub type Options = Settings[Number]
+            type Settings[a] = { concurrency?: a }
+
+            #[extern("alder:kernel", "$fixture")]
+            pub fn configure(options?: Options) Options
+        "#};
+        let annotations = super::builtin_value_annotations_from_source(&bump, module, source);
+        let annotation = annotations["configure"];
+        let alder_ast::Type::Fn { params, ret } = annotation.typ.value else {
+            panic!("expected a function signature");
+        };
+        let alder_ast::Type::Named { reference, args } = params[0].value else {
+            panic!("optional parameter must have Option type");
+        };
+        assert_eq!(reference.name, "Option");
+        assert_eq!(reference.module.package, alder_ast::PackageId::Builtin);
+        for typ in [args[0], ret] {
+            let alder_ast::Type::Alias { reference, .. } = typ.value else {
+                panic!("source alias must retain its canonical identity");
+            };
+            assert_eq!(reference.module, module);
+            assert_eq!(reference.name, "Options");
+            let mut expanded = typ;
+            while let alder_ast::Type::Alias { target, .. } = expanded.value {
+                expanded = match target {
+                    alder_ast::AliasType::Open(body) | alder_ast::AliasType::Filled(body) => body,
+                };
+            }
+            let alder_ast::Type::Record { fields, .. } = expanded.value else {
+                panic!("aliases must expand to the underlying record");
+            };
+            assert_eq!(fields.len(), 1);
+            assert_eq!(fields[0].name, "concurrency");
+            let alder_ast::Type::Named { reference, args } = fields[0].typ.value else {
+                panic!("optional record shorthand must expand to Option");
+            };
+            assert_eq!(reference.name, "Option");
+            assert_eq!(reference.module.package, alder_ast::PackageId::Builtin);
+            assert_eq!(args.len(), 1);
+            let alder_ast::Type::Named {
+                reference,
+                args: [],
+            } = args[0].value
+            else {
+                panic!("generic private alias must substitute its argument");
+            };
+            assert_eq!(reference.name, "Number");
+            assert_eq!(reference.module.package, alder_ast::PackageId::Builtin);
         }
     }
 

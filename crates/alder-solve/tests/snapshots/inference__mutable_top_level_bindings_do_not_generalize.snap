@@ -7,11 +7,11 @@ description: "let identity = (value) -> { value }\nfn number() { identity(1) }\n
         region: Region {
             start: Position {
                 line: 3,
-                column: 13,
+                column: 22,
             },
             end: Position {
                 line: 3,
-                column: 29,
+                column: 28,
             },
         },
         kind: Mismatch {

@@ -1,0 +1,50 @@
+fn returning_pin() Number {
+    match 0 { ^{ return 42 } => 0, _ => 0 }
+}
+
+fn nested_pin(value: Option[Number]) Number {
+    match value { Some(^{ return 42 }) => 0, _ => 1 }
+}
+
+fn propagating_pin(value: Option[Number]) Option[Number] {
+    match 42 { ^value? => Some(42), _ => Some(0) }
+}
+
+fn exiting_pin() Number {
+    loop {
+        match 0 {
+            ^{ break 42 } if { break "guard" } => { break "body" },
+            ^{ break "later pin" } => { break "later body" },
+            _ => { break "fallback" },
+        }
+    }
+}
+
+fn exiting_nested_pin() Number {
+    loop {
+        match Some((0, 0)) {
+            Some((^{ break 42 }, ^{ break "unreachable" })) => (),
+            _ => (),
+        }
+    }
+}
+
+fn guard_retry_pin() Number {
+    loop {
+        match (0, 0) {
+            (_, _) | (^{ break 42 }, _) if false => (),
+            _ => { break 0 },
+        }
+    }
+}
+
+pub fn verify() {
+    assert(guard_retry_pin() == 42)
+    assert(exiting_nested_pin() == 42)
+    assert(exiting_pin() == 42)
+    assert(returning_pin() == 42)
+    assert(nested_pin(Some(0)) == 42)
+    assert(nested_pin(None) == 1)
+    assert(propagating_pin(Some(42)) == Some(42))
+    assert(propagating_pin(None) == None)
+}

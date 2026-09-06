@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn relate(first?: a, second: a) {}\nfn conflict(first, second) {\n    relate(first, second)\n    relate(second, first)\n}\n"
+---
+alder::type::ambiguous_option_lifting
+
+  × I cannot choose consistent Option wrapping for these values
+   ╭─[/project/src/main.ald:3:12]
+ 2 │ fn conflict(first, second) {
+ 3 │     relate(first, second)
+   ·            ──┬──
+   ·              ╰── the intended Option layers are ambiguous here
+ 4 │     relate(second, first)
+   ╰────
+  help: add a type annotation or explicit Some wrappers to make the intended
+        Option layers clear

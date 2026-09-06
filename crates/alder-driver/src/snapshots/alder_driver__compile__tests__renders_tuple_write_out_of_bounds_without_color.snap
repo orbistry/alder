@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn write(pair: (Number, String)) {\n    pair.2 = 42\n}\n"
+---
+alder::type::tuple_index_out_of_bounds
+
+  × index 2 is outside this 2-element tuple
+   ╭─[/project/src/main.ald:2:10]
+ 1 │ fn write(pair: (Number, String)) {
+ 2 │     pair.2 = 42
+   ·          ┬
+   ·          ╰── there is no element at this index
+ 3 │ }
+   ╰────
+  help: tuple indices start at zero; valid indices are 0 through 1

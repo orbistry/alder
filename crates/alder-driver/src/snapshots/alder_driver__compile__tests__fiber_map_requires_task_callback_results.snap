@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub async fn main() {\n    Fiber.map([1, 2], value -> value + 1).await\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Task[a]`, found `Number`
+   ╭─[/project/src/main.ald:2:23]
+ 1 │ pub async fn main() {
+ 2 │     Fiber.map([1, 2], value -> value + 1).await
+   ·                       ─────────┬────────
+   ·                                ╰── type requirement originates here
+ 3 │ }
+   ╰────

@@ -1,0 +1,22 @@
+pub error First { :failed(Number), :missing }
+pub error Second { :missing, :failed(Number) }
+
+pub trait PreserveResult[a] {
+    fn preserve_result(value: a) a { value }
+}
+
+impl PreserveResult[Result[Number, First]] {}
+
+pub fn check() {
+    let success: Result[Number, Second] = Ok(42)
+    let failure: Result[Number, Second] = Err(:failed(7))
+    let events = []
+    let blocked: Result[Number, Second] = {
+        Array.push(events, 1)
+        Err(:failed(8))
+    }
+    assert(preserve_result(success) == success)
+    assert(preserve_result(failure) == failure)
+    assert(preserve_result(blocked) == blocked)
+    assert(events == [1])
+}

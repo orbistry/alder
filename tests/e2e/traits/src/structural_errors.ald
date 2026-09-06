@@ -1,0 +1,119 @@
+import ~/error_display
+import ~/codec
+
+enum Code { Value(Number) }
+
+impl Show[Code] {
+    fn show(value: Code) String { "custom" }
+}
+
+impl Hash[Code] {
+    fn hash(value: Code) BigInt {
+        match value { Code::Value(number) => hash(number) }
+    }
+}
+
+impl Json[Code] {
+    fn encode(value: Code) String {
+        match value { Code::Value(number) => Json.encode([number]) }
+    }
+    fn decode(text: String) Result[Code, [:invalid_json(String)]] {
+        let values: Array[Number] = Json.decode(text)?
+        if Array.length(values) == 1 {
+            Ok(Code::Value(values[0]))
+        } else {
+            Err(:invalid_json("expected one code number"))
+        }
+    }
+}
+
+error First { :bad(Code), :missing }
+error Second { :missing, :bad(Code) }
+
+#[derive(Show, Json, Hash)]
+enum WrappedFailure[a] { Wrap(a, Result[Number, First], First) }
+
+#[derive(Show, Json, Hash)]
+enum FailureTree[a] {
+    Leaf(a),
+    Nested(Result[Number, [:cause(FailureTree[a])]]),
+}
+
+fn first(value: Result[Number, First]) String { show(value) }
+fn second(value: Result[Number, Second]) String { show(value) }
+
+fn relay(value: First) Second { value }
+fn direct_render(value: Second) String { show(value) }
+fn direct_encode(value: First) String { Json.encode(value) }
+
+pub fn run() {
+    let left: Result[Number, First] = Err(:bad(Code::Value(7)))
+    let right: Result[Number, Second] = Err(:bad(Code::Value(8)))
+    assert first(left) == "Err(:bad(custom))"
+    assert second(right) == first(left)
+    let same: Result[Number, Second] = Err(:bad(Code::Value(7)))
+    assert codec.hash_equal(left, same)
+    let narrow: Result[Number, [:bad(Code)]] = Err(:bad(Code::Value(7)))
+    let wide: Result[Number, [:absent | :bad(Code) | :missing]] = Err(:bad(Code::Value(7)))
+    assert hash(narrow) == hash(left)
+    assert hash(wide) == hash(left)
+    match left {
+        Err(value) => {
+            let translated: Second = relay(value)
+            assert direct_render(translated) == ":bad(custom)"
+            let direct = direct_encode(translated)
+            assert direct == "{\"tag\":\":bad\",\"fields\":[[7]]}"
+            let decoded: Result[Second, [:invalid_json(String)]] = Json.decode(direct)
+            assert match decoded { Ok(value) => value == translated, _ => false }
+            let wrapped = WrappedFailure::Wrap(Some(None), left, translated)
+            let twin = WrappedFailure::Wrap(Some(None), same, value)
+            let typed: WrappedFailure[Option[Option[Number]]] = wrapped
+            assert codec.hash_equal(typed, twin)
+            assert show(typed) == "Wrap(Some(None), Err(:bad(custom)), :bad(custom))"
+            let roundtrip: Result[WrappedFailure[Option[Option[Number]]], [:invalid_json(String)]] = codec.decode_value(codec.encode_value(typed))
+            assert match roundtrip { Ok(value) => value == typed, _ => false }
+        },
+        Ok(_) => { assert false },
+    }
+    let encoded = codec.encode_value(left)
+    assert encoded == "{\"$\":\"Err\",\"_0\":{\"tag\":\":bad\",\"fields\":[[7]]}}"
+    let decoded: Result[Result[Number, Second], [:invalid_json(String)]] = codec.decode_value(encoded)
+    assert match decoded { Ok(value) => value == left, _ => false }
+    for invalid in [
+        "{\"$\":\"Err\"}",
+        "{\"$\":\"Err\",\"_0\":{\"tag\":\":unknown\",\"fields\":[]}}",
+        "{\"$\":\"Err\",\"_0\":{\"tag\":\":bad\",\"fields\":[]}}",
+        "{\"$\":\"Err\",\"_0\":{\"tag\":\":bad\",\"fields\":[\"wrong\"]}}",
+    ] {
+        let rejected: Result[Result[Number, First], [:invalid_json(String)]] = Json.decode(invalid)
+        assert match rejected { Err(:invalid_json(_)) => true, _ => false }
+    }
+    assert error_display.describe(left) == "Err(:bad(custom))"
+    assert error_display.describe(Err(:bad(42))) == "Err(:bad(42))"
+    assert error_display.describe(Err(:bad("text"))) == "Err(:bad(\"text\"))"
+    let missing: Result[Number, First] = Err(:missing)
+    assert first(missing) == "Err(:missing)"
+    let nested: Option[Option[Number]] = Some(None)
+    let failed: Result[Number, [:nested(Option[Option[Number]])]] = Err(:nested(nested))
+    assert show(failed) == "Err(:nested(Some(None)))"
+    let nested_decoded: Result[Result[Number, [:nested(Option[Option[Number]])]], [:invalid_json(String)]] = Json.decode(Json.encode(failed))
+    assert match nested_decoded { Ok(value) => value == failed, _ => false }
+    let tree: FailureTree[Option[Option[Number]]] = FailureTree::Nested(
+        Err(:cause(FailureTree::Leaf(nested))),
+    )
+    let recursive: Result[Number, [:tree(FailureTree[Option[Option[Number]]])]] = Err(:tree(tree))
+    assert show(recursive) == "Err(:tree(Nested(Err(:cause(Leaf(Some(None)))))))"
+    let twin: FailureTree[Option[Option[Number]]] = FailureTree::Nested(
+        Err(:cause(FailureTree::Leaf(Some(None)))),
+    )
+    assert tree == twin
+    assert codec.hash_equal(tree, twin)
+    let tree_decoded: Result[FailureTree[Option[Option[Number]]], [:invalid_json(String)]] = codec.decode_value(codec.encode_value(tree))
+    assert match tree_decoded { Ok(value) => value == tree, _ => false }
+    let custom: FailureTree[Code] = FailureTree::Nested(
+        Err(:cause(FailureTree::Leaf(Code::Value(42)))),
+    )
+    assert error_display.describe(Err(:bad(custom))) == "Err(:bad(Nested(Err(:cause(Leaf(custom))))))"
+    let custom_decoded: Result[FailureTree[Code], [:invalid_json(String)]] = codec.decode_value(codec.encode_value(custom))
+    assert match custom_decoded { Ok(value) => value == custom, _ => false }
+}

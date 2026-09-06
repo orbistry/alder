@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn update(value) {\n    value.0 = 20\n    value.3 = 22\n    value.0 + value.3\n}\nfn run() Number { update((0, false, \"unused\", 0)) }\n"
+---
+run: fn() Number
+update: forall a. fn(a) Number where tuple a length 4 {0: Number, 3: Number}

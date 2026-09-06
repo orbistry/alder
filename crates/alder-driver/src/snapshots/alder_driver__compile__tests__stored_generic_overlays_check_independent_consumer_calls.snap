@@ -1,15 +1,14 @@
 ---
 source: crates/alder-driver/src/compile.rs
-assertion_line: 945
 description: "import @vendor/widgets.{ merge }\npub fn main() Number {\n    merge({ value: 42 }, { value: \"wrong\" }).value\n}\n"
 ---
 alder::type::type_mismatch
 
   × type mismatch: expected `Number`, found `String`
-   ╭─[/project/src/main.ald:2:1]
- 1 │     import @vendor/widgets.{ merge }
- 2 │ ╭─▶ pub fn main() Number {
- 3 │ │       merge({ value: 42 }, { value: "wrong" }).value
- 4 │ ├─▶ }
-   · ╰──── type requirement originates here
+   ╭─[/project/src/main.ald:3:35]
+ 2 │ pub fn main() Number {
+ 3 │     merge({ value: 42 }, { value: "wrong" }).value
+   ·                                   ───┬───
+   ·                                      ╰── type requirement originates here
+ 4 │ }
    ╰────

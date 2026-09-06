@@ -1,0 +1,163 @@
+import ~/spread_defaults
+import ~/collections
+import ~/json_fields
+import ~/mutual_overlays
+
+fn read(record: { value: Option[Number] }) Option[Number] { record.value }
+
+fn generic_default(record: { value: a }, witness: a) a { record.value }
+
+fn apply(value: a, callback: fn(a) b) b { callback(value) }
+
+fn read_marked(record: { marker: Number, value?: Number }) Option[Number] { record.value }
+
+#[derive(Show, Ord, Hash, Json)]
+enum Config { Config { value?: Option[Number], unit?: () } }
+
+type MaybeNumber = Option[Number]
+#[derive(Json)]
+enum Generic[a] { Generic { value: a } }
+
+enum Reverse { Reverse(Number) }
+impl Ord[Reverse] {
+    fn compare(left: Reverse, right: Reverse) Ordering {
+        match (left, right) { (Reverse(a), Reverse(b)) => compare(b, a) }
+    }
+}
+
+fn same_ordered(left: a, right: a) Bool where a: Ord { left == right }
+
+fn merge(left, right) { { ..left, ..right } }
+
+fn fallback(left: { result: Result[Number, e] }, right: { result?: Result[Number, f] }) {
+    let value = match right.result { Some(result) => result?, None => left.result? }
+    Ok(value)
+}
+
+pub async fn main() {
+    assert(spread_defaults.repeat(3, { nested: { nested: 0 } }, { nested: 42 }).nested == 42)
+    assert(spread_defaults.repeat(0, { nested: { nested: "old" } }, { nested: "new" }).nested == "new")
+    collections.check()
+    json_fields.check()
+    assert(mutual_overlays.even(2, { nested: { nested: 0 } }, { nested: 42 }).nested == 42)
+    assert(mutual_overlays.odd(3, { nested: { nested: "seed" } }, { nested: "text" }).nested == "text")
+    assert(mutual_overlays.even(0, { nested: { nested: 0 } }, { nested: 7 }).nested == 7)
+    let omitted: { value?: Number } = {}
+    let explicit: { value: Option[Number] } = { value: None }
+    assert(omitted == explicit)
+    assert(read({}) == None)
+    let source = {}
+    assert(spread_defaults.copy(source).value == None)
+    assert(spread_defaults.delayed(source).value == None)
+    assert(spread_defaults.delayed({ value: Some(42) }).value == Some(42))
+    assert(source == {})
+    assert(spread_defaults.copy({ value: Some(42) }).value == Some(42))
+    assert(spread_defaults.copy({ value: 42 }).value == Some(42))
+    assert(spread_defaults.copy({ value: None }).value == None)
+    assert(spread_defaults.nested({}).value == None)
+    assert(spread_defaults.nested({ value: Some(None) }).value == Some(None))
+    let grouped = spread_defaults.grouping({ value: 42, x: "old" })
+    assert(grouped.0 == grouped.1)
+    assert(grouped.0.value == 42)
+    assert(grouped.0.x == 0)
+    assert(grouped.0.y)
+    let overwrite_trace = []
+    let overwritten = spread_defaults.overwritten(
+        { value: false }, { value: "right", kept: 42 }, overwrite_trace
+    )
+    assert(overwritten.value == "right")
+    assert(overwritten.kept == 42)
+    assert(overwritten.x == 0)
+    assert(overwrite_trace == [1, 2])
+    let known_trace = []
+    let known = spread_defaults.known_overwrite({ value: 42 }, { x: None, kept: "right" }, known_trace)
+    assert(known.x == None)
+    assert(known.kept == "right")
+    assert(known.value == 42)
+    assert(known_trace == [1])
+    assert(apply({}, read) == None)
+    assert(apply({ ..{} }, read) == None)
+    assert(apply(if true { {} } else { {} }, read) == None)
+    assert(apply(if false { {} } else { {} }, read) == None)
+    let trace = []
+    let delayed = apply({ marker: {
+        Array.push(trace, 1)
+        42
+    } }, {
+        Array.push(trace, 2)
+        read_marked
+    })
+    assert(delayed == None)
+    assert(trace == [1, 2])
+    assert(generic_default({}, Some(42)) == None)
+    assert(generic_default({ ..{} }, Some(42)) == None)
+    assert(read({ value: 42 }) == Some(42))
+    let outer: { value?: Option[Number] } = {}
+    let inner: { value: Option[Option[Number]] } = { value: Some(None) }
+    assert(outer.value == None)
+    assert(inner.value == Some(None))
+    assert(outer != inner)
+    let spread = { value: Some(42), ..omitted }
+    assert(spread.value == None)
+    let base = { count: 1 }
+    let extended: { count: Number, value: Option[Number] } = { ..base }
+    assert(extended.count == 1)
+    assert(extended.value == None)
+    assert(base == { count: 1 })
+    omitted.value = Some(42)
+    assert(omitted.value == Some(42))
+    omitted.value = None
+    assert(omitted == explicit)
+    let defaults: Fiber::MapOptions = {}
+    let explicit_defaults: { concurrency: Option[Number] } = { concurrency: None }
+    assert(defaults == explicit_defaults)
+    assert(Fiber.map([1, 2], value -> async { value * 2 }, defaults).await == [2, 4])
+    assert(Fiber.map([1, 2], value -> async { value * 2 }, explicit_defaults).await == [2, 4])
+    let patch: { value?: String } = {}
+    let replaced = merge({ value: 42, marker: true }, patch)
+    assert(replaced.value == None)
+    assert(replaced.marker)
+    assert(match fallback({ result: Err(:left) }, {}) { Err(:left) => true, _ => false })
+    assert(match fallback({ result: Err(:left) }, { result: Err(:right) }) {
+        Err(:right) => true,
+        _ => false,
+    })
+    assert(match fallback({ result: Ok(42) }, {}) { Ok(42) => true, _ => false })
+    let absent_config = Config::Config {}
+    let explicit_config = Config::Config { value: None, unit: None }
+    let decoded_missing: Result[Config, [:invalid_json(String)]] = Json.decode("{\"tag\":\"Config\",\"value\":{}}")
+    assert(decoded_missing == Ok(explicit_config))
+    let generic_missing: Result[Generic[MaybeNumber], [:invalid_json(String)]] = Json.decode("{\"tag\":\"Generic\",\"value\":{}}")
+    assert(generic_missing == Ok(Generic::Generic { value: None }))
+    let required_missing: Result[Generic[Number], [:invalid_json(String)]] = Json.decode("{\"tag\":\"Generic\",\"value\":{}}")
+    assert(match required_missing { Err(:invalid_json(_)) => true, _ => false })
+    assert(Json.encode(absent_config) == Json.encode(explicit_config))
+    assert(absent_config == explicit_config)
+    assert(hash(absent_config) == hash(explicit_config))
+    assert(compare(absent_config, explicit_config) == Ordering::Equal)
+    assert(show(absent_config) == "Config { value: None, unit: None }")
+    assert(match absent_config {
+        Config::Config { value: None, unit: None } => true,
+        _ => false,
+    })
+    let nested_config = Config::Config { value: Some(None), unit: () }
+    let nested_roundtrip: Result[Config, [:invalid_json(String)]] = Json.decode(Json.encode(nested_config))
+    assert(nested_roundtrip == Ok(nested_config))
+    assert(nested_config != absent_config)
+    assert(compare(absent_config, nested_config) == Ordering::Less)
+    assert(compare(nested_config, absent_config) == Ordering::Greater)
+    let low: Option[Option[Reverse]] = Some(Some(Reverse::Reverse(1)))
+    let high: Option[Option[Reverse]] = Some(Some(Reverse::Reverse(2)))
+    assert(compare(low, high) == Ordering::Greater)
+    assert(same_ordered(low, Some(Some(Reverse::Reverse(1)))))
+    let outer_none: Option[Option[Number]] = None
+    let inner_none: Option[Option[Number]] = Some(None)
+    assert(compare(outer_none, inner_none) == Ordering::Less)
+    assert(compare(inner_none, Some(Some(42))) == Ordering::Less)
+    assert(match nested_config {
+        Config::Config { value: Some(None), unit: Some(()) } => true,
+        _ => false,
+    })
+    let { value } = inner
+    assert(value == Some(None))
+}

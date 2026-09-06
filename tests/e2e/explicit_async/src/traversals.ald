@@ -1,0 +1,207 @@
+async fn classify(value: Number) Result[Number, [:bad]] {
+    if value == 2 { Err(:bad) } else { Ok(value * 2) }
+}
+
+async fn try_visit(value: Number, visits: Array[Number]) Result[(), [:bad]] {
+    let result = classify(value).await?
+    Array.push(visits, result)
+    Ok(())
+}
+
+async fn piped_try_map() Result[Array[Number], [:bad]] {
+    let values = [1, 3] |> Fiber.tryMap(classify).await?
+    Ok(values)
+}
+
+pub async fn run() {
+    let unlimited: Fiber::MapOptions = { concurrency: Fiber.unbounded }
+    let started = 0
+    let all_started = false
+    let work = Fiber.map([1, 2, 3], value -> async {
+        started += 1
+        while !all_started { Task.sleep(0).await }
+        value * 2
+    }, unlimited)
+    assert started == 0
+    let running = Fiber.fork(work).await
+    while started != 3 { Task.sleep(0).await }
+    all_started = true
+    assert Fiber.join(running).await == [2, 4, 6]
+    let unlimited_visits: Array[Number] = []
+    Fiber.forEach([1, 3], value -> async {
+        Array.push(unlimited_visits, value)
+    }, unlimited).await
+    assert Array.length(unlimited_visits) == 2
+    assert match Fiber.tryMap([1, 3], classify, unlimited).await {
+        Ok(values) => values == [2, 6],
+        _ => false,
+    }
+    assert match Fiber.tryForEach([1, 3], value -> try_visit(value, unlimited_visits), unlimited).await {
+        Ok(()) => true,
+        _ => false,
+    }
+    assert Array.length(unlimited_visits) == 4
+
+    let calls = 0
+    let active = 0
+    let peak = 0
+    let cleaned = 0
+    let input = [1, 2, 3]
+    let options: Fiber::MapOptions = { concurrency: 2 }
+    let mapped = Fiber.map(input, value -> async {
+        calls += 1
+        active += 1
+        if active > peak { peak = active }
+        Fiber.addFinalizer(async {
+            Task.sleep(0).await
+            active -= 1
+            cleaned += 1
+        }).await
+        Task.sleep(0).await
+        value * 2
+    }, options)
+    assert calls == 0
+    assert mapped.await == [2, 4, 6]
+    assert calls == 3
+    assert peak == 2
+    assert active == 0
+    assert cleaned == 3
+    input[0] = 10
+    assert mapped.await == [20, 4, 6]
+    assert cleaned == 6
+
+    let visits: Array[Number] = []
+    let each = Fiber.forEach([1, 2, 3], value -> async {
+        Array.push(visits, value)
+        Task.sleep(0).await
+        Array.push(visits, value * 10)
+    })
+    assert visits == []
+    each.await
+    assert visits == [1, 10, 2, 20, 3, 30]
+    assert ([1, 2] |> Fiber.map(value -> async { value + 1 }).await) == [2, 3]
+    assert Fiber.map([1], value -> async { value }, None).await == [1]
+    assert Fiber.map([1], value -> async { value }, {}).await == [1]
+
+    let settled = Fiber.map([1, 2, 3], classify, { concurrency: 2 }).await
+    assert match settled[0] { Ok(2) => true, _ => false }
+    assert match settled[1] { Err(:bad) => true, _ => false }
+    assert match settled[2] { Ok(6) => true, _ => false }
+    let attempted: Array[Number] = []
+    let failed = Fiber.tryMap([1, 2, 3], value -> async {
+        Array.push(attempted, value)
+        classify(value).await
+    }).await
+    assert match failed { Err(:bad) => true, _ => false }
+    assert attempted == [1, 2]
+    let successful = Fiber.tryMap([1, 3], classify, { concurrency: 2 }).await
+    assert match successful { Ok(values) => values == [2, 6], _ => false }
+    assert match piped_try_map().await { Ok(values) => values == [2, 6], _ => false }
+    let successful_visits: Array[Number] = []
+    let failed_each = Fiber.tryForEach([1, 2, 3], value -> try_visit(value, successful_visits)).await
+    assert match failed_each { Err(:bad) => true, _ => false }
+    assert successful_visits == [2]
+    let passed_each = Fiber.tryForEach([1, 3], value -> try_visit(value, successful_visits), {}).await
+    assert match passed_each { Ok(()) => true, _ => false }
+    assert successful_visits == [2, 2, 6]
+}
+
+pub async fn interruption_waits_for_cleanup() {
+    for mode in [0, 1, 2, 3] {
+        let started = 0
+        let ready = 0
+        let cleanup_started = 0
+        let cleaned = 0
+        let release = false
+        let interrupted = false
+        let callback = (value: Number) Task[()] -> async {
+            started += 1
+            Fiber.addFinalizer(async {
+                cleanup_started += 1
+                while !release { Task.sleep(0).await }
+                cleaned += 1
+            }).await
+            ready += 1
+            while true { Task.sleep(0).await }
+        }
+        let typed_callback = (value: Number) Task[Result[(), [:bad]]] -> async {
+            callback(value).await
+            Ok(())
+        }
+        let work = async {
+            if mode == 0 {
+                let result = Fiber.map([1, 2, 3, 4], callback, { concurrency: 2 }).await
+            } else if mode == 1 {
+                Fiber.forEach([1, 2, 3, 4], callback, { concurrency: 2 }).await
+            } else if mode == 2 {
+                let result = Fiber.tryMap([1, 2, 3, 4], typed_callback, { concurrency: 2 }).await
+            } else {
+                let result = Fiber.tryForEach([1, 2, 3, 4], typed_callback, { concurrency: 2 }).await
+            }
+        }
+        let child = Fiber.fork(work).await
+        while ready != 2 { Task.sleep(0).await }
+        let interrupt = Fiber.fork(async {
+            Fiber.interrupt(child).await
+            interrupted = true
+        }).await
+        while cleanup_started != 2 { Task.sleep(0).await }
+        assert !interrupted
+        assert cleaned == 0
+        assert started == 2
+        release = true
+        Fiber.join(interrupt).await
+        assert interrupted
+        assert cleaned == 2
+        assert started == 2
+    }
+}
+
+pub async fn typed_failure_waits_for_sibling_cleanup() {
+    for mode in [0, 1] {
+        let started = 0
+        let ready = 0
+        let fail = false
+        let cleanup_started = 0
+        let cleaned = 0
+        let release = false
+        let completed = false
+        let callback = (value: Number) Task[Result[(), [:later]]] -> async {
+            started += 1
+            Fiber.addFinalizer(async {
+                cleanup_started += 1
+                while !release { Task.sleep(0).await }
+                cleaned += 1
+            }).await
+            ready += 1
+            while !fail { Task.sleep(0).await }
+            if value == 1 { Err(:later) } else { while true { Task.sleep(0).await } }
+        }
+        let traversal = Fiber.fork(async {
+            let selected_later = if mode == 0 {
+                match Fiber.tryMap([0, 1, 2, 3], callback, { concurrency: 2 }).await {
+                    Err(:later) => true,
+                    _ => false,
+                }
+            } else {
+                match Fiber.tryForEach([0, 1, 2, 3], callback, { concurrency: 2 }).await {
+                    Err(:later) => true,
+                    _ => false,
+                }
+            }
+            assert selected_later
+            completed = true
+        }).await
+        while ready != 2 { Task.sleep(0).await }
+        fail = true
+        while cleanup_started != 2 { Task.sleep(0).await }
+        assert !completed
+        assert cleaned == 0
+        assert started == 2
+        release = true
+        Fiber.join(traversal).await
+        assert completed
+        assert cleaned == 2
+        assert started == 2
+    }
+}

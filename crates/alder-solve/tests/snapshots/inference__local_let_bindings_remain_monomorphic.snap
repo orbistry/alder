@@ -7,11 +7,11 @@ description: "fn invalid() {\n    let identity = (value) -> { value }\n    let n
         region: Region {
             start: Position {
                 line: 4,
-                column: 5,
+                column: 14,
             },
             end: Position {
                 line: 4,
-                column: 21,
+                column: 20,
             },
         },
         kind: Mismatch {

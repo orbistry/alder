@@ -1,0 +1,6 @@
+---
+source: crates/alder-solve/tests/inference.rs
+description: "fn read(value) {\n    let first = value.0\n    let again = value.0\n    (first.0, again.3)\n}\nfn run() { read(((1, false, \"unused\", 42), ())) }\n"
+---
+read: forall a, b, c, d. fn(a) (b, c) where tuple a length 2 {0: d}, tuple d length 4 {0: b, 3: c}
+run: fn() (Number, Number)

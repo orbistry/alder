@@ -1042,13 +1042,6 @@ fn expression_problem(error: &alder_parse::error::Expr<'_>) -> SyntaxProblem {
             "expected an accessor",
             None,
         ),
-        Expr::Unary(row, column) => expected_problem(
-            "this unary operator is missing its operand",
-            *row,
-            *column,
-            "expected an expression",
-            None,
-        ),
         Expr::TupleIndexOverflow(row, column) => expected_problem(
             "this tuple index is too large",
             *row,
@@ -1058,6 +1051,13 @@ fn expression_problem(error: &alder_parse::error::Expr<'_>) -> SyntaxProblem {
                 "tuple indices must fit in an unsigned 32-bit integer (0 through 4294967295)"
                     .to_owned(),
             ),
+        ),
+        Expr::Unary(row, column) => expected_problem(
+            "this unary operator is missing its operand",
+            *row,
+            *column,
+            "expected an expression",
+            None,
         ),
         Expr::PinOutsideQuery(row, column) => expected_problem(
             "expression pins are only allowed inside queries",
@@ -1231,11 +1231,52 @@ pub fn codegen(source: Source, error: &alder_codegen::Error) -> Diagnostic {
 fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
     use alder_constrain::ErrorKind;
     match &error.kind {
+        ErrorKind::InvalidResultErrorType { actual } => {
+            return Diagnostic::error(
+                source,
+                format!("Result needs an error row, but this type is `{actual}`"),
+            )
+            .with_code("alder::type::invalid_result_error_type")
+            .with_primary_label(error.region, "this is not an error row or named error group")
+            .with_help("use a tagged error row such as `[:failed(String)]`, or declare a named error group");
+        }
+        ErrorKind::RecursiveErrorGroup { name } => {
+            return Diagnostic::error(
+                source,
+                format!("the error group `{name}` expands back into itself"),
+            )
+            .with_code("alder::type::recursive_error_group")
+            .with_primary_label(error.region, "this reference creates a recursive error row")
+            .with_help("error groups describe structural rows; use an enum for a recursive payload instead");
+        }
+        ErrorKind::TupleIndexOutOfBounds { index, length } => {
+            let help = if *length == 0 {
+                "this tuple has no elements to access".to_owned()
+            } else {
+                format!(
+                    "tuple indices start at zero; valid indices are 0 through {}",
+                    length - 1
+                )
+            };
+            return Diagnostic::error(
+                source,
+                format!("index {index} is outside this {length}-element tuple"),
+            )
+            .with_code("alder::type::tuple_index_out_of_bounds")
+            .with_primary_label(error.region, "there is no element at this index")
+            .with_help(help);
+        }
         ErrorKind::MissingReturn { expected } => {
             return Diagnostic::error(source, format!("this function can finish without returning `{expected}`"))
                 .with_code("alder::type::missing_return")
                 .with_primary_label(error.region, "a path reaches the end without a value")
                 .with_help("add a final expression or return a value on every path; a while or for loop may run zero times");
+        }
+        ErrorKind::AmbiguousOptionLifting => {
+            return Diagnostic::error(source, "I cannot choose consistent Option wrapping for these values")
+                .with_code("alder::type::ambiguous_option_lifting")
+                .with_primary_label(error.region, "the intended Option layers are ambiguous here")
+                .with_help("add a type annotation or explicit Some wrappers to make the intended Option layers clear");
         }
         ErrorKind::UnresolvedSharedExport { name } => {
             return Diagnostic::error(source, format!("the shared type of `{name}` is not determined"))
@@ -1328,13 +1369,20 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
             "these higher-kinded types cannot be unified".to_owned(),
         ),
         ErrorKind::InvalidAwait => ("invalid_await", "`.await` requires a Task value".to_owned()),
-        ErrorKind::InvalidTry => ("invalid_try", "`?` requires a Result value".to_owned()),
+        ErrorKind::InvalidTry => (
+            "invalid_try",
+            "`?` requires a Result or Option value and a matching return context".to_owned(),
+        ),
         ErrorKind::ReturnMismatch => (
             "return_mismatch",
             "return value does not match the function result".to_owned(),
         ),
         ErrorKind::NonExhaustiveErrorMatch { .. }
+        | ErrorKind::InvalidResultErrorType { .. }
+        | ErrorKind::RecursiveErrorGroup { .. }
+        | ErrorKind::TupleIndexOutOfBounds { .. }
         | ErrorKind::MissingReturn { .. }
+        | ErrorKind::AmbiguousOptionLifting
         | ErrorKind::GenericSpecialization { .. }
         | ErrorKind::GenericEscape { .. }
         | ErrorKind::UnresolvedSharedExport { .. }
@@ -1535,6 +1583,14 @@ fn coherence_report(
             "this trait participates in the superclass cycle",
             None,
             Some("remove one of the superclass constraints in this cycle".to_owned()),
+        ),
+        CoherenceError::NamedErrorGroupImpl { implementation, group } => (
+            "named_error_group_impl",
+            format!("cannot define a custom trait implementation for error group `{}`", group.name),
+            impl_region(module, *implementation),
+            "this error group names a structural row, not a distinct type",
+            None,
+            Some("define an enum wrapper if you need a distinct type with custom trait behavior".to_owned()),
         ),
         CoherenceError::OrphanImpl {
             implementation,

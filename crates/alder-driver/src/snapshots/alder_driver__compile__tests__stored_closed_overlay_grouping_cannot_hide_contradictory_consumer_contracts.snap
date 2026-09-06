@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ split, grouped }\npub fn invalid(record) {\n    let first: Number = split(record).value\n    let second: String = grouped(record).value\n    (first, second)\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/project/src/main.ald:4:26]
+ 3 │     let first: Number = split(record).value
+ 4 │     let second: String = grouped(record).value
+   ·                          ──────────┬──────────
+   ·                                    ╰── type requirement originates here
+ 5 │     (first, second)
+   ╰────

@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub trait Read[a] {\n    fn read(value: a) Result[Number, String]\n}\n"
+---
+alder::type::invalid_result_error_type
+
+  × Result needs an error row, but this type is `String`
+   ╭─[/project/src/main.ald:2:38]
+ 1 │ pub trait Read[a] {
+ 2 │     fn read(value: a) Result[Number, String]
+   ·                                      ───┬──
+   ·                                         ╰── this is not an error row or named error group
+ 3 │ }
+   ╰────
+  help: use a tagged error row such as `[:failed(String)]`, or declare a named
+        error group

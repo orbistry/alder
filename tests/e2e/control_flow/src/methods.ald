@@ -1,0 +1,43 @@
+trait Choose[a] {
+    fn choose(value: a, flag: Bool) Number {
+        if flag { return 41 } else { return 42 }
+    }
+
+    fn maybe(value: a, input: Option[Number]) Option[Number] {
+        let result = loop { break input? }
+        Some(result)
+    }
+
+    async fn later(value: a, input: Result[Number, [:missing]]) Result[Number, [:missing]] {
+        Task.sleep(0).await
+        let result = loop { break input? }
+        Ok(result)
+    }
+}
+
+impl Choose[Number] {}
+
+impl Choose[String] {
+    fn choose(value: String, flag: Bool) Number {
+        loop {
+            while true { break }
+            if flag { return 43 }
+            break 44
+        }
+    }
+}
+
+pub async fn verify() {
+    assert(choose(0, true) == 41)
+    assert(choose(0, false) == 42)
+    assert(choose("", true) == 43)
+    assert(choose("", false) == 44)
+    assert(maybe(0, Some(42)) == Some(42))
+    assert(maybe(0, None) == None)
+    assert(maybe("", Some(42)) == Some(42))
+    assert(maybe("", None) == None)
+    assert(later(0, Ok(42)).await == Ok(42))
+    assert(later(0, Err(:missing)).await == Err(:missing))
+    assert(later("", Ok(42)).await == Ok(42))
+    assert(later("", Err(:missing)).await == Err(:missing))
+}

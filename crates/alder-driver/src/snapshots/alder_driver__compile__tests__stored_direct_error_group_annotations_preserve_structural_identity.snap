@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ relay, render }\nerror Local { :missing, :bad(String) }\npub fn describe(value: Local) String { render(relay(value)) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/project/src/main.ald:3:53]
+ 2 │ error Local { :missing, :bad(String) }
+ 3 │ pub fn describe(value: Local) String { render(relay(value)) }
+   ·                                                     ──┬──
+   ·                                                       ╰── type requirement originates here
+   ╰────

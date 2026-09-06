@@ -38,6 +38,13 @@ pub struct Error {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
+    AmbiguousOptionLifting,
+    RecursiveErrorGroup {
+        name: String,
+    },
+    InvalidResultErrorType {
+        actual: String,
+    },
     Mismatch {
         actual: String,
         expected: String,
@@ -48,6 +55,10 @@ pub enum ErrorKind {
     },
     MissingField {
         field: String,
+    },
+    TupleIndexOutOfBounds {
+        index: u32,
+        length: usize,
     },
     AssocTypeMismatch {
         assoc: String,

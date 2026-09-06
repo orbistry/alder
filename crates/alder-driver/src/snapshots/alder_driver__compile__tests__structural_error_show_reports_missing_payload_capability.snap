@@ -1,0 +1,22 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "error Failed { :callback(fn(Number) Number) }\npub fn render(value: Result[Number, Failed]) String { show(value) }\n"
+---
+alder::trait::missing_instance
+
+  × no implementation of `Show[fn(Number) Number]` was found
+   ╭─[/project/src/main.ald:2:55]
+ 1 │ error Failed { :callback(fn(Number) Number) }
+ 2 │ pub fn render(value: Result[Number, Failed]) String { show(value) }
+   ·                                                       ──┬─
+   ·                                                         ╰── this use needs trait evidence
+   ╰────
+  help: define an implementation of `Show[fn(Number) Number]`, or use a type
+        that already has one
+        
+        obligation chain:
+          Show[Result[Number, [:callback(fn(Number) Number)]]]
+          -> Show[[:callback(fn(Number) Number)]], required by a standard-
+        library implementation
+          -> Show[fn(Number) Number], required by a standard-library
+        implementation

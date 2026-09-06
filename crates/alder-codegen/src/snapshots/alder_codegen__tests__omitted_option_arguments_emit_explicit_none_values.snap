@@ -1,0 +1,21 @@
+---
+source: crates/alder-codegen/src/lib.rs
+description: "fn choose(value: Number, extra?: Number) Number { value }\npub fn main() Number {\n    let direct = choose(20)\n    let piped = 22 |> choose()\n    direct + piped\n}\n"
+---
+function $v_choose($a0, $a1) {
+	let $l0_value = $a0;
+	let $l1_extra = $a1;
+	return $l0_value;
+}
+function $v_main() {
+	const $t0 = $v_choose;
+	const $t1 = $t0(20, null);
+	let $l2_direct = $t1;
+	const $t2 = 22;
+	const $t3 = $v_choose;
+	const $t4 = $t3($t2, null);
+	let $l3_piped = $t4;
+	const $t5 = $l2_direct;
+	return $t5 + $l3_piped;
+}
+export { $v_main as main };
