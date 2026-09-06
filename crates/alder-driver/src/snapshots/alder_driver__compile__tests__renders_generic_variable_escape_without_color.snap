@@ -11,5 +11,7 @@ alder::type::generic_escape
    · ─────────────────────┬────────────────────
    ·                      ╰── this signature cannot be independently instantiated
    ╰────
-  help: pass the shared value as an argument, or use a concrete type for this
-        function
+  help: each call may choose a different type, but the captured value has one
+        shared type across calls. Check the captured value and the operation
+        that ties it to this signature; an annotation cannot make shared
+        storage independently polymorphic

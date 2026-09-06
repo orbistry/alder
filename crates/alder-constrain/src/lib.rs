@@ -14,6 +14,7 @@ use alder_region::Region;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DiagnosticType {
     Variable(usize),
+    NamedVariable(String),
     Named(String),
     Application(Box<Self>, Vec<Self>),
     Function(Vec<Self>, Box<Self>),
@@ -43,6 +44,7 @@ impl std::fmt::Display for DiagnosticType {
         match self {
             Self::Variable(index) if *index < 26 => write!(f, "{}", (b'a' + *index as u8) as char),
             Self::Variable(index) => write!(f, "t{index}"),
+            Self::NamedVariable(name) => f.write_str(name),
             Self::Named(name) => f.write_str(name),
             Self::Application(head, args) => {
                 write!(f, "{head}[")?;
@@ -99,6 +101,15 @@ impl std::fmt::Display for DiagnosticType {
             Self::Hole => write!(f, "_"),
         }
     }
+}
+
+/// The restriction that contradicts a declaration's universal type promise.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GenericRestriction {
+    Type(DiagnosticType),
+    SameVariable(String),
+    ResultRow(String),
+    RecordField(String),
 }
 
 #[derive(Debug)]
@@ -215,7 +226,7 @@ pub enum ErrorKind {
     },
     GenericSpecialization {
         variable: String,
-        actual: String,
+        restriction: GenericRestriction,
     },
     GenericEscape {
         variable: String,

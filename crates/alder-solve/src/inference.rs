@@ -7,8 +7,8 @@ use alder_ast::{
 };
 use alder_can::Annotations;
 use alder_constrain::{
-    Constraints, DiagnosticType, Error, ErrorKind, ExpectationKind, RequirementKind,
-    RequirementSeed,
+    Constraints, DiagnosticType, Error, ErrorKind, ExpectationKind, GenericRestriction,
+    RequirementKind, RequirementSeed,
 };
 use alder_region::{Located, Region};
 use bumpalo::Bump;
@@ -6069,7 +6069,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                         region: contract.region,
                         kind: ErrorKind::GenericSpecialization {
                             variable: name.to_owned(),
-                            actual: self.render(resolved),
+                            restriction: GenericRestriction::Type(
+                                self.generic_diagnostic_type(resolved),
+                            ),
                         },
                     });
                 };
@@ -6080,7 +6082,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                             region: contract.region,
                             kind: ErrorKind::GenericSpecialization {
                                 variable: name.to_owned(),
-                                actual: format!("tuple of length {}", shape.length),
+                                restriction: GenericRestriction::Type(DiagnosticType::TupleShape(
+                                    shape.length,
+                                )),
                             },
                         });
                     }
@@ -6091,7 +6095,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         region: contract.region,
                         kind: ErrorKind::GenericSpecialization {
                             variable: name.to_owned(),
-                            actual: previous.to_owned(),
+                            restriction: GenericRestriction::SameVariable(previous.to_owned()),
                         },
                     });
                 }
@@ -6276,9 +6280,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                                 region: overlay.region,
                                 kind: ErrorKind::GenericSpecialization {
                                     variable: (*variable).to_owned(),
-                                    actual: format!(
-                                        "the declared result row `{}`",
-                                        universals[&expected_id]
+                                    restriction: GenericRestriction::ResultRow(
+                                        universals[&expected_id].to_owned(),
                                     ),
                                 },
                             });
@@ -6304,9 +6307,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                                 region: overlay.region,
                                 kind: ErrorKind::GenericSpecialization {
                                     variable: (*variable).to_owned(),
-                                    actual: format!(
-                                        "a record row with a constrained `{name}` field"
-                                    ),
+                                    restriction: GenericRestriction::RecordField(name.to_owned()),
                                 },
                             });
                         }
@@ -8063,6 +8064,83 @@ impl<'a, 'db> Infer<'a, 'db> {
             ),
             Ty::Any => D::Hole,
         }
+    }
+
+    fn generic_diagnostic_type(&mut self, typ: Ty<'a>) -> DiagnosticType {
+        fn rename(typ: &mut DiagnosticType, names: &BTreeMap<usize, String>) {
+            use DiagnosticType as D;
+            match typ {
+                D::Variable(index) => *typ = D::NamedVariable(names[index].clone()),
+                D::Application(head, args) | D::Function(args, head) => {
+                    rename(head, names);
+                    for arg in args {
+                        rename(arg, names);
+                    }
+                }
+                D::Tuple(items) => {
+                    for item in items {
+                        rename(item, names);
+                    }
+                }
+                D::Record(fields, tail) => {
+                    for (_, typ) in fields {
+                        rename(typ, names);
+                    }
+                    if let Some(tail) = tail {
+                        rename(tail, names);
+                    }
+                }
+                D::ErrorRow(tags, tail) => {
+                    for (_, args) in tags {
+                        for arg in args {
+                            rename(arg, names);
+                        }
+                    }
+                    if let Some(tail) = tail {
+                        rename(tail, names);
+                    }
+                }
+                D::Projection(head, _) => rename(head, names),
+                D::NamedVariable(_) | D::Named(_) | D::Unit | D::TupleShape(_) | D::Hole => {}
+            }
+        }
+
+        let typ = self.normalize_type(typ);
+        let mut indices = BTreeMap::new();
+        let mut diagnostic = self.diagnostic_type(typ, &mut indices);
+        let declared = self.variable_names.clone();
+        let mut reserved = declared
+            .values()
+            .map(|name| (*name).to_owned())
+            .collect::<BTreeSet<_>>();
+        let mut names = BTreeMap::new();
+        for (id, name) in declared {
+            if let Ty::Var(id) = self.prune(Ty::Var(id))
+                && let Some(index) = indices.get(&id)
+            {
+                names.entry(*index).or_insert_with(|| name.to_owned());
+            }
+        }
+        // Preserve declaration spellings, and do not make fresh variables look
+        // like the universal whose specialization is being reported.
+        let mut next = 0;
+        for index in 0..indices.len() {
+            names.entry(index).or_insert_with(|| {
+                loop {
+                    let candidate = if next < 26 {
+                        ((b'a' + next as u8) as char).to_string()
+                    } else {
+                        format!("t{next}")
+                    };
+                    next += 1;
+                    if reserved.insert(candidate.clone()) {
+                        break candidate;
+                    }
+                }
+            });
+        }
+        rename(&mut diagnostic, &names);
+        diagnostic
     }
 
     fn render(&mut self, typ: Ty<'a>) -> String {

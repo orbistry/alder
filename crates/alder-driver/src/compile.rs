@@ -6881,6 +6881,73 @@ mod tests {
         "#};
     }
 
+    #[test]
+    fn generic_contracts_explain_specialization_and_independent_variables() {
+        let source = indoc::indoc! {r#"
+            fn specialize(value: a) a { 42 }
+            fn collapse(first: a, second: b) a { second }
+            fn nested(value: a, left: b, right: c) a { (left, right) }
+            fn tuple(value: a) { value.0 }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid generic contracts must fail")
+        };
+        assert_eq!(diagnostics.len(), 4, "{diagnostics:?}");
+        assert!(
+            miette::Diagnostic::help(&diagnostics[0])
+                .unwrap()
+                .to_string()
+                .contains("the caller chooses")
+        );
+        assert!(
+            miette::Diagnostic::help(&diagnostics[1])
+                .unwrap()
+                .to_string()
+                .contains("independently chosen")
+        );
+        assert!(
+            miette::Diagnostic::help(&diagnostics[2])
+                .unwrap()
+                .to_string()
+                .contains("`(b, c)`")
+        );
+        assert!(
+            miette::Diagnostic::help(&diagnostics[3])
+                .unwrap()
+                .to_string()
+                .contains("tuple of length"),
+            "{:?}",
+            diagnostics[3]
+        );
+        for diagnostic in diagnostics {
+            assert!(
+                !miette::Diagnostic::help(diagnostic)
+                    .unwrap()
+                    .to_string()
+                    .contains("give the declaration a concrete signature")
+            );
+        }
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = indoc::indoc! {r#"
+            fn keep(value: a) a { value }
+            fn choose(first: a, second: b) a { first }
+            fn pair(left: b, right: c) (b, c) { (left, right) }
+            fn first(value: (a, b)) a { value.0 }
+        "#};
+        let valid = build_fixture_sync(
+            vec![(uri.clone(), Ok(valid.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(matches!(valid.modules[&uri], ModuleResult::Success { .. }));
+    }
+
     #[tokio::test]
     async fn renders_local_annotation_specializing_an_enclosing_generic_without_color() {
         assert_diagnostic_snapshot! {r#"
@@ -6889,6 +6956,44 @@ mod tests {
                 value
             }
         "#};
+    }
+
+    #[test]
+    fn generic_record_restrictions_explain_unknown_overwrites() {
+        let source = indoc::indoc! {r#"
+            fn merge(left, right) { { ..left, ..right } }
+            fn invalid(left: { r | value: Number }, right: { s | marker: Bool }) Number {
+                merge(left, right).value
+            }
+            fn invalid_rows(left: { r | value: Number }, right: { s | marker: Bool }) ({ r | value: Number, marker: Bool }) {
+                merge(left, right)
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("an independent row may overwrite the required field")
+        };
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert!(
+            miette::Diagnostic::help(&diagnostics[0])
+                .unwrap()
+                .to_string()
+                .contains("which spread operand supplies this field"),
+            "{diagnostics:?}"
+        );
+        assert!(
+            miette::Diagnostic::help(&diagnostics[1])
+                .unwrap()
+                .to_string()
+                .contains("two independent rows are equal"),
+            "{diagnostics:?}"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
     }
 
     #[tokio::test]

@@ -500,3 +500,33 @@ six CLI subprocess tests and all other suites; two existing ignored doctests).
 The additional matching-type positive control also passed. Strict workspace
 Clippy, formatting and diff checks passed; obsolete pending proposals were
 removed after reviewing the accepted snapshots.
+
+## Generic explanation checkpoint
+
+Elm distinguishes rigid-variable specialization from equating two independent
+rigid variables. Alder's generic diagnostic previously encoded both as one
+formatted `actual` string and suggested changing the signature even for trait
+implementations. `generic_contracts_explain_specialization_and_independent_variables`
+reproduced the undifferentiated explanation before the change.
+
+`GenericRestriction` now retains a structured diagnostic type, an independently
+named variable, a result row, or a required record field until rendering. Types
+preserve declared variable spellings and give unnamed variables fresh readable
+names that do not collide with declared names. The source snapshot covers
+concrete specialization, equated universals, distinct `(b, c)` payloads and a
+sparse tuple requirement; matching generic functions compile as positive
+controls. A second source snapshot covers unknown record overwrites and tying
+independent input/result rows together. These explanations identify the broken
+promise without proposing a semantics-changing signature or wrapper.
+
+Shared-environment escape now explains why separately instantiated calls cannot
+give shared storage independent types. Existing trait-method, local-annotation,
+lambda and recursive-peer source snapshots retain their rejection category and
+locations with the updated explanations. This does not change universal
+contract checking or its metadata recovery boundary.
+
+Validation: full workspace tests passed (231 driver tests, 467 inference tests,
+six CLI subprocess tests and all other suites; two existing ignored doctests).
+Strict all-target/all-feature Clippy, formatting and diff checks passed. Both
+new source snapshots and all five changed existing source snapshots were
+reviewed; no pending snapshot proposals remain.

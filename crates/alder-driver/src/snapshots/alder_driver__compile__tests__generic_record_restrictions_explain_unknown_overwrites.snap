@@ -1,0 +1,29 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn merge(left, right) { { ..left, ..right } }\nfn invalid(left: { r | value: Number }, right: { s | marker: Bool }) Number {\n    merge(left, right).value\n}\nfn invalid_rows(left: { r | value: Number }, right: { s | marker: Bool }) ({ r | value: Number, marker: Bool }) {\n    merge(left, right)\n}\n"
+---
+alder::type::generic_specialization
+
+  × this implementation does not work for every `s`
+   ╭─[/app/src/main.ald:3:5]
+ 2 │ fn invalid(left: { r | value: Number }, right: { s | marker: Bool }) Number {
+ 3 │     merge(left, right).value
+   ·     ──┬──
+   ·       ╰── the body constrains field `value` inside the independent row `s`
+ 4 │ }
+   ╰────
+  help: the declared row does not promise a particular type for `value`. Check
+        which spread operand supplies this field and the result type it must
+        satisfy
+alder::type::generic_specialization
+
+  × this implementation does not work for every `s`
+   ╭─[/app/src/main.ald:6:5]
+ 5 │ fn invalid_rows(left: { r | value: Number }, right: { s | marker: Bool }) ({ r | value: Number, marker: Bool }) {
+ 6 │     merge(left, right)
+   ·     ──┬──
+   ·       ╰── the body ties `s` to the declared result row `r`
+ 7 │ }
+   ╰────
+  help: independently named record rows may contain different fields and field
+        types. The result cannot promise that two independent rows are equal

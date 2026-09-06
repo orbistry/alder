@@ -1,0 +1,57 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn specialize(value: a) a { 42 }\nfn collapse(first: a, second: b) a { second }\nfn nested(value: a, left: b, right: c) a { (left, right) }\nfn tuple(value: a) { value.0 }\n"
+---
+alder::type::generic_specialization
+
+  × this implementation does not work for every `a`
+   ╭─[/app/src/main.ald:1:1]
+ 1 │ fn specialize(value: a) a { 42 }
+   · ────────────────┬───────────────
+   ·                 ╰── the signature promises an independent `a`, but the body requires `Number`
+ 2 │ fn collapse(first: a, second: b) a { second }
+   ╰────
+  help: the caller chooses `a` for each call; the body must work for every
+        type allowed by the declared bounds, not just `Number`. Check
+        the operation or value that imposes this restriction; a trait
+        implementation must preserve the trait's generic contract
+alder::type::generic_specialization
+
+  × this implementation does not work for every `b`
+   ╭─[/app/src/main.ald:2:1]
+ 1 │ fn specialize(value: a) a { 42 }
+ 2 │ fn collapse(first: a, second: b) a { second }
+   · ──────────────────────┬──────────────────────
+   ·                       ╰── the body requires `b` and `a` to be the same type
+ 3 │ fn nested(value: a, left: b, right: c) a { (left, right) }
+   ╰────
+  help: `b` and `a` are independently chosen by the caller. Separate names
+        do not promise equal types; check the values that the body combines
+        or returns
+alder::type::generic_specialization
+
+  × this implementation does not work for every `a`
+   ╭─[/app/src/main.ald:3:1]
+ 2 │ fn collapse(first: a, second: b) a { second }
+ 3 │ fn nested(value: a, left: b, right: c) a { (left, right) }
+   · ─────────────────────────────┬────────────────────────────
+   ·                              ╰── the signature promises an independent `a`, but the body requires `(b, c)`
+ 4 │ fn tuple(value: a) { value.0 }
+   ╰────
+  help: the caller chooses `a` for each call; the body must work for every
+        type allowed by the declared bounds, not just `(b, c)`. Check
+        the operation or value that imposes this restriction; a trait
+        implementation must preserve the trait's generic contract
+alder::type::generic_specialization
+
+  × this implementation does not work for every `a`
+   ╭─[/app/src/main.ald:4:1]
+ 3 │ fn nested(value: a, left: b, right: c) a { (left, right) }
+ 4 │ fn tuple(value: a) { value.0 }
+   · ───────────────┬──────────────
+   ·                ╰── the signature promises an independent `a`, but the body requires `tuple of length 2`
+   ╰────
+  help: the caller chooses `a` for each call; the body must work for every
+        type allowed by the declared bounds, not just `tuple of length 2`.
+        Check the operation or value that imposes this restriction; a trait
+        implementation must preserve the trait's generic contract

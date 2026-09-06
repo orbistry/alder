@@ -1302,15 +1302,36 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
                 .with_primary_label(error.region, "this export cannot be independently instantiated by each importing module")
                 .with_help("give the shared value a concrete type annotation, or export a function that creates a fresh value on each call");
         }
-        ErrorKind::GenericSpecialization { variable, actual } => {
-            return Diagnostic::error(source, format!(
-                "this implementation does not work for every `{variable}`"
-            ))
+        ErrorKind::GenericSpecialization {
+            variable,
+            restriction,
+        } => {
+            use alder_constrain::GenericRestriction as R;
+            let (requirement, help) = match restriction {
+                R::Type(actual) => (
+                    format!("the signature promises an independent `{variable}`, but the body requires `{actual}`"),
+                    format!("the caller chooses `{variable}` for each call; the body must work for every type allowed by the declared bounds, not just `{actual}`. Check the operation or value that imposes this restriction; a trait implementation must preserve the trait's generic contract"),
+                ),
+                R::SameVariable(other) => (
+                    format!("the body requires `{variable}` and `{other}` to be the same type"),
+                    format!("`{variable}` and `{other}` are independently chosen by the caller. Separate names do not promise equal types; check the values that the body combines or returns"),
+                ),
+                R::ResultRow(row) => (
+                    format!("the body ties `{variable}` to the declared result row `{row}`"),
+                    "independently named record rows may contain different fields and field types. The result cannot promise that two independent rows are equal".to_owned(),
+                ),
+                R::RecordField(field) => (
+                    format!("the body constrains field `{field}` inside the independent row `{variable}`"),
+                    format!("the declared row does not promise a particular type for `{field}`. Check which spread operand supplies this field and the result type it must satisfy"),
+                ),
+            };
+            return Diagnostic::error(
+                source,
+                format!("this implementation does not work for every `{variable}`"),
+            )
             .with_code("alder::type::generic_specialization")
-            .with_primary_label(error.region, format!(
-                "the signature promises an independent `{variable}`, but the body requires `{actual}`"
-            ))
-            .with_help("use the same value generically, or give the declaration a concrete signature; a trait implementation must preserve the trait's generic contract");
+            .with_primary_label(error.region, requirement)
+            .with_help(help);
         }
         ErrorKind::GenericEscape { variable } => {
             return Diagnostic::error(
@@ -1323,7 +1344,7 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
                 "this signature cannot be independently instantiated",
             )
             .with_help(
-                "pass the shared value as an argument, or use a concrete type for this function",
+                "each call may choose a different type, but the captured value has one shared type across calls. Check the captured value and the operation that ties it to this signature; an annotation cannot make shared storage independently polymorphic",
             );
         }
         ErrorKind::NonExhaustiveErrorMatch { missing, open } => {

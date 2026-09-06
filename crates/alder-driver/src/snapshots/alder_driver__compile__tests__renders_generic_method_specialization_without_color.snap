@@ -12,6 +12,7 @@ alder::type::generic_specialization
    ·           ╰── the signature promises an independent `b`, but the body requires `Number`
  4 │ }
    ╰────
-  help: use the same value generically, or give the declaration a concrete
-        signature; a trait implementation must preserve the trait's generic
-        contract
+  help: the caller chooses `b` for each call; the body must work for every
+        type allowed by the declared bounds, not just `Number`. Check
+        the operation or value that imposes this restriction; a trait
+        implementation must preserve the trait's generic contract
