@@ -1,0 +1,38 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Needed[a] { fn required(value: a) Number }\nfn trait_first() Number { Needed::required(\"string\") }\nfn core() Number { true }\nfn dependent() Number { Needed::required(core()) }\nfn trait_failure() Number { Needed::required(1) }\n"
+---
+alder::trait::missing_instance
+
+  × no implementation of `Needed[String]` was found
+   ╭─[/app/src/main.ald:2:27]
+ 1 │ trait Needed[a] { fn required(value: a) Number }
+ 2 │ fn trait_first() Number { Needed::required("string") }
+   ·                           ────────┬───────
+   ·                                   ╰── this use needs trait evidence
+ 3 │ fn core() Number { true }
+   ╰────
+  help: define an implementation of `Needed[String]`, or use a type that
+        already has one
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `Bool`
+   ╭─[/app/src/main.ald:3:20]
+ 2 │ fn trait_first() Number { Needed::required("string") }
+ 3 │ fn core() Number { true }
+   ·           ───┬──   ──┬─
+   ·              │       ╰── this return value has an incompatible type
+   ·              ╰── the declared return type
+ 4 │ fn dependent() Number { Needed::required(core()) }
+   ╰────
+alder::trait::missing_instance
+
+  × no implementation of `Needed[Number]` was found
+   ╭─[/app/src/main.ald:5:29]
+ 4 │ fn dependent() Number { Needed::required(core()) }
+ 5 │ fn trait_failure() Number { Needed::required(1) }
+   ·                             ────────┬───────
+   ·                                     ╰── this use needs trait evidence
+   ╰────
+  help: define an implementation of `Needed[Number]`, or use a type that
+        already has one

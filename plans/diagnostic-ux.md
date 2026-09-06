@@ -394,3 +394,30 @@ Validation: full workspace tests passed (222 driver tests, six CLI subprocess
 tests and all other suites; two existing ignored doctests). Strict workspace
 Clippy, formatting and diff checks passed. The new colorless source snapshot was
 reviewed; no existing snapshots needed modification for this warning category.
+
+## Independent trait diagnostics after core recovery
+
+The previous `infer_recovering` discarded a successful remainder whenever an
+earlier declaration failed, so `solve` never reached trait resolution for otherwise
+independent declarations. `core_recovery_also_reports_independent_trait_obligations`
+reproduced this: only the core mismatch was emitted, hiding the missing instance.
+
+Recovery now returns an internal, non-publishable remainder plus its accumulated
+core errors. The remainder comes from a fresh complete inference attempt after
+invalid declarations and their transitive users were excluded; it is not the
+partially mutated state of a failed attempt. `solve` resolves that remainder's
+trait obligations and appends its errors. Any core error still forces `Err`, even
+if all remaining traits succeed. The core-only `run` API likewise returns no
+annotations after an error. Nominal/trait metadata failures still stop recovery;
+this change does not relax that boundary or publish a reduced module.
+
+The source snapshot covers two independent missing instances surrounding a core
+mismatch, and a dependent trait call that must be suppressed. Check/Build/Test
+all report exactly the three root errors and no interfaces or artifacts. Driver
+module diagnostics are now sorted at construction so mixed core/trait errors
+retain source order, independently of which phase discovered them first.
+
+Validation: full workspace tests passed (223 driver tests, six CLI subprocess
+tests and all other suites; two existing ignored doctests). Strict all-target/
+all-feature Clippy, formatting and diff checks passed. The mixed-error source
+snapshot was reviewed; existing inference snapshots remained unchanged.

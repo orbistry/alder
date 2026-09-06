@@ -1370,7 +1370,16 @@ pub fn run<'a>(
     constraints: &Constraints<'a>,
 ) -> Result<Annotations<'a>, Vec<Error>> {
     let database = TraitDatabase::build(bump, constraints.module, &[]);
-    infer_recovering(bump, &database, constraints).map(|result| result.annotations)
+    let recovered = infer_recovering(bump, &database, constraints);
+    if recovered.errors.is_empty() {
+        Ok(recovered
+            .remainder
+            .expect("error-free inference has a result")
+            .1
+            .annotations)
+    } else {
+        Err(recovered.errors)
+    }
 }
 
 /// Validate coherence, infer the module, and resolve its trait obligations into
@@ -1388,9 +1397,27 @@ pub fn solve<'a>(
     if !coherence_errors.is_empty() {
         return Err(coherence_errors);
     }
-    let result = infer_recovering(bump, database, constraints)
-        .map_err(|errors| errors.into_iter().map(SolveError::Core).collect::<Vec<_>>())?;
-    resolve_obligations(bump, constraints.module, database, result)
+    let recovered = infer_recovering(bump, database, constraints);
+    let mut errors = recovered
+        .errors
+        .into_iter()
+        .map(SolveError::Core)
+        .collect::<Vec<_>>();
+    if let Some((module, result)) = recovered.remainder {
+        match resolve_obligations(bump, module, database, result) {
+            Ok(output) if errors.is_empty() => return Ok(output),
+            Ok(_) => {}
+            Err(trait_errors) => errors.extend(trait_errors),
+        }
+    }
+    Err(errors)
+}
+
+/// A cleanly re-inferred remainder is useful for discovering independent trait
+/// failures, but is never publishable when an earlier attempt reported errors.
+struct RecoveredInference<'a> {
+    errors: Vec<Error>,
+    remainder: Option<(&'a Module<'a>, InferenceResult<'a>)>,
 }
 
 /// Each failed attempt is discarded in its entirety. In particular, neither
@@ -1402,15 +1429,20 @@ fn infer_recovering<'a>(
     bump: &'a Bump,
     database: &TraitDatabase<'a>,
     constraints: &Constraints<'a>,
-) -> Result<InferenceResult<'a>, Vec<Error>> {
+) -> RecoveredInference<'a> {
     let original = constraints.module;
     let mut module = original;
     let mut errors = Vec::new();
     let mut excluded = BTreeSet::new();
     loop {
         match Infer::new(bump, database, constraints.requirement_seeds).infer_module(module) {
-            Ok(result) if errors.is_empty() => return Ok(result),
-            Ok(_) => break,
+            Ok(result) => {
+                errors.sort_by_key(|error: &Error| error.region);
+                return RecoveredInference {
+                    errors,
+                    remainder: Some((module, result)),
+                };
+            }
             Err(error) => {
                 // An unknown/external origin cannot safely identify a recovery
                 // unit. Report it and stop instead of guessing a declaration.
@@ -1490,7 +1522,10 @@ fn infer_recovering<'a>(
         });
     }
     errors.sort_by_key(|error| error.region);
-    Err(errors)
+    RecoveredInference {
+        errors,
+        remainder: None,
+    }
 }
 
 fn value_names<'a>(item: &ItemKind<'a>) -> Vec<&'a str> {

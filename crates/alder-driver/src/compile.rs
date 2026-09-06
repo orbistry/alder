@@ -554,7 +554,8 @@ fn compile_module<'s>(
         uri.path(),
         source.as_ref().map_or("", String::as_str).to_owned(),
     );
-    let failed = |diagnostics: Vec<Diagnostic>| {
+    let failed = |mut diagnostics: Vec<Diagnostic>| {
+        diagnostics.sort_by(Diagnostic::source_order);
         (
             CompileOutput {
                 uri: uri.clone(),
@@ -1273,6 +1274,40 @@ mod tests {
             );
         }
         assert_rendered_diagnostics_snapshot!(source, &result.warnings);
+    }
+
+    #[test]
+    fn core_recovery_also_reports_independent_trait_obligations() {
+        let source = indoc::indoc! {r#"
+            trait Needed[a] { fn required(value: a) Number }
+            fn trait_first() Number { Needed::required("string") }
+            fn core() Number { true }
+            fn dependent() Number { Needed::required(core()) }
+            fn trait_failure() Number { Needed::required(1) }
+        "#};
+        let uri = url("app/src/main.ald");
+        for mode in [BuildMode::Check, BuildMode::Build, BuildMode::Test] {
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                mode,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("invalid module must fail")
+            };
+            assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|error| error.message().contains("Needed")),
+                "{diagnostics:?}"
+            );
+            assert!(result.interfaces.is_empty());
+            assert!(result.artifacts.is_empty());
+            if mode == BuildMode::Check {
+                assert_rendered_diagnostics_snapshot!(source, diagnostics);
+            }
+        }
     }
 
     #[test]
