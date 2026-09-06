@@ -1029,6 +1029,9 @@ impl<'a> Env<'a> {
         if let Some(Candidate::Unique(existing)) = self.types.get(text) {
             return Err(existing.region);
         }
+        if let Some(Candidate::Unique(existing)) = self.traits.get(text) {
+            return Err(existing.region);
+        }
         self.types.insert(
             text,
             Candidate::Unique(TypeBinding {
@@ -1067,6 +1070,9 @@ impl<'a> Env<'a> {
         if let Some(Candidate::Unique(existing)) = self.traits.get(text)
             && existing.reference.module.package != PackageId::Builtin
         {
+            return Err(existing.region);
+        }
+        if let Some(Candidate::Unique(existing)) = self.types.get(text) {
             return Err(existing.region);
         }
         self.traits.insert(

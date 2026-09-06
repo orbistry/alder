@@ -1521,6 +1521,186 @@ mod tests {
     }
 
     #[test]
+    fn reexport_type_trait_collisions_reject_both_import_orders() {
+        for (index, source) in [
+            indoc::indoc! {"
+                pub import ~/left.*
+                pub import ~/right.*
+            "},
+            indoc::indoc! {"
+                pub import ~/right.*
+                pub import ~/left.*
+            "},
+            indoc::indoc! {"
+                pub import ~/left.{ Shared as Renamed }
+                pub import ~/right.{ Shared as Renamed }
+            "},
+            indoc::indoc! {"
+                pub import ~/right.{ Shared as Renamed }
+                pub import ~/left.{ Shared as Renamed }
+            "},
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for declaration in ["pub type Shared = Number", "pub enum Shared { Value }"] {
+                let facade = url("project/src/facade.ald");
+                let result = build_fixture_sync(
+                    vec![
+                        (url("project/src/left.ald"), Ok(declaration.to_owned())),
+                        (
+                            url("project/src/right.ald"),
+                            Ok("pub trait Shared[a] { fn read(value: a) Number }".to_owned()),
+                        ),
+                        (facade.clone(), Ok(source.to_owned())),
+                    ],
+                    BuildMode::Build,
+                    BuildDependencies::default(),
+                );
+                assert!(!result.is_success(), "collision accepted: {source}");
+                assert!(!result.artifacts.contains_key(&facade));
+                assert!(
+                    !result
+                        .interfaces
+                        .iter()
+                        .any(|interface| interface.module.path == ["facade"])
+                );
+                let ModuleResult::Failed { diagnostics } = &result.modules[&facade] else {
+                    panic!("colliding facade must fail")
+                };
+                assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+                if index == 0 && declaration.starts_with("pub type") {
+                    assert_rendered_diagnostic_snapshot!(source, diagnostics[0].clone());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reexport_type_trait_distinct_aliases_remain_usable() {
+        let alias = dependency_interface("pub type Shared = Number", &["left"], &[]);
+        let trait_ = dependency_interface(
+            "pub trait Shared[a] { fn read(value: a) Number }",
+            &["right"],
+            &[],
+        );
+        let facade = dependency_interface(
+            indoc::indoc! {"
+                pub import ~/left.{ Shared as Payload }
+                pub import ~/right.{ Shared as Reader }
+            "},
+            &["facade"],
+            &[alias, trait_],
+        );
+        let bytes = bincode::serialize(&facade).unwrap();
+        drop(facade);
+        let source = indoc::indoc! {"
+            import @vendor/widgets/facade.{ Payload, Reader }
+            pub fn use_reader(value: a) Payload where a: Reader { Reader::read(value) }
+        "};
+        let result = build_fixture_sync(
+            vec![(url("project/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![bincode::deserialize(&bytes).unwrap()],
+                ..BuildDependencies::default()
+            },
+        );
+        assert!(result.is_success(), "{:#?}", result.modules);
+    }
+
+    #[test]
+    fn named_reexports_cannot_rename_private_type_or_trait_declarations() {
+        let leaf = indoc::indoc! {"
+            type SecretAlias = Number
+            enum SecretEnum { Hidden }
+            trait SecretTrait[a] { fn secret_method(value: a) Number }
+            pub fn visible() Number { 42 }
+        "};
+        for source in [
+            "pub import ~/leaf.{ SecretAlias as PublicAlias }",
+            "pub import ~/leaf.{ SecretEnum as PublicEnum }",
+            "pub import ~/leaf.{ SecretTrait as PublicTrait }",
+            "pub import ~/leaf.{ secret_method as public_method }",
+        ] {
+            let facade = url("project/src/facade.ald");
+            let result = build_fixture_sync(
+                vec![
+                    (url("project/src/leaf.ald"), Ok(leaf.to_owned())),
+                    (facade.clone(), Ok(source.to_owned())),
+                ],
+                BuildMode::Build,
+                BuildDependencies::default(),
+            );
+            assert!(!result.is_success(), "private re-export accepted: {source}");
+            assert!(!result.artifacts.contains_key(&facade));
+            assert!(
+                !result
+                    .interfaces
+                    .iter()
+                    .any(|interface| interface.module.path == ["facade"])
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&facade] else {
+                panic!("private re-export must fail")
+            };
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            let expected = if source.contains("secret_method") {
+                "does not export `secret_method`"
+            } else {
+                "private"
+            };
+            assert!(
+                diagnostics[0].to_string().contains(expected),
+                "{diagnostics:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn public_reexport_cycles_fail_graph_construction_deterministically() {
+        let files = [
+            (
+                url("project/src/left.ald"),
+                "pub import ~/right.*".to_owned(),
+            ),
+            (
+                url("project/src/right.ald"),
+                "pub import ~/left.{ answer }".to_owned(),
+            ),
+            (url("project/src/main.ald"), "import ~/left".to_owned()),
+        ];
+        let mut expected = None;
+        for iteration in 0..6 {
+            let mut ordered = files.to_vec();
+            ordered.rotate_left(iteration % 3);
+            if iteration >= 3 {
+                ordered.reverse();
+            }
+            let modules = ordered
+                .iter()
+                .map(|(uri, _)| uri.clone())
+                .collect::<Vec<_>>();
+            let db = Arc::new(Mutex::new(Database::new(InMemorySource::with_files(
+                ordered,
+            ))));
+            let error = fixture_graph(db, &modules)
+                .await
+                .expect_err("public imports cannot bypass cycle rejection");
+            assert!(
+                matches!(error, DriverError::ImportCycle { .. }),
+                "{error:?}"
+            );
+            let rendered = error.to_string();
+            assert!(rendered.contains("left -> right -> left"), "{rendered}");
+            if let Some(expected) = &expected {
+                assert_eq!(&rendered, expected);
+            } else {
+                expected = Some(rendered);
+            }
+        }
+    }
+
+    #[test]
     fn wildcard_reexport_collision_rejects_publication() {
         let source = indoc::indoc! {r#"
             pub import ~/left.*
