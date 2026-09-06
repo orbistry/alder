@@ -18,6 +18,11 @@ jobs:
       - name: Install components
         run: rustup component add clippy rustfmt
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Target cleanup drops V8's gn_out archive but retains Cargo metadata.
+          # Use a new prefix so older incomplete target caches cannot restore.
+          prefix-key: v1-rust-registry-only
+          cache-targets: "false"
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -34,5 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Keep this aligned with the Linux job's registry-only cache policy.
+          prefix-key: v1-rust-registry-only
+          cache-targets: "false"
       - name: Build CLI
         run: cargo build --locked -p alder-cli
