@@ -276,7 +276,7 @@ function pushU64(bytes, value) {
 function pushText(bytes, value) {
     const encoded = new TextEncoder().encode(value);
     pushU64(bytes, BigInt(encoded.length));
-    bytes.push(...encoded);
+    for (const byte of encoded) bytes.push(byte);
 }
 
 function pushChildHash(bytes, index, value) {
@@ -320,7 +320,7 @@ function hashStream(value) {
         }
         encoded.reverse();
         pushU64(bytes, BigInt(encoded.length));
-        bytes.push(...encoded);
+        for (const byte of encoded) bytes.push(byte);
         return bytes;
     }
     if (typeof value === "string") {

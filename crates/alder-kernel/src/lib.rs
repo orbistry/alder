@@ -1513,6 +1513,51 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn large_string_hash_preserves_the_utf8_byte_stream() {
+        let harness = indoc::indoc! {r#"
+            const value = "a😀".repeat(50000);
+            const encoded = new TextEncoder().encode(value);
+            let expected = 14695981039346656037n;
+            const feed = byte => {
+                expected = ((expected ^ BigInt(byte)) * 1099511628211n) & 0xffffffffffffffffn;
+            };
+            feed(0x04);
+            for (let shift = 0n; shift < 64n; shift += 8n) {
+                feed(Number((BigInt(encoded.length) >> shift) & 0xffn));
+            }
+            for (const byte of encoded) feed(byte);
+            $assert($hash(value) === expected);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn bigint_hash_preserves_signed_magnitude_bytes() {
+        let harness = indoc::indoc! {r#"
+            const hex = "fedcba9876543210".repeat(32);
+            const magnitude = BigInt(`0x${hex}`);
+            for (const sign of [0, 1]) {
+                let expected = 14695981039346656037n;
+                const feed = byte => {
+                    expected = ((expected ^ BigInt(byte)) * 1099511628211n) & 0xffffffffffffffffn;
+                };
+                feed(0x03);
+                feed(sign);
+                for (let shift = 0n; shift < 64n; shift += 8n) {
+                    feed(Number((BigInt(hex.length / 2) >> shift) & 0xffn));
+                }
+                for (let index = 0; index < hex.length; index += 2) {
+                    feed(parseInt(hex.slice(index, index + 2), 16));
+                }
+                $assert($hash(sign === 0 ? magnitude : -magnitude) === expected);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn derived_json_rejects_inherited_variant_names_at_tag_path() {
         let harness = indoc::indoc! {r#"
             const variants = { Known: { record: false, fields: [] } };

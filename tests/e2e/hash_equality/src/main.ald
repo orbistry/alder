@@ -12,6 +12,14 @@ fn equal(left: a, right: a) where a: Hash {
 }
 
 pub fn main() {
+    let text = "a😀"
+    let count = 0
+    while count < 16 {
+        text = String.concat(text, text)
+        count += 1
+    }
+    equal(text, String.concat(text, ""))
+    equal(Some(text), Some(String.concat(text, "")))
     equal(0, -0)
     equal((), ())
     equal(true, true)
