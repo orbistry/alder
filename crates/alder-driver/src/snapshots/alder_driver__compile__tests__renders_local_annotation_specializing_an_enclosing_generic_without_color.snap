@@ -1,0 +1,17 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn keep(value: a) a {\n    let ignored: a = 42\n    value\n}\n"
+---
+alder::type::generic_specialization
+
+  × this implementation does not work for every `a`
+   ╭─[/project/src/main.ald:1:1]
+ 1 │ ╭─▶ fn keep(value: a) a {
+ 2 │ │       let ignored: a = 42
+ 3 │ │       value
+ 4 │ ├─▶ }
+   · ╰──── the signature promises an independent `a`, but the body requires `Number`
+   ╰────
+  help: use the same value generically, or give the declaration a concrete
+        signature; a trait implementation must preserve the trait's generic
+        contract

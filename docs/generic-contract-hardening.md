@@ -1,5 +1,32 @@
 # Generic contract acceptance evidence
 
+## Local annotation scope correction
+
+Local let annotations now follow the documented callable annotation rule:
+an enclosing type-variable name is reused; otherwise it is fresh for that
+annotation. Local bindings remain monomorphic and fresh names do not leak into
+sibling declarations. The prior canonicalizer used an empty permitted-name set,
+rejecting valid `let copy: a = value` inside `fn copy(value: a) a`.
+
+Allowing those names alone reproduced a second bug: the local solver built its
+annotation with a fresh map and accepted `let unused: a = 42` inside an otherwise
+universal function. The solver now clones the enclosing annotation scope, as it
+already does for lambda annotations, so the final generic-contract check catches
+that specialization. No new generalization rule or dictionary ABI is introduced.
+
+Seven solver tests cover valid scalar/higher-kinded contracts, rejected
+specialization, sibling freshness, monomorphic shared arrays, nested lambda and
+async scopes, and trait default/override/bound evidence. The driver snapshot
+`renders_local_annotation_specializing_an_enclosing_generic_without_color`
+contains the actual source and reports Number specializing the promised `a`.
+The compiled Option-law fixture now uses a body-local `Result[a, ...]` annotation
+and passes for independently instantiated nested Number and unit payloads.
+
+The local-scope finding is resolved; this does not close the remaining wider
+generic/evidence integration review or final package gates.
+
+## Earlier contract audit checkpoints
+
 This records `42c5423` plus the integrated hardening worktree, not an isolated
 validation of that commit or a claim of general compiler soundness. The remaining
 joint-constraint audit is tracked in the hardening

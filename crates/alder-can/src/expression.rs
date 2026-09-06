@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use alder_ast::{
     Attr as CanAttr, AttrValue as CanAttrValue, Block as CanBlock, Child as CanChild,
@@ -410,7 +410,12 @@ pub(crate) fn canonicalize_stmt<'a>(
         SourceStmt::Let(decl) => {
             let value = canonicalize_expr(bump, env, decl.value)?;
             let annotation = match decl.annotation {
-                Some(typ) => Some(canonicalize_type(bump, env, &BTreeSet::new(), typ)?),
+                Some(typ) => Some(canonicalize_type(
+                    bump,
+                    env,
+                    &crate::canonicalize::type_variables(typ),
+                    typ,
+                )?),
                 None => None,
             };
             let pattern = canonicalize_pattern(bump, env, decl.pattern, BindingMode::Local)?;

@@ -2033,7 +2033,10 @@ impl<'a, 'db> Infer<'a, 'db> {
         match &statement.value {
             Stmt::Let(decl) => {
                 let value = if let Some(annotation) = decl.annotation {
-                    let annotated = self.from_ast(annotation, &mut BTreeMap::new());
+                    // As in lambda signatures, existing names refer to the
+                    // enclosing contract. New names are local to this annotation;
+                    // the let binding itself remains monomorphic.
+                    let annotated = self.from_ast(annotation, &mut self.annotation_scope.clone());
                     self.infer_checked_expr(env, decl.value, annotated, return_type.clone())?
                 } else {
                     self.infer_expr(env, decl.value, return_type.clone())?

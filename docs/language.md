@@ -233,8 +233,11 @@ fn traverse(xs: t[f[a]], g: fn(a) f[b]) f[t[b]]
   bounds on one variable; `i.Item == Number` constrains an associated type.
 - Higher-kinded variables (`f` above) are applied like any other type; their
   kind is inferred from use.
-- A type variable named in a nested lambda's annotation refers to the
-  enclosing function's variable of the same name; otherwise it is fresh.
+- A type variable named in a nested lambda or local `let` annotation refers
+  to the enclosing callable's variable of the same name; otherwise it is
+  fresh for that annotation (or lambda signature). Fresh local annotation
+  names do not bind names in sibling declarations. Local lets remain
+  monomorphic; an annotation does not grant polymorphism to shared values.
 - There are no explicit type arguments at call sites. Annotate the binding
   instead: `let users: Array[User] = parse(body)?`.
 - A type that starts with `[` is an error row (`[:not_found(Id) | r]`), so

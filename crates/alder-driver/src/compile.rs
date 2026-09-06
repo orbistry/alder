@@ -3977,6 +3977,16 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn renders_local_annotation_specializing_an_enclosing_generic_without_color() {
+        assert_diagnostic_snapshot! {r#"
+            fn keep(value: a) a {
+                let ignored: a = 42
+                value
+            }
+        "#};
+    }
+
+    #[tokio::test]
     async fn renders_lambda_specializing_an_enclosing_generic_without_color() {
         assert_diagnostic_snapshot! {r#"
             fn keep(value: a) a {
