@@ -63,6 +63,14 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn hash_superclass_equality_agrees_with_ordinary_equality() {
+        assert_eq!(
+            execute("hash_equality", BuildMode::Build, EntryKind::Standalone).await,
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn refutable_bindings_fail_before_exposing_invalid_payloads() {
         let compiled =
             super::build::compile_ephemeral(&fixture("pattern_bindings"), BuildMode::Build)

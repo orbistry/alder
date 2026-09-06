@@ -3021,10 +3021,13 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 properties.push(self.js.property("show", self.js.identifier("$show")));
             }
             Intrinsic::HashKernel => {
-                self.kernel.insert("$equal");
                 self.kernel.insert("$hash");
                 let mut equality_properties = self.js.vec();
-                equality_properties.push(self.js.property("eq", self.js.identifier("$equal")));
+                // Bare HashKernel evidence is primitive; containers carry their
+                // payload evidence separately. Match the primitive Eq contract,
+                // including signed zero and NaN, through the superclass too.
+                equality_properties
+                    .push(self.intrinsic_binary_property("eq", BinaryOperator::StrictEquality));
                 let equality = self.js.object(equality_properties);
                 properties.push(self.js.property("$super0", equality));
                 properties.push(self.js.property("hash", self.js.identifier("$hash")));

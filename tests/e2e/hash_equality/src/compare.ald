@@ -1,0 +1,7 @@
+pub fn ordinary(left: a, right: a) Bool where a: Eq { left == right }
+
+pub fn inherited(left: a, right: a) Bool where a: Hash { left == right }
+
+pub fn hashes_match(left: a, right: a) Bool where a: Hash {
+    hash(left) == hash(right)
+}

@@ -1,0 +1,35 @@
+import ~/compare
+
+#[derive(Hash)]
+enum Box[a] { Value(a) }
+
+fn equal(left: a, right: a) where a: Hash {
+    assert compare.ordinary(left, right)
+    assert compare.ordinary(right, left)
+    assert compare.inherited(left, right)
+    assert compare.inherited(right, left)
+    assert compare.hashes_match(left, right)
+}
+
+pub fn main() {
+    equal(0, -0)
+    equal((), ())
+    equal(true, true)
+    equal("same", "same")
+    equal(42n, 42n)
+    equal(1 / 0, 1 / 0)
+    equal(-1 / 0, -1 / 0)
+    let positive: Option[Option[Number]] = Some(Some(0))
+    let negative: Option[Option[Number]] = Some(Some(-0))
+    equal(positive, negative)
+    equal([positive], [negative])
+    equal(Box::Value(positive), Box::Value(negative))
+    let nan = 0 / 0
+    assert !compare.ordinary(nan, nan)
+    assert !compare.inherited(nan, nan)
+    let nested: Option[Option[Number]] = Some(Some(nan))
+    assert !compare.ordinary(nested, nested)
+    assert !compare.inherited(nested, nested)
+    assert !compare.inherited([nested], [nested])
+    assert !compare.inherited(Box::Value(nested), Box::Value(nested))
+}
