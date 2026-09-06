@@ -1,7 +1,9 @@
 # Tuple projection inference
 
 Status: sparse projection production, fixed-arity constraints, scheme/interface
-transport and consumer checks implemented; broader acceptance audit pending.
+transport and consumer checks implemented and accepted. Final evidence is in
+`docs/compiler-hardening-final-report.md`; incremental pending-work notes below
+are historical.
 
 ## Current recursive-group check
 

@@ -10,12 +10,12 @@ snapshot-reference run. `cargo insta test --check --unreferenced reject --
 --quiet` then passed (session 6089): all tests/doctests pass, no unreferenced
 snapshots, and no snapshots to review. No source or snapshots were deleted.
 Formatting and strict Clippy passed again (session 21565). Final acceptance
-reconciliation is still open.
+is reconciled in `compiler-hardening-final-report.md`.
 The latest full workspace pass before that commit includes 72 codegen, 199
 driver, 72 kernel, 17 CLI, and 467 inference tests, plus strict Clippy and
 formatting. Fresh committed-code tests and package verification now pass;
 the older package results below are not final release evidence. Contract audits
-are reconciled; final acceptance and clean-tree gates remain open.
+are reconciled; the completion report is the authoritative final status.
 
 ## Earlier verification checkpoints
 

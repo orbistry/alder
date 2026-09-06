@@ -1,15 +1,17 @@
 # Compiler hardening
 
-Status: active on `compiler-hardening`, based on `21994e0`.
+Status: hardening accepted on `compiler-hardening`, based on `21994e0`.
+Final requirement map, validation and limits: `docs/compiler-hardening-final-report.md`.
 
 ## Current integration status
 
 The remaining cross-layer compiler/runtime changes and their regressions are
 committed in `556a21c`, after the Coalesce checkpoint `c9bb0b6` and dictionary
 audit `d63bd86`. All numbered and related-contract audits below are reconciled.
-The final acceptance checklist is still open: fresh package verification,
-original counterexamples/examples against the final artifacts, documentation
-reconciliation, and clean committed-tree verification are required.
+The final acceptance checklist below is reconciled: clean-branch packaging,
+original probes, examples/integration fixtures, snapshot references, source
+contracts and release metadata have been verified. The completion report records
+the exact evidence and deliberate limits; no merge or publication is authorized.
 
 The chronological notes below describe earlier worktree states; statements
 about pending iterator decisions, missing defaults, uncommitted production
@@ -2245,7 +2247,9 @@ and packaging/clean commits/the broader acceptance audit remain open.
   return/duplicate probes; success for records, loops, nested Option, local
   externs, 20,000 awaits, and template payload before/after a real formatting
   edit. Extracted-kernel timer probe passes. See release-packaging-hardening.
-- [ ] Adversarial review of alternate forms and cross-feature interactions.
+- [x] Adversarial review of alternate forms and cross-feature interactions.
+  Final report links the completed generic/mutation/row/Option/dictionary,
+  control-flow/evaluation-order, runtime, module and source-boundary matrices.
 - [x] `cargo fmt --all` and strict all-target/all-feature Clippy.
   Refreshed after rebuilding parser/report binaries; session 21565 exits 0.
 - [x] Full `cargo test`, snapshots reviewed, no pending/stale artifacts.
@@ -2260,8 +2264,14 @@ and packaging/clean commits/the broader acceptance audit remain open.
 - [x] Release package verification for affected crates.
   Clean-tree, offline workspace packaging verifies all 17 crates without
   `--allow-dirty`; 1,517 extracted source/stdlib/kernel files match exactly.
-- [ ] SPEC/design docs reflect behavior; per-crate Sampo changesets.
-- [ ] Clean committed branch; final requirement-by-requirement evidence audit.
+- [x] SPEC/design docs reflect behavior; per-crate Sampo changesets.
+  Current syntax, Option contracts, explicit async, structural capabilities and
+  iterator semantics match source/tests. Every touched publishable crate has a
+  Sampo entry; packaged stdlib copies match. Historical logs are identified.
+- [x] Clean committed branch; final requirement-by-requirement evidence audit.
+  `docs/compiler-hardening-final-report.md` reconciles the original objective
+  and amendments against inspected source, permanent tests and clean package
+  execution. Completion documentation is the only post-verification change.
 
 - Expression evaluation-order follow-up: the shared `values` lowering helper
   collected every operand's setup before evaluating any final expressions.

@@ -1,7 +1,8 @@
 # Option propagation hardening
 
-Status: core typing and direct AST lowering implemented; boundary/cleanup audit
-and final hardening acceptance remain open. Approved semantics are recorded in
+Status: typing, direct AST lowering and boundary/cleanup audit accepted;
+final evidence is in `docs/compiler-hardening-final-report.md`.
+Approved semantics are recorded in
 `plans/hardening-language-decisions.md`.
 
 `Some(value)?` produces value; `None?` returns None from the enclosing Option

@@ -1,6 +1,8 @@
 # Structural instance selection
 
-Status: active; related record findings are in record-coherence-hardening.md.
+Status: implemented and accepted; related record findings are in
+record-coherence-hardening.md. Final evidence is in
+`docs/compiler-hardening-final-report.md`; pending-work notes below are historical.
 
 Confirmed function-head defect: match_type rejected every Type::Fn, although
 coherence and method checking accepted function implementation heads. A local

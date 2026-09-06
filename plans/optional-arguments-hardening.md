@@ -1,8 +1,9 @@
 # Optional arguments and contextual Option lifting
 
-Status: in progress. The authoritative semantics are in
-`plans/hardening-language-decisions.md`; this is an implementation checkpoint,
-not completion of optional arguments or the compiler-hardening goal.
+Status: implemented and accepted. Authoritative semantics are in
+`plans/hardening-language-decisions.md`; final evidence is in
+`docs/compiler-hardening-final-report.md`. The incremental notes below, including
+initially failing probes and pending migration statements, are historical.
 
 ## Approved record-equivalence migration
 

@@ -1,7 +1,7 @@
 # Approved hardening language decisions
 
-Status: user-approved; implementation and verification remain part of compiler
-hardening. Recording these decisions does not resume the goal or mark work done.
+Status: user-approved, implemented and verified by compiler hardening; see
+`docs/compiler-hardening-final-report.md` for acceptance evidence and limits.
 This document supersedes earlier checkpoints requesting these choices.
 
 ## Tuple projections

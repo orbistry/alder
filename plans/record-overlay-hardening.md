@@ -3,7 +3,8 @@
 Status: transport, deferred inference, partial-field exposure, and several
 contract checks are implemented and tested. The three joint-audit criteria below
 now have source-path reviews and regression evidence. Final integrated compiler
-acceptance and clean committed-tree gates remain open. This is part of requirement
+acceptance is recorded in `docs/compiler-hardening-final-report.md`. Earlier
+pending-work statements below are historical. This is part of requirement
 8 of compiler hardening, not a new language milestone or a waived limitation.
 
 ## Reproductions

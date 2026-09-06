@@ -2,7 +2,8 @@
 
 Status: record overlap and selection use ordinary field types and shared row
 tails. Optional shorthand is exactly Option, with no presence metadata. The
-joint alias/HKT/imported-evidence and complexity audit remains open.
+joint alias/HKT/imported-evidence and complexity audit is accepted in
+`docs/compiler-hardening-final-report.md`. Pending-work notes below are historical.
 
 ## Current Option equivalence
 

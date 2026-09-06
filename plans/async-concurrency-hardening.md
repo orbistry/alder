@@ -1,7 +1,9 @@
 # Async and concurrency decisions
 
 Status: explicit async, synchronization, and traversal kernels implemented;
-public unbounded configuration is implemented; final integration/release gates remain open.
+public unbounded configuration is implemented; integration/release acceptance is
+recorded in `docs/compiler-hardening-final-report.md`. Earlier pending-work and
+package-refresh statements below are historical.
 The user has approved `Fiber.unbounded` as the concurrency-limit value, used as
 `{ concurrency: Fiber.unbounded }`, not as a whole options record.
 The implementation now includes a monomorphic Number

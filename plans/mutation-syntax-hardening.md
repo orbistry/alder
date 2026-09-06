@@ -1,7 +1,8 @@
 # Assignment syntax and generalization hardening
 
 Status: syntax removal and repository-consumer cleanup complete. The joint
-generalization review and final clean-tree release gates remain open.
+generalization review and release acceptance are complete; see
+`docs/compiler-hardening-final-report.md`. Pending-work notes below are historical.
 
 ## Approved semantics
 
