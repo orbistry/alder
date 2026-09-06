@@ -9,6 +9,6 @@ alder::type::type_mismatch
  4 │     consume(42)
  5 │     consume(nested)
    ·             ───┬──
-   ·                ╰── these types are incompatible
+   ·                ╰── argument 1 of `consume` has an incompatible type
  6 │ }
    ╰────

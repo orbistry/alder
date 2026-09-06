@@ -1178,6 +1178,16 @@ struct OptionLift<'a> {
     expected: Ty<'a>,
     region: Region,
     site: OptionLiftSite,
+    expectation: Option<ExpectationKind>,
+}
+
+impl OptionLift<'_> {
+    fn explain(&self, error: Error) -> Error {
+        match &self.expectation {
+            Some(expectation) => error.expected_by(expectation.clone(), None),
+            None => error,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -2971,6 +2981,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                             expected: expected.clone(),
                             region: value.region,
                             site: OptionLiftSite::Field(name.region),
+                            expectation: None,
                         });
                         expected
                     } else {
@@ -4055,7 +4066,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                     endpoints[0].1.clone(),
                     endpoints[1].1.clone(),
                     constraint.region,
-                )?;
+                )
+                .map_err(|error| constraint.explain(error))?;
                 edges.push(crate::option_levels::Edge {
                     from: endpoints[0].0,
                     to: endpoints[1].0,
@@ -4125,7 +4137,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     // Every nonempty component originates at a source site,
                     // so its earliest edge identifies a real participating use.
                     let constraint = &constraints[failure.edge];
-                    match failure.kind {
+                    constraint.explain(match failure.kind {
                         crate::option_levels::Failure::Ambiguous => Error {
                             expectation: None,
                             region: constraint.region,
@@ -4136,7 +4148,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                             constraint.actual.clone(),
                             constraint.expected.clone(),
                         ),
-                    }
+                    })
                 })?;
             for (id, (node, payload)) in variables {
                 self.bind(
@@ -4154,7 +4166,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.lift_option(constraint.actual.clone(), depth),
                     constraint.expected.clone(),
                     constraint.region,
-                )?;
+                )
+                .map_err(|error| constraint.explain(error))?;
                 if depth > 0 {
                     match constraint.site {
                         OptionLiftSite::Argument(use_id, index) => {
@@ -4317,6 +4330,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                                 expected: expected.clone(),
                                 region: argument.region,
                                 site: OptionLiftSite::Argument(use_id, args.len()),
+                                expectation: Some(ExpectationKind::Argument {
+                                    position: index + 1,
+                                    callee: callee.clone(),
+                                }),
                             });
                             Ok(expected)
                         } else {
@@ -6676,6 +6693,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                             expected: typ.clone(),
                             region: value.region,
                             site: OptionLiftSite::Field(name.region),
+                            expectation: None,
                         });
                         typ.clone()
                     } else {

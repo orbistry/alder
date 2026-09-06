@@ -337,3 +337,25 @@ The first full run exposed a timestamp collision between parallel CLI test
 directories. Their names now include a per-process atomic sequence, and the
 complete rerun passed (219 driver tests, six CLI subprocess tests, 467 inference
 tests and the remaining suites; two existing ignored doctests).
+
+## Deferred optional-argument checkpoint
+
+Queued `OptionLift` constraints now retain an owned argument expectation. Payload
+checks and inconsistent wrapping-depth checks attach that expectation when they
+fail, rather than losing the call context after `infer_call` returns. Existing
+inner expectations still win. Field-initializer constraints are not mislabeled
+as arguments, and no foreign declaration span is attached to the call site.
+
+`deferred_optional_arguments_keep_position_and_callee` reproduced generic labels
+before the change. Its colorless source snapshot now covers ordinary calls,
+pipeline-leading arguments and an optional second argument. The existing
+`option_lifting_mismatch_does_not_label_an_unrelated_argument` snapshot now names
+`consume` at the real failing use, still not the earlier unrelated call. The
+467 inference tests pass without snapshot changes, preserving Option lifting
+acceptance and ambiguity rules. General deferred record/tuple/row context work
+and specialized ambiguity explanations remain separate unfinished work.
+
+Validation: full workspace tests passed (220 driver tests, six CLI subprocess
+tests and all other suites; two existing ignored doctests). Strict workspace
+Clippy, formatting and diff checks passed. The new source snapshot and the one
+changed existing source label were reviewed; no pending snapshot proposals remain.

@@ -1244,6 +1244,43 @@ mod tests {
     }
 
     #[test]
+    fn deferred_optional_arguments_keep_position_and_callee() {
+        let source = indoc::indoc! {r#"
+            fn need(value?: Number) {}
+            fn ordinary() { need("wrong") }
+            fn piped() { "wrong" |> need() }
+            fn later(first: Number, value?: Number) {}
+            fn second() { later(1, "wrong") }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("invalid arguments must fail")
+        };
+        assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+        for (diagnostic, (position, callee)) in
+            diagnostics
+                .iter()
+                .zip([(1, "need"), (1, "need"), (2, "later")])
+        {
+            assert!(
+                miette::Diagnostic::labels(diagnostic)
+                    .unwrap()
+                    .any(|label| label
+                        .label()
+                        .is_some_and(|label| label.contains(&format!("argument {position}"))
+                            && label.contains(callee))),
+                "{diagnostic:?}"
+            );
+        }
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
     fn mismatch_explains_expectations_at_the_source() {
         let source = indoc::indoc! {r#"
             fn need(value: Number) { () }
