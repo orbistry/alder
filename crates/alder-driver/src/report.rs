@@ -7,6 +7,8 @@ use alder_region::{Position, Region};
 use alder_report::{Diagnostic, Source};
 use alder_solve::{CoherenceError, SolveError, SolveTraitError};
 
+mod type_names;
+
 pub fn source_failure(source: Source, message: impl Into<String>) -> Diagnostic {
     Diagnostic::error(source, message)
         .with_code("alder::driver::source")
@@ -1232,9 +1234,16 @@ pub fn warning(source: Source, warning: &alder_can::Warning<'_>) -> Diagnostic {
     }
 }
 
-pub fn solve(source: Source, module: &Module<'_>, error: &SolveError<'_>) -> Diagnostic {
+pub fn solve(
+    source: Source,
+    module: &Module<'_>,
+    interfaces: &[alder_ast::Interface<'_>],
+    error: &SolveError<'_>,
+) -> Diagnostic {
     match error {
-        SolveError::Core(error) => constrain(source, error),
+        SolveError::Core(error) => {
+            constrain(source, &type_names::localize(module, interfaces, error))
+        }
         SolveError::Trait(error) => trait_error(source, module, error),
         SolveError::Coherence(error) => coherence(source, module, error),
     }

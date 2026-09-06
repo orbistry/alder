@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ accept }\nenum Token { Token }\nfn invalid() { accept(Token::Token) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Token (from @vendor/widgets)`, found `Token`
+   ╭─[/app/src/main.ald:3:23]
+ 2 │ enum Token { Token }
+ 3 │ fn invalid() { accept(Token::Token) }
+   ·                       ──────┬─────
+   ·                             ╰── argument 1 of `accept` has an incompatible type
+   ╰────

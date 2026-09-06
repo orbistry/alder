@@ -6,8 +6,49 @@
 //! boundary without carrying Elm's binary-function and fixed-tuple constraint
 //! vocabulary into Alder.
 
-use alder_ast::{MethodId, Module, UseId};
+use alder_ast::{MethodId, Module, PackageId, QualifiedName, UseId};
 use alder_region::Region;
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DiagnosticPackage {
+    Application,
+    ApplicationMember(String),
+    Named { author: String, project: String },
+    Builtin,
+}
+
+/// Owned identity: source-facing aliases are selected only by the renderer.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DiagnosticName {
+    pub package: DiagnosticPackage,
+    pub module: Vec<String>,
+    pub name: String,
+}
+
+impl From<QualifiedName<'_>> for DiagnosticName {
+    fn from(reference: QualifiedName<'_>) -> Self {
+        Self {
+            package: match reference.module.package {
+                PackageId::Application => DiagnosticPackage::Application,
+                PackageId::ApplicationMember(member) => {
+                    DiagnosticPackage::ApplicationMember(member.to_owned())
+                }
+                PackageId::Named(package) => DiagnosticPackage::Named {
+                    author: package.author.to_owned(),
+                    project: package.project.to_owned(),
+                },
+                PackageId::Builtin => DiagnosticPackage::Builtin,
+            },
+            module: reference
+                .module
+                .path
+                .iter()
+                .map(|part| (*part).to_owned())
+                .collect(),
+            name: reference.name.to_owned(),
+        }
+    }
+}
 
 /// An owned snapshot of a diagnostic type, independent of the inference arena.
 /// Variable indices are dense, comparison-local names, never solver IDs.
@@ -16,6 +57,7 @@ pub enum DiagnosticType {
     Variable(usize),
     NamedVariable(String),
     Named(String),
+    NamedReference(Box<DiagnosticName>),
     Application(Box<Self>, Vec<Self>),
     Function(Vec<Self>, Box<Self>),
     Unit,
@@ -25,6 +67,52 @@ pub enum DiagnosticType {
     ErrorRow(Vec<(String, Vec<Self>)>, Option<Box<Self>>),
     Projection(Box<Self>, String),
     Hole,
+}
+
+impl DiagnosticType {
+    /// Visit every node, children first, for renderer-local transformations.
+    pub fn visit_mut(&mut self, visit: &mut impl FnMut(&mut Self)) {
+        match self {
+            Self::Application(head, args) | Self::Function(args, head) => {
+                head.visit_mut(visit);
+                for arg in args {
+                    arg.visit_mut(visit);
+                }
+            }
+            Self::Tuple(items) => {
+                for item in items {
+                    item.visit_mut(visit);
+                }
+            }
+            Self::Record(fields, tail) => {
+                for (_, typ) in fields {
+                    typ.visit_mut(visit);
+                }
+                if let Some(tail) = tail {
+                    tail.visit_mut(visit);
+                }
+            }
+            Self::ErrorRow(tags, tail) => {
+                for (_, args) in tags {
+                    for arg in args {
+                        arg.visit_mut(visit);
+                    }
+                }
+                if let Some(tail) = tail {
+                    tail.visit_mut(visit);
+                }
+            }
+            Self::Projection(head, _) => head.visit_mut(visit),
+            Self::Variable(_)
+            | Self::NamedVariable(_)
+            | Self::Named(_)
+            | Self::NamedReference(_)
+            | Self::Unit
+            | Self::TupleShape(_)
+            | Self::Hole => {}
+        }
+        visit(self);
+    }
 }
 
 impl std::fmt::Display for DiagnosticType {
@@ -46,6 +134,7 @@ impl std::fmt::Display for DiagnosticType {
             Self::Variable(index) => write!(f, "t{index}"),
             Self::NamedVariable(name) => f.write_str(name),
             Self::Named(name) => f.write_str(name),
+            Self::NamedReference(reference) => f.write_str(&reference.name),
             Self::Application(head, args) => {
                 write!(f, "{head}[")?;
                 separated(f, args)?;

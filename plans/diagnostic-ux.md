@@ -530,3 +530,39 @@ six CLI subprocess tests and all other suites; two existing ignored doctests).
 Strict all-target/all-feature Clippy, formatting and diff checks passed. Both
 new source snapshots and all five changed existing source snapshots were
 reviewed; no pending snapshot proposals remain.
+
+## Nominal diagnostic naming checkpoint
+
+`nominal_type_mismatches_use_resolved_import_names` reproduced an actual
+cross-module error reading “expected Token, found Token”, despite explicit
+`LeftToken`/`RightToken` imports. Elm's type localizer uses the current module's
+exposing/alias scope; Alder now preserves owned package/module/name identities
+in structured core diagnostic types and localizes them at the driver renderer.
+The identity payload is boxed so ordinary solver `Result` errors stay compact.
+
+The renderer resolves explicit import bindings and wildcard exports through
+the actual imported interfaces, including re-exported declaration identities.
+It selects aliases deterministically. Module-only imports use descriptive
+provenance such as `Token (from left)`: lower-case module bindings are not type
+paths in Alder's grammar, so the renderer does not invent a qualified type
+spelling. Types not imported by name retain an explicit originating module or
+package. Colliding display names fall back to distinct origins.
+
+Source snapshots cover direct aliases inside scalar and Array comparisons,
+renamed re-exports, module-qualified value inference, and a dependency interface
+that is serialized, discarded and reloaded before a consumer error. That stored
+case checks both an explicit consumer alias and unimported-type provenance.
+Matching nominal types still compile. Generic diagnostic variable naming reuses
+the same recursive visitor without losing declared variable names.
+
+This checkpoint concerns nominal identities in structured core errors, not
+source-synonym reconstruction for expanded transparent aliases or all remaining
+specialized trait diagnostic strings. Those remain part of the final comparison
+audit.
+
+Validation: full workspace tests passed (235 driver tests, 467 inference tests,
+six CLI subprocess tests and all other suites; two existing ignored doctests),
+followed by the added stored-interface unimported-type case. Strict all-target/
+all-feature Clippy, formatting and diff checks passed. All five new colorless
+source snapshots were reviewed; existing inference and driver snapshots remained
+unchanged.

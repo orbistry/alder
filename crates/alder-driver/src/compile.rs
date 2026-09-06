@@ -643,6 +643,7 @@ fn compile_module<'s>(
                     crate::report::solve(
                         report_source.clone(),
                         header.module,
+                        interfaces,
                         &alder_solve::SolveError::Coherence(error.clone()),
                     )
                 })
@@ -701,7 +702,12 @@ fn compile_module<'s>(
                 errors
                     .iter()
                     .map(|error| {
-                        crate::report::solve(report_source.clone(), can_result.module, error)
+                        crate::report::solve(
+                            report_source.clone(),
+                            can_result.module,
+                            interfaces,
+                            error,
+                        )
                     })
                     .collect(),
             );
@@ -1158,6 +1164,147 @@ mod tests {
     }
 
     #[test]
+    fn nominal_type_mismatches_use_resolved_import_names() {
+        let source = indoc::indoc! {r#"
+            import ~/left.{ Token as LeftToken }
+            import ~/right.{ Token as RightToken }
+            fn invalid(value: RightToken) LeftToken { value }
+            fn nested(value: Array[RightToken]) Array[LeftToken] { value }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![
+                (uri.clone(), Ok(source.to_owned())),
+                (
+                    url("app/src/left.ald"),
+                    Ok("pub enum Token { Token }".to_owned()),
+                ),
+                (
+                    url("app/src/right.ald"),
+                    Ok("pub enum Token { Token }".to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("nominal types from different modules must not unify")
+        };
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "type mismatch: expected `LeftToken`, found `RightToken`"
+        );
+        assert_eq!(
+            diagnostics[1].message(),
+            "type mismatch: expected `Array[LeftToken]`, found `Array[RightToken]`"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = source
+            .replace("value: RightToken", "value: LeftToken")
+            .replace("Array[RightToken]", "Array[LeftToken]");
+        let result = build_fixture_sync(
+            vec![
+                (uri.clone(), Ok(valid)),
+                (
+                    url("app/src/left.ald"),
+                    Ok("pub enum Token { Token }".to_owned()),
+                ),
+                (
+                    url("app/src/right.ald"),
+                    Ok("pub enum Token { Token }".to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(matches!(result.modules[&uri], ModuleResult::Success { .. }));
+    }
+
+    #[test]
+    fn nominal_type_names_follow_reexported_identities() {
+        let source = indoc::indoc! {r#"
+            import ~/api.{ PublicLeft as LeftToken, PublicRight as RightToken }
+            fn invalid(value: RightToken) LeftToken { value }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![
+                (uri.clone(), Ok(source.to_owned())),
+                (
+                    url("app/src/left.ald"),
+                    Ok("pub enum Token { Token }".to_owned()),
+                ),
+                (
+                    url("app/src/right.ald"),
+                    Ok("pub enum Token { Token }".to_owned()),
+                ),
+                (
+                    url("app/src/api.ald"),
+                    Ok(indoc::indoc! {r#"
+                    pub import ~/left.{ Token as PublicLeft }
+                    pub import ~/right.{ Token as PublicRight }
+                "#}
+                    .to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("re-exports retain distinct nominal identities")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "type mismatch: expected `LeftToken`, found `RightToken`"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn inferred_nominal_types_describe_module_provenance() {
+        let source = indoc::indoc! {r#"
+            import ~/left as left
+            import ~/right as right
+            fn invalid() { left.accept(right.make()) }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![
+                (uri.clone(), Ok(source.to_owned())),
+                (
+                    url("app/src/left.ald"),
+                    Ok(indoc::indoc! {r#"
+                    pub enum Token { Token }
+                    pub fn accept(value: Token) {}
+                "#}
+                    .to_owned()),
+                ),
+                (
+                    url("app/src/right.ald"),
+                    Ok(indoc::indoc! {r#"
+                    pub enum Token { Token }
+                    pub fn make() Token { Token::Token }
+                "#}
+                    .to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("inferred types from different modules must not unify")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "type mismatch: expected `Token (from left)`, found `Token (from right)`"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
     fn explicit_returns_preserve_their_own_annotation_origins() {
         let source = indoc::indoc! {r#"
             fn early() Number {
@@ -1186,6 +1333,68 @@ mod tests {
         let primary = labels.iter().find(|label| label.primary()).unwrap();
         assert_eq!(primary.offset(), source.find("\"wrong\"").unwrap());
         assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn stored_nominal_identities_keep_consumer_type_aliases() {
+        let producer = dependency_interface(
+            indoc::indoc! {r#"
+            pub enum Token { Token }
+            pub fn accept(value: Token) {}
+        "#},
+            &[],
+            &[],
+        );
+        let bytes = bincode::serialize(&producer).unwrap();
+        drop(producer);
+        let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ Token as RemoteToken }
+            enum Token { Token }
+            fn invalid(value: Token) RemoteToken { value }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored.clone()],
+                ..BuildDependencies::default()
+            },
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("stored and local nominal types remain distinct")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "type mismatch: expected `RemoteToken`, found `Token`"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets.{ accept }
+            enum Token { Token }
+            fn invalid() { accept(Token::Token) }
+        "#};
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: vec![stored],
+                ..BuildDependencies::default()
+            },
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("an unimported type still retains its package identity")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].message(),
+            "type mismatch: expected `Token (from @vendor/widgets)`, found `Token`"
+        );
+        insta::with_settings!({ snapshot_suffix => "unimported" }, {
+            assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        });
     }
 
     #[test]
@@ -5095,6 +5304,7 @@ mod tests {
         let diagnostic = crate::report::solve(
             Source::new("local.ald", source),
             canonical.module,
+            &[],
             &alder_solve::SolveError::Coherence(alder_solve::CoherenceError::SuperclassCycle {
                 traits: &[local, foreign],
             }),
@@ -5175,6 +5385,7 @@ mod tests {
         crate::report::solve(
             Source::new("/project/src/main.ald", source.to_owned()),
             canonical.module,
+            &[],
             &error,
         )
     }
@@ -5225,6 +5436,7 @@ mod tests {
         crate::report::solve(
             Source::new("/project/src/main.ald", source.to_owned()),
             canonical.module,
+            &[],
             &error,
         )
     }

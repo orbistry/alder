@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/left as left\nimport ~/right as right\nfn invalid() { left.accept(right.make()) }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Token (from left)`, found `Token (from right)`
+   ╭─[/app/src/main.ald:3:28]
+ 2 │ import ~/right as right
+ 3 │ fn invalid() { left.accept(right.make()) }
+   ·                            ──────┬─────
+   ·                                  ╰── argument 1 of `accept` has an incompatible type
+   ╰────

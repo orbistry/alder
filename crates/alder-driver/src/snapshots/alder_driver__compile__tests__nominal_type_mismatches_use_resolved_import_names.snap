@@ -1,0 +1,25 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/left.{ Token as LeftToken }\nimport ~/right.{ Token as RightToken }\nfn invalid(value: RightToken) LeftToken { value }\nfn nested(value: Array[RightToken]) Array[LeftToken] { value }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `LeftToken`, found `RightToken`
+   ╭─[/app/src/main.ald:3:43]
+ 2 │ import ~/right.{ Token as RightToken }
+ 3 │ fn invalid(value: RightToken) LeftToken { value }
+   ·                               ────┬────   ──┬──
+   ·                                   │         ╰── this return value has an incompatible type
+   ·                                   ╰── the declared return type
+ 4 │ fn nested(value: Array[RightToken]) Array[LeftToken] { value }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Array[LeftToken]`, found `Array[RightToken]`
+   ╭─[/app/src/main.ald:4:56]
+ 3 │ fn invalid(value: RightToken) LeftToken { value }
+ 4 │ fn nested(value: Array[RightToken]) Array[LeftToken] { value }
+   ·                                     ────────┬───────   ──┬──
+   ·                                             │            ╰── this return value has an incompatible type
+   ·                                             ╰── the declared return type
+   ╰────

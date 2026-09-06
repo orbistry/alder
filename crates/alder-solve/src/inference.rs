@@ -8002,7 +8002,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let next = names.len();
                 D::Variable(*names.entry(id).or_insert(next))
             }
-            Ty::Con(name) => D::Named(name.name.to_owned()),
+            Ty::Con(name) => Self::diagnostic_named_type(name),
             Ty::App(head, args) => D::Application(
                 Box::new(self.diagnostic_type(*head, names)),
                 args.into_iter()
@@ -8031,7 +8031,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 tail.map(|tail| Box::new(self.diagnostic_type(*tail, names))),
             ),
             Ty::Partial(reference, slots) => D::Application(
-                Box::new(D::Named(reference.name.to_owned())),
+                Box::new(Self::diagnostic_named_type(reference)),
                 slots
                     .into_iter()
                     .map(|slot| match slot {
@@ -8042,7 +8042,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             ),
             Ty::Projection(trait_, args, assoc) => D::Projection(
                 Box::new(D::Application(
-                    Box::new(D::Named(trait_.0.name.to_owned())),
+                    Box::new(Self::diagnostic_named_type(trait_.0)),
                     args.into_iter()
                         .map(|arg| self.diagnostic_type(arg, names))
                         .collect(),
@@ -8066,45 +8066,15 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
     }
 
-    fn generic_diagnostic_type(&mut self, typ: Ty<'a>) -> DiagnosticType {
-        fn rename(typ: &mut DiagnosticType, names: &BTreeMap<usize, String>) {
-            use DiagnosticType as D;
-            match typ {
-                D::Variable(index) => *typ = D::NamedVariable(names[index].clone()),
-                D::Application(head, args) | D::Function(args, head) => {
-                    rename(head, names);
-                    for arg in args {
-                        rename(arg, names);
-                    }
-                }
-                D::Tuple(items) => {
-                    for item in items {
-                        rename(item, names);
-                    }
-                }
-                D::Record(fields, tail) => {
-                    for (_, typ) in fields {
-                        rename(typ, names);
-                    }
-                    if let Some(tail) = tail {
-                        rename(tail, names);
-                    }
-                }
-                D::ErrorRow(tags, tail) => {
-                    for (_, args) in tags {
-                        for arg in args {
-                            rename(arg, names);
-                        }
-                    }
-                    if let Some(tail) = tail {
-                        rename(tail, names);
-                    }
-                }
-                D::Projection(head, _) => rename(head, names),
-                D::NamedVariable(_) | D::Named(_) | D::Unit | D::TupleShape(_) | D::Hole => {}
-            }
+    fn diagnostic_named_type(name: QualifiedName<'a>) -> DiagnosticType {
+        if name.module.package == PackageId::Builtin {
+            DiagnosticType::Named(name.name.to_owned())
+        } else {
+            DiagnosticType::NamedReference(Box::new(name.into()))
         }
+    }
 
+    fn generic_diagnostic_type(&mut self, typ: Ty<'a>) -> DiagnosticType {
         let typ = self.normalize_type(typ);
         let mut indices = BTreeMap::new();
         let mut diagnostic = self.diagnostic_type(typ, &mut indices);
@@ -8139,7 +8109,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
             });
         }
-        rename(&mut diagnostic, &names);
+        diagnostic.visit_mut(&mut |typ| {
+            if let DiagnosticType::Variable(index) = typ {
+                *typ = DiagnosticType::NamedVariable(names[index].clone());
+            }
+        });
         diagnostic
     }
 

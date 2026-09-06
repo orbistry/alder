@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import @vendor/widgets.{ Token as RemoteToken }\nenum Token { Token }\nfn invalid(value: Token) RemoteToken { value }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `RemoteToken`, found `Token`
+   ╭─[/app/src/main.ald:3:40]
+ 2 │ enum Token { Token }
+ 3 │ fn invalid(value: Token) RemoteToken { value }
+   ·                          ─────┬─────   ──┬──
+   ·                               │          ╰── this return value has an incompatible type
+   ·                               ╰── the declared return type
+   ╰────

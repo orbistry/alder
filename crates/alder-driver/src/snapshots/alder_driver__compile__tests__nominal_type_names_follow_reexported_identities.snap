@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "import ~/api.{ PublicLeft as LeftToken, PublicRight as RightToken }\nfn invalid(value: RightToken) LeftToken { value }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `LeftToken`, found `RightToken`
+   ╭─[/app/src/main.ald:2:43]
+ 1 │ import ~/api.{ PublicLeft as LeftToken, PublicRight as RightToken }
+ 2 │ fn invalid(value: RightToken) LeftToken { value }
+   ·                               ────┬────   ──┬──
+   ·                                   │         ╰── this return value has an incompatible type
+   ·                                   ╰── the declared return type
+   ╰────
