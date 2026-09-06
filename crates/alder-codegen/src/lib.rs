@@ -236,6 +236,15 @@ macro_rules! assert_solved_emit_snapshot {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn structural_error_equality_uses_runtime_tag_names() {
+        assert_solved_emit_snapshot! {r#"
+            pub fn same(left: Result[Number, [:payload(Number, String)]], right: Result[Number, [:payload(Number, String)]]) Bool {
+                left == right
+            }
+        "#};
+    }
+
+    #[test]
     fn explicit_async_without_await_is_lazy() {
         assert_solved_emit_snapshot!("pub async fn answer() Number { 42 }");
     }

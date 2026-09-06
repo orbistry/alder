@@ -67,6 +67,17 @@ tests pass, as do formatting and strict Clippy; the preceding full workspace
 and doctest pass covers this unchanged production source state. Record optional
 presence semantics and the broader structural codec integration remain separate.
 
+### Error payload equality
+
+Structural error-row equality metadata must use the same tag names as runtime
+values: `:payload:0`, not `payload:0`. The missing prefix skipped payload
+comparisons and made unequal error messages compare equal, weakening earlier
+JSON assertions. Direct AST lowering now includes the prefix. A source-aware
+emission snapshot checks both payload slots; CLI regressions compare unequal
+Number and String payloads, equal errors in both directions, and nested
+Option[Result] values. This fix does not change the error-row representation or
+introduce JavaScript source generation.
+
 - Audit container envelopes, optional/unit/nested Option representation, derived
   payloads, aliases, generic dictionaries, error groups, and round-trip behavior
   at the module API as well as trait calls.

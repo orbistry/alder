@@ -2706,7 +2706,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                         "error_row",
                         tags.iter()
                             .flat_map(|(tag, arity)| {
-                                (0..*arity).map(move |index| format!("{tag}:{index}"))
+                                (0..*arity).map(move |index| format!(":{tag}:{index}"))
                             })
                             .collect(),
                     ),

@@ -199,6 +199,15 @@ fn verify_option_representation() {
 }
 
 pub fn main() {
+    let first_error: Result[Number, [:payload(Number, String)]] = Err(:payload(1, "first"))
+    let different_number: Result[Number, [:payload(Number, String)]] = Err(:payload(2, "first"))
+    let different_text: Result[Number, [:payload(Number, String)]] = Err(:payload(1, "second"))
+    let same_error: Result[Number, [:payload(Number, String)]] = Err(:payload(1, "first"))
+    assert(first_error != different_number)
+    assert(first_error != different_text)
+    assert(first_error == same_error)
+    assert(same_error == first_error)
+    assert(Option.some(first_error) != Option.some(different_text))
     assert(Ref.same(facade.numbers, facade.same_numbers))
     assert(Ref.same(facade.numbers, public_types.shared))
     facade.append(2)
