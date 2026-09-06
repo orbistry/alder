@@ -1,5 +1,43 @@
 # Generic contract acceptance evidence
 
+## Current contract-audit reconciliation
+
+The explicit-signature/default/implementation/HKT/associated-equality/bounds/
+recursive-group/interface review in hardening requirement 1 is complete for the
+integrated implementation. This is an evidence-backed audit, not a proof of
+general compiler soundness or final committed-tree release verification.
+
+`infer_function` keeps inference positions flexible, registers declared
+universals and independently substituted trait-method universals, and derives
+implementation dictionary order from the trait contract. Implementation-only
+bounds remain obligations; declared associated equations are installed before
+signature/body checking. Default bodies now scope every trait-head variable.
+Local and lambda annotations reuse the enclosing callable scope, which is
+restored after each body along with givens and projection equations.
+
+The final module loop settles record initializers, Try constraints, tuple
+projections/shapes, overlays, and error-row constraints before
+`check_generic_contracts`. That check rejects concrete specialization, merged
+independent representatives, shared-environment escape, and undeclared tuple or
+error-row restrictions. Overlay universal proofs and retained-row behavior have
+their completed source/acceptance map in `record-row-acceptance.md` and the
+record-overlay plan. The earlier open-overlay notes below are historical.
+
+After this boundary, `resolve_obligations` consumes an `InferenceResult` and
+constructs evidence through `resolve_predicate`; it does not receive the mutable
+`Infer` substitution state. Published annotations and stored-interface tests
+therefore describe the contract checked before evidence construction. Broader
+dictionary lowering and evaluation-order audits remain separate delivery items.
+
+The permanent matrix below is supplemented by thirteen local-annotation cases,
+including recursive peers, trait-head scope, and unmentioned higher-kinded
+Functor parameters. Both the valid inherited-Functor case and rejection of an
+attempt to specialize that constructor to Array pass. Stored method and recursive
+local-annotation producers are serialized, discarded, and reloaded for consumers
+with independent Number/String calls. Source-aware diagnostic and compiled
+cross-module evidence are retained; no test is a substitute for the source-path
+review or the final integration/package gates.
+
 ## Local annotation scope correction
 
 Local let annotations now follow the documented callable annotation rule:
@@ -25,7 +63,7 @@ and passes for independently instantiated nested Number and unit payloads.
 The local-scope finding is resolved; this does not close the remaining wider
 generic/evidence integration review or final package gates.
 
-## Earlier contract audit checkpoints
+## Default-method scope follow-up
 
 Default-method follow-up: the annotation scope previously contained only names
 encountered in method signatures. A trait parameter absent from those signatures
@@ -44,7 +82,9 @@ consumer that calls the exported functions at Number and String. The focused
 local-annotation suite now has eleven cases, all passing; the stored regression
 passes without retaining the producer's arena.
 
-This records `42c5423` plus the integrated hardening worktree, not an isolated
+## Earlier contract audit checkpoints
+
+The following records `42c5423` plus the integrated hardening worktree, not an isolated
 validation of that commit or a claim of general compiler soundness. The remaining
 joint-constraint audit is tracked in the hardening
 plan and the optional-arguments/record-overlay plans.

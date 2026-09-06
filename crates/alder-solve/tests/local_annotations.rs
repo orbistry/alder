@@ -31,6 +31,50 @@ fn solve_input<'a>(
 }
 
 #[test]
+fn default_method_scope_preserves_unmentioned_higher_kinded_parameters() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Container[f] where f: Functor {
+            fn check() Number {
+                let identity = (value: f[Number]) f[Number] -> {
+                    let local: f[Number] = map(value, number -> number)
+                    local
+                }
+                42
+            }
+        }
+    "#},
+    )
+    .expect("the full higher-kinded trait head and its Functor evidence scope over defaults");
+}
+
+#[test]
+fn default_method_scope_rejects_unmentioned_constructor_specialization() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Container[f] where f: Functor {
+            fn check() Number {
+                let local: f[Number] = [42]
+                42
+            }
+        }
+    "#},
+    )
+    .expect_err("a default body cannot specialize the trait constructor to Array");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Core(Error {
+            kind: ErrorKind::GenericSpecialization { .. },
+            ..
+        })
+    )));
+}
+
+#[test]
 fn default_method_local_annotations_use_unmentioned_trait_bounds() {
     let bump = Bump::new();
     solve_input(
