@@ -31,6 +31,99 @@ fn solve_input<'a>(
 }
 
 #[test]
+fn default_method_local_annotations_use_unmentioned_trait_bounds() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        trait Describe[a] where a: Show {
+            fn formatter() Number {
+                let render = (value: a) String -> {
+                    let local: a = value
+                    show(local)
+                }
+                42
+            }
+        }
+    "#},
+    )
+    .expect("default bodies inherit the full trait head and its superclasses");
+}
+
+#[test]
+fn local_annotations_in_default_methods_cannot_specialize_trait_parameters() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        trait Marker[a] {
+            fn value() Number {
+                let unused: a = 42
+                42
+            }
+        }
+    "#},
+    )
+    .expect_err("a trait parameter remains universal even when absent from method arguments");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Core(Error {
+            kind: ErrorKind::GenericSpecialization { .. },
+            ..
+        })
+    )));
+}
+
+#[test]
+fn recursive_local_annotations_preserve_independent_contracts() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        indoc! {r#"
+        fn first(value: a, remaining: Number) a {
+            let local: a = value
+            if remaining == 0 { local } else { second(local, remaining - 1) }
+        }
+        fn second(value: b, remaining: Number) b {
+            let local: b = value
+            if remaining == 0 { local } else { first(local, remaining - 1) }
+        }
+        fn use_it() {
+            let number: Number = first(42, 3)
+            let text: String = second("text", 4)
+        }
+    "#},
+    )
+    .expect("SCC peers retain their own universal names and independent calls");
+}
+
+#[test]
+fn recursive_local_annotations_cannot_hide_peer_specialization() {
+    let bump = Bump::new();
+    let errors = solve_input(
+        &bump,
+        indoc! {r#"
+        fn first(value: a, flag: Bool) a {
+            let local: a = value
+            if flag { second(local, false) } else { local }
+        }
+        fn second(value: b, flag: Bool) b {
+            let specialized: b = 42
+            if flag { first(value, false) } else { value }
+        }
+    "#},
+    )
+    .expect_err("a local annotation cannot specialize a recursive peer's universal");
+    assert!(errors.iter().any(|error| matches!(
+        error,
+        alder_solve::SolveError::Core(Error {
+            kind: ErrorKind::GenericSpecialization { .. },
+            ..
+        })
+    )));
+}
+
+#[test]
 fn local_annotation_preserves_trait_method_contracts_and_bounds() {
     let bump = Bump::new();
     solve_input(

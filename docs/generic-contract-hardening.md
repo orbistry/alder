@@ -27,6 +27,23 @@ generic/evidence integration review or final package gates.
 
 ## Earlier contract audit checkpoints
 
+Default-method follow-up: the annotation scope previously contained only names
+encountered in method signatures. A trait parameter absent from those signatures
+was represented by a separate fresh variable when creating the self predicate,
+and was neither scoped over the body nor included in the universal contract.
+In `trait Marker[a]`, a default `fn value() Number` containing
+`let unused: a = 42` reproduced acceptance of a specialization. Default
+inference now seeds every trait-head parameter before checking signatures,
+building self/superclass evidence, and registering the generic contract.
+
+The negative regression fails before the fix and passes afterward. A positive
+test checks an unmentioned `a: Show` bound inside a nested annotated lambda.
+Recursive local annotations also retain independent peer contracts, reject peer
+specialization, and survive producer serialization/deserialization into a fresh
+consumer that calls the exported functions at Number and String. The focused
+local-annotation suite now has eleven cases, all passing; the stored regression
+passes without retaining the producer's arena.
+
 This records `42c5423` plus the integrated hardening worktree, not an isolated
 validation of that commit or a claim of general compiler soundness. The remaining
 joint-constraint audit is tracked in the hardening

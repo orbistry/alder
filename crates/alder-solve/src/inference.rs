@@ -1793,6 +1793,13 @@ impl<'a, 'db> Infer<'a, 'db> {
         let outer_free = self.environment_free_vars(env, &excluded);
         let mut local = env.clone();
         let mut vars = BTreeMap::new();
+        if let FunctionContext::Default(trait_) = context {
+            // The whole trait head scopes over a default body, even when a
+            // method's parameter/result annotations do not mention it.
+            for parameter in trait_.type_params {
+                vars.insert(parameter.name.value, self.fresh());
+            }
+        }
         let mut args = Vec::with_capacity(params.len());
         for param in params {
             let typ = match param.annotation {
@@ -1920,7 +1927,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         .map(|parameter| {
                             vars.get(parameter.name.value)
                                 .cloned()
-                                .unwrap_or_else(|| self.fresh())
+                                .expect("default method scope contains every trait parameter")
                         })
                         .collect(),
                 };
