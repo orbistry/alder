@@ -446,3 +446,26 @@ tests and all other suites; two existing ignored doctests), followed by the adde
 deferred-cycle fallback test. Strict workspace Clippy, formatting and diff checks
 passed. The new source snapshot and changed higher-kinded inference snapshot
 were reviewed; the duplicate pending snapshot proposal was removed.
+
+## Record comparison checkpoint
+
+Record shape unification now retains structured actual/expected records instead
+of reusing projection's `MissingField` error. A field present only in the actual
+closed record is reported as unexpected, not falsely described as absent.
+The renderer lists missing and unexpected fields independently, respecting open
+tails. A single missing/extra pair uses the existing conservative typo matcher;
+ordinary field projections retain their existing available-field suggestions.
+Common-field mismatches retain enclosing nested record shapes instead of only
+the conflicting leaf types. Shared diagnostic variable naming remains intact.
+
+Source regressions first reproduced incorrect extra-field direction, lost
+nested shapes, and the lost typo suggestion. The final colorless snapshots cover
+all three; existing recursive-overlay snapshots now include their enclosing
+records. This is not yet full enclosing function/tuple/application comparison
+or alias/name-ambiguity work. No record acceptance rules were intentionally
+changed.
+
+Validation: full workspace tests passed (228 driver tests, six CLI subprocess
+tests and all other suites; two existing ignored doctests). Strict all-target/
+all-feature Clippy, formatting and diff checks passed. Source snapshots were
+reviewed and no pending snapshot proposals remain.

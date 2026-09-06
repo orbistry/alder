@@ -357,7 +357,7 @@ fn late_record_context_cannot_invent_required_fields_or_convert_aliases() {
             errors.iter().any(|error| matches!(
                 error,
                 alder_solve::SolveError::Core(Error {
-                    kind: ErrorKind::MissingField { .. },
+                    kind: ErrorKind::RecordFieldsMismatch { .. },
                     ..
                 })
             )),

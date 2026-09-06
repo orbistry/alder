@@ -1371,6 +1371,10 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
         ErrorKind::MissingField { field, .. } => {
             ("missing_field", format!("record has no field `{field}`"))
         }
+        ErrorKind::RecordFieldsMismatch { actual, expected } => (
+            "record_fields_mismatch",
+            format!("record fields do not match: expected `{expected}`, found `{actual}`"),
+        ),
         ErrorKind::AssocTypeMismatch {
             assoc,
             expected,
@@ -1472,6 +1476,43 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
     }
     if matches!(error.kind, ErrorKind::InfiniteType { .. }) {
         diagnostic = diagnostic.with_help("these requirements form a cycle: expanding the type would keep nesting it inside itself. Check the highlighted use and the types it connects; adding an annotation cannot make this structural cycle finite");
+    }
+    if let ErrorKind::RecordFieldsMismatch {
+        actual: alder_constrain::DiagnosticType::Record(actual, actual_tail),
+        expected: alder_constrain::DiagnosticType::Record(expected, expected_tail),
+    } = &error.kind
+    {
+        let missing = expected
+            .iter()
+            .filter(|(name, _)| {
+                actual_tail.is_none() && !actual.iter().any(|(actual, _)| actual == name)
+            })
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>();
+        let extra = actual
+            .iter()
+            .filter(|(name, _)| {
+                expected_tail.is_none() && !expected.iter().any(|(expected, _)| expected == name)
+            })
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>();
+        let mut differences = Vec::new();
+        if !missing.is_empty() {
+            differences.push(format!("missing fields: `{}`", missing.join("`, `")));
+        }
+        if !extra.is_empty() {
+            differences.push(format!("unexpected fields: `{}`", extra.join("`, `")));
+        }
+        if missing.len() == 1
+            && extra.len() == 1
+            && let Some(candidate) = nearest_field(&extra[0], &missing)
+        {
+            differences.push(format!(
+                "did you mean `{candidate}` instead of `{}`?",
+                extra[0]
+            ));
+        }
+        diagnostic = diagnostic.with_help(differences.join("; "));
     }
     if let ErrorKind::MissingField { field, available } = &error.kind {
         let fields = available

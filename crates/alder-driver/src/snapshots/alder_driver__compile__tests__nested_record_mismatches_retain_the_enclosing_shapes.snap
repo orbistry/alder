@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn need(value: { profile: { name: String, active: Bool } }) {}\nfn wrong() {\n    let value = { profile: { name: 42, active: true } }\n    need(value)\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `{ profile: { active: Bool, name: String } }`,
+  │ found `{ profile: { active: Bool, name: Number } }`
+   ╭─[/app/src/main.ald:4:10]
+ 3 │     let value = { profile: { name: 42, active: true } }
+ 4 │     need(value)
+   ·          ──┬──
+   ·            ╰── argument 1 of `need` has an incompatible type
+ 5 │ }
+   ╰────

@@ -190,6 +190,10 @@ pub enum ErrorKind {
         field: String,
         available: Vec<String>,
     },
+    RecordFieldsMismatch {
+        actual: DiagnosticType,
+        expected: DiagnosticType,
+    },
     TupleIndexOutOfBounds {
         index: u32,
         length: usize,

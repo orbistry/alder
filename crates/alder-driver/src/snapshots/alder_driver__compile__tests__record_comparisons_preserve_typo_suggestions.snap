@@ -1,0 +1,16 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn need(value: { name: String }) {}\nfn wrong() { need({ naem: \"Ada\" }) }\n"
+---
+alder::type::record_fields_mismatch
+
+  × record fields do not match: expected `{ name: String }`, found `{ naem:
+  │ String }`
+   ╭─[/app/src/main.ald:2:19]
+ 1 │ fn need(value: { name: String }) {}
+ 2 │ fn wrong() { need({ naem: "Ada" }) }
+   ·                   ───────┬───────
+   ·                          ╰── argument 1 of `need` has an incompatible type
+   ╰────
+  help: missing fields: `name`; unexpected fields: `naem`; did you mean `name`
+        instead of `naem`?

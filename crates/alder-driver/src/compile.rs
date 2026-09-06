@@ -1277,6 +1277,109 @@ mod tests {
     }
 
     #[test]
+    fn record_comparisons_distinguish_missing_and_unexpected_fields() {
+        let source = indoc::indoc! {r#"
+            fn need(value: { name: String }) {}
+            fn extra() { let value = { name: "Ada", age: 37 }
+                need(value)
+            }
+            fn missing() { let value = { age: 37 }
+                need(value)
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("incompatible record shapes must fail")
+        };
+        assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+        for diagnostic in diagnostics {
+            assert!(
+                diagnostic.message().contains("expected `{ name: String }`"),
+                "{diagnostic:?}"
+            );
+            assert!(
+                miette::Diagnostic::help(diagnostic)
+                    .unwrap()
+                    .to_string()
+                    .contains("unexpected fields: `age`"),
+                "{diagnostic:?}"
+            );
+        }
+        assert!(
+            miette::Diagnostic::help(&diagnostics[1])
+                .unwrap()
+                .to_string()
+                .contains("missing fields: `name`")
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn record_comparisons_preserve_typo_suggestions() {
+        let source = indoc::indoc! {r#"
+            fn need(value: { name: String }) {}
+            fn wrong() { need({ naem: "Ada" }) }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("misspelled record field must fail")
+        };
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert!(
+            miette::Diagnostic::help(&diagnostics[0])
+                .unwrap()
+                .to_string()
+                .contains("did you mean `name` instead of `naem`?"),
+            "{diagnostics:?}"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
+    fn nested_record_mismatches_retain_the_enclosing_shapes() {
+        let source = indoc::indoc! {r#"
+            fn need(value: { profile: { name: String, active: Bool } }) {}
+            fn wrong() {
+                let value = { profile: { name: 42, active: true } }
+                need(value)
+            }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("nested field must fail")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert!(
+            diagnostics[0]
+                .message()
+                .contains("{ profile: { active: Bool, name: String } }"),
+            "{diagnostics:?}"
+        );
+        assert!(
+            diagnostics[0]
+                .message()
+                .contains("{ profile: { active: Bool, name: Number } }"),
+            "{diagnostics:?}"
+        );
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+    }
+
+    #[test]
     fn infinite_types_explain_the_actual_recursive_equation() {
         let source = indoc::indoc! {r#"
             fn apply_to_self(value) { value(value) }

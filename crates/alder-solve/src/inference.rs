@@ -7128,34 +7128,39 @@ impl<'a, 'db> Infer<'a, 'db> {
         right_open: Option<Box<Ty<'a>>>,
         region: Region,
     ) -> Result<(), Error> {
-        for (name, left_type) in &left {
-            match right.get(name) {
-                Some(right_type) => {
-                    self.unify(left_type.clone(), right_type.clone(), region)?;
-                }
-                None if right_open.is_none() => {
-                    return Err(Error {
-                        expectation: None,
-                        region,
-                        kind: ErrorKind::MissingField {
-                            field: (*name).to_owned(),
-                            available: right.keys().map(|name| (*name).to_owned()).collect(),
-                        },
-                    });
-                }
-                None => {}
-            }
+        if (right_open.is_none() && left.keys().any(|name| !right.contains_key(name)))
+            || (left_open.is_none() && right.keys().any(|name| !left.contains_key(name)))
+        {
+            let mut names = BTreeMap::new();
+            return Err(Error {
+                expectation: None,
+                region,
+                kind: ErrorKind::RecordFieldsMismatch {
+                    actual: self.diagnostic_type(Ty::Record(left, left_open), &mut names),
+                    expected: self.diagnostic_type(Ty::Record(right, right_open), &mut names),
+                },
+            });
         }
-        for name in right.keys() {
-            if !left.contains_key(name) && left_open.is_none() {
-                return Err(Error {
-                    expectation: None,
-                    region,
-                    kind: ErrorKind::MissingField {
-                        field: (*name).to_owned(),
-                        available: left.keys().map(|name| (*name).to_owned()).collect(),
-                    },
-                });
+        for (name, left_type) in &left {
+            if let Some(right_type) = right.get(name)
+                && let Err(mut error) = self.unify(left_type.clone(), right_type.clone(), region)
+            {
+                if matches!(error.kind, ErrorKind::Mismatch { .. }) {
+                    // Keep the enclosing fields instead of reporting two
+                    // disconnected leaf types for a nested record mismatch.
+                    let mut names = BTreeMap::new();
+                    error.kind = ErrorKind::Mismatch {
+                        actual: self.diagnostic_type(
+                            Ty::Record(left.clone(), left_open.clone()),
+                            &mut names,
+                        ),
+                        expected: self.diagnostic_type(
+                            Ty::Record(right.clone(), right_open.clone()),
+                            &mut names,
+                        ),
+                    };
+                }
+                return Err(error);
             }
         }
         let common = left

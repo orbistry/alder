@@ -1,0 +1,28 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "fn need(value: { name: String }) {}\nfn extra() { let value = { name: \"Ada\", age: 37 }\n    need(value)\n}\nfn missing() { let value = { age: 37 }\n    need(value)\n}\n"
+---
+alder::type::record_fields_mismatch
+
+  × record fields do not match: expected `{ name: String }`, found `{ age:
+  │ Number, name: String }`
+   ╭─[/app/src/main.ald:3:10]
+ 2 │ fn extra() { let value = { name: "Ada", age: 37 }
+ 3 │     need(value)
+   ·          ──┬──
+   ·            ╰── argument 1 of `need` has an incompatible type
+ 4 │ }
+   ╰────
+  help: unexpected fields: `age`
+alder::type::record_fields_mismatch
+
+  × record fields do not match: expected `{ name: String }`, found `{ age:
+  │ Number }`
+   ╭─[/app/src/main.ald:6:10]
+ 5 │ fn missing() { let value = { age: 37 }
+ 6 │     need(value)
+   ·          ──┬──
+   ·            ╰── argument 1 of `need` has an incompatible type
+ 7 │ }
+   ╰────
+  help: missing fields: `name`; unexpected fields: `age`
