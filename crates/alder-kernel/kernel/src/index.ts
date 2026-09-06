@@ -887,6 +887,7 @@ class FiberImpl {
             case "Join": return this.handleJoin(operation.fiber);
             case "Interrupt": return this.handleInterrupt(operation.fiber);
             case "All": return this.handleAll(operation.tasks);
+            case "AllDiscard": return this.handleAll(operation.tasks, false);
             case "Race": return this.handleRace(operation.tasks);
             case "Scope": return this.handleScope(operation.task);
             case "SemaphoreAcquire":
@@ -1047,7 +1048,7 @@ class FiberImpl {
         });
     }
 
-    handleAll(tasks) {
+    handleAll(tasks, collect = true) {
         if (!Array.isArray(tasks)) {
             this.resumeMethod = "throw";
             this.resumeValue = new TypeError("Fiber.all expected an Array of tasks");
@@ -1056,9 +1057,9 @@ class FiberImpl {
         const created = this.createChildren(tasks);
         if (created.failed) return this.handleChildConstructionFailure(created);
         const children = created.children;
-        if (children.length === 0) { this.resumeValue = []; return false; }
+        if (children.length === 0) { this.resumeValue = collect ? [] : undefined; return false; }
         return this.suspend((resume) => {
-            const results = new Array(children.length);
+            const results = collect ? new Array(children.length) : undefined;
             const removers = [];
             let remaining = children.length;
             let settled = false;
@@ -1077,7 +1078,7 @@ class FiberImpl {
                         finishFailure(exit.error, child);
                         return;
                     }
-                    results[index] = exit.value;
+                    if (results) results[index] = exit.value;
                     remaining -= 1;
                     if (remaining === 0) {
                         settled = true;
@@ -1386,6 +1387,114 @@ export function $fiberJoin(fiber) {
 
 export function $fiberInterrupt(fiber) {
     return $task(function* () { return yield { $: "Interrupt", fiber }; });
+}
+
+export function $fiberMap(values, transform, concurrency = 1) {
+    return fiberTraverse(values, transform, concurrency, true);
+}
+
+export function $fiberForEach(values, transform, concurrency = 1) {
+    return fiberTraverse(values, transform, concurrency, false);
+}
+
+export function $fiberTryMap(values, transform, concurrency = 1) {
+    return fiberTraverse(values, transform, concurrency, true, true);
+}
+
+export function $fiberTryForEach(values, transform, concurrency = 1) {
+    return fiberTraverse(values, transform, concurrency, false, true);
+}
+
+function fiberTraverse(values, transform, concurrency, collect, fallible = false) {
+    return $task(function* () {
+        if (!Array.isArray(values) || typeof transform !== "function") {
+            throw new TypeError("Fiber traversal expected an Array and a task-producing callback");
+        }
+        if (concurrency !== Infinity && (!Number.isSafeInteger(concurrency) || concurrency <= 0)) {
+            throw new RangeError("Fiber traversal concurrency must be a positive safe integer or explicitly unbounded");
+        }
+        const items = values.slice();
+        const results = collect ? new Array(items.length) : undefined;
+        let next = 0;
+        let stopped = false;
+        let typedError;
+        let defect;
+        let hasDefect = false;
+        const activeWorkers = new Set();
+        const cancelledWorkers = new Set();
+        const stopWorkers = (origin) => {
+            stopped = true;
+            for (const worker of activeWorkers) {
+                if (worker !== origin) {
+                    cancelledWorkers.add(worker);
+                    worker.interruptUnsafe();
+                }
+            }
+        };
+        const workers = Array.from({ length: Math.min(items.length, concurrency) }, () =>
+            $task(function* () {
+                const worker = currentFiber;
+                activeWorkers.add(worker);
+                try {
+                    while (!stopped && next < items.length) {
+                        const index = next++;
+                        try {
+                            const value = yield* $fiberScope($task(function* () {
+                                if (stopped) return;
+                                try {
+                                    let value = yield* transform(items[index]);
+                                    if (fallible) {
+                                        if (value == null || (value.$ !== "Ok" && value.$ !== "Err")) {
+                                            throw new TypeError("Fiber typed traversal callback must complete with Result");
+                                        }
+                                        if (value.$ === "Err") {
+                                            if (!stopped) {
+                                                typedError = value;
+                                                stopWorkers(worker);
+                                            }
+                                            return;
+                                        }
+                                        value = value._0;
+                                    }
+                                    if (!collect && value !== undefined) {
+                                        throw new TypeError("Fiber.forEach callback must complete with unit");
+                                    }
+                                    return value;
+                                }
+                                catch (error) {
+                                    if (!stopped) {
+                                        hasDefect = true;
+                                        defect = error;
+                                        stopWorkers(worker);
+                                    }
+                                    throw error;
+                                }
+                            }));
+                            if (results) results[index] = value;
+                        } catch (error) {
+                            // Only our own stop-induced interruption is bookkeeping.
+                            // Parent interruption still escapes the coordinator join.
+                            if (!(cancelledWorkers.has(worker) && error === worker.interruptError)) {
+                                if (!hasDefect) {
+                                    hasDefect = true;
+                                    defect = error;
+                                }
+                                stopWorkers(worker);
+                            }
+                            break;
+                        }
+                    }
+                } finally {
+                    activeWorkers.delete(worker);
+                }
+            }));
+        yield { $: "AllDiscard", tasks: workers };
+        if (hasDefect) throw defect;
+        if (fallible) {
+            return typedError ?? { $: "Ok", _0: results };
+        }
+        return results;
+    });
 }
 
 export function $fiberAll(tasks) {

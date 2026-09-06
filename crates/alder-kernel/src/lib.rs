@@ -783,6 +783,736 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn fiber_plain_traversals_interrupt_siblings_before_defect_cleanup_finishes() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberMap, $fiberForEach]) {
+                let entered, stopped, release;
+                const ready = new Promise((resolve) => { entered = resolve; });
+                const interrupted = new Promise((resolve) => { stopped = resolve; });
+                const gate = new Promise((resolve) => { release = resolve; });
+                const defect = new Error("item failure");
+                const calls = [];
+                const parent = new FiberImpl(traverse([0, 1, 2, 3], (value) => {
+                    calls.push(value);
+                    return $task(function* () {
+                        if (value === 0) {
+                            try {
+                                yield* $tryPromise(() => { entered(); return new Promise(() => {}); });
+                            } finally { stopped(); }
+                        }
+                        yield* $tryPromise(() => ready);
+                        yield* $fiberAddFinalizer($task(function* () {
+                            yield* $tryPromise(() => gate);
+                        }));
+                        throw defect;
+                    });
+                }, 2)).start();
+                await interrupted;
+                $assert(parent.exit === null && calls.join(",") === "0,1");
+                release();
+                const exit = await parent.awaitExit();
+                $assert(exit.$ === "Failure" && exit.error === defect);
+                $assert(parent.children.size === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("defects must interrupt siblings before awaiting failing-item cleanup")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_try_map_interrupts_siblings_before_error_cleanup_finishes() {
+        let harness = indoc::indoc! {r#"
+            let release, started, stopped;
+            const gate = new Promise((resolve) => { release = resolve; });
+            const ready = new Promise((resolve) => { started = resolve; });
+            const interrupted = new Promise((resolve) => { stopped = resolve; });
+            const err = { $: "Err", _0: { $: ":failed" } };
+            const calls = [];
+            const parent = new FiberImpl($fiberTryMap([0, 1, 2, 3], (value) => {
+                calls.push(value);
+                return $task(function* () {
+                    if (value === 0) {
+                        try { yield* $tryPromise(() => { started(); return new Promise(() => {}); }); }
+                        finally { stopped(); }
+                    }
+                    yield* $tryPromise(() => ready);
+                    yield* $fiberAddFinalizer($task(function* () {
+                        yield* $tryPromise(() => gate);
+                    }));
+                    return err;
+                });
+            }, 2)).start();
+            await interrupted;
+            $assert(parent.exit === null && calls.join(",") === "0,1");
+            release();
+            const exit = await parent.awaitExit();
+            $assert(exit.$ === "Success" && exit.value === err);
+            $assert(parent.children.size === 0);
+            const mapped = await $runTask($fiberTryMap([3, 2, 1], (n) => $task(function* () {
+                return { $: "Ok", _0: n * 2 };
+            }), 2));
+            $assert(mapped.$ === "Ok" && mapped._0.join(",") === "6,4,2");
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("typed failure must interrupt siblings and join cleanup")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_traversals_deliver_pending_interruption_after_the_mask_is_removed() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberMap, $fiberForEach, $fiberTryMap, $fiberTryForEach]) {
+                const typed = traverse === $fiberTryMap || traverse === $fiberTryForEach;
+                let ready, release, calls = 0, cleaned = 0, inside = false, outside = false;
+                const started = new Promise((resolve) => { ready = resolve; });
+                const gate = new Promise((resolve) => { release = resolve; });
+                const err = { $: "Err", _0: { $: ":expected" } };
+                const parent = new FiberImpl($task(function* () {
+                    yield* $fiberUninterruptible($task(function* () {
+                        const value = yield* traverse([0, 1, 2, 3], () => $task(function* () {
+                            calls++;
+                            yield* $fiberAddFinalizer($task(function* () { cleaned++; }));
+                            yield* $tryPromise(() => {
+                                if (calls === 2) ready();
+                                return gate;
+                            });
+                            return typed ? err : undefined;
+                        }), 2);
+                        if (typed) $assert(value === err);
+                        $assert(cleaned === calls);
+                        inside = true;
+                    }));
+                    outside = true;
+                })).start();
+                await started;
+                parent.interruptUnsafe();
+                $assert(parent.interruptMask === 1 && parent.exit === null);
+                release();
+                const exit = await parent.awaitExit();
+                $assert(exit.$ === "Failure" && exit.error === parent.interruptError);
+                $assert(inside && !outside && cleaned === (typed ? 2 : 4));
+                $assert(parent.interruptMask === 0 && parent.children.size === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("masked traversal must eventually deliver pending interruption")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_typed_traversals_select_the_first_observed_error_not_input_order() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberTryMap, $fiberTryForEach]) {
+                for (const first of [0, 1]) {
+                    let ready, cleaning, release, calls = 0;
+                    const started = new Promise((resolve) => { ready = resolve; });
+                    const cleanupStarted = new Promise((resolve) => { cleaning = resolve; });
+                    const gate = new Promise((resolve) => { release = resolve; });
+                    const settle = [];
+                    const errors = [0, 1].map((n) => ({ $: "Err", _0: { $: ":failed", _0: n } }));
+                    const parent = new FiberImpl(traverse([0, 1, 2, 3], (index) => {
+                        calls++;
+                        return $task(function* () {
+                            if (index === first) yield* $fiberAddFinalizer($task(function* () {
+                                yield* $tryPromise(() => { cleaning(); return gate; });
+                            }));
+                            return yield* $tryPromise(() => new Promise((resolve) => {
+                                settle[index] = resolve;
+                                if (settle[0] && settle[1]) ready();
+                            }));
+                        });
+                    }, 2)).start();
+                    await started;
+                    settle[first](errors[first]);
+                    settle[1 - first](errors[1 - first]);
+                    await cleanupStarted;
+                    $assert(parent.exit === null && calls === 2);
+                    release();
+                    const exit = await parent.awaitExit();
+                    $assert(exit.$ === "Success" && exit.value === errors[first]);
+                    $assert(parent.children.size === 0);
+                }
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("competing errors must select once and join cleanup")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_typed_traversal_cancellation_during_selected_error_cleanup_wins() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberTryMap, $fiberTryForEach]) {
+                let release, cleaning;
+                const gate = new Promise((resolve) => { release = resolve; });
+                const ready = new Promise((resolve) => { cleaning = resolve; });
+                const err = { $: "Err", _0: { $: ":failed" } };
+                let cleaned = 0, calls = 0, observed = 0;
+                const parent = new FiberImpl($task(function* () {
+                    try {
+                        return yield* traverse([0, 1, 2], () => {
+                            calls++;
+                            return $task(function* () {
+                                yield* $fiberAddFinalizer($task(function* () {
+                                    yield* $tryPromise(() => { cleaning(); return gate; });
+                                    cleaned++;
+                                }));
+                                return err;
+                            });
+                        });
+                    } finally { $assert(cleaned === 1); }
+                })).start();
+                parent.observe(() => { observed++; });
+                await ready;
+                parent.interruptUnsafe();
+                parent.interruptUnsafe();
+                for (let index = 0; index < 8; index++) await $runTask($task(function* () {}));
+                $assert(parent.exit === null && cleaned === 0 && calls === 1);
+                release();
+                const exit = await parent.awaitExit();
+                $assert(exit.$ === "Failure" && exit.error === parent.interruptError);
+                $assert(cleaned === 1 && observed === 1 && parent.children.size === 0);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("parent interruption must join selected-error cleanup")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_typed_traversal_keeps_defects_out_of_the_typed_error_channel() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberTryMap, $fiberTryForEach]) {
+                const err = { $: "Err", _0: { $: ":failed" } };
+                const cleanupDefect = new Error("cleanup failed");
+                const parent = new FiberImpl(traverse([0, 1], () => $task(function* () {
+                    yield* $fiberAddFinalizer($task(function* () { throw cleanupDefect; }));
+                    return err;
+                }))).start();
+                const exit = await parent.awaitExit();
+                $assert(exit.$ === "Failure" && exit.error === cleanupDefect);
+                // Falsy thrown values are still defects, not an absent failure.
+                for (const defect of [undefined, null, false, 0]) {
+                    let calls = 0;
+                    const broken = new FiberImpl(traverse([0, 1, 2], () => {
+                        calls++;
+                        throw defect;
+                    }, 2)).start();
+                    const failed = await broken.awaitExit();
+                    $assert(failed.$ === "Failure" && failed.error === defect);
+                    $assert(calls === 1 && broken.children.size === 0);
+                }
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("traversal defects must finish as runtime failures")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_typed_traversals_yield_to_host_timers() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberTryMap, $fiberTryForEach]) {
+                for (const suspend of [false, true]) {
+                    let timerRan = false, calls = 0;
+                    const timer = setTimeout(() => { timerRan = true; }, 0);
+                    try {
+                        const output = await $runTask(traverse(
+                            Array.from({ length: 2048 }, (_, index) => index),
+                            (value) => $task(function* () {
+                                calls++;
+                                if (calls === 1024) $assert(timerRan);
+                                if (suspend) yield* $tryPromise(() => Promise.resolve());
+                                return { $: "Ok", _0: traverse === $fiberTryMap ? value : undefined };
+                            }), 3));
+                        $assert(output.$ === "Ok" && calls === 2048 && timerRan);
+                        if (traverse === $fiberTryMap) $assert(output._0[2047] === 2047);
+                        else $assert(output._0 === undefined);
+                    } finally { clearTimeout(timer); }
+                }
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("typed traversal must yield to the host")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_traversals_isolate_each_items_provider_context() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberMap, $fiberForEach, $fiberTryMap, $fiberTryForEach]) {
+                let cleaned = 0;
+                await $runTask($task(function* () {
+                    $providerPush("service", "parent");
+                    try {
+                        yield* traverse([0, 1, 2, 3, 4, 5], (value) => $task(function* () {
+                            $assert($providerGet("service") === "parent");
+                            $providerPush("service", value);
+                            yield* $fiberAddFinalizer($task(function* () {
+                                $assert($providerGet("service") === value);
+                                cleaned++;
+                            }));
+                            yield* $tryPromise(() => Promise.resolve());
+                            $assert($providerGet("service") === value);
+                            // Deliberately leave this context installed: the next
+                            // item on this worker must still inherit the parent.
+                            return traverse === $fiberTryMap || traverse === $fiberTryForEach
+                                ? { $: "Ok", _0: undefined } : undefined;
+                        }), 2);
+                        $assert($providerGet("service") === "parent");
+                    } finally { $providerPop("service"); }
+                }));
+                $assert(cleaned === 6);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("item scopes must finish with isolated context")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_typed_traversals_preserve_cancellation_and_validate_results() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberTryMap, $fiberTryForEach]) {
+                let ready, calls = 0, cleaned = 0;
+                const started = new Promise((resolve) => { ready = resolve; });
+                const parent = new FiberImpl(traverse([1, 2, 3], () => $task(function* () {
+                    calls++;
+                    try {
+                        yield* $tryPromise(() => {
+                            if (calls === 2) ready();
+                            return new Promise(() => {});
+                        });
+                    } finally {
+                        yield* $tryPromise(() => Promise.resolve());
+                        cleaned++;
+                    }
+                }), 2)).start();
+                await started;
+                parent.interruptUnsafe();
+                const exit = await parent.awaitExit();
+                $assert(exit.$ === "Failure" && exit.error === parent.interruptError);
+                $assert(calls === 2 && cleaned === 2 && parent.children.size === 0);
+                for (const malformed of [undefined, null, 42, { $: "Other" }]) {
+                    let rejected = false;
+                    try { await $runTask(traverse([0], () => $task(function* () { return malformed; }))); }
+                    catch (error) { rejected = error instanceof TypeError; }
+                    $assert(rejected);
+                }
+                const empty = await $runTask(traverse([], () => { throw new Error("unreachable"); }));
+                $assert(empty.$ === "Ok");
+            }
+            const unit = await $runTask($fiberTryForEach([1, 2], () => $task(function* () {
+                return { $: "Ok", _0: undefined };
+            })));
+            $assert(unit.$ === "Ok" && unit._0 === undefined);
+            let rejected = false;
+            try {
+                await $runTask($fiberTryForEach([0], () => $task(function* () { return { $: "Ok", _0: 42 }; })));
+            } catch (error) { rejected = error instanceof TypeError; }
+            $assert(rejected);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("typed traversals must preserve cancellation")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_traversals_snapshot_membership_but_preserve_payload_aliases() {
+        let harness = indoc::indoc! {r#"
+            for (const traverse of [$fiberMap, $fiberForEach, $fiberTryMap, $fiberTryForEach]) {
+                for (const limit of [1, 2, Infinity]) {
+                    const typed = traverse === $fiberTryMap || traverse === $fiberTryForEach;
+                    const collect = traverse === $fiberMap || traverse === $fiberTryMap;
+                    const first = { value: 1 }, second = { value: 2 };
+                    const replacement = { value: 100 };
+                    const input = [first, second];
+                    let seen = [];
+                    const task = traverse(input, (item) => $task(function* () {
+                        seen.push(item);
+                        if (item === first) {
+                            input.splice(1, 1, replacement);
+                            input.push({ value: 200 });
+                            second.value = 42;
+                        }
+                        yield* $tryPromise(() => Promise.resolve());
+                        const value = collect ? item : undefined;
+                        return typed ? { $: "Ok", _0: value } : value;
+                    }), limit);
+                    $assert(seen.length === 0);
+                    const firstOutcome = await $runTask(task);
+                    const firstValues = typed ? firstOutcome._0 : firstOutcome;
+                    if (typed) $assert(firstOutcome.$ === "Ok");
+                    $assert(seen.length === 2 && seen[0] === first && seen[1] === second);
+                    $assert(seen[1].value === 42);
+                    if (collect) {
+                        $assert(firstValues.length === 2);
+                        $assert(firstValues[0] === first && firstValues[1] === second);
+                    } else $assert(firstValues === undefined);
+
+                    input.splice(0, input.length, replacement);
+                    seen = [];
+                    const secondOutcome = await $runTask(task);
+                    const secondValues = typed ? secondOutcome._0 : secondOutcome;
+                    if (typed) $assert(secondOutcome.$ === "Ok");
+                    $assert(seen.length === 1 && seen[0] === replacement);
+                    if (collect) {
+                        $assert(secondValues.length === 1 && secondValues[0] === replacement);
+                        $assert(firstValues !== secondValues && firstValues.length === 2);
+                        second.value = 43;
+                        $assert(firstValues[1].value === 43);
+                    } else $assert(secondValues === undefined);
+                }
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("reusable traversal must preserve shallow snapshot semantics")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_map_is_lazy_bounded_ordered_and_snapshots_each_execution() {
+        let harness = indoc::indoc! {r#"
+            const input = [1, 2, 3];
+            let calls = 0, active = 0, peak = 0;
+            const task = $fiberMap(input, (value) => {
+                calls++;
+                return $task(function* () {
+                    active++;
+                    peak = Math.max(peak, active);
+                    yield* $fiberAddFinalizer($task(function* () { active--; }));
+                    yield* $tryPromise(() => Promise.resolve());
+                    input.push(99);
+                    return value * 2;
+                });
+            }, 2);
+            input[0] = 10;
+            $assert(calls === 0);
+            $assert((await $runTask(task)).join(",") === "20,4,6");
+            $assert(calls === 3 && peak === 2 && active === 0);
+            input.length = 1;
+            $assert((await $runTask(task)).join(",") === "20");
+            $assert(calls === 4 && active === 0);
+            const err = { $: "Err", _0: { $: ":expected" } };
+            const values = await $runTask($fiberMap([1, 2], () => $task(function* () { return err; })));
+            $assert(values.length === 2 && values.every((value) => value === err));
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("bounded map must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_map_stops_callbacks_when_a_failure_is_waiting_for_cleanup() {
+        let harness = indoc::indoc! {r#"
+            let cleaning, release;
+            const cleanupStarted = new Promise((resolve) => { cleaning = resolve; });
+            const gate = new Promise((resolve) => { release = resolve; });
+            const calls = [];
+            const defect = new Error("callback failed");
+            const parent = new FiberImpl($fiberMap([0, 1, 2, 3, 4, 5], (value) => {
+                calls.push(value);
+                if (value === 0) {
+                    currentFiber.scope.add(() => $task(function* () {
+                        yield* $tryPromise(() => { cleaning(); return gate; });
+                    }));
+                    throw defect;
+                }
+                return $task(function* () { return value; });
+            }, 2)).start();
+            await cleanupStarted;
+            // Give runnable siblings bounded scheduler turns while failed-item
+            // cleanup stays gated. No timing threshold controls the assertion.
+            for (let index = 0; index < 16; index++) {
+                await $runTask($task(function* () {}));
+            }
+            release();
+            const exit = await parent.awaitExit();
+            $assert(exit.$ === "Failure" && exit.error === defect);
+            $assert(calls.every((value) => value < 2));
+            $assert(parent.children.size === 0);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("failed traversal must clean up")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_map_cancellation_stops_work_and_joins_active_cleanup() {
+        let harness = indoc::indoc! {r#"
+            let ready;
+            const started = new Promise((resolve) => { ready = resolve; });
+            let callbacks = 0, cleaned = 0;
+            const map = $fiberMap([0, 1, 2, 3, 4, 5], () => {
+                callbacks++;
+                return $task(function* () {
+                    try {
+                        yield* $tryPromise(() => {
+                            if (callbacks === 2) ready();
+                            return new Promise(() => {});
+                        });
+                    } finally {
+                        yield* $tryPromise(() => Promise.resolve());
+                        cleaned++;
+                    }
+                });
+            }, 2);
+            const parent = new FiberImpl($task(function* () {
+                try { yield* map; }
+                finally { $assert(cleaned === 2); }
+            })).start();
+            await started;
+            parent.interruptUnsafe();
+            parent.interruptUnsafe();
+            const exit = await parent.awaitExit();
+            $assert(exit.$ === "Failure" && exit.error instanceof Interrupted);
+            $assert(callbacks === 2 && cleaned === 2 && parent.children.size === 0);
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("map cancellation must clean up")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_map_keeps_input_order_when_later_items_finish_first() {
+        let harness = indoc::indoc! {r#"
+            const releases = [], starts = [];
+            const ready = Array.from({ length: 4 }, (_, index) =>
+                new Promise((resolve) => { starts[index] = resolve; }));
+            const completed = [];
+            const execution = $runTask($fiberMap([0, 1, 2, 3], (value) => $task(function* () {
+                yield* $tryPromise(() => new Promise((resolve) => {
+                    releases[value] = resolve;
+                    starts[value]();
+                }));
+                completed.push(value);
+                return value * 2;
+            }), 2));
+            await Promise.all([ready[0], ready[1]]);
+            $assert(releases[2] === undefined && releases[3] === undefined);
+            releases[1]();
+            await ready[2];
+            releases[2]();
+            await ready[3];
+            releases[3]();
+            // Queue a host-level task behind the released item's resumption.
+            for (let index = 0; index < 4; index++) await $runTask($task(function* () {}));
+            releases[0]();
+            const results = await execution;
+            $assert(completed.join(",") === "1,2,3,0");
+            $assert(results.join(",") === "0,2,4,6");
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("ordered traversal must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_map_validates_limits_and_defaults_to_sequential_execution() {
+        let harness = indoc::indoc! {r#"
+            let calls = 0;
+            const callback = () => { calls++; return $task(function* () {}); };
+            $assert((await $runTask($fiberMap([], callback))).length === 0 && calls === 0);
+            for (const limit of [0, -1, 0.5, NaN, -Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+                let rejected = false;
+                try { await $runTask($fiberMap([1], callback, limit)); }
+                catch (error) { rejected = error instanceof RangeError; }
+                $assert(rejected && calls === 0);
+            }
+            for (const limit of [undefined, Infinity]) {
+                let active = 0, peak = 0;
+                await $runTask($fiberMap([1, 2, 3], () => $task(function* () {
+                    active++;
+                    peak = Math.max(peak, active);
+                    try { yield* $tryPromise(() => Promise.resolve()); }
+                    finally { active--; }
+                }), limit));
+                $assert(active === 0 && peak === (limit === undefined ? 1 : 3));
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(alder_runtime::execute(code, Vec::new()).await.unwrap(), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_map_immediate_work_yields_to_host_timers() {
+        let harness = indoc::indoc! {r#"
+            let timerRan = false, calls = 0;
+            const timer = setTimeout(() => { timerRan = true; }, 0);
+            try {
+                const results = await $runTask($fiberMap(
+                    Array.from({ length: 2048 }, (_, index) => index),
+                    (value) => $task(function* () {
+                        calls++;
+                        if (calls === 1024) $assert(timerRan);
+                        return value;
+                    }), 3));
+                $assert(results.length === 2048 && results[2047] === 2047 && timerRan);
+            } finally { clearTimeout(timer); }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("traversal must yield to the host")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn fiber_for_each_is_bounded_unit_returning_and_does_not_discard_values() {
+        let harness = indoc::indoc! {r#"
+            let active = 0, peak = 0, cleaned = 0;
+            const visited = [];
+            const task = $fiberForEach([1, 2, 3, 4], (value) => $task(function* () {
+                active++;
+                peak = Math.max(peak, active);
+                yield* $fiberAddFinalizer($task(function* () { active--; cleaned++; }));
+                yield* $tryPromise(() => Promise.resolve());
+                visited.push(value);
+            }), 2);
+            $assert(visited.length === 0);
+            $assert(await $runTask(task) === undefined);
+            $assert(visited.length === 4 && active === 0 && peak === 2 && cleaned === 4);
+            $assert(await $runTask($fiberForEach([], () => { throw new Error("empty callback"); })) === undefined);
+            for (const value of [42, null, { $: "Err", _0: { $: ":error" } }]) {
+                let rejected = false;
+                try { await $runTask($fiberForEach([1], () => $task(function* () { return value; }))); }
+                catch (error) { rejected = error instanceof TypeError; }
+                $assert(rejected);
+            }
+        "#};
+        let code = format!("{KERNEL_JS}\n{harness}");
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                alder_runtime::execute(code, Vec::new())
+            )
+            .await
+            .expect("unit traversal must finish")
+            .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn primitive_json_codecs_validate_types_and_round_trip() {
         let harness = indoc::indoc! {r#"
             for (const [value, kind] of [[42, "number"], ["text", "string"], [true, "boolean"],

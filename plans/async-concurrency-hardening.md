@@ -234,6 +234,30 @@ separate checked-error channel is not reproduced.
 
 ## Bounded Fiber traversal
 
+Current defect review: ordinary map/forEach previously only stopped new work
+when a callback defect was observed. Active siblings were interrupted only after
+the failing item's scope completed cleanup. A gated regression failed with
+"Top-level await promise never resolved": failing-item cleanup awaited a gate
+that was released only after sibling interruption. All traversal modes now
+register active workers, record the first defect before interrupting siblings,
+and join the workers before rethrowing that defect. Stop-induced sibling
+interruption cannot replace the originating defect; parent cancellation still
+escapes the coordinator's join. The bounded regression covers map and forEach.
+
+Reference review: rechecked pinned Effect `forEach`, `iterateEagerImpl`, and
+`forEachConcurrent` at bd393d63c19bdd0ab212d95576cec89051c8501c. Alder uses fixed
+worker tasks and per-item scopes, not Effect's eager-exit optimization or full
+Cause representation. Ordinary Result values remain data; only tryMap and
+tryForEach select typed errors. No source was copied. Public options and their
+unbounded spelling remain a separate checkpoint.
+
+Traversal implementation decisions: take a shallow array snapshot at each task
+execution, before invoking callbacks. Mutations before execution are observed;
+later array replacement/push/removal does not change that execution's items.
+Payload objects retain alias identity. Snapshotting is ordinary synchronous
+bulk work, not preemptible by the cooperative scheduler. Each execution gets
+fresh result storage and scheduling state.
+
 Provide these distinct operations (schematic types, not final declarations):
 
 | Operation | Callback result | Traversal result |

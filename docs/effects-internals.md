@@ -445,6 +445,22 @@ exit exactly once, interrupts every loser, and waits for loser cleanup before
 publishing the winner. `Fiber.scope(task)` runs the task as an owned child and
 does not let it outlive the call.
 
+The traversal kernels use a bounded worker pool and a fresh owned scope per
+item; each scope's cleanup completes before its worker claims another item.
+They snapshot the input array shallowly at execution time and preserve input
+order in collected results. Ordinary map collects Result values as data.
+The distinct tryMap/tryForEach kernels interpret the first observed Err, stop
+new callbacks, interrupt active workers, and join cleanup before returning that
+same Err. Their coordinator distinguishes its own worker-stop interruption from
+defects; parent interruption still escapes the join unchanged. A defect observed
+by the coordinator is a runtime failure, never an invented typed error.
+All four modes stop active siblings as soon as an item defect is observed,
+before awaiting the failing item's cleanup. They retain that defect separately
+from stop-induced interruption and join all workers before propagating it.
+Pending parent interruption under an uninterruptible mask remains pending even
+when a traversal finishes with Err. Per-item provider context does not leak to
+the next item on the same worker.
+
 If constructing an all/race child fails, previously constructed children are
 already owned by the parent. They are interrupted before being scheduled, so
 their generator bodies do not start, but they still reach terminal exits and
