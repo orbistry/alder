@@ -2,6 +2,15 @@
 
 Status: active on `compiler-hardening`, based on `21994e0`.
 
+Canonical pattern checkpoint review: match-only permission is now carried by
+binding mode rather than leaked expression depth. Pins use pre-pattern lexical
+scopes; alternatives share the first pattern's local IDs and must bind equal
+name sets. Six canonicalization regressions cover missing/extra names, forbidden
+pins in nested let/lambda bindings, valid nested matches, and self-pattern name
+lookup. Source-aware snapshots were reviewed, including the two new tuple-based
+alternative errors. Rendered alternative-binding diagnostics pass. This does
+not close the related solver compatibility or codegen evaluation-order audit.
+
 The eleven defects from the September 4 review are minimum acceptance scope.
 The M2–M4 milestone checkmarks describe the feature work that landed, not proof
 that the contracts below are sound. Further milestones remain out of scope.

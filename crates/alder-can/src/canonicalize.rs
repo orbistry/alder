@@ -3361,6 +3361,71 @@ mod tests {
     }
 
     #[test]
+    fn alternative_pattern_missing_binding_is_rejected() {
+        assert_can_error_snapshot! {r#"
+            fn read(input: (Number, Number)) Number {
+                match input { (value, _) | (_, _) => value }
+            }
+        "#};
+    }
+
+    #[test]
+    fn alternative_pattern_extra_binding_is_rejected() {
+        assert_can_error_snapshot! {r#"
+            fn read(input: (Number, Number)) Number {
+                match input { (_, _) | (value, _) => 0 }
+            }
+        "#};
+    }
+
+    #[test]
+    fn pin_in_let_inside_match_is_not_a_match_pattern() {
+        assert_can_error_snapshot! {r#"
+            fn same(input: Number) Bool {
+                match input {
+                    expected => {
+                        let ^expected = input
+                        true
+                    }
+                }
+            }
+        "#};
+    }
+
+    #[test]
+    fn pin_in_lambda_parameter_inside_match_is_not_a_match_pattern() {
+        assert_can_error_snapshot! {r#"
+            fn same(input: Number) {
+                match input { expected => (^expected) -> true }
+            }
+        "#};
+    }
+
+    #[test]
+    fn nested_match_inside_lambda_allows_its_own_pin_patterns() {
+        let bump = Bump::new();
+        can(
+            &bump,
+            indoc::indoc! {r#"
+            fn same(input: Number) {
+                match input {
+                    expected => value -> match value { ^expected => true, _ => false }
+                }
+            }
+        "#},
+        );
+    }
+
+    #[test]
+    fn pin_cannot_reference_a_new_binding_in_its_own_pattern() {
+        assert_can_error_snapshot! {r#"
+            fn same(input: (Number, Number)) Bool {
+                match input { (number, ^number) => true, _ => false }
+            }
+        "#};
+    }
+
+    #[test]
     fn unknown_value_error() {
         insta::assert_snapshot!(can_error("fn read() { missing }"));
     }

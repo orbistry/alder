@@ -77,7 +77,6 @@ pub struct ControlContext {
     pub async_body: bool,
     pub function_depth: u16,
     pub loop_depth: u16,
-    pub match_depth: u16,
     pub query_depth: u16,
     pub opaque_names_depth: u16,
     pub test_depth: u16,

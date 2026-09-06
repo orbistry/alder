@@ -290,18 +290,17 @@ pub fn canonicalize_expr<'a>(
             let mut canonical = Vec::with_capacity(arms.len());
             for arm in arms {
                 env.push_scope();
-                env.control.match_depth += 1;
                 let mut patterns = Vec::with_capacity(arm.patterns.len());
                 if let Some((first, rest)) = arm.patterns.split_first() {
                     let base = env.clone();
-                    patterns.push(canonicalize_pattern(bump, env, first, BindingMode::Local)?);
+                    patterns.push(canonicalize_pattern(bump, env, first, BindingMode::Match)?);
                     for pattern in rest {
                         let mut alternative_env = base.clone();
                         patterns.push(canonicalize_pattern(
                             bump,
                             &mut alternative_env,
                             pattern,
-                            BindingMode::Local,
+                            BindingMode::Alternative(env.scopes.last().expect("pattern scope")),
                         )?);
                     }
                 }
@@ -310,7 +309,6 @@ pub fn canonicalize_expr<'a>(
                     None => None,
                 };
                 let body = canonicalize_expr(bump, env, arm.body)?;
-                env.control.match_depth -= 1;
                 env.pop_scope();
                 canonical.push(CanMatchArm {
                     patterns: bump.alloc_slice_copy(&patterns),
@@ -1057,24 +1055,22 @@ fn canonicalize_child<'a>(
             let mut canonical = Vec::with_capacity(arms.len());
             for arm in arms {
                 env.push_scope();
-                env.control.match_depth += 1;
                 let base = env.clone();
                 let mut patterns = Vec::with_capacity(arm.patterns.len());
                 if let Some((first, rest)) = arm.patterns.split_first() {
-                    patterns.push(canonicalize_pattern(bump, env, first, BindingMode::Local)?);
+                    patterns.push(canonicalize_pattern(bump, env, first, BindingMode::Match)?);
                     for pattern in rest {
                         let mut alternative_env = base.clone();
                         patterns.push(canonicalize_pattern(
                             bump,
                             &mut alternative_env,
                             pattern,
-                            BindingMode::Local,
+                            BindingMode::Alternative(env.scopes.last().expect("pattern scope")),
                         )?);
                     }
                 }
                 let guard = canonicalize_optional_expr(bump, env, arm.guard)?;
                 let body = canonicalize_child_block(bump, env, arm.body)?;
-                env.control.match_depth -= 1;
                 env.pop_scope();
                 canonical.push(CanChildMatchArm {
                     patterns: bump.alloc_slice_copy(&patterns),

@@ -150,6 +150,10 @@ pub struct OrphanImplDetails<'a> {
 #[derive(Clone, Debug)]
 pub enum PatternError<'a> {
     Name(NameError<'a>),
+    AlternativeBindings {
+        expected: &'a [&'a str],
+        actual: &'a [&'a str],
+    },
     DuplicateBinding {
         name: &'a str,
         first: Region,

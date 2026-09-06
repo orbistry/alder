@@ -1848,6 +1848,16 @@ fn type_error(error: &TypeError<'_>) -> CanDetails {
 
 fn pattern_error(error: &PatternError<'_>) -> CanDetails {
     match error {
+        PatternError::AlternativeBindings { expected, actual } => (
+            "alternative_bindings",
+            "match alternatives must bind the same names".to_owned(),
+            Some(format!(
+                "the first alternative binds [{}]; this one binds [{}]",
+                expected.join(", "),
+                actual.join(", ")
+            )),
+            None,
+        ),
         PatternError::Name(error) => name_error(error),
         PatternError::DuplicateBinding { name, first } => {
             duplicate("pattern binding", name, *first)

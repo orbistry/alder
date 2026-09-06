@@ -1,0 +1,26 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "fn read(input: (Number, Number)) Number {\n    match input { (value, _) | (_, _) => value }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 32,
+            },
+            end: Position {
+                line: 2,
+                column: 38,
+            },
+        },
+        kind: Pattern(
+            AlternativeBindings {
+                expected: [
+                    "value",
+                ],
+                actual: [],
+            },
+        ),
+    },
+]

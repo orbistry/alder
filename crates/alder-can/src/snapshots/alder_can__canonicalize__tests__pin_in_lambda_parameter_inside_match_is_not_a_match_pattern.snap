@@ -1,0 +1,21 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "fn same(input: Number) {\n    match input { expected => (^expected) -> true }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 32,
+            },
+            end: Position {
+                line: 2,
+                column: 41,
+            },
+        },
+        kind: Pattern(
+            PinOutsideMatch,
+        ),
+    },
+]

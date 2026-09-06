@@ -36,6 +36,14 @@ constraint generation, unification, and error presentation.
   each `break value`; a bare `break` contributes `()`.
 - Pattern pins are legal in `match` patterns. Expression pins are legal only
   in queries. Their outside-context errors are separate.
+  Match permission belongs to the pattern's binding mode, not an enclosing
+  expression depth: a let or lambda parameter inside a match is not a match
+  pattern. A nested match establishes its own permission. Pinned expressions
+  resolve against a snapshot of the enclosing lexical scopes before any names
+  in that pattern are introduced. Alternative patterns must bind identical
+  name sets and reuse the first alternative's local IDs, so guards and bodies
+  refer to the same bindings regardless of which alternative matches. Payload
+  compatibility and short-circuit evaluation remain solver/codegen obligations.
 - Table and schema internals are name-resolved in M2, but do not generate type
   constraints. This reconciles structural acceptance with the promise that
   canonicalization resolves names inside deferred constructs.

@@ -1,0 +1,28 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "fn same(input: (Number, Number)) Bool {\n    match input { (number, ^number) => true, _ => false }\n}\n"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 29,
+            },
+            end: Position {
+                line: 2,
+                column: 35,
+            },
+        },
+        kind: Expr(
+            Name(
+                Unknown {
+                    namespace: Value,
+                    qualifier: None,
+                    name: "number",
+                    suggestions: [],
+                },
+            ),
+        ),
+    },
+]
