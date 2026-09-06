@@ -1,0 +1,24 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub async fn broken() Result[(), [:failed]] {\n    let first = (42).await\n    let second = 43?\n    Ok(())\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Task[a]`, found `Number`
+   ╭─[/app/src/main.ald:2:17]
+ 1 │ pub async fn broken() Result[(), [:failed]] {
+ 2 │     let first = (42).await
+   ·                 ─────┬────
+   ·                      ╰── await requires a Task value
+ 3 │     let second = 43?
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Result[a, [b]]`, found `Number`
+   ╭─[/app/src/main.ald:3:18]
+ 2 │     let first = (42).await
+ 3 │     let second = 43?
+   ·                  ─┬─
+   ·                   ╰── this propagation requires compatible Option or Result types
+ 4 │     Ok(())
+   ╰────

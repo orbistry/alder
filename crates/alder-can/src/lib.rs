@@ -22,6 +22,9 @@ pub use error::{
 pub use interface::{builtin_trait_interface, from_module, headers_from_module};
 pub use value_scc::callable_dependencies;
 pub use value_scc::dependencies as value_dependencies;
+pub use value_scc::{
+    StatementLocalDependencies, expression_local_dependencies, statement_local_dependencies,
+};
 pub use warning::{BindingForm, Warning, WarningKind};
 
 /// Type annotations produced for top-level values by the solver.

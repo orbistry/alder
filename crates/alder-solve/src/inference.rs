@@ -1407,6 +1407,7 @@ struct Infer<'a, 'db> {
     omitted_record_fields: BTreeMap<Region, Vec<&'a str>>,
     record_initializers: Vec<(Ty<'a>, Ty<'a>, Region)>,
     ignored_callable_regions: BTreeSet<Region>,
+    body_recovery: Option<BodyRecovery>,
 }
 
 /// Infer core annotations only, without validating coherence or resolving trait
@@ -1509,6 +1510,27 @@ fn infer_recovering<'a>(
                 let failed_region = error.region;
                 errors.push(error);
                 let Some(owner) = owner else { break };
+                let item = &original.items[owner].value.kind;
+                let body = match item {
+                    ItemKind::Fn(function) => Some(function.body),
+                    ItemKind::Component(component) => Some(component.body),
+                    ItemKind::Test(test) => Some(test.body),
+                    _ => callable_units(item)
+                        .into_iter()
+                        .find(|callable| callable.body.region.contains(&failed_region))
+                        .map(|callable| callable.body),
+                };
+                if let Some(body) = body {
+                    errors.extend(recover_body_errors(
+                        bump,
+                        database,
+                        constraints,
+                        module,
+                        &ignored_callables,
+                        body,
+                        failed_region,
+                    ));
+                }
                 if let Some(callable) = callable_units(&original.items[owner].value.kind)
                     .into_iter()
                     .find(|callable| {
@@ -1639,6 +1661,114 @@ fn declaration_annotation_errors<'a>(
     errors
 }
 
+#[derive(Clone)]
+struct BodyRecovery {
+    block: Region,
+    statements: BTreeSet<Region>,
+    tail: bool,
+}
+
+impl BodyRecovery {
+    fn exclude(
+        &mut self,
+        home: alder_ast::ModuleId<'_>,
+        body: &Located<Block<'_>>,
+        failure: Region,
+    ) -> bool {
+        if let Some(statement) = body
+            .value
+            .statements
+            .iter()
+            .find(|statement| statement.region.contains(&failure))
+        {
+            if !self.statements.insert(statement.region) {
+                return false;
+            }
+        } else if body
+            .value
+            .tail
+            .is_some_and(|tail| tail.region.contains(&failure))
+        {
+            if self.tail {
+                return false;
+            }
+            self.tail = true;
+        } else {
+            return false;
+        }
+
+        let statements = body
+            .value
+            .statements
+            .iter()
+            .map(|statement| {
+                (
+                    statement.region,
+                    alder_can::statement_local_dependencies(home, statement),
+                )
+            })
+            .collect::<Vec<_>>();
+        loop {
+            let invalid = statements
+                .iter()
+                .filter(|(region, _)| self.statements.contains(region))
+                .flat_map(|(_, dependencies)| dependencies.bindings.iter().copied())
+                .collect::<BTreeSet<_>>();
+            let before = self.statements.len();
+            for (region, dependencies) in &statements {
+                if !dependencies.uses.is_disjoint(&invalid) {
+                    self.statements.insert(*region);
+                }
+            }
+            if let Some(tail) = body.value.tail
+                && !alder_can::expression_local_dependencies(home, tail).is_disjoint(&invalid)
+            {
+                self.tail = true;
+            }
+            if before == self.statements.len() {
+                break;
+            }
+        }
+        true
+    }
+}
+
+/// Probe further statements only for diagnostics. Every retry starts the whole
+/// module from scratch, and its result is always discarded. The outer recovery
+/// still excludes this failed declaration (and its users) before trait solving.
+fn recover_body_errors<'a>(
+    bump: &'a Bump,
+    database: &TraitDatabase<'a>,
+    constraints: &Constraints<'a>,
+    module: &'a Module<'a>,
+    ignored_callables: &BTreeSet<Region>,
+    body: &'a Located<Block<'a>>,
+    initial_failure: Region,
+) -> Vec<Error> {
+    let mut recovery = BodyRecovery {
+        block: body.region,
+        statements: BTreeSet::new(),
+        tail: false,
+    };
+    let mut errors = Vec::new();
+    let mut failure = initial_failure;
+    while recovery.exclude(module.id, body, failure) {
+        let mut attempt = Infer::new(bump, database, constraints.requirement_seeds);
+        attempt.ignored_callable_regions = ignored_callables.clone();
+        attempt.body_recovery = Some(recovery.clone());
+        match attempt.infer_module(module) {
+            Err(error) if body.region.contains(&error.region) => {
+                failure = error.region;
+                errors.push(error);
+            }
+            // An outside failure belongs to ordinary declaration recovery,
+            // which must run without the incomplete body's inferred contract.
+            Ok(_) | Err(_) => break,
+        }
+    }
+    errors
+}
+
 struct CallableUnit<'a> {
     region: Region,
     params: &'a [alder_ast::Param<'a>],
@@ -1745,6 +1875,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             option_lifts: Vec::new(),
             record_initializers: Vec::new(),
             ignored_callable_regions: BTreeSet::new(),
+            body_recovery: None,
         }
     }
 
@@ -2612,21 +2743,35 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<Ty<'a>, Error> {
         self.with_reachability(true, |this| {
             for statement in block.value.statements {
-                this.infer_stmt(env, statement, return_type.clone())?;
+                let ignored = this.body_recovery.as_ref().is_some_and(|recovery| {
+                    recovery.block == block.region
+                        && recovery.statements.contains(&statement.region)
+                });
+                if !ignored {
+                    this.infer_stmt(env, statement, return_type.clone())?;
+                }
                 this.reachable &= alder_ast::flow::statement(statement).falls_through;
             }
             let falls_through = alder_ast::flow::block(block).falls_through;
-            let result = match (block.value.tail, expected) {
-                (Some(tail), Some(expected)) if falls_through => {
-                    this.infer_expr_context(env, tail, return_type, Some(expected))
-                }
-                (Some(tail), _) => this.infer_expr(env, tail, return_type),
-                (None, Some(ExprExpectation::Exact(expected))) if falls_through => {
-                    this.check_value(Ty::Unit, expected.clone(), block.region)?;
-                    Ok(this.prune(expected))
-                }
-                (None, _) => Ok(Ty::Unit),
-            }?;
+            let ignored_tail = this
+                .body_recovery
+                .as_ref()
+                .is_some_and(|recovery| recovery.block == block.region && recovery.tail);
+            let result = if ignored_tail {
+                this.fresh()
+            } else {
+                match (block.value.tail, expected) {
+                    (Some(tail), Some(expected)) if falls_through => {
+                        this.infer_expr_context(env, tail, return_type, Some(expected))
+                    }
+                    (Some(tail), _) => this.infer_expr(env, tail, return_type),
+                    (None, Some(ExprExpectation::Exact(expected))) if falls_through => {
+                        this.check_value(Ty::Unit, expected.clone(), block.region)?;
+                        Ok(this.prune(expected))
+                    }
+                    (None, _) => Ok(Ty::Unit),
+                }?
+            };
             if falls_through {
                 Ok(result)
             } else {

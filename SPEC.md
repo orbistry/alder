@@ -239,6 +239,8 @@ Tracked separately in `plans/diagnostic-ux.md`; this is not an M5–M10 expansio
     state, method-level dependency suppression, and no failed-build publication
   - [x] Collect invalid declaration Result error kinds before body inference,
     suppressing dependent alias/body cascades without reusing converter state
+  - [x] Collect independent statement core errors within callable bodies through
+    discarded fresh retries, with resolved-local dependency suppression
 - [ ] Preserve structured expected/actual types and source expectation context
   - [x] Retain ordinary and specialized core comparison types through reporting
     with resolved nominal-name localization

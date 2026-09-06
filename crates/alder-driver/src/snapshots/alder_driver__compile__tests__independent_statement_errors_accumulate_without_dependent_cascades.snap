@@ -1,0 +1,58 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn broken() {\n    let first: Number = \"wrong\"\n    let dependent = first + true\n    let pinned = match 0 { ^first => 1, _ => 2 }\n    let second: String = 42\n    let captured = () -> dependent + false\n    let third: Bool = 0\n    let shadowed = { let first: Bool = 42\n        first }\n}\npub fn sibling() Number { false }\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+   ╭─[/app/src/main.ald:2:25]
+ 1 │ pub fn broken() {
+ 2 │     let first: Number = "wrong"
+   ·                ───┬──   ───┬───
+   ·                   │        ╰── this value does not match its annotation
+   ·                   ╰── the declared type
+ 3 │     let dependent = first + true
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/app/src/main.ald:5:26]
+ 4 │     let pinned = match 0 { ^first => 1, _ => 2 }
+ 5 │     let second: String = 42
+   ·                 ───┬──   ─┬
+   ·                    │      ╰── this value does not match its annotation
+   ·                    ╰── the declared type
+ 6 │     let captured = () -> dependent + false
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:7:23]
+ 6 │     let captured = () -> dependent + false
+ 7 │     let third: Bool = 0
+   ·                ──┬─   ┬
+   ·                  │    ╰── this value does not match its annotation
+   ·                  ╰── the declared type
+ 8 │     let shadowed = { let first: Bool = 42
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/app/src/main.ald:8:40]
+ 7 │     let third: Bool = 0
+ 8 │     let shadowed = { let first: Bool = 42
+   ·                                 ──┬─   ─┬
+   ·                                   │     ╰── this value does not match its annotation
+   ·                                   ╰── the declared type
+ 9 │         first }
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `Bool`
+    ╭─[/app/src/main.ald:11:27]
+ 10 │ }
+ 11 │ pub fn sibling() Number { false }
+    ·                  ───┬──   ──┬──
+    ·                     │       ╰── this return value has an incompatible type
+    ·                     ╰── the declared return type
+    ╰────

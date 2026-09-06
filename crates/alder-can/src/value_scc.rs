@@ -201,6 +201,35 @@ pub fn callable_dependencies<'a>(
     out
 }
 
+/// Resolved local identities read or introduced by a statement, including
+/// captures, pattern pins and assignment targets. Recovery uses these same
+/// identities as unused-binding analysis rather than comparing source names.
+pub struct StatementLocalDependencies {
+    pub bindings: BTreeSet<alder_ast::LocalId>,
+    pub uses: BTreeSet<alder_ast::LocalId>,
+}
+
+pub fn statement_local_dependencies<'a>(
+    home: ModuleId<'a>,
+    statement: Node<'a, Stmt<'a>>,
+) -> StatementLocalDependencies {
+    let mut locals = Locals::default();
+    stmt(home, statement, &mut locals);
+    StatementLocalDependencies {
+        bindings: locals.bindings.into_keys().collect(),
+        uses: locals.uses,
+    }
+}
+
+pub fn expression_local_dependencies<'a>(
+    home: ModuleId<'a>,
+    expression: Node<'a, Expr<'a>>,
+) -> BTreeSet<alder_ast::LocalId> {
+    let mut locals = Locals::default();
+    expr(home, expression, &mut locals);
+    locals.uses
+}
+
 fn collect_item<'a>(home: ModuleId<'a>, item: &ItemKind<'a>, out: &mut impl References<'a>) {
     match item {
         ItemKind::Fn(function) => {

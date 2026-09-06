@@ -1,0 +1,26 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "trait Inspect[a] {\n    fn inspect(value: a) () {\n        let first: Number = false\n        let second: String = 42\n    }\n}\nimpl Inspect[Number] {}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `Bool`
+   ╭─[/app/src/main.ald:3:29]
+ 2 │     fn inspect(value: a) () {
+ 3 │         let first: Number = false
+   ·                    ───┬──   ──┬──
+   ·                       │       ╰── this value does not match its annotation
+   ·                       ╰── the declared type
+ 4 │         let second: String = 42
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/app/src/main.ald:4:30]
+ 3 │         let first: Number = false
+ 4 │         let second: String = 42
+   ·                     ───┬──   ─┬
+   ·                        │      ╰── this value does not match its annotation
+   ·                        ╰── the declared type
+ 5 │     }
+   ╰────

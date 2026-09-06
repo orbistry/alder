@@ -3555,6 +3555,160 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn independent_statement_errors_accumulate_without_dependent_cascades() {
+        let source = indoc::indoc! {r#"
+            pub fn broken() {
+                let first: Number = "wrong"
+                let dependent = first + true
+                let pinned = match 0 { ^first => 1, _ => 2 }
+                let second: String = 42
+                let captured = () -> dependent + false
+                let third: Bool = 0
+                let shadowed = { let first: Bool = 42
+                    first }
+            }
+            pub fn sibling() Number { false }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+            panic!("five independent failures must reject the module")
+        };
+        assert_eq!(diagnostics.len(), 5, "{diagnostics:?}");
+        assert!(result.interfaces.is_empty());
+        assert!(result.artifacts.is_empty());
+        assert_rendered_diagnostics_snapshot!(source, diagnostics);
+        let valid = source
+            .replace("= \"wrong\"", "= 42")
+            .replace("first + true", "first + 1")
+            .replace("String = 42", "String = \"ok\"")
+            .replace("dependent + false", "dependent + 2")
+            .replace("Bool = 0", "Bool = true")
+            .replace("Bool = 42", "Bool = true")
+            .replace("Number { false }", "Number { 42 }");
+        let result = build_fixture_sync(
+            vec![(uri.clone(), Ok(valid))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert!(
+            matches!(result.modules[&uri], ModuleResult::Success { .. }),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn statement_recovery_discards_partial_unification_and_async_state() {
+        for (suffix, source, valid) in [
+            (
+                "partial_unification",
+                indoc::indoc! {r#"
+                    pub fn broken() {
+                        let shared = []
+                        let bad: (Array[Number], Bool) = (shared, 42)
+                        let good: Array[String] = shared
+                        let independent: Number = false
+                    }
+                "#},
+                indoc::indoc! {r#"
+                    pub fn valid() {
+                        let shared = []
+                        let good: Array[String] = shared
+                        let independent: Number = 42
+                    }
+                "#},
+            ),
+            (
+                "async",
+                indoc::indoc! {r#"
+                    pub async fn broken() Result[(), [:failed]] {
+                        let first = (42).await
+                        let second = 43?
+                        Ok(())
+                    }
+                "#},
+                indoc::indoc! {r#"
+                    async fn ready() Number { 42 }
+                    pub async fn valid() Result[(), [:failed]] {
+                        let first = ready().await
+                        let second = Ok(43)?
+                        Ok(())
+                    }
+                "#},
+            ),
+            (
+                "default_method",
+                indoc::indoc! {r#"
+                    trait Inspect[a] {
+                        fn inspect(value: a) () {
+                            let first: Number = false
+                            let second: String = 42
+                        }
+                    }
+                    impl Inspect[Number] {}
+                "#},
+                indoc::indoc! {r#"
+                    trait Inspect[a] {
+                        fn inspect(value: a) () {
+                            let first: Number = 42
+                            let second: String = "ok"
+                        }
+                    }
+                    impl Inspect[Number] {}
+                "#},
+            ),
+            (
+                "mutation_and_tail",
+                indoc::indoc! {r#"
+                    pub fn broken() {
+                        let first: Number = false
+                        first += "wrong"
+                        let second: String = 42
+                        first
+                    }
+                "#},
+                indoc::indoc! {r#"
+                    pub fn valid() {
+                        let first: Number = 42
+                        first += 1
+                        let second: String = "ok"
+                        first
+                    }
+                "#},
+            ),
+        ] {
+            let uri = url("app/src/main.ald");
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(source.to_owned()))],
+                BuildMode::Build,
+                BuildDependencies::default(),
+            );
+            let ModuleResult::Failed { diagnostics } = &result.modules[&uri] else {
+                panic!("independent statement failures must reject {suffix}")
+            };
+            assert_eq!(diagnostics.len(), 2, "{suffix}: {diagnostics:?}");
+            assert!(result.interfaces.is_empty());
+            assert!(result.artifacts.is_empty());
+            insta::with_settings!({ snapshot_suffix => suffix }, {
+                assert_rendered_diagnostics_snapshot!(source, diagnostics);
+            });
+            let result = build_fixture_sync(
+                vec![(uri.clone(), Ok(valid.to_owned()))],
+                BuildMode::Build,
+                BuildDependencies::default(),
+            );
+            assert!(
+                matches!(result.modules[&uri], ModuleResult::Success { .. }),
+                "{suffix}: {result:?}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn renders_missing_alternative_binding_without_color() {
         assert_diagnostic_snapshot! {r#"

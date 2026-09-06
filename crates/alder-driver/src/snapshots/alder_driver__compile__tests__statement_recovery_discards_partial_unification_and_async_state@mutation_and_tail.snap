@@ -1,0 +1,26 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn broken() {\n    let first: Number = false\n    first += \"wrong\"\n    let second: String = 42\n    first\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `Bool`
+   ╭─[/app/src/main.ald:2:25]
+ 1 │ pub fn broken() {
+ 2 │     let first: Number = false
+   ·                ───┬──   ──┬──
+   ·                   │       ╰── this value does not match its annotation
+   ·                   ╰── the declared type
+ 3 │     first += "wrong"
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `String`, found `Number`
+   ╭─[/app/src/main.ald:4:26]
+ 3 │     first += "wrong"
+ 4 │     let second: String = 42
+   ·                 ───┬──   ─┬
+   ·                    │      ╰── this value does not match its annotation
+   ·                    ╰── the declared type
+ 5 │     first
+   ╰────

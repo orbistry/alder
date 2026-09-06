@@ -416,3 +416,60 @@ fn cli_orders_independent_errors_by_source_not_message() {
         assert!(!project.0.join("dist").exists());
     }
 }
+
+#[test]
+fn cli_and_editor_deliver_statement_recovery_and_clear_it() {
+    let project = Project::new();
+    let source = indoc::indoc! {r#"
+        pub fn main() {
+            let first: Number = "wrong"
+            let dependent = first + true
+            let second: Bool = 42
+        }
+    "#};
+    project.source("main.ald", source);
+    for command in ["check", "build", "test"] {
+        let output = project.run(command);
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(!output.status.success(), "{command}: {stderr}");
+        assert_eq!(
+            stderr.matches("type mismatch:").count(),
+            2,
+            "{command}: {stderr}"
+        );
+        assert!(
+            stderr.contains("expected `Number`, found `String`"),
+            "{stderr}"
+        );
+        assert!(
+            stderr.contains("expected `Bool`, found `Number`"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains('\u{1b}'), "{stderr}");
+        assert!(!project.0.join("dist").exists());
+    }
+    let uri = url::Url::from_file_path(project.0.canonicalize().unwrap().join("src/main.ald"))
+        .unwrap()
+        .to_string();
+    let mut editor = Editor::new(&project);
+    editor.send(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}));
+    let initialized = editor.receive(|message| message["id"] == 1);
+    assert!(initialized["error"].is_null(), "{initialized}");
+    editor.send(json!({"jsonrpc":"2.0","method":"initialized","params":{}}));
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{
+            "uri":uri,"languageId":"alder","version":1,"text":source
+        }}}),
+    );
+    let errors = editor.diagnostics(1);
+    assert_eq!(errors.as_array().unwrap().len(), 2, "{errors}");
+    assert_eq!(errors[0]["range"]["start"]["line"], 1);
+    assert_eq!(errors[1]["range"]["start"]["line"], 3);
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+            "textDocument":{"uri":uri,"version":2},
+            "contentChanges":[{"text":"pub fn main() { 0 }"}]
+        }}),
+    );
+    assert_eq!(editor.diagnostics(2), json!([]));
+}

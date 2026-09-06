@@ -30,7 +30,7 @@ remaining work as follows; a passing test gate does not close the open reviews.
 
 | Requirement | Verified current evidence | Remaining review / policy |
 | --- | --- | --- |
-| Independent errors and safe recovery | Fresh retries in `infer_recovering`; `independent_type_errors_accumulate_without_publishing`, partial-shared-state and recursive-group tests; implementation/default/generic-method recovery snapshots; invalid declaration Result kinds accumulate in isolated preflight converters | Recursive structural-group errors still stop at one cycle; invalid metadata prevents body checking; expression-level recovery within a failed callable is not implemented |
+| Independent errors and safe recovery | Fresh retries in `infer_recovering`; `independent_type_errors_accumulate_without_publishing`, partial-shared-state and recursive-group tests; implementation/default/generic-method recovery snapshots; invalid declaration Result kinds accumulate in isolated preflight converters; discarded statement retries collect independent core errors inside callables | Recursive structural-group errors still stop at one cycle; invalid metadata prevents body checking; nested sibling expressions and trait obligations inside a core-failing body remain open |
 | Dependent suppression and publication | Callable resolved-dependency traversal; cross-module re-export/invalid-impl publication tests; Check/Build/Test output gates | Final audit of all remaining metadata stop cases |
 | Context and source spans | `mismatch_explains_expectations_at_the_source`, innermost-context, return/lambda/async, optional argument and alias-return-origin tests | Deferred record/error-row paths and specialized errors still need a complete provenance audit |
 | Type comparisons | Structured records, functions, tuples, applications, dense variables, named generic restrictions; nominal import/re-export localization; expanded aliases retain source annotation labels; specialized core errors and complete trait goals retain structured types | Final cross-context review; compact reconstruction of source synonyms is not implemented |
@@ -863,3 +863,63 @@ solver inference tests, six CLI/editor subprocess tests and all other suites;
 two existing ignored doctests). There are no pending or unreferenced snapshots.
 The new source snapshot was reviewed; existing snapshots required no changes.
 Final extracted-package verification remains to be refreshed.
+
+## Statement-sequence recovery checkpoint
+
+`independent_statement_errors_accumulate_without_dependent_cascades` first
+reproduced collection of only the first body error plus a sibling-function error,
+missing two independent local annotations. Recovery now probes additional body
+statements with fresh whole-module inference attempts. A failed statement and
+all transitive statements using its introduced local identities are omitted on
+the next diagnostic-only attempt. The shared canonical reference walk includes
+pattern pins, closure captures and assignment targets; shadowed names have
+different IDs and remain independent. Dependent tails are not inferred.
+
+Every probe result is discarded, even when the remainder checks. Ordinary outer
+recovery still removes the failed declaration, or ignores the failed method,
+before producing any usable remainder. No substitutions, deferred constraints,
+row state, async state or trait obligations from the failed attempt survive.
+Original source flow remains authoritative, so omitting a failed return does
+not invent a new fallthrough path. No executable AST or public scheme is edited.
+Unlike Elm's in-place Error descriptors (`Type/Unify.hs`), this uses replay and
+resolved statement dependencies rather than unifying through a poison type.
+
+The expanded source regression reports four independent body errors (including
+a shadowed binding in a block) plus the sibling function, without reporting the
+dependent read, pin or closure. Positive controls compile. The parameterized
+`statement_recovery_discards_partial_unification_and_async_state` checks partial
+tuple unification of a shared array, await/propagation boundaries, a default
+method, and dependent mutation/tail suppression. Five colorless source snapshots
+were reviewed. Initial async/default fixtures needed parentheses around the
+numeric await operand and an explicit method return annotation; those parser/
+canonicalization mistakes were corrected, not counted as compiler regressions.
+
+The real subprocess test `cli_and_editor_deliver_statement_recovery_and_clear_it`
+checks two errors from one function in CLI Check/Build/Test, no dist publication
+or ANSI escapes under NO_COLOR, editor source lines and clearing after an unsaved
+edit. This supplements, rather than replaces, independent-declaration delivery.
+
+This checkpoint splits only the outer statement sequence of each selected body;
+multiple errors inside one nested expression/statement are not yet split. An
+outside failure ends a body probe and belongs to normal declaration recovery.
+Trait resolution does not run on a partially omitted body, avoiding ambiguous
+obligations caused by removing constraints; collecting independent trait failures
+inside a core-failing body still needs a safe dependency design. Replay cost grows
+with independent failed statements times module inference work. These limits and
+the remaining parity-matrix work are not waived by this checkpoint.
+
+Validation: formatting, strict all-target/all-feature Clippy and the full
+workspace snapshot/reference command passed (251 driver tests, 467 solver
+inference tests, seven CLI/editor subprocess tests and all other suites; two
+existing ignored doctests). No pending or unreferenced snapshots remain. The
+five new source snapshots were reviewed; existing snapshots did not change.
+
+Fresh archive verification passed for all 17 publishable crates with
+`cargo package --workspace --exclude stub --offline --allow-dirty --target-dir
+/tmp/alder-statement-recovery-package.dhVgL9`. This refresh includes the preceding
+return-origin, associated-equality and declaration-preflight checkpoints. Outside
+the checkout, the packaged CLI reported three independent statement errors in
+Check and Build, exited 1 and left only source/configuration files. A positive
+packaged Run executed mutation and primitive Show, printing `42` and `true` and
+exiting 0. Its first fixture attempted unavailable tuple Show; using the separate
+primitive instances corrected the fixture without changing compiler semantics.

@@ -1,0 +1,27 @@
+---
+source: crates/alder-driver/src/compile.rs
+description: "pub fn broken() {\n    let shared = []\n    let bad: (Array[Number], Bool) = (shared, 42)\n    let good: Array[String] = shared\n    let independent: Number = false\n}\n"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `(Array[Number], Bool)`, found `(Array[Number],
+  │ Number)`
+   ╭─[/app/src/main.ald:3:38]
+ 2 │     let shared = []
+ 3 │     let bad: (Array[Number], Bool) = (shared, 42)
+   ·              ──────────┬──────────   ──────┬─────
+   ·                        │                   ╰── this value does not match its annotation
+   ·                        ╰── the declared type
+ 4 │     let good: Array[String] = shared
+   ╰────
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `Bool`
+   ╭─[/app/src/main.ald:5:31]
+ 4 │     let good: Array[String] = shared
+ 5 │     let independent: Number = false
+   ·                      ───┬──   ──┬──
+   ·                         │       ╰── this value does not match its annotation
+   ·                         ╰── the declared type
+ 6 │ }
+   ╰────
