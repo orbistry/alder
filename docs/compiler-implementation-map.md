@@ -28,6 +28,14 @@ Two compiled lower-level APIs must not be confused with this path:
 
 ## Unlinked Elm-port files
 
+The driver's compiled `ModuleMeta`, `InterfaceCache::start_build`, and
+`InterfaceCache::needs_rebuild` helpers also have no active build callers.
+They are not evidence of timestamp-based incremental reuse. Current source
+dependencies are rebuilt from source; only interface-only packages load saved
+interfaces/indexes through `Project::build_dependencies`. The optional
+`load_package_index` convenience method is likewise not the checked project
+loading path, which uses `load_package_index_checked` and reports errors.
+
 The following files exist but have no reachable `mod`, `#[path]`, or `include!`
 edge from their crate root. Their internal tests are not workspace test coverage.
 They are retained historical material, not active alternatives to the pipeline.

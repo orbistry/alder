@@ -1,5 +1,41 @@
 # Explicit driver module identities
 
+## Current audit reconciliation at 6b4af4c plus the integrated worktree
+
+The module/cache audit now combines the ownership and ordering evidence below
+with the two reproduced cache fixes: `9b47b90` separates identity-kind cache
+paths; `6b4af4c` rejects package indexes whose full implementation headers do not
+match their module interfaces. The latter tests use valid fingerprints and cover
+both missing and deleted implementations, so they exercise cross-file agreement
+rather than only corrupt-file rejection.
+
+Project ownership selects the most specific canonical source root for both
+package and path maps. Dependency discovery uses each importing member's
+manifest and canonical dependency roots, follows transitive source dependencies,
+coalesces aliases, and rejects one package name mapped to distinct roots. Source
+dependencies never mix current compilation with saved semantic headers.
+Interface-only dependencies check format/compiler/fingerprint, requested identity,
+index membership, and implementation-header agreement before returning metadata.
+
+The permanent driver matrix covers root modules, repeated `src` components,
+same-relative-path packages, missing/duplicate identities, reordered/nested and
+relocated workspaces, source aliases, package collisions, owned interfaces, and
+instance indexes. Source-backed CLI tests cover cold/transitive dependencies,
+modified bodies and removed implementations with previously saved artifacts.
+The re-export audit separately verifies namespace/privacy/owner preservation and
+six fresh byte-identical bundles with source-ordered exactly-once initialization.
+See `reexport-hardening.md` for its inspected source/test mapping.
+
+Full integrated validation after both fixes passes 190 driver tests, 465 solver
+integration tests, 63 kernel tests, 17 CLI tests, and workspace doctests, with
+strict Clippy and formatting. These conclude the specified module identity,
+resolution, cache and initialization audit, not arbitrary filesystem fault
+recovery, trust in attacker-authored binary interfaces, remote Windows execution,
+or the final clean committed-tree release gate. Fresh package verification and
+packaged CLI checks pass after these production changes; exact evidence is in
+`release-packaging-hardening.md` at the `6b4af4c` checkpoint. Historical counts and
+unfinished-audit statements below describe earlier checkpoints.
+
 The driver no longer derives semantic identities from URI spelling. Every
 source URI requires both an owning package and a source-root-relative module
 path in `BuildDependencies`. Filesystem project discovery supplies these maps;
