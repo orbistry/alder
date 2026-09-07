@@ -74,7 +74,7 @@ vertical slice; async and context follow without weakening that slice.
 - `.await?` remains ordinary postfix composition. A stage such as
   `request |> send(client).await?` forwards into `send` before applying
   `.await` and `?`; no fused `await?` construct or do-notation is introduced.
-- `Fiber.fork/all/race/scope`, interruption, and structured concurrency work.
+- `fiber.fork/all/race/scope`, interruption, and structured concurrency work.
 - `use Provider` requirements propagate through calls; `provide` discharges
   them lexically; unresolved entry-point requirements are diagnostics.
 

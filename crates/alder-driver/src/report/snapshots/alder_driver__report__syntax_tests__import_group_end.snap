@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/report/syntax_tests.rs
+description: pub import (json io)
+---
+alder::syntax
+
+  × I was expecting `,` or `)` after this imported module
+   ╭─[/project/src/main.ald:1:18]
+ 1 │ pub import (json io)
+   ·            ┬     ┬
+   ·            │     ╰── expected `,` or `)`
+   ·            ╰── this `(` opens here
+   ╰────

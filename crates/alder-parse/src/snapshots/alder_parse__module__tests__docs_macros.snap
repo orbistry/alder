@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "#[derive(Show, Eq, Json)]\ntype Point = { x: Number, y: Number }\n\nmacro assert_eq(left, right) {\n    quote {\n        let l = unquote(left)\n        let r = unquote(right)\n        if l != r { Test.fail(unquote(stringify(left)), l, r) }\n    }\n}\n\ncomptime {\n    let routes = Fs.readDir(\"routes\")\n    Routes.generate(routes)\n}\n"
+description: "import (fs, routes as routing, test as test_utils)\n\n#[derive(Show, Eq, Json)]\ntype Point = { x: Number, y: Number }\n\nmacro assert_eq(left, right) {\n    quote {\n        let l = unquote(left)\n        let r = unquote(right)\n        if l != r { test_utils.fail(unquote(stringify(left)), l, r) }\n    }\n}\n\ncomptime {\n    let routes = fs.readDir(\"routes\")\n    routing.generate(routes)\n}\n"
 ---
 Module {
     items: [
@@ -11,7 +11,190 @@ Module {
                     column: 1,
                 },
                 end: Position {
-                    line: 2,
+                    line: 1,
+                    column: 51,
+                },
+            },
+            value: Item {
+                attributes: [],
+                visibility: Private,
+                kind: ImportGroup(
+                    [
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 9,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 11,
+                                },
+                            },
+                            value: Import {
+                                path: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 9,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 11,
+                                        },
+                                    },
+                                    value: ModulePath {
+                                        root: StandardLibrary,
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 9,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 11,
+                                                    },
+                                                },
+                                                value: "fs",
+                                            },
+                                        ],
+                                    },
+                                },
+                                tail: Module,
+                            },
+                        },
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 13,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 30,
+                                },
+                            },
+                            value: Import {
+                                path: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 13,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 19,
+                                        },
+                                    },
+                                    value: ModulePath {
+                                        root: StandardLibrary,
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 13,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 19,
+                                                    },
+                                                },
+                                                value: "routes",
+                                            },
+                                        ],
+                                    },
+                                },
+                                tail: Alias(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 23,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 30,
+                                            },
+                                        },
+                                        value: "routing",
+                                    },
+                                ),
+                            },
+                        },
+                        Located {
+                            region: Region {
+                                start: Position {
+                                    line: 1,
+                                    column: 32,
+                                },
+                                end: Position {
+                                    line: 1,
+                                    column: 50,
+                                },
+                            },
+                            value: Import {
+                                path: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 32,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 36,
+                                        },
+                                    },
+                                    value: ModulePath {
+                                        root: StandardLibrary,
+                                        segments: [
+                                            Located {
+                                                region: Region {
+                                                    start: Position {
+                                                        line: 1,
+                                                        column: 32,
+                                                    },
+                                                    end: Position {
+                                                        line: 1,
+                                                        column: 36,
+                                                    },
+                                                },
+                                                value: "test",
+                                            },
+                                        ],
+                                    },
+                                },
+                                tail: Alias(
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 40,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 50,
+                                            },
+                                        },
+                                        value: "test_utils",
+                                    },
+                                ),
+                            },
+                        },
+                    ],
+                ),
+            },
+        },
+        Located {
+            region: Region {
+                start: Position {
+                    line: 3,
+                    column: 1,
+                },
+                end: Position {
+                    line: 4,
                     column: 38,
                 },
             },
@@ -20,11 +203,11 @@ Module {
                     Located {
                         region: Region {
                             start: Position {
-                                line: 1,
+                                line: 3,
                                 column: 1,
                             },
                             end: Position {
-                                line: 1,
+                                line: 3,
                                 column: 26,
                             },
                         },
@@ -32,11 +215,11 @@ Module {
                             name: Located {
                                 region: Region {
                                     start: Position {
-                                        line: 1,
+                                        line: 3,
                                         column: 3,
                                     },
                                     end: Position {
-                                        line: 1,
+                                        line: 3,
                                         column: 9,
                                     },
                                 },
@@ -46,11 +229,11 @@ Module {
                                 Located {
                                     region: Region {
                                         start: Position {
-                                            line: 1,
+                                            line: 3,
                                             column: 10,
                                         },
                                         end: Position {
-                                            line: 1,
+                                            line: 3,
                                             column: 14,
                                         },
                                     },
@@ -60,11 +243,11 @@ Module {
                                                 Located {
                                                     region: Region {
                                                         start: Position {
-                                                            line: 1,
+                                                            line: 3,
                                                             column: 10,
                                                         },
                                                         end: Position {
-                                                            line: 1,
+                                                            line: 3,
                                                             column: 14,
                                                         },
                                                     },
@@ -77,11 +260,11 @@ Module {
                                 Located {
                                     region: Region {
                                         start: Position {
-                                            line: 1,
+                                            line: 3,
                                             column: 16,
                                         },
                                         end: Position {
-                                            line: 1,
+                                            line: 3,
                                             column: 18,
                                         },
                                     },
@@ -91,11 +274,11 @@ Module {
                                                 Located {
                                                     region: Region {
                                                         start: Position {
-                                                            line: 1,
+                                                            line: 3,
                                                             column: 16,
                                                         },
                                                         end: Position {
-                                                            line: 1,
+                                                            line: 3,
                                                             column: 18,
                                                         },
                                                     },
@@ -108,11 +291,11 @@ Module {
                                 Located {
                                     region: Region {
                                         start: Position {
-                                            line: 1,
+                                            line: 3,
                                             column: 20,
                                         },
                                         end: Position {
-                                            line: 1,
+                                            line: 3,
                                             column: 24,
                                         },
                                     },
@@ -122,11 +305,11 @@ Module {
                                                 Located {
                                                     region: Region {
                                                         start: Position {
-                                                            line: 1,
+                                                            line: 3,
                                                             column: 20,
                                                         },
                                                         end: Position {
-                                                            line: 1,
+                                                            line: 3,
                                                             column: 24,
                                                         },
                                                     },
@@ -146,11 +329,11 @@ Module {
                         name: Located {
                             region: Region {
                                 start: Position {
-                                    line: 2,
+                                    line: 4,
                                     column: 6,
                                 },
                                 end: Position {
-                                    line: 2,
+                                    line: 4,
                                     column: 11,
                                 },
                             },
@@ -160,11 +343,11 @@ Module {
                         typ: Located {
                             region: Region {
                                 start: Position {
-                                    line: 2,
+                                    line: 4,
                                     column: 14,
                                 },
                                 end: Position {
-                                    line: 2,
+                                    line: 4,
                                     column: 38,
                                 },
                             },
@@ -174,11 +357,11 @@ Module {
                                         field: Located {
                                             region: Region {
                                                 start: Position {
-                                                    line: 2,
+                                                    line: 4,
                                                     column: 16,
                                                 },
                                                 end: Position {
-                                                    line: 2,
+                                                    line: 4,
                                                     column: 17,
                                                 },
                                             },
@@ -188,11 +371,11 @@ Module {
                                         typ: Located {
                                             region: Region {
                                                 start: Position {
-                                                    line: 2,
+                                                    line: 4,
                                                     column: 19,
                                                 },
                                                 end: Position {
-                                                    line: 2,
+                                                    line: 4,
                                                     column: 25,
                                                 },
                                             },
@@ -202,11 +385,11 @@ Module {
                                                         Located {
                                                             region: Region {
                                                                 start: Position {
-                                                                    line: 2,
+                                                                    line: 4,
                                                                     column: 19,
                                                                 },
                                                                 end: Position {
-                                                                    line: 2,
+                                                                    line: 4,
                                                                     column: 25,
                                                                 },
                                                             },
@@ -222,11 +405,11 @@ Module {
                                         field: Located {
                                             region: Region {
                                                 start: Position {
-                                                    line: 2,
+                                                    line: 4,
                                                     column: 27,
                                                 },
                                                 end: Position {
-                                                    line: 2,
+                                                    line: 4,
                                                     column: 28,
                                                 },
                                             },
@@ -236,11 +419,11 @@ Module {
                                         typ: Located {
                                             region: Region {
                                                 start: Position {
-                                                    line: 2,
+                                                    line: 4,
                                                     column: 30,
                                                 },
                                                 end: Position {
-                                                    line: 2,
+                                                    line: 4,
                                                     column: 36,
                                                 },
                                             },
@@ -250,11 +433,11 @@ Module {
                                                         Located {
                                                             region: Region {
                                                                 start: Position {
-                                                                    line: 2,
+                                                                    line: 4,
                                                                     column: 30,
                                                                 },
                                                                 end: Position {
-                                                                    line: 2,
+                                                                    line: 4,
                                                                     column: 36,
                                                                 },
                                                             },
@@ -277,11 +460,11 @@ Module {
         Located {
             region: Region {
                 start: Position {
-                    line: 4,
+                    line: 6,
                     column: 1,
                 },
                 end: Position {
-                    line: 10,
+                    line: 12,
                     column: 2,
                 },
             },
@@ -293,11 +476,11 @@ Module {
                         name: Located {
                             region: Region {
                                 start: Position {
-                                    line: 4,
+                                    line: 6,
                                     column: 7,
                                 },
                                 end: Position {
-                                    line: 4,
+                                    line: 6,
                                     column: 16,
                                 },
                             },
@@ -307,11 +490,11 @@ Module {
                             Located {
                                 region: Region {
                                     start: Position {
-                                        line: 4,
+                                        line: 6,
                                         column: 17,
                                     },
                                     end: Position {
-                                        line: 4,
+                                        line: 6,
                                         column: 21,
                                     },
                                 },
@@ -320,11 +503,11 @@ Module {
                             Located {
                                 region: Region {
                                     start: Position {
-                                        line: 4,
+                                        line: 6,
                                         column: 23,
                                     },
                                     end: Position {
-                                        line: 4,
+                                        line: 6,
                                         column: 28,
                                     },
                                 },
@@ -334,15 +517,15 @@ Module {
                         body: Located {
                             region: Region {
                                 start: Position {
-                                    line: 4,
+                                    line: 6,
                                     column: 31,
                                 },
                                 end: Position {
-                                    line: 10,
+                                    line: 12,
                                     column: 1,
                                 },
                             },
-                            value: "\n    quote {\n        let l = unquote(left)\n        let r = unquote(right)\n        if l != r { Test.fail(unquote(stringify(left)), l, r) }\n    }\n",
+                            value: "\n    quote {\n        let l = unquote(left)\n        let r = unquote(right)\n        if l != r { test_utils.fail(unquote(stringify(left)), l, r) }\n    }\n",
                         },
                     },
                 ),
@@ -351,11 +534,11 @@ Module {
         Located {
             region: Region {
                 start: Position {
-                    line: 12,
+                    line: 14,
                     column: 1,
                 },
                 end: Position {
-                    line: 15,
+                    line: 17,
                     column: 2,
                 },
             },
@@ -366,11 +549,11 @@ Module {
                     Located {
                         region: Region {
                             start: Position {
-                                line: 12,
+                                line: 14,
                                 column: 10,
                             },
                             end: Position {
-                                line: 15,
+                                line: 17,
                                 column: 2,
                             },
                         },
@@ -379,11 +562,11 @@ Module {
                                 Located {
                                     region: Region {
                                         start: Position {
-                                            line: 13,
+                                            line: 15,
                                             column: 5,
                                         },
                                         end: Position {
-                                            line: 13,
+                                            line: 15,
                                             column: 38,
                                         },
                                     },
@@ -392,11 +575,11 @@ Module {
                                             pattern: Located {
                                                 region: Region {
                                                     start: Position {
-                                                        line: 13,
+                                                        line: 15,
                                                         column: 9,
                                                     },
                                                     end: Position {
-                                                        line: 13,
+                                                        line: 15,
                                                         column: 15,
                                                     },
                                                 },
@@ -408,11 +591,11 @@ Module {
                                             value: Located {
                                                 region: Region {
                                                     start: Position {
-                                                        line: 13,
+                                                        line: 15,
                                                         column: 18,
                                                     },
                                                     end: Position {
-                                                        line: 13,
+                                                        line: 15,
                                                         column: 38,
                                                     },
                                                 },
@@ -420,11 +603,11 @@ Module {
                                                     function: Located {
                                                         region: Region {
                                                             start: Position {
-                                                                line: 13,
+                                                                line: 15,
                                                                 column: 18,
                                                             },
                                                             end: Position {
-                                                                line: 13,
+                                                                line: 15,
                                                                 column: 28,
                                                             },
                                                         },
@@ -432,42 +615,26 @@ Module {
                                                             record: Located {
                                                                 region: Region {
                                                                     start: Position {
-                                                                        line: 13,
+                                                                        line: 15,
                                                                         column: 18,
                                                                     },
                                                                     end: Position {
-                                                                        line: 13,
+                                                                        line: 15,
                                                                         column: 20,
                                                                     },
                                                                 },
-                                                                value: Path(
-                                                                    Path {
-                                                                        segments: [
-                                                                            Located {
-                                                                                region: Region {
-                                                                                    start: Position {
-                                                                                        line: 13,
-                                                                                        column: 18,
-                                                                                    },
-                                                                                    end: Position {
-                                                                                        line: 13,
-                                                                                        column: 20,
-                                                                                    },
-                                                                                },
-                                                                                value: "Fs",
-                                                                            },
-                                                                        ],
-                                                                    },
+                                                                value: Var(
+                                                                    "fs",
                                                                 ),
                                                             },
                                                             field: Located {
                                                                 region: Region {
                                                                     start: Position {
-                                                                        line: 13,
+                                                                        line: 15,
                                                                         column: 21,
                                                                     },
                                                                     end: Position {
-                                                                        line: 13,
+                                                                        line: 15,
                                                                         column: 28,
                                                                     },
                                                                 },
@@ -479,11 +646,11 @@ Module {
                                                         Located {
                                                             region: Region {
                                                                 start: Position {
-                                                                    line: 13,
+                                                                    line: 15,
                                                                     column: 29,
                                                                 },
                                                                 end: Position {
-                                                                    line: 13,
+                                                                    line: 15,
                                                                     column: 37,
                                                                 },
                                                             },
@@ -502,67 +669,51 @@ Module {
                                 Located {
                                     region: Region {
                                         start: Position {
-                                            line: 14,
+                                            line: 16,
                                             column: 5,
                                         },
                                         end: Position {
-                                            line: 14,
-                                            column: 28,
+                                            line: 16,
+                                            column: 29,
                                         },
                                     },
                                     value: Call {
                                         function: Located {
                                             region: Region {
                                                 start: Position {
-                                                    line: 14,
+                                                    line: 16,
                                                     column: 5,
                                                 },
                                                 end: Position {
-                                                    line: 14,
-                                                    column: 20,
+                                                    line: 16,
+                                                    column: 21,
                                                 },
                                             },
                                             value: Access {
                                                 record: Located {
                                                     region: Region {
                                                         start: Position {
-                                                            line: 14,
+                                                            line: 16,
                                                             column: 5,
                                                         },
                                                         end: Position {
-                                                            line: 14,
-                                                            column: 11,
+                                                            line: 16,
+                                                            column: 12,
                                                         },
                                                     },
-                                                    value: Path(
-                                                        Path {
-                                                            segments: [
-                                                                Located {
-                                                                    region: Region {
-                                                                        start: Position {
-                                                                            line: 14,
-                                                                            column: 5,
-                                                                        },
-                                                                        end: Position {
-                                                                            line: 14,
-                                                                            column: 11,
-                                                                        },
-                                                                    },
-                                                                    value: "Routes",
-                                                                },
-                                                            ],
-                                                        },
+                                                    value: Var(
+                                                        "routing",
                                                     ),
                                                 },
                                                 field: Located {
                                                     region: Region {
                                                         start: Position {
-                                                            line: 14,
-                                                            column: 12,
+                                                            line: 16,
+                                                            column: 13,
                                                         },
                                                         end: Position {
-                                                            line: 14,
-                                                            column: 20,
+                                                            line: 16,
+                                                            column: 21,
                                                         },
                                                     },
                                                     value: "generate",
@@ -573,12 +724,12 @@ Module {
                                             Located {
                                                 region: Region {
                                                     start: Position {
-                                                        line: 14,
-                                                        column: 21,
+                                                        line: 16,
+                                                        column: 22,
                                                     },
                                                     end: Position {
-                                                        line: 14,
-                                                        column: 27,
+                                                        line: 16,
+                                                        column: 28,
                                                     },
                                                 },
                                                 value: Var(

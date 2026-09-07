@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/fn_.rs
-description: "fn describe(xs: Array[a]) String where a: Show {\n    xs |> Array.map(show) |> String.join(\", \")\n}\n"
+description: "fn describe(xs: Array[a]) String where a: Show {\n    xs |> array.map(show) |> string.join(\", \")\n}\n"
 ---
 FnDecl {
     is_async: false,
@@ -251,24 +251,8 @@ FnDecl {
                                                                 column: 16,
                                                             },
                                                         },
-                                                        value: Path(
-                                                            Path {
-                                                                segments: [
-                                                                    Located {
-                                                                        region: Region {
-                                                                            start: Position {
-                                                                                line: 2,
-                                                                                column: 11,
-                                                                            },
-                                                                            end: Position {
-                                                                                line: 2,
-                                                                                column: 16,
-                                                                            },
-                                                                        },
-                                                                        value: "Array",
-                                                                    },
-                                                                ],
-                                                            },
+                                                        value: Var(
+                                                            "array",
                                                         ),
                                                     },
                                                     field: Located {
@@ -355,24 +339,8 @@ FnDecl {
                                                         column: 36,
                                                     },
                                                 },
-                                                value: Path(
-                                                    Path {
-                                                        segments: [
-                                                            Located {
-                                                                region: Region {
-                                                                    start: Position {
-                                                                        line: 2,
-                                                                        column: 30,
-                                                                    },
-                                                                    end: Position {
-                                                                        line: 2,
-                                                                        column: 36,
-                                                                    },
-                                                                },
-                                                                value: "String",
-                                                            },
-                                                        ],
-                                                    },
+                                                value: Var(
+                                                    "string",
                                                 ),
                                             },
                                             field: Located {

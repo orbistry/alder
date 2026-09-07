@@ -120,7 +120,7 @@ mod tests {
             }
             let message = deferred.await
             assert(message == "start\n   \nend   ")
-            assert(String.length(message) == 16)
+            assert(string.length(message) == 16)
             }
         "#}
         .replace("<spaces>", "   ");

@@ -14,7 +14,7 @@ host objects supplied by externs. No production change was needed.
 
 ## Unary array callbacks
 
-Array.map/filter declarations take unary functions. The kernel previously
+array.map/filter declarations take unary functions. The kernel previously
 passed them directly to native JavaScript map/filter/flatMap, which supply
 three arguments. This also affected the callback inside array applicative
 application. Additional arguments are observable for functions returned from
@@ -46,9 +46,9 @@ all-feature Clippy pass. The last release archives predate this kernel change.
 
 ## Source-reviewed baseline
 
-- Array.push, Map.set, and Set.add mutate the original collection and return
+- array.push, map.set, and set.add mutate the original collection and return
   JavaScript undefined, matching unit declarations.
-- Map.get checks membership separately and uses the centralized Option Some
+- map.get checks membership separately and uses the centralized Option Some
   producer, distinguishing a present None payload from a missing key.
 - Map/Set use native identity keys, as explicitly documented in language.md;
   structural Eq/Hash lookup is not part of their current contract.
@@ -64,12 +64,12 @@ fixture's main module, now executes the following through the CLI pipeline:
 
 - Map lookup distinguishes a missing entry from a present None, Some payload,
   and unit. Overwriting an entry through an alias updates the original map.
-- A record obtained from Map.get retains its shared nested array; mutation
+- A record obtained from map.get retains its shared nested array; mutation
   through the retrieved record affects the original payload.
 - Map and Set retain reference-identity keys: the original record key succeeds,
   while a newly constructed structurally equal key does not.
-- Map.set and Set.add return unit; aliases retain the collection's identity.
-- Option.map returning None produces Some(None), and returning unit produces
+- map.set and set.add return unit; aliases retain the collection's identity.
+- option.map returning None produces Some(None), and returning unit produces
   Some(()), rather than collapsing either to outer None.
 
 The standalone end-to-end CLI test passes with these assertions, and formatting
@@ -127,7 +127,7 @@ The kernel string regression compares the result against an independent,
 streaming implementation of the documented tagged, length-prefixed FNV-1a
 format. A separate BigInt regression verifies positive and negative 256-byte
 magnitudes against independently decoded hexadecimal bytes. The CLI Hash fixture
-constructs a 320 KiB string with ordinary String.concat and hashes it directly
+constructs a 320 KiB string with ordinary string.concat and hashes it directly
 and inside Option through imported generic functions. No generated JavaScript
 source construction or compiler ABI change is involved.
 

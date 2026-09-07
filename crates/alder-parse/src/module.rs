@@ -99,6 +99,33 @@ macro_rules! assert_module_error_snapshot {
 
 #[cfg(test)]
 mod tests {
+    use alder_region::Position;
+
+    #[test]
+    fn grouped_import_entries_preserve_regions_visibility_and_comments() {
+        let bump = bumpalo::Bump::new();
+        let source = "pub import (\n    json, // encoder\n    ~/user as users,\n)\nlet value = 1\n";
+        let module = crate::parse_module(&bump, source).unwrap();
+        let entries = module.import_entries().collect::<Vec<_>>();
+        assert_eq!(entries.len(), 2);
+        assert!(
+            entries
+                .iter()
+                .all(|(visibility, _, _)| matches!(visibility, alder_source::Visibility::Pub(_)))
+        );
+        assert_eq!(
+            entries[0].1,
+            alder_region::Region::new(Position::new(2, 5), Position::new(2, 9))
+        );
+        assert_eq!(
+            entries[1].1,
+            alder_region::Region::new(Position::new(3, 5), Position::new(3, 20))
+        );
+        assert_eq!(module.comments.len(), 1);
+        assert_eq!(module.comments[0].text, "// encoder");
+        assert_eq!(module.items.len(), 2);
+    }
+
     #[test]
     fn empty_module() {
         assert_module_snapshot!("");
@@ -275,7 +302,7 @@ mod tests {
             }
 
             fn describe(xs: Array[a]) String where a: Show {
-                xs |> Array.map(show) |> String.join(", ")
+                xs |> array.map(show) |> string.join(", ")
             }
 
             trait Iterator[i] {
@@ -466,8 +493,8 @@ mod tests {
             }
 
             let big = [1, 2, 3]
-                |> Array.map(x -> x * 2)
-                |> Array.filter(x -> x > 2)
+                |> array.map(x -> x * 2)
+                |> array.filter(x -> x > 2)
             "#
         );
     }
@@ -558,13 +585,14 @@ mod tests {
     fn docs_async_fibers() {
         assert_module_snapshot!(
             r#"
-            fn profile(id: Id) Result[Profile] {
-                let user = Http.get(`/users/${id}`).await?
-                let posts = Http.get(`/users/${id}/posts`).await?
+            import (fiber, http)
+            async fn profile(id: Id) Result[Profile] {
+                let user = http.get(`/users/${id}`).await?
+                let posts = http.get(`/users/${id}/posts`).await?
                 Ok({ user, posts })
             }
 
-            let (a, b) = Fiber.all(profile(1), profile(2)).await
+            async fn profiles() { fiber.all([profile(1), profile(2)]).await }
             "#
         );
     }
@@ -595,6 +623,8 @@ mod tests {
     fn docs_macros() {
         assert_module_snapshot!(
             r#"
+            import (fs, routes as routing, test as test_utils)
+
             #[derive(Show, Eq, Json)]
             type Point = { x: Number, y: Number }
 
@@ -602,13 +632,13 @@ mod tests {
                 quote {
                     let l = unquote(left)
                     let r = unquote(right)
-                    if l != r { Test.fail(unquote(stringify(left)), l, r) }
+                    if l != r { test_utils.fail(unquote(stringify(left)), l, r) }
                 }
             }
 
             comptime {
-                let routes = Fs.readDir("routes")
-                Routes.generate(routes)
+                let routes = fs.readDir("routes")
+                routing.generate(routes)
             }
             "#
         );
@@ -642,8 +672,11 @@ mod tests {
         assert_module_snapshot!(
             r#"
             // src/hooks.server.ald
+            import http.{RequestEvent, Response, Error, ErrorResponse, Request, Fetch}
+            import ~/services/auth
+
             pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) Task[Response]) Task[Response] {
-                let session = Auth.fromCookie(event.cookies).await
+                let session = auth.fromCookie(event.cookies).await
                 provide Session = session {
                     resolve(event).await
                 }
@@ -747,7 +780,7 @@ mod tests {
 
     #[test]
     fn error_item() {
-        assert_module_error_snapshot!("import http");
+        assert_module_error_snapshot!("import /http");
     }
 
     #[test]

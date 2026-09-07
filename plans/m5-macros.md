@@ -54,7 +54,7 @@ ones from M3.
    dependency and used immediately; macros cannot see types.** Type-aware
    macros are out of scope.
 4. Compile-time I/O. **Read-only access to the package source tree
-   (`Fs.readDir`, `Fs.readFile`) for things like route discovery;
+   (`import fs`, then `fs.readDir` and `fs.readFile`) for things like route discovery;
    nothing else.** Network and writes are denied.
 5. Caching. **Content-addressed on (macro source hash, dependency
    interface hashes, input tokens); stored under `.alder/macros/`.**

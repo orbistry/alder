@@ -1,0 +1,8 @@
+---
+source: crates/alder-parse/src/type_.rs
+description: "fiber::map"
+---
+PathMember(
+    1,
+    8,
+)

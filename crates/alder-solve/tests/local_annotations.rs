@@ -19,7 +19,7 @@ fn solve_input<'a>(
                 package: PackageId::Application,
                 path: &["Main"],
             },
-            imports: &[],
+            imports: alder_can::resolve_imports(bump, &parsed, PackageId::Application),
             interfaces: &[],
         },
         &parsed,
@@ -205,9 +205,10 @@ fn local_annotation_rejects_specialization_inside_async_blocks() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
+        import task
         fn invalid(value: a) Task[a] {
             async {
-                Task.sleep(0).await
+                task.sleep(0).await
                 let local: a = 42
                 value
             }
@@ -250,7 +251,7 @@ fn local_annotation_does_not_generalize_a_shared_array() {
             indoc! {r#"
         fn invalid() {
             let values: Array[a] = []
-            Array.push(values, 42)
+            array.push(values, 42)
             let texts: Array[String] = values
         }
     "#}

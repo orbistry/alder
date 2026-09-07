@@ -22,9 +22,9 @@ pub fn run() {
     let different: Array[Option[Option[Key]]] = [Some(Some(Key::Value(11))), Some(None), None]
     assert hash(left) == hash(different)
     assert !codec.hash_equal(left, different)
-    Array.push(left, None)
+    array.push(left, None)
     assert !codec.hash_equal(left, right)
-    Array.push(right, None)
+    array.push(right, None)
     assert codec.hash_equal(left, right)
 
     let tree: Tree[Option[Option[Key]]] = Tree::Branch([

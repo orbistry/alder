@@ -726,12 +726,11 @@ impl SyntaxReporter<'_> {
                 "expected `,` or `}`",
                 None,
             ),
-            Import::PubNeedsNames(row, column) => expected_problem(
-                "a public import must say which names it re-exports",
-                *row,
-                *column,
-                "this imports only the module",
-                Some("use `pub import ~/module.{ Name }` or `pub import ~/module.*`".to_owned()),
+            Import::GroupEnd(end) => self.end_problem(
+                end,
+                "I was expecting `,` or `)` after this imported module",
+                "expected `,` or `)`",
+                None,
             ),
             Import::ReservedBinding(keyword, row, column) => expected_problem(
                 format!(
@@ -761,7 +760,7 @@ impl SyntaxReporter<'_> {
                 "I was expecting an import path",
                 *row,
                 *column,
-                "expected `@` or `~`",
+                "expected a bundled module name, `@`, or `~`",
                 None,
             ),
             ModulePath::Author(row, column) => expected_problem(

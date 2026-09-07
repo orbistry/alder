@@ -38,7 +38,7 @@ coverage audit distinguishes source-reachable cases from defensive handlers belo
 ```text
 Module: Item, SameLine, BadEnd
 Attribute: Open, Name, Arg, ArgEnd, End, Dangling
-Import: Path, Tail, Name, NameAlias, NamesEnd, Alias, PubNeedsNames, ReservedBinding, RootOnly
+Import: Path, Tail, Name, NameAlias, NamesEnd, Alias, GroupEnd, ReservedBinding, RootOnly
 ModulePath: Start, Author, Slash, Package, Segment
 Fn: Keyword, Name, Params, Ret, Where, Body
 Params: Open, Pattern, Type, OptionalAnnotation, End

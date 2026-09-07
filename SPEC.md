@@ -303,6 +303,8 @@ intentional.
 
 - [x] Lexer: `//` comments, template literals, `:tag` tokens, `#[`, `::`, `=>`, `->`, `|>`, `??`, `?`, `^`, `@if`/`@for`/`@match`
 - [x] Items: `pub`, path-first `import` with `.{ }`/`.*`/`as`, re-exports (`pub import`)
+- [x] Unified bundled/local/external roots, grouped imports, lowercase prelude,
+  and namespace re-export chains with identity-preserving interfaces.
 - [x] `fn` declarations with optional juxtaposed return types; arrow lambdas without a leading `fn`
 - [x] Statements: `let`, assignment and compound assignment, `for`, `while`, `loop`, `break`/`continue` with values, `return`, `assert`
 - [x] Expressions: blocks, `if`/`else if`, `match` with `=>` and guards, `|>`, `.await`, `?`, `??`, calls, `_` placeholders, field/tuple access, paths (`Option::Some`)
@@ -323,7 +325,7 @@ intentional.
 - [x] Adapt `alder-can` to namespaced constructors, `pub` visibility, statements, assignment
 - [x] `alder-codegen`: JS emission for the core language; decide enum/record representation
 - [x] Prelude and stdlib skeleton: `Option`, `Result`, `Array`, `String`, `Number`, `BigInt`, `Map`
-- [x] `Array.iter` creates independent live `ArrayIterator[a]` cursors; `Iterator` advances the cursor without consuming source elements and stays exhausted after None.
+- [x] `array.iter` creates independent live `ArrayIterator[a]` cursors; `Iterator` advances the cursor without consuming source elements and stays exhausted after None.
 - [x] JS kernel skeleton and `extern` binding
 - [x] Embed `deno_core` plus the web-standard extension crates in `alder-cli`; `alder run` for the `standalone` target
 - [x] `Cli` module (raw `args()`; the `Args`/`Subcommand` derives land with M5)
@@ -363,7 +365,7 @@ checkpoints in the individual plans. Full provider checking remains unfinished.
 
   - [x] Public map/forEach/tryMap/tryForEach with optional MapOptions,
     execution-time bounds validation, and CLI coverage for defaults and Result behavior
-  - [x] Expose `Fiber.unbounded` as the explicit concurrency-limit value
+  - [x] Expose `fiber.unbounded` as the explicit concurrency-limit value
   - [x] Complete traversal integration and local package-verification acceptance
     gates (accepted hardening scope; not a claim of release publication)
 - [ ] Statically checked services/layers dependency injection: `#[using(...)]`
@@ -430,7 +432,7 @@ No macro implementation is part of the current provider/context discussion.
 EBNF for the new syntax, as implemented by `alder-parse` in M1. Each
 departure from the first draft is a numbered decision in
 `docs/parser-internals.md` §10 (cited as §10.n); `?`-marked productions
-are still open. `alder-can` decides what names denote (`Array.map` is an
+are still open. `alder-can` decides what names denote (`array.map` is an
 access on a path, §10.15), whether a bodiless `fn` carries `#[extern]`
 (§10.26) and how a flat operator chain nests (§10.1).
 
@@ -487,7 +489,7 @@ bigint        = ( decimal | hex ) 'n' ;
 digits        = digit { digit } ;                       (* tuple index after '.'; must fit u32, overflow is an error *)
 string        = '"' { string_char | escape } '"' ;      (* single line; no interpolation (§10.11) *)
 template      = '`' { template_char | '${' expression '}' } '`' ;   (* multi-line; escapes add \` and \$ *)
-path          = upper_ident { '::' upper_ident } ;
+path          = { lower_ident '::' } upper_ident { '::' upper_ident } ; (* namespace prefixes retain lowercase bindings *)
 ```
 
 `_name` is not an identifier (`_` alone is the wildcard / placeholder).
@@ -506,10 +508,12 @@ item_body     = import | fn_decl | let_decl | type_alias | opaque_type | enum_de
 
 attribute     = '#[' lower_ident [ '(' [ expression { ',' expression } [ ',' ] ] ')' ] ']' ;
 
-import        = 'import' module_path [ 'as' lower_ident | '.' import_names ] ;
+import        = 'import' ( import_entry | '(' import_entry { ',' import_entry } [ ',' ] ')' ) ;
+import_entry  = module_path [ 'as' lower_ident | '.' import_names ] ;
 import_names  = '{' import_name { ',' import_name } [ ',' ] '}' | '*' ;
 import_name   = ( lower_ident | upper_ident ) [ 'as' ( lower_ident | upper_ident ) ] ;
-module_path   = '@' raw_lower '/' raw_lower { '/' raw_lower }         (* package *)
+module_path   = raw_lower { '/' raw_lower }                         (* bundled standard library *)
+              | '@' raw_lower '/' raw_lower { '/' raw_lower }         (* package *)
               | '~' { '/' raw_lower } ;                               (* this package *)
 
 fn_decl       = [ 'async' ] 'fn' lower_ident '(' [ params ] ')' [ type ] [ where_clause ] [ block ] ;
@@ -554,8 +558,16 @@ tests_block   = 'tests' '{' { item } '}' ;                            (* line-br
 - A bare `import module_path` binds its last segment, which must be
   present and not a reserved word (`import ~` and `import @alder/test`
   are errors; `import @alder/test.{ fakeDb }` and `as` are fine, §10.37).
-- `pub import` requires `.{ … }` or `.*` (§10.25); it is the re-export
-  form.
+- `pub import` accepts every import form. A module or alias form exports the
+  namespace; a selection or wildcard exports public declarations without
+  changing their original identities. Groups retain per-entry regions.
+- Bundled operations use lowercase namespaces. Basic operation namespaces are
+  ordinary implicit prelude imports; `io`, `cli`, `json`, `task`, `fiber`, `ref`,
+  `synchronized_ref`, and `semaphore` require explicit imports. Core types,
+  constructors, and traits retain uppercase names. See `docs/language.md`.
+- Consecutive same-visibility imports format into sorted standard-library,
+  local, and external sections. Initialization follows canonical module
+  identities and dependency edges, not import declaration order.
 - A bodiless `fn_decl` is an extern function (with `#[extern("module",
 "name")]`) or a trait signature; `opaque_type` requires `#[extern]`.
   The parser accepts both anywhere and canonicalization checks the

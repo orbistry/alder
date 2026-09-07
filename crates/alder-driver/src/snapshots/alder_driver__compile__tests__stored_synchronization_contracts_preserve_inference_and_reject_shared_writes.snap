@@ -1,14 +1,14 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "import @vendor/widgets.{ shared }\npub async fn main() {\n    let cell = shared().await\n    SynchronizedRef.set(cell, [\"wrong\"]).await\n}\n"
+description: "import synchronized_ref\nimport @vendor/widgets.{ shared }\npub async fn main() {\n    let cell = shared().await\n    synchronized_ref.set(cell, [\"wrong\"]).await\n}\n"
 ---
 alder::type::type_mismatch
 
   × type mismatch: expected `Number`, found `String`
-   ╭─[/project/src/main.ald:4:32]
- 3 │     let cell = shared().await
- 4 │     SynchronizedRef.set(cell, ["wrong"]).await
-   ·                                ───┬───
-   ·                                   ╰── argument 2 of `set` has an incompatible type
- 5 │ }
+   ╭─[/project/src/main.ald:5:33]
+ 4 │     let cell = shared().await
+ 5 │     synchronized_ref.set(cell, ["wrong"]).await
+   ·                                 ───┬───
+   ·                                    ╰── argument 2 of `set` has an incompatible type
+ 6 │ }
    ╰────

@@ -91,7 +91,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(self.add_end(start, Type::Hole))
             }
-            Some(b) if b.is_ascii_uppercase() => {
+            Some(b) if b.is_ascii_uppercase() || self.starts_namespace_path() => {
                 let path = self.path(error::Type::Start, error::Type::PathMember)?;
                 // `path` stops before `::lower` (a value member); a type
                 // cannot be one, so report it like a dangling `::` (§10.42).
@@ -536,6 +536,21 @@ macro_rules! assert_type_error_snapshot {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn lowercase_namespace_type() {
+        assert_type_snapshot!("fiber::MapOptions");
+    }
+
+    #[test]
+    fn nested_namespace_type() {
+        assert_type_snapshot!("api::models::User[a]");
+    }
+
+    #[test]
+    fn namespace_type_rejects_lowercase_member() {
+        assert_type_error_snapshot!("fiber::map");
+    }
+
     // ---- variables and names
 
     #[test]

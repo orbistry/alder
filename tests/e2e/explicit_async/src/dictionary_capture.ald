@@ -1,3 +1,4 @@
+import task
 pub enum Word { Word }
 pub enum Code { Code }
 pub enum Box[a] { Wrap(a) }
@@ -9,11 +10,11 @@ pub trait Label[a] {
 impl Label[Word] { fn label(value: Word) String { "word" } }
 impl Label[Code] { fn label(value: Code) String { "code" } }
 impl Label[Array[a]] where a: Label {
-    fn label(value: Array[a]) String { String.concat("array-", label(value[0])) }
+    fn label(value: Array[a]) String { string.concat("array-", label(value[0])) }
 }
 impl Label[Box[a]] where a: Label {
     fn label(value: Box[a]) String {
-        match value { Box::Wrap(inner) => String.concat("box-", label(inner)) }
+        match value { Box::Wrap(inner) => string.concat("box-", label(inner)) }
     }
 }
 
@@ -21,8 +22,8 @@ pub trait Format[a] where a: Label {
     async fn format(value: a, payload: b, suffix: c) String where b: Label, c: Label {
         let prefix = label
         let finish = () -> label(suffix)
-        Task.sleep(0).await
-        String.concat(prefix(value), String.concat(label(payload), finish()))
+        task.sleep(0).await
+        string.concat(prefix(value), string.concat(label(payload), finish()))
     }
 }
 
@@ -31,8 +32,8 @@ impl Format[Box[a]] where a: Label {
     async fn format(value: Box[a], payload: b, suffix: c) String where c: Label, b: Label, c: Label {
         let prefix = label
         let finish = () -> label(suffix)
-        Task.sleep(0).await
-        String.concat(prefix(value), String.concat(label(payload), finish()))
+        task.sleep(0).await
+        string.concat(prefix(value), string.concat(label(payload), finish()))
     }
 }
 

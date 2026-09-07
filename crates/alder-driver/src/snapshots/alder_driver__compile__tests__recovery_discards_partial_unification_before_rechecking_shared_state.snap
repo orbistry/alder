@@ -1,6 +1,6 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "let shared = []\nfn zzaccept(value: (Array[Number], Bool)) { () }\nfn zbroken() { zzaccept((shared, \"wrong\")) }\nfn avalid() { Array.push(shared, \"text\") }\nfn unrelated() Bool { 42 }\n"
+description: "let shared = []\nfn zzaccept(value: (Array[Number], Bool)) { () }\nfn zbroken() { zzaccept((shared, \"wrong\")) }\nfn avalid() { array.push(shared, \"text\") }\nfn unrelated() Bool { 42 }\n"
 ---
 alder::type::type_mismatch
 
@@ -11,13 +11,13 @@ alder::type::type_mismatch
  3 │ fn zbroken() { zzaccept((shared, "wrong")) }
    ·                         ────────┬────────
    ·                                 ╰── argument 1 of `zzaccept` has an incompatible type
- 4 │ fn avalid() { Array.push(shared, "text") }
+ 4 │ fn avalid() { array.push(shared, "text") }
    ╰────
 alder::type::type_mismatch
 
   × type mismatch: expected `Bool`, found `Number`
    ╭─[/app/src/main.ald:5:23]
- 4 │ fn avalid() { Array.push(shared, "text") }
+ 4 │ fn avalid() { array.push(shared, "text") }
  5 │ fn unrelated() Bool { 42 }
    ·                ──┬─   ─┬
    ·                  │     ╰── this return value has an incompatible type

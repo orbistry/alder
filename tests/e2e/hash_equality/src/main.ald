@@ -1,7 +1,9 @@
-import ~/compare
-import ~/mutual
-import ~/cycles
-import ~/option_laws
+import (
+    ~/compare,
+    ~/cycles,
+    ~/mutual,
+    ~/option_laws,
+)
 
 #[derive(Hash)]
 enum Box[a] { Value(a) }
@@ -18,14 +20,14 @@ enum GenericCycle[a] { Link(Array[GenericCycle[a]], a) }
 fn generic_cycle(value: a) GenericCycle[a] {
     let children = []
     let node = GenericCycle::Link(children, value)
-    Array.push(children, node)
+    array.push(children, node)
     node
 }
 
 fn cycle(value: Number) Cycle {
     let children: Array[Option[Cycle]] = []
     let node = Cycle::Link(children, value)
-    Array.push(children, Some(node))
+    array.push(children, Some(node))
     node
 }
 
@@ -60,11 +62,11 @@ pub fn main() {
     let text = "a😀"
     let count = 0
     while count < 16 {
-        text = String.concat(text, text)
+        text = string.concat(text, text)
         count += 1
     }
-    equal(text, String.concat(text, ""))
-    equal(Some(text), Some(String.concat(text, "")))
+    equal(text, string.concat(text, ""))
+    equal(Some(text), Some(string.concat(text, "")))
     equal(0, -0)
     equal((), ())
     equal(true, true)

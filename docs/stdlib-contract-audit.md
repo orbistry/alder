@@ -9,7 +9,7 @@ remain open; the inventory alone is not a proof of runtime correctness.
 The workspace contains 16 builtin value modules plus `Traits.ald`. A read-only
 inventory compared all 17 files byte-for-byte with `alder-can/stdlib`, checked
 all 51 `#[extern("alder:kernel", ...)]` targets against kernel exports, and checked
-their exported-name mappings in the bundle facades. All match. `Fiber.unbounded`
+their exported-name mappings in the bundle facades. All match. `fiber.unbounded`
 is the separate typed Number constant backed by `$fiberUnbounded = Infinity`.
 The canonicalizer's permanent packaged-source/signature tests cover the copies
 and type declarations; the separate unbounded test checks its monomorphic type.
@@ -24,13 +24,13 @@ production Alder output still arrives as directly constructed Oxc ASTs.
 
 | Surface | Contract and evidence |
 | --- | --- |
-| Number, BigInt, String | Parse returns a payload or None; BigInt parsing preserves values above Number's exact integer range. String length counts code points, not UTF-16 units or grapheme clusters. Concat preserves the text. New scalar kernel and actual CLI checks cover these paths, including first-class Number.parse through Array.map. |
-| Ref.same, Cli, Io | Ref.same uses strict JS equality without coercion. Cli.args exposes host-supplied strings (or an empty array without that host). The scalar runtime test passes nonempty Unicode arguments. Io.print delegates to console.log and returns unit; existing hello/externs CLI execution covers host printing. |
+| Number, BigInt, String | Parse returns a payload or None; BigInt parsing preserves values above Number's exact integer range. String length counts code points, not UTF-16 units or grapheme clusters. Concat preserves the text. New scalar kernel and actual CLI checks cover these paths, including first-class number.parse through array.map. |
+| ref.same, Cli, Io | ref.same uses strict JS equality without coercion. cli.args exposes host-supplied strings (or an empty array without that host). The scalar runtime test passes nonempty Unicode arguments. io.print delegates to console.log and returns unit; existing hello/externs CLI execution covers host printing. |
 | Array, Map, Set, Option, Result | Collection mutation/unit returns, identity keys, unary callback arity, Option wrapping/unwrapping, and Result payload forwarding are mapped in `collection-runtime-acceptance.md` and `option-operation-acceptance.md`. |
 | Json | Module encode/decode carry a leading selected Json dictionary and delegate to it. Primitive validation, envelopes, custom/container/derived codecs, Option defaults and structural errors are mapped in `json-hardening.md`, `option-operation-acceptance.md`, and `cyclic-values.md`. No unchecked JSON.parse public bypass remains. |
 | Task, Fiber | Declarations return lazy Task values with the documented result layers. Traversals use the public options-record adapters, not the numeric internal adapters. Optional omission becomes None; the unbounded constant is a concurrency value. Lifecycle, callbacks, cancellation, fairness and result shapes are mapped in `async-hardening-acceptance.md`. |
 | Ref, SynchronizedRef, Semaphore | Callback argument/result order matches the declarations: modify returns the first tuple component and stores the second. Ref callbacks are synchronous; synchronized callbacks return Tasks. Set/update return unit. Lazy allocation, aliasing, commit/cleanup behavior and permit validation have kernel and compiled tests mapped in the async acceptance document. |
-| Traits | Canonical source headers and bootstrap parity enter ordinary instance selection. Primitive/container/structural payload evidence, higher-kinded adapters and their superclass slots remain part of the wider dictionary/codegen audit. `Array.iter` creates independent live cursors for `Iterator[ArrayIterator[a]]`; bounded kernel and imported CLI checks verify progress, permanent exhaustion, aliases, live mutation, and Option/unit payloads. |
+| Traits | Canonical source headers and bootstrap parity enter ordinary instance selection. Primitive/container/structural payload evidence, higher-kinded adapters and their superclass slots remain part of the wider dictionary/codegen audit. `array.iter` creates independent live cursors for `Iterator[ArrayIterator[a]]`; bounded kernel and imported CLI checks verify progress, permanent exhaustion, aliases, live mutation, and Option/unit payloads. |
 
 The new scalar kernel test checks successful/failed parses, exact BigInt values,
 Unicode text, same/different object identity, heterogeneous primitives, signed

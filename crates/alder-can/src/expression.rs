@@ -51,7 +51,9 @@ pub fn canonicalize_expr<'a>(
                     },
                 )));
             }
-            if let Some(module) = env.find_module(name) {
+            if env.find_value(name).is_none()
+                && let Some(module) = env.find_module(name)
+            {
                 return Ok(bump.alloc(Located::at(
                     source.region,
                     CanExpr::Var {
@@ -79,9 +81,26 @@ pub fn canonicalize_expr<'a>(
         }
         SourceExpr::Path(path) => canonicalize_path_expr(bump, env, source.region, path)?,
         SourceExpr::PathVar { path, name } => {
-            if let [trait_name] = path.segments
-                && let Some(method) = env.find_trait_method(trait_name.value, name.value)
-            {
+            let trait_name = path.segments.last().expect("paths are nonempty");
+            let method = if path.segments.len() == 1 {
+                env.find_trait_method(trait_name.value, name.value)
+            } else {
+                env.find_trait(
+                    bump,
+                    path.region(),
+                    crate::types::namespace_prefix(bump, path),
+                    trait_name.value,
+                )
+                .ok()
+                .and_then(|trait_| {
+                    trait_
+                        .methods
+                        .iter()
+                        .find(|method| method.id.name == name.value)
+                        .copied()
+                })
+            };
+            if let Some(method) = method {
                 return Ok(bump.alloc(Located::at(
                     source.region,
                     CanExpr::Var {
@@ -93,11 +112,15 @@ pub fn canonicalize_expr<'a>(
                     },
                 )));
             }
-            let Some(module) = path
-                .segments
-                .first()
-                .and_then(|segment| env.find_module(segment.value))
-            else {
+            let Some(module) = env.find_module_path(
+                bump,
+                &path
+                    .segments
+                    .iter()
+                    .map(|segment| segment.value)
+                    .collect::<Vec<_>>()
+                    .join("::"),
+            ) else {
                 return Err(vec![unknown_value(path.region(), name.value)]);
             };
             if let Some(interface) = module.interface {
@@ -111,26 +134,10 @@ pub fn canonicalize_expr<'a>(
                         reference: interface_value_ref(*value),
                     }
                 } else {
-                    return Err(vec![unknown_value(name.region, name.value)]);
-                }
-            } else if module.module.package == alder_ast::PackageId::Builtin {
-                CanExpr::Var {
-                    use_id: env.fresh_use(),
-                    reference: env
-                        .builtin_value(bump, module.module, name.value)
-                        .ok_or_else(|| vec![unknown_value(name.region, name.value)])?,
+                    return Err(vec![module_member_error(interface, name)]);
                 }
             } else {
-                CanExpr::Access {
-                    record: bump.alloc(Located::at(
-                        path.region(),
-                        CanExpr::Var {
-                            use_id: env.fresh_use(),
-                            reference: ValueRef::Module(module.module),
-                        },
-                    )),
-                    field: name,
-                }
+                return Err(vec![unknown_value(name.region, name.value)]);
             }
         }
         SourceExpr::Tag { name, args } => CanExpr::Tag {
@@ -175,45 +182,50 @@ pub fn canonicalize_expr<'a>(
             arguments,
         } => return canonicalize_call(bump, env, source.region, function, arguments),
         SourceExpr::Access { record, field } => {
-            let module_name = match record.value {
-                SourceExpr::Var(name) => Some(name),
-                SourceExpr::Path(path) if path.segments.len() == 1 => Some(path.segments[0].value),
-                _ => None,
-            };
-            if let Some(module_name) = module_name
-                && let Some(module) = env.find_module(module_name)
+            let record = if let SourceExpr::Var(name) = record.value
+                && let Some(module) = env.visible_module(name)
             {
-                if let Some(interface) = module.interface {
-                    if let Some(value) = interface
-                        .values
-                        .iter()
-                        .find(|value| value.exported_as == field.value)
-                    {
-                        CanExpr::Var {
-                            use_id: env.fresh_use(),
-                            reference: interface_value_ref(*value),
-                        }
-                    } else {
-                        return Err(vec![unknown_value(field.region, field.value)]);
-                    }
-                } else if module.module.package == alder_ast::PackageId::Builtin {
+                bump.alloc(Located::at(
+                    record.region,
                     CanExpr::Var {
                         use_id: env.fresh_use(),
-                        reference: env
-                            .builtin_value(bump, module.module, field.value)
-                            .ok_or_else(|| vec![unknown_value(field.region, field.value)])?,
+                        reference: ValueRef::Module(module.module),
+                    },
+                ))
+            } else {
+                canonicalize_expr(bump, env, record)?
+            };
+            if let CanExpr::Var {
+                reference: ValueRef::Module(module),
+                ..
+            } = record.value
+            {
+                let Some(interface) = env.module_interface(bump, module) else {
+                    return Err(vec![unknown_value(field.region, field.value)]);
+                };
+                if let Some(value) = interface
+                    .values
+                    .iter()
+                    .find(|value| value.exported_as == field.value)
+                {
+                    CanExpr::Var {
+                        use_id: env.fresh_use(),
+                        reference: interface_value_ref(*value),
+                    }
+                } else if let Some(namespace) = interface
+                    .modules
+                    .iter()
+                    .find(|namespace| namespace.exported_as == field.value)
+                {
+                    CanExpr::Var {
+                        use_id: env.fresh_use(),
+                        reference: ValueRef::Module(namespace.module),
                     }
                 } else {
-                    CanExpr::Access {
-                        record: canonicalize_expr(bump, env, record)?,
-                        field,
-                    }
+                    return Err(vec![module_member_error(interface, field)]);
                 }
             } else {
-                CanExpr::Access {
-                    record: canonicalize_expr(bump, env, record)?,
-                    field,
-                }
+                CanExpr::Access { record, field }
             }
         }
         SourceExpr::TupleAccess { tuple, index } => CanExpr::TupleAccess {
@@ -333,7 +345,7 @@ pub fn canonicalize_expr<'a>(
                 .find_type(
                     bump,
                     name.region(),
-                    (name.segments.len() > 1).then(|| name.segments[0].value),
+                    crate::types::namespace_prefix(bump, name),
                     provider_name.value,
                 )
                 .map_err(|error| vec![error])?;
@@ -431,7 +443,7 @@ pub(crate) fn canonicalize_stmt<'a>(
                 .find_type(
                     bump,
                     path.region(),
-                    (path.segments.len() > 1).then(|| path.segments[0].value),
+                    crate::types::namespace_prefix(bump, path),
                     name.value,
                 )
                 .map_err(|error| vec![error])?;
@@ -980,7 +992,7 @@ fn resolve_component<'a>(
         env.find_type(
             bump,
             path.region(),
-            (path.segments.len() > 1).then(|| path.segments[0].value),
+            crate::types::namespace_prefix(bump, path),
             name.value,
         )
         .err()
@@ -1201,6 +1213,28 @@ fn reduce_binop<'a>(
             right,
         },
     )));
+}
+
+fn module_member_error<'a>(
+    interface: &alder_ast::Interface<'a>,
+    name: alder_source::Name<'a>,
+) -> Error<'a> {
+    if let Some(private) = interface
+        .private_names
+        .iter()
+        .find(|private| private.name == name.value)
+    {
+        Error::new(
+            name.region,
+            ErrorKind::Expr(ExprError::Name(NameError::Private {
+                owner: interface.home,
+                namespace: private.namespace,
+                name: name.value,
+            })),
+        )
+    } else {
+        unknown_value(name.region, name.value)
+    }
 }
 
 fn unknown_value<'a>(region: Region, name: &'a str) -> Error<'a> {

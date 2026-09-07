@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn call_placeholder_first() {
-        assert_expression_snapshot!("Array.map(_, double)");
+        assert_expression_snapshot!("array.map(_, double)");
     }
 
     #[test]

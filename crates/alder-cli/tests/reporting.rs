@@ -159,7 +159,7 @@ fn failure_counts_diagnostics_not_blocked_modules_and_summary_is_last() {
 #[test]
 fn run_preserves_program_streams_arguments_and_has_one_build_summary() {
     let project = Project::new();
-    project.source("#[extern(\"./streams.js\", \"write\")]\nfn write(value: String) ()\npub fn main() { write(Cli.args()[0]) }");
+    project.source("import cli\n#[extern(\"./streams.js\", \"write\")]\nfn write(value: String) ()\npub fn main() { write(cli.args()[0]) }");
     std::fs::write(
         project.0.join("src/streams.js"),
         "export function write(value) { console.log(value); console.error('program stderr'); }",
@@ -271,7 +271,7 @@ fn test_runner_owns_actual_counts_once_including_zero_tests() {
             assert!(stderr(&quiet).contains("one"));
         }
     }
-    project.source("test \"output\" { Io.print(\"test stdout\")\nassert(true) }");
+    project.source("import io\ntest \"output\" { io.print(\"test stdout\")\nassert(true) }");
     let output = project.run(&["test", "--quiet"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(output.stdout, b"test stdout\n");

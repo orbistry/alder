@@ -681,7 +681,7 @@ mod tests {
         assert_fn_decl_snapshot!(
             r#"
             fn describe(xs: Array[a]) String where a: Show {
-                xs |> Array.map(show) |> String.join(", ")
+                xs |> array.map(show) |> string.join(", ")
             }
         "#
         );

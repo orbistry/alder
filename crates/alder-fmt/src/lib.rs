@@ -4,6 +4,7 @@
 //! lines. Both input and output are parsed before output is returned.
 
 mod doc;
+mod imports;
 
 use bumpalo::Bump;
 
@@ -41,6 +42,8 @@ pub fn format_source(source: &str) -> Result<String, Error> {
 }
 
 pub fn format_with(source: &str, options: Options) -> Result<String, Error> {
+    let imports = imports::format(source, options.indent_width).map_err(Error::Parse)?;
+    let source = imports.as_str();
     let (before, ranges) = parse_info(source).map_err(Error::Parse)?;
     let mut masked = source.as_bytes().to_vec();
     for &(start, end) in &ranges {
@@ -246,6 +249,8 @@ mod tests {
     /// Debug escapes literal newlines, so source text cannot masquerade as a
     /// structural `Region {` line. Keep literal payloads and comment text intact.
     fn semantic_structure(source: &str) -> String {
+        let normalized = imports::format(source, Options::default().indent_width).unwrap();
+        let source = normalized.as_str();
         let bump = Bump::new();
         let module = alder_parse::parse_module(&bump, source).unwrap();
         let rendered = format!("{module:#?}");

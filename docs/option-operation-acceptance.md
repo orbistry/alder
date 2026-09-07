@@ -36,7 +36,7 @@ The composition check changes the payload type by introducing extra Some layers.
 
 The compiled `hash_equality/option_laws.ald` fixture independently tests generic
 Hash/Json evidence, Eq obtained through Hash, nested Number/unit values, signed
-zero, decode/encode round trips, and Option.map identity. Existing numeric tests
+zero, decode/encode round trips, and option.map identity. Existing numeric tests
 cover infinities and NaN: NaN intentionally retains primitive non-reflexive Eq,
 and non-finite Number JSON encoding is rejected rather than asserted to round-trip.
 

@@ -1,4 +1,8 @@
-import ~/math
+import (
+    io,
+
+    ~/math,
+)
 
 pub fn main() {
     let result = math.answer({
@@ -6,5 +10,5 @@ pub fn main() {
         note: "from an indexed module",
         meta: { increment: 2, enabled: true },
     })
-    Io.print(result)
+    io.print(result)
 }

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/markup/directive.rs
-description: "<ul>@for x in Array.range(0, n) { <li>{x}</li> }</ul>"
+description: "<ul>@for x in array.range(0, n) { <li>{x}</li> }</ul>"
 ---
 Located {
     region: Region {
@@ -95,24 +95,8 @@ Located {
                                                         column: 20,
                                                     },
                                                 },
-                                                value: Path(
-                                                    Path {
-                                                        segments: [
-                                                            Located {
-                                                                region: Region {
-                                                                    start: Position {
-                                                                        line: 1,
-                                                                        column: 15,
-                                                                    },
-                                                                    end: Position {
-                                                                        line: 1,
-                                                                        column: 20,
-                                                                    },
-                                                                },
-                                                                value: "Array",
-                                                            },
-                                                        ],
-                                                    },
+                                                value: Var(
+                                                    "array",
                                                 ),
                                             },
                                             field: Located {

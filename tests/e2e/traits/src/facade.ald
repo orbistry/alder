@@ -1,4 +1,6 @@
-pub import ~/codec.*
-pub import ~/renamed.*
+pub import (
+    ~/codec.*,
+    ~/renamed.*,
+)
 
 let initialized = append(0)

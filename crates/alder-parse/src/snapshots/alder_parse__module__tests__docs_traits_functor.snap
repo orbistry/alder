@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "pub trait Show[a] {\n    fn show(value: a) String\n}\n\nimpl Show[User] {\n    fn show(user: User) String { user.name }\n}\n\npub trait Functor[f] {\n    fn map(fa: f[a], g: fn(a) b) f[b]\n}\n\nimpl Functor[Option] {\n    fn map(fa: Option[a], g: fn(a) b) Option[b] {\n        match fa {\n            Some(x) => Some(g(x)),\n            None => None,\n        }\n    }\n}\n\nfn describe(xs: Array[a]) String where a: Show {\n    xs |> Array.map(show) |> String.join(\", \")\n}\n\ntrait Iterator[i] {\n    type Item\n    fn next(it: i) Option[Item]\n}\n"
+description: "pub trait Show[a] {\n    fn show(value: a) String\n}\n\nimpl Show[User] {\n    fn show(user: User) String { user.name }\n}\n\npub trait Functor[f] {\n    fn map(fa: f[a], g: fn(a) b) f[b]\n}\n\nimpl Functor[Option] {\n    fn map(fa: Option[a], g: fn(a) b) Option[b] {\n        match fa {\n            Some(x) => Some(g(x)),\n            None => None,\n        }\n    }\n}\n\nfn describe(xs: Array[a]) String where a: Show {\n    xs |> array.map(show) |> string.join(\", \")\n}\n\ntrait Iterator[i] {\n    type Item\n    fn next(it: i) Option[Item]\n}\n"
 ---
 Module {
     items: [
@@ -1445,24 +1445,8 @@ Module {
                                                                                     column: 16,
                                                                                 },
                                                                             },
-                                                                            value: Path(
-                                                                                Path {
-                                                                                    segments: [
-                                                                                        Located {
-                                                                                            region: Region {
-                                                                                                start: Position {
-                                                                                                    line: 23,
-                                                                                                    column: 11,
-                                                                                                },
-                                                                                                end: Position {
-                                                                                                    line: 23,
-                                                                                                    column: 16,
-                                                                                                },
-                                                                                            },
-                                                                                            value: "Array",
-                                                                                        },
-                                                                                    ],
-                                                                                },
+                                                                            value: Var(
+                                                                                "array",
                                                                             ),
                                                                         },
                                                                         field: Located {
@@ -1549,24 +1533,8 @@ Module {
                                                                             column: 36,
                                                                         },
                                                                     },
-                                                                    value: Path(
-                                                                        Path {
-                                                                            segments: [
-                                                                                Located {
-                                                                                    region: Region {
-                                                                                        start: Position {
-                                                                                            line: 23,
-                                                                                            column: 30,
-                                                                                        },
-                                                                                        end: Position {
-                                                                                            line: 23,
-                                                                                            column: 36,
-                                                                                        },
-                                                                                    },
-                                                                                    value: "String",
-                                                                                },
-                                                                            ],
-                                                                        },
+                                                                    value: Var(
+                                                                        "string",
                                                                     ),
                                                                 },
                                                                 field: Located {

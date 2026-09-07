@@ -1430,7 +1430,7 @@ compiler synthesis is reserved for derives and automatic structural `Eq`.
 Their headers are loaded into both the canonical name environment and the
 `TraitDatabase` before operators or derive paths are canonicalized.
 
-`std/Traits.ald` is embedded and header-canonicalized for each solver arena. It
+`std/traits.ald` is embedded and header-canonicalized for each solver arena. It
 is the audited source of every first-party trait header and the primitive,
 container, HKT, and Array iterator instance headers. The canonicalizer retains
 a minimal bootstrap name table because that same source defines the names it
@@ -1572,7 +1572,7 @@ Derived behavior is fixed:
   decimal strings, never JSON numbers that may already have lost precision.
   Non-finite Number encoding throws a TypeError instead of silently producing
   `null`. Containers and derives pass child decoding failures through with their
-  field/index path. The `std/Json.ald` module API requires `a: Json` and forwards
+  field/index path. The `std/json.ald` module API requires `a: Json` and forwards
   the selected dictionary through kernel helpers, so it shares these codec
   semantics and honors custom instances. Unsupported types require an instance.
 
@@ -1613,7 +1613,7 @@ least three nested levels.
 Only boxes created by the kernel are recognized as Option wrappers (a private
 WeakSet tracks them). An ordinary user enum with a `Some` variant is a payload,
 not a wrapper. Consumers remove exactly one wrapper before passing a payload
-to its dictionary or callback. `map`, `apply`, traversal, and `Map.get` construct
+to its dictionary or callback. `map`, `apply`, traversal, and `map.get` construct
 their successful Option results through `$optionSome`; `flatMap` already
 receives an Option result from its callback and must not add a layer.
 
@@ -1626,7 +1626,7 @@ reconstructs the result through `$optionSome`. Thus simple non-null encodings
 remain unchanged while nested None and Some(unit) round-trip without collapse.
 This changes the previously lossy encoding of nested nullable options.
 
-`Ref.same(a, b)` remains explicit reference identity and never satisfies an Eq
+`ref.same(a, b)` remains explicit reference identity and never satisfies an Eq
 obligation.
 
 ## Diagnostics

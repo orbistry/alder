@@ -57,6 +57,10 @@ selected roots need construction. Share instances within their declared lifetime
 The following is a syntax sketch, **not accepted grammar or executable Alder**:
 
 ```text
+import ~/models/user.{User, UserId}
+import ~/services/database.{Database, postgresDatabase}
+import ~/services/logger.{Logger, consoleLogger}
+
 service Users {
     async fn find(id: UserId) Result[Option[User]]
     async fn save(user: User) Result[()]

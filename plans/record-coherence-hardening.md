@@ -101,7 +101,7 @@ absent property.
 The imported CLI instance module now reads `value?: Option[Number]` through a
 trait method. The migrated fixture checks omission as outer None and uses an
 explicit Some(None) to distinguish inner absence. The fixture
-uses Option.some because this larger trait project deliberately has another
+uses option.some because this larger trait project deliberately has another
 Some constructor in scope; the initial ambiguity was a fixture naming issue,
 not a new inference defect. The standalone CLI project suite passes.
 

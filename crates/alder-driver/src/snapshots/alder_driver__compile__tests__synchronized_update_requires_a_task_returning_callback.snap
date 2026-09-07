@@ -1,15 +1,15 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "pub async fn main() {\n    let cell = SynchronizedRef.make(0).await\n    SynchronizedRef.update(cell, value -> value + 1).await\n}\n"
+description: "import synchronized_ref\npub async fn main() {\n    let cell = synchronized_ref.make(0).await\n    synchronized_ref.update(cell, value -> value + 1).await\n}\n"
 ---
 alder::type::type_mismatch
 
   × type mismatch: expected `fn(Number) Task[Number]`, found `fn(Number)
   │ Number`
-   ╭─[/project/src/main.ald:3:34]
- 2 │     let cell = SynchronizedRef.make(0).await
- 3 │     SynchronizedRef.update(cell, value -> value + 1).await
-   ·                                  ─────────┬────────
-   ·                                           ╰── argument 2 of `update` has an incompatible type
- 4 │ }
+   ╭─[/project/src/main.ald:4:35]
+ 3 │     let cell = synchronized_ref.make(0).await
+ 4 │     synchronized_ref.update(cell, value -> value + 1).await
+   ·                                   ─────────┬────────
+   ·                                            ╰── argument 2 of `update` has an incompatible type
+ 5 │ }
    ╰────

@@ -912,6 +912,15 @@ fn name_error(error: &NameError<'_>) -> CanDetails {
 fn import_error(error: &ImportError<'_>) -> CanDetails {
     match error {
         ImportError::Name(error) => name_error(error),
+        ImportError::ModuleNotFound { module } => (
+            "import_module_not_found",
+            format!("cannot find imported module `{}`", module_name(*module)),
+            Some(match module.package {
+                PackageId::Builtin => "bare paths refer only to bundled standard-library modules; use `~/` for a module in this package".to_owned(),
+                _ => "check the module path and that its package is available to this build".to_owned(),
+            }),
+            None,
+        ),
         ImportError::NameNotFound {
             name, available, ..
         } => (

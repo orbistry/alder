@@ -1,0 +1,229 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: "import (\n    array.{map},\n    ~/models/user,\n    @acme/http as client,\n)\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 5,
+            column: 2,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: ImportGroup(
+            [
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 2,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 2,
+                            column: 16,
+                        },
+                    },
+                    value: Import {
+                        path: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 2,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 2,
+                                    column: 10,
+                                },
+                            },
+                            value: ModulePath {
+                                root: StandardLibrary,
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 5,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 10,
+                                            },
+                                        },
+                                        value: "array",
+                                    },
+                                ],
+                            },
+                        },
+                        tail: Names(
+                            [
+                                ImportName {
+                                    name: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 2,
+                                                column: 12,
+                                            },
+                                            end: Position {
+                                                line: 2,
+                                                column: 15,
+                                            },
+                                        },
+                                        value: "map",
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                        ),
+                    },
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 3,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 3,
+                            column: 18,
+                        },
+                    },
+                    value: Import {
+                        path: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 3,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 3,
+                                    column: 18,
+                                },
+                            },
+                            value: ModulePath {
+                                root: Local(
+                                    Region {
+                                        start: Position {
+                                            line: 3,
+                                            column: 5,
+                                        },
+                                        end: Position {
+                                            line: 3,
+                                            column: 6,
+                                        },
+                                    },
+                                ),
+                                segments: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 7,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 13,
+                                            },
+                                        },
+                                        value: "models",
+                                    },
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 3,
+                                                column: 14,
+                                            },
+                                            end: Position {
+                                                line: 3,
+                                                column: 18,
+                                            },
+                                        },
+                                        value: "user",
+                                    },
+                                ],
+                            },
+                        },
+                        tail: Module,
+                    },
+                },
+                Located {
+                    region: Region {
+                        start: Position {
+                            line: 4,
+                            column: 5,
+                        },
+                        end: Position {
+                            line: 4,
+                            column: 25,
+                        },
+                    },
+                    value: Import {
+                        path: Located {
+                            region: Region {
+                                start: Position {
+                                    line: 4,
+                                    column: 5,
+                                },
+                                end: Position {
+                                    line: 4,
+                                    column: 15,
+                                },
+                            },
+                            value: ModulePath {
+                                root: Package {
+                                    author: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 4,
+                                                column: 6,
+                                            },
+                                            end: Position {
+                                                line: 4,
+                                                column: 10,
+                                            },
+                                        },
+                                        value: "acme",
+                                    },
+                                    package: Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 4,
+                                                column: 11,
+                                            },
+                                            end: Position {
+                                                line: 4,
+                                                column: 15,
+                                            },
+                                        },
+                                        value: "http",
+                                    },
+                                },
+                                segments: [],
+                            },
+                        },
+                        tail: Alias(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 4,
+                                        column: 19,
+                                    },
+                                    end: Position {
+                                        line: 4,
+                                        column: 25,
+                                    },
+                                },
+                                value: "client",
+                            },
+                        ),
+                    },
+                },
+            ],
+        ),
+    },
+}

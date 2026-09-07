@@ -1,4 +1,11 @@
-import ~/nested/operations
+import (
+    cli,
+    fiber,
+    ref,
+    task,
+
+    ~/nested/operations,
+)
 
 #[extern("./client.js", "numberParser")]
 fn number_parser() fn(String) Number
@@ -35,17 +42,17 @@ fn throws() Task[Number]
 fn rejects() Task[Number]
 
 pub async fn main() {
-    let parse = Number.parse
-    assert(Array.map(["42", "not a number"], parse) == [Some(42), None])
-    assert(BigInt.parse("9007199254740993") == Some(9007199254740993n))
-    assert(BigInt.parse("4.5") == None)
-    assert(String.length(String.concat("a", "😀é")) == 4)
+    let parse = number.parse
+    assert(array.map(["42", "not a number"], parse) == [Some(42), None])
+    assert(bigint.parse("9007199254740993") == Some(9007199254740993n))
+    assert(bigint.parse("4.5") == None)
+    assert(string.length(string.concat("a", "😀é")) == 4)
     let identity_value = { items: [] }
-    assert(Ref.same(identity_value, identity_value))
-    assert(!Ref.same(identity_value, { items: [] }))
-    assert(!Ref.same(42, "42"))
+    assert(ref.same(identity_value, identity_value))
+    assert(!ref.same(identity_value, { items: [] }))
+    assert(!ref.same(42, "42"))
     let parse_number = number_parser()
-    assert(Array.map(["10", "10", "10"], parse_number) == [10, 10, 10])
+    assert(array.map(["10", "10", "10"], parse_number) == [10, 10, 10])
     assert(bounded_identity(42) == 42)
     let indirect = bounded_identity
     assert(indirect("hello") == "hello")
@@ -53,8 +60,8 @@ pub async fn main() {
     assert(generic_identity("generic") == "generic")
     assert(bounded_async(44).await == 44)
     assert(match bounded_result(45) { Ok(value) => value == 45, Err(_) => false })
-    let args = Cli.args()
-    if Array.length(args) > 0 {
+    let args = cli.args()
+    if array.length(args) > 0 {
         if args[0] == "throw" {
             assert(throws().await == 0)
         } else {
@@ -71,8 +78,8 @@ pub async fn main() {
         Ok(_) => false,
         Err(:rejected(message)) => message == "typed error",
     })
-    let fiber = Fiber.fork(pending()).await
-    Task.sleep(1).await
-    Fiber.interrupt(fiber).await
+    let handle = fiber.fork(pending()).await
+    task.sleep(1).await
+    fiber.interrupt(handle).await
     assert(abortCount() == 1)
 }

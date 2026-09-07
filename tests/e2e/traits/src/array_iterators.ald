@@ -1,12 +1,14 @@
+import array.{ArrayIterator}
+
 pub fn advance(iterator: i) Option[Number] where i: Iterator, i.Item == Number {
     next(iterator)
 }
 
 pub fn run() {
     let values = [7, 8]
-    let first = Array.iter(values)
+    let first = array.iter(values)
     let alias = first
-    let second = Array.iter(values)
+    let second = array.iter(values)
     let step: fn(ArrayIterator[Number]) Option[Number] = next
     assert(step(first) == Some(7))
     assert(advance(alias) == Some(8))
@@ -16,21 +18,21 @@ pub fn run() {
     assert(next(second) == Some(8))
     assert(values == [7, 8])
 
-    let live = Array.iter(values)
+    let live = array.iter(values)
     assert(next(live) == Some(7))
     values[1] = 20
-    Array.push(values, 30)
+    array.push(values, 30)
     assert(next(live) == Some(20))
     assert(next(live) == Some(30))
     assert(next(live) == None)
-    Array.push(values, 40)
+    array.push(values, 40)
     assert(next(live) == None)
 
-    let units = Array.iter([()])
+    let units = array.iter([()])
     assert(next(units) == Some(()))
     assert(next(units) == None)
     let options: Array[Option[Number]] = [None, Some(42)]
-    let optional = Array.iter(options)
+    let optional = array.iter(options)
     match next(optional) {
         Some(None) => {}
         _ => { assert(false) }
@@ -42,7 +44,7 @@ pub fn run() {
     assert(next(optional) == None)
 
     let records = [{ value: 1 }]
-    let shared = Array.iter(records)
+    let shared = array.iter(records)
     match next(shared) {
         Some(record) => { record.value = 42 }
         None => { assert(false) }

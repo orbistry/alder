@@ -45,7 +45,7 @@ and full workspace tests/doctests pass (69 codegen, 194 driver, 72 kernel,
 17 CLI); no snapshots are pending. These edits remain uncommitted
 with the pending imported-default and dictionary-initialization integration.
 
-Array iteration now uses the approved separate cursor design: `Array.iter`
+Array iteration now uses the approved separate cursor design: `array.iter`
 returns `ArrayIterator[a]`, whose Iterator instance advances independently of
 the array and stays exhausted after None. Native JS live-iterator semantics
 preserve unread mutations and shared elements without copying. Kernel and
@@ -195,7 +195,7 @@ full workspace tests/doctests, formatting, and strict Clippy pass. The new
 semantics/verification map is `docs/cyclic-values.md`. The broader Option/law,
 generic/evidence, source-fidelity, and final integration/package gates remain.
 
-Current implementation checkpoint: `Fiber.unbounded` is now exposed through
+Current implementation checkpoint: `fiber.unbounded` is now exposed through
 the stdlib (and packaged copy), canonical typed-value lookup, kernel constant,
 and bundle export. Its CLI regression reproduced unknown-name before the fix
 and passes after it, testing gated concurrent starts, ordered results, and all
@@ -207,8 +207,8 @@ doctests pass with two ignored. No pending snapshots or whitespace errors.
 Production changed, so the prior package checkpoint
 below is historical and must be refreshed for final delivery.
 
-User decision follow-up: both pending choices are approved. `Fiber.unbounded`
-is a concurrency-limit value used in `{ concurrency: Fiber.unbounded }`.
+User decision follow-up: both pending choices are approved. `fiber.unbounded`
+is a concurrency-limit value used in `{ concurrency: fiber.unbounded }`.
 Cyclic values retain cycle-aware structural Eq; Show emits a cycle marker;
 derived Hash, Ord, and JSON encoding report explicit runtime errors on active
 cycles, preserving existing acyclic behavior. See the concurrency and cyclic
@@ -1016,9 +1016,9 @@ final clean-tree release approval.
   Task layer, lexical binding capture, and async-local control-flow boundaries.
 - [x] Introduce Ref, SynchronizedRef, and a cancellation-safe semaphore with
   the contracts and tests in `plans/async-concurrency-hardening.md`.
-- [x] Implement bounded Fiber.map/forEach/tryMap/tryForEach; distinguish ordinary
+- [x] Implement bounded fiber.map/forEach/tryMap/tryForEach; distinguish ordinary
   Result collection from explicit fail-fast propagation and parent cancellation.
-- [x] Implement the approved `Fiber.unbounded` concurrency-limit value. The bounded
+- [x] Implement the approved `fiber.unbounded` concurrency-limit value. The bounded
   worker/adaptor implementation is verified separately in the async acceptance
   map; its completion does not deliver this public export.
 - [x] Migrate inferred-async syntax, interfaces, examples, diagnostics, and docs;
@@ -1143,14 +1143,14 @@ Root cause: virtual module imports lack a physical importer location.
   externs execution case, acceptance note, and changeset. Its isolated staged
   tree passes full workspace tests, strict Clippy, and formatting; unrelated
   dirty compiler/runtime work was not included.
-  The unchecked `Json.decode` bypass is fixed with bounded dictionary dispatch;
+  The unchecked `json.decode` bypass is fixed with bounded dictionary dispatch;
   codec operation coverage is mapped in `docs/json-hardening.md`. This closes
   the declaration/runtime family review, not the separate generic dictionary
   audit or final integrated release gates.
-- [x] `Map.get` wraps present values so a present `None` differs from absence.
+- [x] `map.get` wraps present values so a present `None` differs from absence.
   Compiled cross-module collection coverage now also checks present unit,
   alias-visible replacement and nested payload mutation, Map/Set identity keys,
-  mutation return units, and Option.map's None/unit layers. The actual standalone
+  mutation return units, and option.map's None/unit layers. The actual standalone
   CLI suite passes; see `docs/collection-runtime-acceptance.md`.
 - [x] Nested lambda annotations share same-named enclosing type variables as
   promised in `docs/language.md`, including nested lambda scopes and HKT.
@@ -1632,7 +1632,7 @@ Root cause: virtual module imports lack a physical importer location.
   for its existing left failure, right failure, and successful sum assertions;
   execution passes. This verifies those paths, not all higher-order contracts.
   Next stdlib audit target remains Json: code inspection confirms not only the
-  unbounded `std/Json.ald` decode extern but also `Intrinsic::JsonKernel` primitive
+  unbounded `std/json.ald` decode extern but also `Intrinsic::JsonKernel` primitive
   dictionaries route decoding through the same unchecked `$jsonDecode` parser.
   Adding a bound to the module wrapper alone would therefore not establish
   typed decoding. Runtime reproductions and type-specific validation are next.
@@ -1768,7 +1768,7 @@ Root cause: virtual module imports lack a physical importer location.
   it for execution to cover renamed row tails and optional missing/present reads.
   Running that new fixture directly compiles but exits with an assertion
   failure. Code inspection shows Access still emits raw member reads while
-  Option.none is null; investigate omitted-field undefined versus Option
+  option.none is null; investigate omitted-field undefined versus Option
   representation, and nested/nullable present payloads, in the codegen seam.
 - Contextual construction/runtime checkpoint: fresh record fields now receive
   recursive expected types, and fresh record/array call arguments receive their
@@ -2024,8 +2024,8 @@ Root cause: virtual module imports lack a physical importer location.
   Tarball verification succeeds with explicit local patches for alder-ast,
   alder-region, alder-source, and alder-parse. Release-version verification
   remains part of the final gate; no versions or tags were manually changed.
-- Direct kernel probes additionally confirmed `Json.decode("42")` returns
-  `Ok(42)` without target-type validation and `Map.get` returns identical null
+- Direct kernel probes additionally confirmed `json.decode("42")` returns
+  `Ok(42)` without target-type validation and `map.get` returns identical null
   values for a present None and an absent key. These runtime-contract defects
   remain required follow-up work, not covered by signature loading alone.
 - Stdlib validation: formatting, strict Clippy, full workspace tests (120 solver
@@ -2034,7 +2034,7 @@ Root cause: virtual module imports lack a physical importer location.
   snapshot files remain.
 - Option audit: reproduced nested equality and map-result collapse in permanent
   kernel tests. All payload consumers now unwrap once; map/apply/traverse and
-  Map.get rewrap successful payloads. Some of an existing box adds a layer;
+  map.get rewrap successful payloads. Some of an existing box adds a layer;
   private box identity avoids collisions with user enums named Some.
 - Four kernel regressions cover equality/symmetry/hash consistency, show,
   layers, unit, mapping/applicative/monadic/traversal behavior, map presence,
@@ -2044,7 +2044,7 @@ Root cause: virtual module imports lack a physical importer location.
   derives, hashing, showing, JSON, map lookup, and a user Some enum payload.
 - Option pattern/optional-field and ordering audits remain open; current solver
   intrinsic selection has no builtin Ord[Option]. The unrelated unchecked
-  Json.decode entry point also remains open.
+  json.decode entry point also remains open.
 - Option checkpoint validation: formatting, strict Clippy, full workspace tests,
   explicit CLI fixtures, and plain `cargo package -p alder-kernel --allow-dirty`
   verification pass. The original `/tmp/alder-review.D3XIzP/option` counterexample
@@ -2227,7 +2227,7 @@ and packaging/clean commits/the broader acceptance audit remain open.
 
 - Optional-field assignment follow-up: reproduced two opposite errors in the
   active solver: `record.value = 42` was rejected for `value?: Number`, while
-  `record.value = Option.some(42)` was accepted. `place_type` reused read typing
+  `record.value = option.some(42)` was accepted. `place_type` reused read typing
   although lowering writes the raw payload. Final-field assignment now uses
   the declared payload type; intermediate fields retain read typing, so an
   absent optional parent cannot be traversed. Four focused solver regressions
@@ -2386,8 +2386,8 @@ Packaging checkpoint for the synchronization/runtime changes: plain
 `cargo package -p alder-kernel --allow-dirty` verifies the extracted package.
 `alder-can` package verification passes with explicit local patches for the
 pending alder-ast/alder-region/alder-source/alder-parse dependency set. Inspected
-the actual .crate archive: it contains stdlib/Ref.ald, stdlib/Semaphore.ald,
-and stdlib/SynchronizedRef.ald. Cargo.lock is unchanged. This does not claim
+the actual .crate archive: it contains stdlib/ref.ald, stdlib/semaphore.ald,
+and stdlib/synchronized_ref.ald. Cargo.lock is unchanged. This does not claim
 registry-only verification against versions not yet released; final release
 dependency/version validation remains required.
 The actual CLI also builds/runs examples/async and examples/pipes successfully
@@ -2665,7 +2665,7 @@ Result identity checkpoint: a user `err` function in `Result.ald` incorrectly
 received built-in bare-tag permission because the solver checked only the last
 module segment. The reproduction compiled before requiring the Builtin package
 and exact module path; it now rejects with the existing source-aware tag
-diagnostic. Actual Result.err remains covered by the passing contextual solver
+diagnostic. Actual result.err remains covered by the passing contextual solver
 tests. All 372 solver integration and 138 driver tests passed, strict workspace
 Clippy passed, and formatting/diff checks pass. An attempted uppercase import
 probe was invalid syntax and removed, as documented in the Result audit. Added
@@ -2918,7 +2918,7 @@ the final full-goal packaging, documentation, and commit gates remain open.
 Next contextual audit reproduced failures through explicit Some and through
 if-expression arguments. Some construction now receives its expected Option
 result before argument inference; the checked argument path then contextualizes
-fresh record fields. Canonical Some and Option.some pass actual CLI execution.
+fresh record fields. Canonical Some and option.some pass actual CLI execution.
 The known branch-context failure remains a permanent failing regression; 405
 solver tests passed with only that named test excluded. No full-green claim is
 made while it remains. See optional-arguments-hardening.md for the boundary and

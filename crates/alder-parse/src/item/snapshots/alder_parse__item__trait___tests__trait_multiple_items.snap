@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/trait_.rs
-description: "trait Monoid[a] {\n    fn empty() a\n    fn append(x: a, y: a) a\n    fn concat(xs: Array[a]) a { Array.fold(xs, empty(), append) }\n}\n"
+description: "trait Monoid[a] {\n    fn empty() a\n    fn append(x: a, y: a) a\n    fn concat(xs: Array[a]) a { array.fold(xs, empty(), append) }\n}\n"
 ---
 TraitDecl {
     name: Located {
@@ -337,24 +337,8 @@ TraitDecl {
                                                             column: 38,
                                                         },
                                                     },
-                                                    value: Path(
-                                                        Path {
-                                                            segments: [
-                                                                Located {
-                                                                    region: Region {
-                                                                        start: Position {
-                                                                            line: 4,
-                                                                            column: 33,
-                                                                        },
-                                                                        end: Position {
-                                                                            line: 4,
-                                                                            column: 38,
-                                                                        },
-                                                                    },
-                                                                    value: "Array",
-                                                                },
-                                                            ],
-                                                        },
+                                                    value: Var(
+                                                        "array",
                                                     ),
                                                 },
                                                 field: Located {

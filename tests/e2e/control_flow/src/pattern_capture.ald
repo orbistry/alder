@@ -1,10 +1,11 @@
+import task
 pub fn run() {
     let source = { item: Some(42), flag: 0 }
     let result = match source {
         { item: Some(value), flag: ^{
             source.item = None
             0
-        } } => value
+            } } => value
         _ => 0
     }
     assert(result == 42)
@@ -14,9 +15,9 @@ pub fn run() {
     let tail = match arrays {
         { items: [first, ..rest], flag: ^{
             arrays.items[1] = 99
-            Array.push(arrays.items, 4)
+            array.push(arrays.items, 4)
             0
-        } } => {
+            } } => {
             assert(first == 1)
             rest
         }
@@ -31,7 +32,7 @@ pub fn run() {
         { nested: { value } as alias, flag: ^{
             records.nested = { value: 99 }
             0
-        } } => {
+            } } => {
             alias.value = value + 1
             value
         }
@@ -46,10 +47,10 @@ pub async fn verify_async() {
     let source = { item: Some(42), flag: 0 }
     let result = match source {
         { item: Some(value), flag: ^{
-            Task.sleep(0).await
+            task.sleep(0).await
             source.item = None
             0
-        } } => value
+            } } => value
         _ => 0
     }
     assert(result == 42)

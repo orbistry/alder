@@ -1,9 +1,17 @@
-import ~/option_flow
-import ~/dictionary_initialization
-import ~/function_instances
-import ~/dictionary_capture.{ Word, Code, Box, capture }
-import ~/foreign_format.{ Foreign, ForeignBox }
-import ~/traversals
+import (
+    fiber,
+    ref,
+    semaphore,
+    synchronized_ref,
+    task as tasks,
+
+    ~/dictionary_capture.{Word, Code, Box, capture},
+    ~/dictionary_initialization,
+    ~/foreign_format.{Foreign, ForeignBox},
+    ~/function_instances,
+    ~/option_flow,
+    ~/traversals,
+)
 
 let calls = 0
 
@@ -19,9 +27,9 @@ async fn option_run(value: Option[Number]) Option[Number] {
 }
 
 fn option_once(value: Option[Number], visits: Array[Number]) Option[Number] {
-    Array.push(visits, 1)
+    array.push(visits, 1)
     let number = value?
-    Array.push(visits, 2)
+    array.push(visits, 2)
     Some(number)
 }
 
@@ -52,10 +60,10 @@ fn failure() Result[Number, [:inner]] { Err(:inner) }
 fn independent_error(events: Array[Number]) Task[Result[Number, [:inner]]] {
     let task = async {
         let value = failure()?
-        Array.push(events, 99)
+        array.push(events, 99)
         Ok(value)
     }
-    Array.push(events, 1)
+    array.push(events, 1)
     task
 }
 
@@ -88,8 +96,8 @@ pub async fn main() {
     traversals.typed_failure_waits_for_sibling_cleanup().await
     let callback_events: Array[Number] = []
     let callback = (value: Number) Task[Number] -> async {
-        Array.push(callback_events, value)
-        Task.sleep(0).await
+        array.push(callback_events, value)
+        tasks.sleep(0).await
         value + 1
     }
     let callback_task = function_instances.invoke(callback)
@@ -132,14 +140,14 @@ pub async fn main() {
     assert(operand_events == [1, 1, 2])
 
     let cleanup_events: Array[Number] = []
-    let propagate_none = Fiber.scope(async {
-        Fiber.addFinalizer(async {
-            Task.sleep(0).await
-            Array.push(cleanup_events, 1)
+    let propagate_none = fiber.scope(async {
+        fiber.addFinalizer(async {
+            tasks.sleep(0).await
+            array.push(cleanup_events, 1)
         }).await
         let missing: Option[Number] = None
         let number = missing?
-        Array.push(cleanup_events, 99)
+        array.push(cleanup_events, 99)
         Some(number)
     })
     assert(cleanup_events == [])
@@ -154,66 +162,66 @@ pub async fn main() {
     assert(option_run(Some(42)).await == Some(42))
     let visits = []
     assert(option_once(None, visits) == None)
-    assert(Array.length(visits) == 1)
+    assert(array.length(visits) == 1)
     assert(option_once(Some(42), visits) == Some(42))
-    assert(Array.length(visits) == 3)
-    let synchronized = SynchronizedRef.make(0).await
-    let transition = SynchronizedRef.update(synchronized, value -> async {
-        Task.sleep(0).await
+    assert(array.length(visits) == 3)
+    let synchronized = synchronized_ref.make(0).await
+    let transition = synchronized_ref.update(synchronized, value -> async {
+        tasks.sleep(0).await
         value + 1
     })
-    assert SynchronizedRef.get(synchronized).await == 0
-    Fiber.all([transition, transition, transition]).await
-    assert SynchronizedRef.get(synchronized).await == 3
-    let old = SynchronizedRef.modify(synchronized, value -> async {
-        Task.sleep(0).await
+    assert synchronized_ref.get(synchronized).await == 0
+    fiber.all([transition, transition, transition]).await
+    assert synchronized_ref.get(synchronized).await == 3
+    let old = synchronized_ref.modify(synchronized, value -> async {
+        tasks.sleep(0).await
         (value, 42)
     }).await
     assert old == 3
-    assert SynchronizedRef.get(synchronized).await == 42
-    SynchronizedRef.set(synchronized, 7).await
-    assert SynchronizedRef.get(synchronized).await == 7
+    assert synchronized_ref.get(synchronized).await == 42
+    synchronized_ref.set(synchronized, 7).await
+    assert synchronized_ref.get(synchronized).await == 7
 
-    let gate = Semaphore.make(1).await
+    let gate = semaphore.make(1).await
     let active = 0
     let cleaned = 0
-    let protected = Semaphore.withPermits(gate, 1, async {
+    let protected = semaphore.withPermits(gate, 1, async {
         active += 1
         assert active == 1
-        Fiber.addFinalizer(async {
-            Task.sleep(0).await
+        fiber.addFinalizer(async {
+            tasks.sleep(0).await
             active -= 1
             cleaned += 1
         }).await
-        Task.sleep(0).await
+        tasks.sleep(0).await
         42
     })
     assert active == 0
-    let results = Fiber.all([protected, protected, protected]).await
+    let results = fiber.all([protected, protected, protected]).await
     assert results == [42, 42, 42]
     assert active == 0
     assert cleaned == 3
 
-    let allocate = Ref.make(0)
+    let allocate = ref.make(0)
     let cell = allocate.await
     let independent = allocate.await
-    assert !Ref.same(cell, independent)
-    let increment = Ref.update(cell, value -> value + 1)
-    assert Ref.get(cell).await == 0
+    assert !ref.same(cell, independent)
+    let increment = ref.update(cell, value -> value + 1)
+    assert ref.get(cell).await == 0
     increment.await
     increment.await
-    assert Ref.get(cell).await == 2
-    assert Ref.get(independent).await == 0
-    let previous = Ref.modify(cell, value -> (value, 42)).await
+    assert ref.get(cell).await == 2
+    assert ref.get(independent).await == 0
+    let previous = ref.modify(cell, value -> (value, 42)).await
     assert previous == 2
-    assert Ref.get(cell).await == 42
-    Ref.set(cell, 0).await
-    Fiber.all(Array.map([1, 2, 3, 4], ignored -> async {
+    assert ref.get(cell).await == 42
+    ref.set(cell, 0).await
+    fiber.all(array.map([1, 2, 3, 4], ignored -> async {
         for index in [1, 2, 3, 4] {
-            Ref.update(cell, value -> value + 1).await
+            ref.update(cell, value -> value + 1).await
         }
     })).await
-    assert Ref.get(cell).await == 16
+    assert ref.get(cell).await == 16
 
     let task = delayed(argument())
     assert calls == 1
@@ -238,7 +246,7 @@ pub async fn main() {
 
     let iterations: Array[Task[Number]] = []
     for index in [1, 2] {
-        Array.push(iterations, async { index })
+        array.push(iterations, async { index })
         index += 10
     }
     assert iterations[0].await == 11
@@ -247,7 +255,7 @@ pub async fn main() {
     let shared_iterations: Array[Task[Number]] = []
     let counter = 0
     while counter < 2 {
-        Array.push(shared_iterations, async { counter })
+        array.push(shared_iterations, async { counter })
         counter += 1
     }
     assert shared_iterations[0].await == 2
@@ -269,7 +277,7 @@ pub async fn main() {
 
     let fresh = fresh_local(1)
     let first = fresh.await
-    Array.push(first, 2)
+    array.push(first, 2)
     let second = fresh.await
     assert first == [1, 2]
     assert second == [1]

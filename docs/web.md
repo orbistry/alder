@@ -2,10 +2,17 @@
 
 **Status: current direction, everything provisional.**
 
-Alder ships a full metaframework: routing, SSR/SSG/CSR, components with
+The planned Alder metaframework will provide routing, SSR/SSG/CSR, components with
 fine-grained reactivity, stores, typed styles, forms, and JSON APIs.
 JavaScript is required in the browser; there is no progressive
 enhancement mode.
+
+Routing, HTTP, components, and SSR are deferred, not shipped compiler features.
+Future framework modules follow ordinary explicit bundled imports, for example
+`import http/router as router` and `import http.{Request, Response}`. They do
+not create global `Http`, `Html`, or routing namespaces. Application services
+use `~/services/...`; external packages use `@author/package`. DI sketches below
+remain provisional and are superseded by `dependency-injection.md`.
 
 ## Routing
 
@@ -43,8 +50,9 @@ src/routes/
 - `+server.ald` exports `get`, `post`, ... returning typed responses. A
   route may return pure JSON this way with no page at all.
 - `+error.ald` renders when a `load` or page in the subtree fails.
-- `[id]` params are typed from the folder name. The compiler generates a
-  typed `Routes` module so `href(Routes.users.show, { id })` is checked
+- `[id]` params are typed from the folder name. The compiler will generate a
+  typed `routes` module, explicitly imported from the application, so
+  `href(routes.users.show, { id })` is checked
   and links to unknown routes fail at compile time.
 - API-only packages can use a code-defined router builder (hono-like)
   with typed path params parsed from the string literal. Both systems
@@ -58,8 +66,11 @@ handled centrally instead of in every `load`.
 
 ```alder
 // src/hooks.server.ald
+import http.{RequestEvent, Response}
+import ~/services/auth
+
 pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) Task[Response]) Task[Response] {
-    let session = Auth.fromCookie(event.cookies).await
+    let session = auth.fromCookie(event.cookies).await
     provide Session = session {
         resolve(event).await
     }
@@ -245,7 +256,8 @@ pub fn signUp(input: SignUp) Result[User] { ... }
 - `+server.ald` handlers with typed request and response bodies. The
   compiler emits a typed client for Alder frontends and `.d.ts` for
   TypeScript consumers.
-- Router builder for API-only packages: `Router.new().get("/users/:id", handler)`.
+- Router builder for API-only packages: explicitly `import http/router`, then
+  `router.new().get("/users/:id", handler)` (deferred).
 - **Open:** middleware model, OpenAPI export, streaming responses.
 
 ## TUI

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/postfix.rs
-description: "Array.map(_, double)"
+description: "array.map(_, double)"
 ---
 Located {
     region: Region {
@@ -37,24 +37,8 @@ Located {
                             column: 6,
                         },
                     },
-                    value: Path(
-                        Path {
-                            segments: [
-                                Located {
-                                    region: Region {
-                                        start: Position {
-                                            line: 1,
-                                            column: 1,
-                                        },
-                                        end: Position {
-                                            line: 1,
-                                            column: 6,
-                                        },
-                                    },
-                                    value: "Array",
-                                },
-                            ],
-                        },
+                    value: Var(
+                        "array",
                     ),
                 },
                 field: Located {

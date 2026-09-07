@@ -1,12 +1,13 @@
+import task as tasks
 fn mark(events: Array[Number], value: Number) Number {
-    Array.push(events, value)
+    array.push(events, value)
     value
 }
 
 fn choose(events: Array[Number]) fn(Number, Number) Number {
-    Array.push(events, 0)
+    array.push(events, 0)
     (left, right) -> {
-        Array.push(events, 3)
+        array.push(events, 3)
         left + right
     }
 }
@@ -85,8 +86,8 @@ pub fn run() {
 }
 
 async fn total(left: Number, right: Number, events: Array[Number]) Number {
-    Array.push(events, 3)
-    Task.sleep(0).await
+    array.push(events, 3)
+    tasks.sleep(0).await
     left + right
 }
 
@@ -97,7 +98,7 @@ pub async fn verify_async() {
         let replacement = 2
         value = replacement
         mark(events, 2)
-    }, events)
+        }, events)
     assert(events == [2])
     value = 99
     assert(task.await == 3)
@@ -106,7 +107,7 @@ pub async fn verify_async() {
 
     let operation: fn(Number) Task[Number] = value -> async { value + 1 }
     let result = operation({
-        let pause = Task.sleep(0).await
+        let pause = tasks.sleep(0).await
         operation = value -> async { value + 100 }
         41
     }).await
@@ -114,10 +115,10 @@ pub async fn verify_async() {
     assert(operation(1).await == 101)
     let defaults = []
     let absent: Option[Number] = None
-    let first = Some(42) ?? { let pause = Task.sleep(0).await
+    let first = Some(42) ?? { let pause = tasks.sleep(0).await
         mark(defaults, 1)
     }
-    let second = absent ?? { let pause = Task.sleep(0).await
+    let second = absent ?? { let pause = tasks.sleep(0).await
         mark(defaults, 2)
     }
     assert(first == 42 && second == 2)

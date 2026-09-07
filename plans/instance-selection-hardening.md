@@ -39,7 +39,7 @@ The explicit_async CLI fixture imports an Invoke implementation for
 fn(Number) Task[Number], whose async method awaits its callback. Creating the
 method's task produces no callback events. Awaiting the same task twice yields
 42 twice and adds exactly one event per execution, including an actual
-Task.sleep(0) suspension in the callback. This checks imported dictionary
+task.sleep(0) suspension in the callback. This checks imported dictionary
 selection, explicit async method lowering, lazy construction, and reusability
 together. No new runtime or compiler change was necessary.
 

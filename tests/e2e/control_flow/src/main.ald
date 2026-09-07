@@ -1,9 +1,14 @@
-import ~/tags
-import ~/call_order
-import ~/assignments
-import ~/methods
-import ~/pins
-import ~/pattern_capture
+import (
+    array as arrays,
+    task,
+
+    ~/assignments,
+    ~/call_order,
+    ~/methods,
+    ~/pattern_capture,
+    ~/pins,
+    ~/tags,
+)
 
 fn choose(flag: Bool) Number {
     if flag { return 42 } else { return 43 }
@@ -21,7 +26,7 @@ fn matched(flag: Bool) Number {
 }
 
 async fn awaited(flag: Bool) Number {
-    Task.sleep(1).await
+    task.sleep(1).await
     if flag { return 42 } else { return 43 }
 }
 
@@ -37,17 +42,17 @@ fn loop_tail_return(flag: Bool) Number {
 fn loop_tail_effects() Number {
     let values = []
     for value in [1, 2] {
-        Array.push(values, value)
+        arrays.push(values, value)
     }
-    Array.length(values)
+    arrays.length(values)
 }
 
 fn break_payload_effects() Number {
     let values = []
     while true {
-        break Array.push(values, 42)
+        break arrays.push(values, 42)
     }
-    Array.length(values)
+    arrays.length(values)
 }
 
 fn nested_loop_values(flag: Bool) Number {
@@ -63,7 +68,7 @@ fn nested_loop_values(flag: Bool) Number {
 
 async fn awaited_loop_value() Number {
     loop {
-        Task.sleep(1).await
+        task.sleep(1).await
         break 42
     }
 }
@@ -72,12 +77,12 @@ fn loop_payload_once() Number {
     let values = []
     let result: Number = loop {
         break {
-            Array.push(values, 42)
-            Array.length(values)
+            arrays.push(values, 42)
+            arrays.length(values)
         }
     }
     assert(result == 1)
-    Array.length(values)
+    arrays.length(values)
 }
 
 fn while_condition_exits_enclosing_loop() Number {
@@ -144,7 +149,7 @@ async fn while_condition_continues_enclosing_loop() Number {
     loop {
         rounds += 1
         while {
-            Task.sleep(0).await
+            task.sleep(0).await
             checks += 1
             if checks == 1 { continue }
             false
@@ -171,7 +176,7 @@ fn guarded_loop(flag: Bool) Number {
 }
 
 fn observe(events: Array[Number], value: Number) Number {
-    Array.push(events, value)
+    arrays.push(events, value)
     value
 }
 
@@ -196,7 +201,7 @@ fn tag_segments(parts: Array[String], left: Number, right: Number) Array[String]
 fn show_tag(parts: Array[String], value: a) String where a: Show { show(value) }
 
 async fn async_tag(parts: Array[String], value: Number) Number {
-    Task.sleep(1).await
+    task.sleep(1).await
     value
 }
 
@@ -210,7 +215,7 @@ fn template_order() {
     assert(rendered == "1:20")
     let shared = [1]
     let captured = `${shared}:${{
-        Array.push(shared, 2)
+        arrays.push(shared, 2)
         "after"
     }}`
     assert(captured == "1:after")
@@ -233,8 +238,8 @@ fn template_order() {
     assert(merged.x + merged.y == 42)
     let absent: { value?: Option[Number] } = {}
     let present: { value?: Option[Number] } = { value: Some(None) }
-    assert(((absent, {}) |> tags.merge_pair).value == Option.none())
-    assert(((present, {}) |> tags.merge_pair).value == Option.some(Option.none()))
+    assert(((absent, {}) |> tags.merge_pair).value == option.none())
+    assert(((present, {}) |> tags.merge_pair).value == option.some(option.none()))
     assert(tags.overlay_value(0, { other: true, value: "old" }, { value: 42 }) == 42)
 }
 
@@ -280,11 +285,11 @@ fn assignment_order() {
 }
 
 async fn suspended_index(nested: Array[Array[Number]], events: Array[Number]) Number {
-    Array.push(events, 1)
-    Task.sleep(1).await
+    arrays.push(events, 1)
+    task.sleep(1).await
     let target = nested
     target[0] = [99]
-    Array.push(events, 2)
+    arrays.push(events, 2)
     0
 }
 
@@ -293,8 +298,8 @@ async fn async_assignment_order() {
     let nested = [[10]]
     let original = nested[0]
     nested[0][suspended_index(nested, events).await] += {
-        Array.push(events, 3)
-        Task.sleep(1).await
+        arrays.push(events, 3)
+        task.sleep(1).await
         original[0] = 100
         2
     }
@@ -351,7 +356,7 @@ fn expression_order() {
     assert(exits == [1])
     let shared = [1]
     let aliases = [shared, {
-        Array.push(shared, 2)
+        arrays.push(shared, 2)
         shared
     }]
     assert(aliases == [[1, 2], [1, 2]])

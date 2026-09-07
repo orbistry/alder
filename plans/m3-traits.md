@@ -92,7 +92,7 @@ static resolution wherever the type is known.
   body failures, and a final body pass uses the same complete package header
   closure for coherence and instance resolution.
 - First-party trait and primitive/container instance headers are authored in
-  `std/Traits.ald`, canonicalized through the header pipeline, and inserted
+  `std/traits.ald`, canonicalized through the header pipeline, and inserted
   into the ordinary `TraitDatabase`. Intrinsic evidence is selected only after
   an ordinary matching header wins instance search.
 - `Ord` has one `compare(left, right) Ordering` method. Generic comparisons
@@ -123,7 +123,7 @@ static resolution wherever the type is known.
    arrays, options, results, and any type whose parts are `Eq`; it is
    overridable for opaque types; functions have no `Eq`, so comparing
    them is a compile error rather than Elm's runtime crash. Generic code
-   writes `where a: Eq`. Identity comparison is explicit (`Ref.same(a, b)`).
+   writes `where a: Eq`. Identity comparison is explicit (`ref.same(a, b)`).
    Cost model: when both sides have a known primitive type (`Number`,
    `String`, `Bool`, `BigInt`, unit variants) the codegen emits `===`
    directly; known records and enums call their generated `eq_T`; only
@@ -198,7 +198,7 @@ collection and adds the narrowly scoped `_` type hole required to represent
   `Monad`, `Traversable`, `Iterator` (with `Item`), `Json` traits and
   instances for the primitives and containers; `==` moved onto `Eq` with
   automatic structural instances and `===` emission for known primitives;
-  `Ref.same` for identity; arithmetic moved onto `Num`.
+  `ref.same` for identity; arithmetic moved onto `Num`.
 - Built-in derives.
 - e2e projects exercising generic functions, HKT `map`, derives.
 

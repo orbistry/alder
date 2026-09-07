@@ -1,12 +1,12 @@
 ---
 source: crates/alder-parse/src/item/import.rs
-description: "pub import @alder/http\nlet x = 1\n"
+description: "import (json as, io)"
 ---
 Import(
-    PubNeedsNames(
+    Alias(
         1,
-        23,
+        16,
     ),
     1,
-    5,
+    1,
 )

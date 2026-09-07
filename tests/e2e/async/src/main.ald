@@ -1,4 +1,9 @@
-import ~/helper.{ delayed }
+import (
+    fiber,
+    task,
+
+    ~/helper.{delayed},
+)
 
 type Operation[a] = Task[a]
 
@@ -18,7 +23,7 @@ async fn load(value: Number) Result[Number] {
 }
 
 async fn checkedDelay(value: Number, milliseconds: Number) Result[Number] {
-    Task.sleep(milliseconds).await
+    task.sleep(milliseconds).await
     Ok(value)
 }
 
@@ -27,7 +32,7 @@ fn prepare(value: Number) Number {
 }
 
 async fn fail() Result[Number] {
-    Task.sleep(1).await
+    task.sleep(1).await
     Err(:not_found("missing"))
 }
 
@@ -57,14 +62,14 @@ async fn choose(flag: Bool) Number {
 async fn counted() Number {
     let count = 0
     while count < 2 {
-        Task.sleep(1).await
+        task.sleep(1).await
         count += 1
     }
     count
 }
 
 async fn early() Number {
-    Task.sleep(1).await
+    task.sleep(1).await
     return 42
 }
 
@@ -101,15 +106,15 @@ pub async fn main() Result[()] {
     let directFinal = 42 |> prepare |> resolved().await
     let groupedFinal = (42 |> prepare |> resolved()).await
     let anonymous = value -> async {
-        Task.sleep(1).await
+        task.sleep(1).await
         value
     }
     let nested = resolved(resolved(42).await).await
-    let concurrent = Fiber.all([delayed(20), delayed(22)]).await
-    let forked = Fiber.fork(delayed(42)).await
-    let joined = Fiber.join(forked).await
-    let winner = Fiber.race([delayed(42), delayed(99)]).await
-    let scoped = Fiber.scope(delayed(42)).await
+    let concurrent = fiber.all([delayed(20), delayed(22)]).await
+    let forked = fiber.fork(delayed(42)).await
+    let joined = fiber.join(forked).await
+    let winner = fiber.race([delayed(42), delayed(99)]).await
+    let scoped = fiber.scope(delayed(42)).await
     assert(direct + piped == 42)
     assert(loaded == 42)
     assert(loadedWithArgument == 42)

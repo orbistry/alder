@@ -2,7 +2,7 @@
 
 Status: implemented; final integrated release gates remain open.
 
-The original `std/Traits.ald` declared `Iterator[Array[a]]` with
+The original `std/traits.ald` declared `Iterator[Array[a]]` with
 `next(iterator: Array[a]) Option[a]`. Codegen selects `$arrayNext`, which returns
 `$optionSome(values[0])` for a nonempty array without advancing anything.
 The existing CLI test calls `next([7, 8])` only once, so it does not establish
@@ -20,10 +20,10 @@ Destructive `next(array)` consumption is not the chosen design.
 
 ## Implemented contract
 
-`Array.iter(values)` constructs a fresh opaque `ArrayIterator[a]`. The builtin
+`array.iter(values)` constructs a fresh opaque `ArrayIterator[a]`. The builtin
 `Iterator[ArrayIterator[a]]` instance exposes `Item = a`; `next(iterator)` returns
 the next value in Some or None on exhaustion. An alias to the same iterator
-shares its progress. Separate calls to `Array.iter` have independent cursors.
+shares its progress. Separate calls to `array.iter` have independent cursors.
 There is no longer a builtin Iterator instance on Array itself.
 
 The kernel uses JavaScript's native array value iterator. It observes unread

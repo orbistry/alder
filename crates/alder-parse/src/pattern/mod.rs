@@ -76,6 +76,9 @@ impl<'a> Parser<'a> {
         let (row, col) = self.position();
         match self.peek() {
             Some(b'_') => self.pattern_wildcard(start),
+            Some(b) if b.is_ascii_lowercase() && self.starts_namespace_path() => {
+                self.pattern_ctor(start)
+            }
             Some(b) if b.is_ascii_lowercase() => self.pattern_var(start),
             Some(b) if b.is_ascii_uppercase() => self.pattern_ctor(start),
             Some(b':') => self.pattern_tag(start),

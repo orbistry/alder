@@ -1,9 +1,10 @@
+import task
 pub fn identity(parts: Array[String], value: a) a { value }
 
 pub fn shown(parts: Array[String], value: a) String where a: Show { show(value) }
 
 pub async fn later(parts: Array[String], value: Number) Number {
-    Task.sleep(1).await
+    task.sleep(1).await
     value
 }
 

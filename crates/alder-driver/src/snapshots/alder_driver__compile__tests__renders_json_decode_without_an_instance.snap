@@ -1,16 +1,16 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "fn invalid() Result[fn(Number) Number, [:invalid_json(String)]] {\n    Json.decode(\"42\")\n}\n"
+description: "import json\nfn invalid() Result[fn(Number) Number, [:invalid_json(String)]] {\n    json.decode(\"42\")\n}\n"
 ---
 alder::trait::missing_instance
 
   × no implementation of `Json[fn(Number) Number]` was found
-   ╭─[/project/src/main.ald:2:5]
- 1 │ fn invalid() Result[fn(Number) Number, [:invalid_json(String)]] {
- 2 │     Json.decode("42")
+   ╭─[/project/src/main.ald:3:5]
+ 2 │ fn invalid() Result[fn(Number) Number, [:invalid_json(String)]] {
+ 3 │     json.decode("42")
    ·     ─────┬─────
    ·          ╰── this use needs trait evidence
- 3 │ }
+ 4 │ }
    ╰────
   help: check the operand type and the implementations available for
         `Json[fn(Number) Number]`; a new implementation must satisfy Alder's

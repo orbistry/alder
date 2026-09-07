@@ -268,7 +268,7 @@ mod tests {
         assert_solved_emit_snapshot! {r#"
             pub fn default_unit(value: Option[()], events: Array[Number]) () {
                 value ?? {
-                    let ignored = Array.push(events, 1)
+                    let ignored = array.push(events, 1)
                     ()
                 }
             }
@@ -308,7 +308,7 @@ mod tests {
     fn nested_pin_effects_follow_enclosing_pattern_checks() {
         assert_solved_emit_snapshot! {r#"
             fn expected(events: Array[Number]) Number {
-                Array.push(events, 1)
+                array.push(events, 1)
                 42
             }
             pub fn same(input: Option[(Number, Number)], events: Array[Number]) Bool {
@@ -456,7 +456,7 @@ mod tests {
     }
 
     use super::*;
-    use alder_ast::{PackageId, ResolvedImport};
+    use alder_ast::PackageId;
     use bumpalo::Bump;
 
     fn emit(source: &str) -> String {
@@ -470,7 +470,7 @@ mod tests {
                     package: PackageId::Application,
                     path: &["main"],
                 },
-                imports: &[] as &[ResolvedImport<'_>],
+                imports: alder_can::resolve_imports(&bump, &parsed, PackageId::Application),
                 interfaces: &[],
             },
             &parsed,
@@ -492,7 +492,7 @@ mod tests {
                     package: PackageId::Application,
                     path: &["main"],
                 },
-                imports: &[] as &[ResolvedImport<'_>],
+                imports: alder_can::resolve_imports(&bump, &parsed, PackageId::Application),
                 interfaces: &[],
             },
             &parsed,
@@ -510,7 +510,8 @@ mod tests {
     fn nested_json_dictionary_size_grows_linearly() {
         let sizes = [2, 4, 8].map(|depth| {
             let ty = format!("{}Number{}", "Array[".repeat(depth), "]".repeat(depth));
-            let source = format!("pub fn encode(value: {ty}) String {{ Json.encode(value) }}");
+            let source =
+                format!("import json\npub fn encode(value: {ty}) String {{ json.encode(value) }}");
             let code = emit_solved(&source);
             assert_eq!(code.matches("$jsonEncodeContainer(").count(), depth);
             assert_eq!(code.matches("$jsonDecodeContainer(").count(), depth);
@@ -563,7 +564,8 @@ mod tests {
             let ty = (0..depth).fold("Number".to_owned(), |payload, _| {
                 format!("Result[Number, [:nested({payload})]]")
             });
-            let source = format!("pub fn encode(value: {ty}) String {{ Json.encode(value) }}");
+            let source =
+                format!("import json\npub fn encode(value: {ty}) String {{ json.encode(value) }}");
             let code = emit_solved(&source);
             assert_eq!(code.matches("$jsonEncodeDerived(").count(), depth);
             assert_eq!(code.matches("$jsonDecodeDerived(").count(), depth);
@@ -738,11 +740,12 @@ mod tests {
     #[test]
     fn async_functions_and_pipe_postfixes_lower_to_direct_generator_asts() {
         assert_solved_emit_snapshot! {r#"
+            import task
             #[extern("globalThis", "Promise.resolve")]
             fn resolved(value: a) Task[a]
 
             async fn load(value: Number) Result[Number] {
-                Task.sleep(1).await
+                task.sleep(1).await
                 Ok(value)
             }
 
@@ -923,8 +926,9 @@ mod tests {
     #[test]
     fn structural_error_json_emits_payload_codecs() {
         assert_solved_emit_snapshot! {r#"
+            import json
             pub fn encode(value: Result[Number, [:missing | :bad(Number)]]) String {
-                Json.encode(value)
+                json.encode(value)
             }
         "#};
     }

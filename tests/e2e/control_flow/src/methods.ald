@@ -1,3 +1,4 @@
+import task
 trait Choose[a] {
     fn choose(value: a, flag: Bool) Number {
         if flag { return 41 } else { return 42 }
@@ -9,7 +10,7 @@ trait Choose[a] {
     }
 
     async fn later(value: a, input: Result[Number, [:missing]]) Result[Number, [:missing]] {
-        Task.sleep(0).await
+        task.sleep(0).await
         let result = loop { break input? }
         Ok(result)
     }

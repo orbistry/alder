@@ -8,7 +8,7 @@ fn make(value: a) Left[a] {
     let children = []
     let left = Left::Value(value, children)
     let right = Right::Back([left])
-    Array.push(children, right)
+    array.push(children, right)
     left
 }
 
@@ -22,7 +22,7 @@ pub fn check() {
     assert make("same") == make("same")
     assert !(make("left") == make("right"))
     match second {
-        Left::Value(_, children) => { Array.push(children, Right::Back([])) }
+        Left::Value(_, children) => { array.push(children, Right::Back([])) }
     }
     assert !(first == second)
     assert !(second == first)

@@ -64,7 +64,16 @@ impl<'a> Parser<'a> {
         Ok(self.located(start, name))
     }
 
-    /// `Upper { '::' Upper }`; stops before `::lower` (the expression layer
+    pub(crate) fn starts_namespace_path(&self) -> bool {
+        let word = self.peek_word();
+        self.peek_lower()
+            && crate::keyword::Keyword::from_word(word).is_none()
+            && self.peek_at(word.len()) == Some(b':')
+            && self.peek_at(word.len() + 1) == Some(b':')
+    }
+
+    /// Lowercase namespace prefixes followed by uppercase type/constructor
+    /// segments; stops before a final `::lower` (the expression layer
     /// consumes that as `PathVar`).
     ///
     /// `Foo::` followed by anything else is `to_member_error` at the position
@@ -77,7 +86,11 @@ impl<'a> Parser<'a> {
         to_expectation: impl FnOnce(Row, Col) -> E,
         to_member_error: impl FnOnce(Row, Col) -> E,
     ) -> Result<Path<'a>, E> {
-        let first = self.located_upper(to_expectation)?;
+        let first = if self.starts_namespace_path() {
+            self.located_lower(to_expectation)?
+        } else {
+            self.located_upper(to_expectation)?
+        };
         let mut segments = bumpalo::collections::Vec::new_in(self.bump);
         segments.push(first);
         while self.peek() == Some(b':') && self.peek_at(1) == Some(b':') {
@@ -87,7 +100,16 @@ impl<'a> Parser<'a> {
                     let segment = self.located_upper(|_, _| unreachable!("peeked uppercase"))?;
                     segments.push(segment);
                 }
-                Some(b) if b.is_ascii_lowercase() => break,
+                Some(b) if b.is_ascii_lowercase() => {
+                    let saved = self.save_state();
+                    self.advance_by(2);
+                    if !self.starts_namespace_path() {
+                        self.restore_state(saved);
+                        break;
+                    }
+                    let segment = self.located_lower(|_, _| unreachable!("checked namespace"))?;
+                    segments.push(segment);
+                }
                 _ => {
                     self.advance_by(2);
                     let (row, col) = self.position();

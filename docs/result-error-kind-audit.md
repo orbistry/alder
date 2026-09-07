@@ -448,7 +448,7 @@ container aliases retain their existing checks; this is not blanket row
 subtyping or an implicit conversion.
 
 Regressions cover a local annotated binding, fresh array elements, function
-arguments, both Err and Result.err spelling, and rejection of unknown tags or
+arguments, both Err and result.err spelling, and rejection of unknown tags or
 wrong payloads. The CLI fixture again uses two reordered multi-tag groups and
 executes both local and imported dictionary calls successfully. This resolves
 the specifically recorded singleton-construction failure; arbitrary expression
@@ -485,7 +485,7 @@ name. Constructor recognition already required the Builtin package.
 The driver regression covers a same-module call. An attempted imported-module
 probe used `import ~/Result`, which the grammar rejects; it was removed rather
 than counted as identity-check evidence. No import grammar change is intended.
-The existing solver contextual-array regression still accepts actual Result.err
+The existing solver contextual-array regression still accepts actual result.err
 alongside Err, so tightening identity does not remove the intended built-in
 entry point. The same helper also controls contextual fresh-Err treatment and
 therefore no longer grants that treatment to unrelated user functions.

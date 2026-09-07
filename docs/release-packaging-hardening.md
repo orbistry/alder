@@ -36,7 +36,7 @@ release automation has run. Final requirement reconciliation remains separate.
 ## Historical package checkpoints
 
 Current compiler/runtime integration: `556a21c`. The following completed package
-checkpoints predate the final integration, including Fiber.unbounded, imported
+checkpoints predate the final integration, including fiber.unbounded, imported
 defaults, pattern captures, ArrayIterator, and Coalesce fixes. They are historical
 evidence only; fresh package verification and packaged CLI execution are required.
 
@@ -336,7 +336,7 @@ cargo package --workspace --exclude stub --offline --allow-dirty --target-dir /t
 
 The target directory was freshly allocated; verification completed with exit
 zero. Archived `option_levels.rs`, solver `inference.rs`, kernel `index.ts`, and
-the canonicalizer's `stdlib/Fiber.ald` match the working sources byte-for-byte.
+the canonicalizer's `stdlib/fiber.ald` match the working sources byte-for-byte.
 Workspace Cargo.lock remains unchanged.
 
 From `/tmp`, the resulting packaged `debug/alder` successfully executes traits,

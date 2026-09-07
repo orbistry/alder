@@ -109,7 +109,10 @@ fn canonicalize_mode<'a>(
     let mut items = Vec::new();
     let mut automatic_impls = Vec::new();
     for (item_ordinal, item) in source.items.iter().enumerate() {
-        if matches!(item.value.kind, SourceItemKind::Import(_)) {
+        if matches!(
+            item.value.kind,
+            SourceItemKind::Import(_) | SourceItemKind::ImportGroup(_)
+        ) {
             continue;
         }
         if headers_only && !is_header_item(&item.value.kind) {
@@ -427,12 +430,18 @@ fn load_imports<'a>(
     interfaces: &'a [Interface<'a>],
 ) -> Vec<Error<'a>> {
     let mut errors = Vec::new();
+    env.register_interfaces(interfaces);
     for import in imports {
         let interface = interfaces
             .iter()
-            .find(|interface| interface.home == import.module);
+            .find(|interface| interface.home == import.module)
+            .or_else(|| crate::interface::builtin_module_interface(bump, import.module));
         match import.kind {
             ResolvedImportKind::Module { binding } => {
+                if interface.is_none() {
+                    errors.push(missing_import_interface(import));
+                    continue;
+                }
                 if let Err(first) =
                     env.insert_module(binding.value, binding.region, import.module, interface)
                 {
@@ -473,10 +482,8 @@ fn load_imports<'a>(
 fn missing_import_interface<'a>(import: &ResolvedImport<'a>) -> Error<'a> {
     Error::new(
         import.region,
-        ErrorKind::Import(ImportError::NameNotFound {
+        ErrorKind::Import(ImportError::ModuleNotFound {
             module: import.module,
-            name: "<interface>",
-            available: &[],
         }),
     )
 }
@@ -767,7 +774,8 @@ fn predeclare<'a>(env: &mut Env<'a>, source: &SourceModule<'a>) -> Vec<Error<'a>
             | SourceItemKind::Comptime(_)
             | SourceItemKind::Test(_)
             | SourceItemKind::Tests(_)
-            | SourceItemKind::Import(_) => {}
+            | SourceItemKind::Import(_)
+            | SourceItemKind::ImportGroup(_) => {}
         }
     }
     errors
@@ -1420,7 +1428,10 @@ fn canonicalize_item<'a>(
             }
             let mut canonical = Vec::with_capacity(items.len());
             for (nested_ordinal, nested) in items.iter().enumerate() {
-                if matches!(nested.value.kind, SourceItemKind::Import(_)) {
+                if matches!(
+                    nested.value.kind,
+                    SourceItemKind::Import(_) | SourceItemKind::ImportGroup(_)
+                ) {
                     continue;
                 }
                 canonical.push(canonicalize_item(
@@ -1434,7 +1445,9 @@ fn canonicalize_item<'a>(
             }
             ItemKind::Tests(bump.alloc_slice_copy(&canonical))
         }
-        SourceItemKind::Import(_) => unreachable!("imports are filtered before item conversion"),
+        SourceItemKind::Import(_) | SourceItemKind::ImportGroup(_) => {
+            unreachable!("imports are filtered before item conversion")
+        }
     };
     if attributes
         .iter()
@@ -1686,7 +1699,7 @@ fn canonicalize_impl<'a>(
         .find_trait(
             bump,
             source.trait_.region(),
-            (source.trait_.segments.len() > 1).then(|| source.trait_.segments[0].value),
+            crate::types::namespace_prefix(bump, source.trait_),
             trait_name.value,
         )
         .map_err(|error| vec![error])?;
@@ -2047,7 +2060,7 @@ fn canonicalize_constraints<'a>(
                     .find_trait(
                         bump,
                         path.region(),
-                        (path.segments.len() > 1).then(|| path.segments[0].value),
+                        crate::types::namespace_prefix(bump, *path),
                         name.value,
                     )
                     .map_err(|error| vec![error])?;
@@ -2764,17 +2777,18 @@ mod tests {
     fn can<'a>(bump: &'a Bump, text: &str) -> CanResult<'a> {
         let source_text = bump.alloc_str(text);
         let source = alder_parse::parse_module(bump, source_text).expect("source parses");
-        canonicalize(bump, context(), &source).expect("source canonicalizes")
+        let mut context = context();
+        context.imports = crate::resolve_imports(bump, &source, context.home.package);
+        canonicalize(bump, context, &source).expect("source canonicalizes")
     }
 
     fn can_error(text: &str) -> String {
         let bump = Bump::new();
         let source_text = bump.alloc_str(text);
         let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
-        format!(
-            "{:#?}",
-            canonicalize(&bump, context(), &source).unwrap_err()
-        )
+        let mut context = context();
+        context.imports = crate::resolve_imports(&bump, &source, context.home.package);
+        format!("{:#?}", canonicalize(&bump, context, &source).unwrap_err())
     }
 
     #[test]
@@ -3329,7 +3343,7 @@ mod tests {
     fn pin_cannot_reference_a_new_binding_in_its_own_pattern() {
         assert_can_error_snapshot! {r#"
             fn same(input: (Number, Number)) Bool {
-                match input { (number, ^number) => true, _ => false }
+                match input { (captured, ^captured) => true, _ => false }
             }
         "#};
     }
@@ -3868,7 +3882,10 @@ mod tests {
     #[test]
     fn explicit_async_function_allows_await() {
         let bump = Bump::new();
-        let result = can(&bump, "async fn wait() { Task.sleep(1).await }");
+        let result = can(
+            &bump,
+            "import task\nasync fn wait() { task.sleep(1).await }",
+        );
         let ItemKind::Fn(function) = result.module.items[0].value.kind else {
             panic!("expected function");
         };
@@ -3877,17 +3894,17 @@ mod tests {
 
     #[test]
     fn plain_function_cannot_await() {
-        assert_can_error_snapshot!("fn wait() { Task.sleep(1).await }");
+        assert_can_error_snapshot!("import task\nfn wait() { task.sleep(1).await }");
     }
 
     #[test]
     fn task_annotation_does_not_authorize_await() {
-        assert_can_error_snapshot!("fn wait() Task[()] { Task.sleep(1).await }");
+        assert_can_error_snapshot!("import task\nfn wait() Task[()] { task.sleep(1).await }");
     }
 
     #[test]
     fn lambda_does_not_inherit_async_permission() {
-        assert_can_error_snapshot!("async fn wait() { () -> Task.sleep(1).await }");
+        assert_can_error_snapshot!("import task\nasync fn wait() { () -> task.sleep(1).await }");
     }
 
     #[test]
@@ -3904,9 +3921,10 @@ mod tests {
     fn async_block_permission_does_not_leak() {
         assert_can_error_snapshot!(
             r#"
+            import task
             fn make() {
-                let task = async { Task.sleep(1).await }
-                Task.sleep(1).await
+                let pending = async { task.sleep(1).await }
+                task.sleep(1).await
             }
         "#
         );
@@ -3915,7 +3933,10 @@ mod tests {
     #[test]
     fn async_block_has_independent_control_flow() {
         let bump = Bump::new();
-        let result = can(&bump, "let task = async { return Task.sleep(1).await }");
+        let result = can(
+            &bump,
+            "import task\nlet pending = async { return task.sleep(1).await }",
+        );
         let ItemKind::Let(decl) = result.module.items[0].value.kind else {
             panic!("expected let");
         };
@@ -3928,7 +3949,10 @@ mod tests {
     #[test]
     fn lambda_returning_async_block_allows_await() {
         let bump = Bump::new();
-        can(&bump, "let wait = () -> async { Task.sleep(1).await }");
+        can(
+            &bump,
+            "import task\nlet wait = () -> async { task.sleep(1).await }",
+        );
     }
 
     #[test]
@@ -3944,7 +3968,7 @@ mod tests {
         for path in paths {
             let source = fs::read_to_string(&path).unwrap();
             let bump = Bump::new();
-            if path.file_name().is_some_and(|name| name == "Traits.ald") {
+            if path.file_name().is_some_and(|name| name == "traits.ald") {
                 let source_text = bump.alloc_str(&source);
                 let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
                 canonicalize_headers(
@@ -3961,7 +3985,22 @@ mod tests {
                 )
                 .expect("trait header source canonicalizes");
             } else {
-                can(&bump, &source);
+                let source_text = bump.alloc_str(&source);
+                let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
+                let name = bump.alloc_str(path.file_stem().unwrap().to_str().unwrap());
+                canonicalize(
+                    &bump,
+                    Context {
+                        home: ModuleId {
+                            package: PackageId::Builtin,
+                            path: bump.alloc_slice_copy(&[&*name]),
+                        },
+                        imports: &[],
+                        interfaces: &[],
+                    },
+                    &source,
+                )
+                .expect("bundled module source canonicalizes");
             }
         }
     }

@@ -1,0 +1,88 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: "import array.{map as transform}"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 32,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Private,
+        kind: Import(
+            Import {
+                path: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 8,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                    },
+                    value: ModulePath {
+                        root: StandardLibrary,
+                        segments: [
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 8,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                },
+                                value: "array",
+                            },
+                        ],
+                    },
+                },
+                tail: Names(
+                    [
+                        ImportName {
+                            name: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 15,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 18,
+                                    },
+                                },
+                                value: "map",
+                            },
+                            alias: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 22,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 31,
+                                        },
+                                    },
+                                    value: "transform",
+                                },
+                            ),
+                        },
+                    ],
+                ),
+            },
+        ),
+    },
+}

@@ -4,8 +4,8 @@ Status: explicit async, synchronization, and traversal kernels implemented;
 public unbounded configuration is implemented; integration/release acceptance is
 recorded in `docs/compiler-hardening-final-report.md`. Earlier pending-work and
 package-refresh statements below are historical.
-The user has approved `Fiber.unbounded` as the concurrency-limit value, used as
-`{ concurrency: Fiber.unbounded }`, not as a whole options record.
+The user has approved `fiber.unbounded` as the concurrency-limit value, used as
+`{ concurrency: fiber.unbounded }`, not as a whole options record.
 The implementation now includes a monomorphic Number
 annotation, kernel constant, and built-in bundle export. A CLI regression first
 failed with unknown-name and now passes, including gated concurrent starts and
@@ -303,7 +303,7 @@ cell without deadlocking; a nested write to the same cell is non-reentrant.
 Result payloads are ordinary values. To return a typed failure without changing
 state, modify can complete with `(Err(error), oldValue)`; it does not implicitly
 interpret Err or invent a checked-error channel. This choice preserves Alder's
-Result semantics. Ref.update remains synchronous; SynchronizedRef.update's
+Result semantics. ref.update remains synchronous; synchronized_ref.update's
 callback explicitly returns a task. Both opaque cell types remain invariant.
 
 Rechecked pinned Effect SynchronizedRef.ts get/modifyEffect at commit
@@ -493,7 +493,7 @@ Its regression covers a public alias referring forward to a private generic
 record alias, payload substitution, retained alias identity, and an optional
 function parameter. Modules with no aliases keep their existing loading path.
 This does not yet expose qualified builtin type names to callers: resolving
-`Fiber::MapOptions`, publishing the traversal signatures and bridges, and testing
+`fiber::MapOptions`, publishing the traversal signatures and bridges, and testing
 their stored interfaces and CLI execution remain required next steps. No public
 record-presence or unbounded-configuration decision is inferred by this change.
 Validation: all 81 alder-can tests pass, including the packaged-source parity
@@ -501,12 +501,12 @@ and signature tests; alder-can all-target/all-feature Clippy with denied warning
 workspace formatting checks, and diff checks pass. The full workspace suite was
 not rerun for this declaration-loader checkpoint.
 
-Qualified builtin alias follow-up: `std/Fiber.ald` and its packaged copy now
+Qualified builtin alias follow-up: `std/fiber.ald` and its packaged copy now
 declare `pub type MapOptions = { concurrency?: Number }`. Qualified type lookup
 loads public canonical stdlib headers lazily, caches them in the environment,
 and expands aliases using the existing substitution machinery. Lookup checks
 the builtin package identity, not merely a matching module path. Alder's actual
-qualified type syntax is `Fiber::MapOptions` (not dot access).
+qualified type syntax is `fiber::MapOptions` (not dot access).
 Inference accepts omitted/numeric fields and rejects a String field. A driver
 test serializes a dependency exporting a Config alias and read function, drops
 the original interface, and checks positive and negative consumers after reload.
@@ -624,7 +624,7 @@ forEach/tryMap/tryForEach and public signature choice remain outstanding.
 Unit traversal checkpoint: added a distinct kernel forEach entry sharing the
 bounded worker loop, with no item-result allocation. An internal AllDiscard
 join reuses all's ownership/failure/cancellation machinery without allocating
-worker-result storage either; ordinary Fiber.all still collects results.
+worker-result storage either; ordinary fiber.all still collects results.
 The public API has no boolean discard option. The first test failed on the
 absent function; it now verifies lazy execution, bounded active work through
 finalizers, unit completion, empty inputs, and rejection of non-unit results
@@ -738,10 +738,10 @@ Provide these distinct operations (schematic types, not final declarations):
 
 | Operation | Callback result | Traversal result |
 | --- | --- | --- |
-| `Fiber.map` | `Task[b]` | `Task[Array[b]]` |
-| `Fiber.forEach` | `Task[()]` | `Task[()]` |
-| `Fiber.tryMap` | `Task[Result[b, e]]` | `Task[Result[Array[b], e]]` |
-| `Fiber.tryForEach` | `Task[Result[(), e]]` | `Task[Result[(), e]]` |
+| `fiber.map` | `Task[b]` | `Task[Array[b]]` |
+| `fiber.forEach` | `Task[()]` | `Task[()]` |
+| `fiber.tryMap` | `Task[Result[b, e]]` | `Task[Result[Array[b], e]]` |
+| `fiber.tryForEach` | `Task[Result[(), e]]` | `Task[Result[(), e]]` |
 
 - Support a concurrency setting, e.g. `{ concurrency: 8 }`. Default to
   sequential execution; unbounded concurrency must be explicit. Specify the
@@ -769,7 +769,7 @@ Provide these distinct operations (schematic types, not final declarations):
 
 ## All-settled distinction
 
-`Fiber.map` over `Task[Result[a, e]]` is the agreed mechanism for collecting all
+`fiber.map` over `Task[Result[a, e]]` is the agreed mechanism for collecting all
 typed successes/errors. A broader settled-outcome API for defects and individual
 interruption was discussed but is not approved for implementation yet. It would
 need an explicit outcome type and must not defeat parent cancellation.

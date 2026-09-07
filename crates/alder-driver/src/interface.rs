@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::DriverError;
 
-pub const INTERFACE_FORMAT_VERSION: u32 = 7;
+pub const INTERFACE_FORMAT_VERSION: u32 = 8;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InterfaceFile {

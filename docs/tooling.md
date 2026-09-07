@@ -139,6 +139,16 @@ conservative module-local value analysis, not whole-program dead-code eliminatio
 or unused-type analysis. Declaration warnings do not suggest invalid `_` function
 names, and warnings never remove code.
 
+`alder fmt` combines consecutive same-visibility imports into canonical groups:
+bundled, local, then external sections, sorted by module path with aliases
+preserved. A single import stays ungrouped; declarations and public/private
+boundaries are never crossed. Attached comments move with their imports.
+Initialization order is determined by canonical module identities, not layout.
+Grouped entries retain individual diagnostic regions in check/build/test and
+the language server, including unsaved edits and clearing corrected diagnostics.
+The language server still does not advertise a formatting capability; formatting
+is available through `alder fmt`.
+
 CLI diagnostics are ordered by source file and primary source location, not
 message text. Source labels for files inside the project are relative to its
 root (for example, `src/main.ald:3:25`), including warnings and related reports.

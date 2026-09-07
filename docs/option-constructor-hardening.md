@@ -160,7 +160,7 @@ enum Node { Link(Array[Node]) }
 pub fn main() {
     let children: Array[Node] = []
     let node = Node::Link(children)
-    Array.push(children, node)
+    array.push(children, node)
     assert node == node
 }
 ```

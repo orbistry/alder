@@ -1,0 +1,93 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: "pub import @alder/http\n    as h\n"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 2,
+            column: 9,
+        },
+    },
+    value: Item {
+        attributes: [],
+        visibility: Pub(
+            Region {
+                start: Position {
+                    line: 1,
+                    column: 1,
+                },
+                end: Position {
+                    line: 1,
+                    column: 4,
+                },
+            },
+        ),
+        kind: Import(
+            Import {
+                path: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 12,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 23,
+                        },
+                    },
+                    value: ModulePath {
+                        root: Package {
+                            author: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 13,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 18,
+                                    },
+                                },
+                                value: "alder",
+                            },
+                            package: Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 19,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 23,
+                                    },
+                                },
+                                value: "http",
+                            },
+                        },
+                        segments: [],
+                    },
+                },
+                tail: Alias(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 2,
+                                column: 8,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 9,
+                            },
+                        },
+                        value: "h",
+                    },
+                ),
+            },
+        ),
+    },
+}

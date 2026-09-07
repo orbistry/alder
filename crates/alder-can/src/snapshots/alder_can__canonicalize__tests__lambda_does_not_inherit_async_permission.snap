@@ -1,16 +1,16 @@
 ---
 source: crates/alder-can/src/canonicalize.rs
-description: "async fn wait() { () -> Task.sleep(1).await }"
+description: "import task\nasync fn wait() { () -> task.sleep(1).await }"
 ---
 [
     Error {
         region: Region {
             start: Position {
-                line: 1,
+                line: 2,
                 column: 25,
             },
             end: Position {
-                line: 1,
+                line: 2,
                 column: 44,
             },
         },

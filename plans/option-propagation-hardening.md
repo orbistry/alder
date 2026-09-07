@@ -56,7 +56,7 @@ function also has its own boundary. An effectful operand appends an event, provi
 exactly-once evaluation; a later event is skipped only for None.
 
 A reusable scoped Option task registers a finalizer that actually suspends with
-Task.sleep(0). Propagating None skips subsequent task-body effects, waits for the
+task.sleep(0). Propagating None skips subsequent task-body effects, waits for the
 finalizer, and produces one cleanup event per execution. Running the task twice
 produces exactly two cleanup events. These actual compiler/runtime checks extend
 the earlier direct-AST snapshots; they are not kernel-only simulations.

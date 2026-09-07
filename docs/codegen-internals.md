@@ -202,7 +202,7 @@ escaping and precedence are Oxc's responsibility. Virtual module IDs are stable:
 ```text
 Application [foo]       alder://app/foo.mjs
 Named a/p [x,y]         alder://pkg/a/p/x/y.mjs
-Builtin [Array]         alder://std/Array.mjs
+Builtin [array]         alder://std/array.mjs
 kernel                  alder://kernel/index.mjs
 ```
 
@@ -373,10 +373,13 @@ Start without a V8 startup snapshot: construct with `try_new`, load the entry
 ESM, evaluate it, and drive the event loop. Do not use `MainWorker` or
 `deno_node`.
 
-The authoritative stdlib is Alder source under `std/`, embedded with a content
-fingerprint and compiled as `PackageId::Builtin` before application modules.
-The prelude injects capitalized module bindings. The cache key includes compiler
-version, stdlib fingerprint, target, and build mode.
+The authoritative stdlib is Alder source under `std/`, with compiler-packaged
+copies. Its ordinary interfaces use `PackageId::Builtin` and lowercase paths.
+The prelude imports basic operation namespaces through those interfaces;
+effectful utilities and JSON operations require explicit imports. Canonical
+core type and trait identities stay at the builtin root. Bundled runtime
+facades use the same lowercase module IDs. Interface format 8 rejects earlier
+serialized contracts rather than translating old module identities.
 
 Rolldown receives application modules as owned `EcmaAst` values through a
 virtual-module plugin. Its public loader currently insists on parsing before

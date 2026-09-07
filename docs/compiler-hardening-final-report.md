@@ -33,9 +33,9 @@ Subsequent completion edits are documentation only.
   async blocks; no async-lambda prefix was added. Main may be explicitly async.
   Captures follow lexical binding identity; call arguments evaluate at construction.
 - Ref, SynchronizedRef, cancellation-safe Semaphore, and ordered
-  Fiber.map/forEach/tryMap/tryForEach are implemented. Ordinary traversal collects
+  fiber.map/forEach/tryMap/tryForEach are implemented. Ordinary traversal collects
   Result values; try traversal fails fast and cleans up siblings. Concurrency
-  defaults to one, validates at execution, and supports `Fiber.unbounded`.
+  defaults to one, validates at execution, and supports `fiber.unbounded`.
 - Optional field/parameter shorthand is ordinary Option. Trailing Option
   arguments may be omitted as None. Supplied construction arguments/fields use
   direct matching or minimal Some lifting, never unrestricted implicit coercion.
@@ -47,7 +47,7 @@ Subsequent completion edits are documentation only.
 - Result errors are structural rows/groups. Named groups cannot define nominal
   custom instances. Selected structural Eq/Show/Json/Hash capabilities depend on
   payload capabilities; Ord is not automatically supplied.
-- Array.iter returns an independent, advancing ArrayIterator. Iterator aliases
+- array.iter returns an independent, advancing ArrayIterator. Iterator aliases
   share progress; separate iterators do not. Native live mutation semantics and
   permanent exhaustion are documented and tested.
 

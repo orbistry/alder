@@ -19,7 +19,7 @@ fn solve_input<'a>(
                 package: PackageId::Application,
                 path: &["Main"],
             },
-            imports: &[],
+            imports: alder_can::resolve_imports(bump, &parsed, PackageId::Application),
             interfaces: &[],
         },
         &parsed,
@@ -49,10 +49,10 @@ fn assert_type_mismatch(source: &str) {
 fn array_iterator_keeps_its_mutable_source_payload_monomorphic() {
     assert_type_mismatch(indoc! {r#"
         let values = []
-        let iterator = Array.iter(values)
+        let iterator = array.iter(values)
         let alias = iterator
         fn invalid() Option[String] {
-            Array.push(values, 42)
+            array.push(values, 42)
             next(alias)
         }
     "#});
@@ -64,7 +64,7 @@ fn independent_array_iterators_preserve_factory_polymorphism() {
     solve_input(
         &bump,
         indoc! {r#"
-            fn fresh(values: Array[a]) ArrayIterator[a] { Array.iter(values) }
+            fn fresh(values: Array[a]) array::ArrayIterator[a] { array.iter(values) }
             fn valid() {
                 let numbers: Option[Number] = next(fresh([42]))
                 let strings: Option[String] = next(fresh(["text"]))
@@ -80,7 +80,7 @@ fn allocated_closure_cannot_regeneralize_hidden_mutable_state() {
         fn make() {
             let items = []
             value -> {
-                Array.push(items, value)
+                array.push(items, value)
                 items
             }
         }
@@ -102,7 +102,7 @@ fn independent_closure_allocations_preserve_function_polymorphism() {
         fn make() {
             let items = []
             value -> {
-                Array.push(items, value)
+                array.push(items, value)
                 items
             }
         }
@@ -129,7 +129,7 @@ fn recursive_functions_cannot_regeneralize_captured_array() {
         }
         let alias = second
         fn invalid() {
-            Array.push(first(0), 42)
+            array.push(first(0), 42)
             let strings: Array[String] = alias(1)
         }
     "#});
@@ -163,7 +163,7 @@ fn restricted_record_in_same_recursive_group_protects_its_array() {
         let shared = { items: [], read: () -> read() }
         fn read() { shared.items }
         fn invalid() {
-            Array.push(read(), 42)
+            array.push(read(), 42)
             let strings: Array[String] = shared.read()
         }
     "#});
@@ -172,11 +172,12 @@ fn restricted_record_in_same_recursive_group_protects_its_array() {
 #[test]
 fn reusable_async_closure_cannot_regeneralize_captured_state() {
     assert_type_mismatch(indoc! {r#"
+        import task
         fn make() {
             let items = []
             value -> async {
-                Task.sleep(0).await
-                Array.push(items, value)
+                task.sleep(0).await
+                array.push(items, value)
                 items
             }
         }
@@ -200,7 +201,7 @@ fn tuple_overlay_error_constraints_preserve_captured_payload_identity() {
             let value = expose(pair, patch).0.value?
             Ok(value)
         }
-        fn write() { Array.push(shared, 42) }
+        fn write() { array.push(shared, 42) }
         fn invalid() Result[Number, [:saved(Array[String])]] {
             propagate(({ value: Err(:saved([])) }, ()), {})
         }

@@ -12,7 +12,7 @@ pub fn check() {
     let failure: Result[Number, Second] = Err(:failed(7))
     let events = []
     let blocked: Result[Number, Second] = {
-        Array.push(events, 1)
+        array.push(events, 1)
         Err(:failed(8))
     }
     assert(preserve_result(success) == success)

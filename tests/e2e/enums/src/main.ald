@@ -1,3 +1,4 @@
+import io
 enum Maybe[a] {
     Nothing,
     Just(a),
@@ -11,5 +12,5 @@ fn unwrap(value) {
 }
 
 pub fn main() {
-    Io.print(unwrap(Maybe::Just(42)))
+    io.print(unwrap(Maybe::Just(42)))
 }

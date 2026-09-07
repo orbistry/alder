@@ -12,10 +12,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use alder_ast::{
-    Interface, ModuleId, PackageId, PackageName, ResolvedImport, ResolvedImportKind,
-    ResolvedImportName, Visibility,
-};
+use alder_ast::{Interface, ModuleId, PackageId, PackageName};
 use alder_report::{Diagnostic, Source};
 use bumpalo::Bump;
 use tokio::sync::Mutex;
@@ -266,6 +263,7 @@ fn build_sync_reported(
         .iter()
         .map(|interface| interface.hydrate(&store))
         .collect::<Vec<_>>();
+    interfaces.extend(alder_can::builtin_module_interfaces(&store));
     let package_instances = dependencies
         .package_instance_indexes
         .iter()
@@ -862,66 +860,7 @@ fn hydrate_package_id<'a>(bump: &'a Bump, package: &OwnedPackageId) -> PackageId
     }
 }
 
-fn resolve_imports<'a>(
-    bump: &'a Bump,
-    module: &alder_source::Module<'a>,
-    home_package: PackageId<'a>,
-) -> &'a [ResolvedImport<'a>] {
-    let imports: Vec<_> = module
-        .items
-        .iter()
-        .filter_map(|item| {
-            let alder_source::ItemKind::Import(import) = item.value.kind else {
-                return None;
-            };
-            let path = import.path.value;
-            let (package, root_name) = match path.root {
-                alder_source::ModuleRoot::Local(_) => (home_package, None),
-                alder_source::ModuleRoot::Package { author, package } => (
-                    PackageId::Named(PackageName {
-                        author: author.value,
-                        project: package.value,
-                    }),
-                    Some(package),
-                ),
-            };
-            let parts: Vec<_> = path.segments.iter().map(|segment| segment.value).collect();
-            let module_id = ModuleId {
-                package,
-                path: bump.alloc_slice_copy(&parts),
-            };
-            let kind = match import.tail {
-                alder_source::ImportTail::Module => {
-                    let binding = path
-                        .segments
-                        .last()
-                        .copied()
-                        .or(root_name)
-                        .expect("the parser rejects imports with no bindable segment");
-                    ResolvedImportKind::Module { binding }
-                }
-                alder_source::ImportTail::Alias(binding) => ResolvedImportKind::Module { binding },
-                alder_source::ImportTail::Names(names) => ResolvedImportKind::Names(
-                    bump.alloc_slice_fill_iter(names.iter().map(|name| ResolvedImportName {
-                        source: name.name,
-                        binding: name.alias.unwrap_or(name.name),
-                    })),
-                ),
-                alder_source::ImportTail::All(_) => ResolvedImportKind::All,
-            };
-            Some(ResolvedImport {
-                module: module_id,
-                region: item.region,
-                visibility: match item.value.visibility {
-                    alder_source::Visibility::Private => Visibility::Private,
-                    alder_source::Visibility::Pub(region) => Visibility::Public(region),
-                },
-                kind,
-            })
-        })
-        .collect();
-    bump.alloc_slice_copy(&imports)
-}
+use alder_can::resolve_imports;
 
 /// Resolve graph edges with the same package identities and source-relative
 /// paths used by canonicalization. Ambiguous identities are diagnosed by build
@@ -990,6 +929,7 @@ fn resolve_source_import(
     known_modules: &BTreeMap<OwnedModuleId, Vec<Url>>,
 ) -> Option<Url> {
     let package = match import.path.value.root {
+        alder_source::ModuleRoot::StandardLibrary => OwnedPackageId::Builtin,
         alder_source::ModuleRoot::Local(_) => current_package.clone(),
         alder_source::ModuleRoot::Package { author, package } => OwnedPackageId::Named {
             author: author.value.to_owned(),
@@ -1147,6 +1087,286 @@ mod tests {
     ) -> BuildResult {
         let dependencies = fixture_dependencies(sources.iter().map(|(uri, _)| uri), dependencies);
         super::build_sync(sources, mode, dependencies)
+    }
+
+    #[test]
+    fn unified_imports_prelude_and_explicit_aliases_share_operations() {
+        let source = indoc::indoc! {r#"
+            import (array, array as arrays, array.{map}, json)
+            pub fn lengths() Array[Number] {
+                let values = map(["a", "bb"], string.length)
+                arrays.map(array.map(values, (x) -> x + 1), (x) -> x + 1)
+            }
+            pub fn encoded() String { json.encode(lengths()) }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri, Ok(source.to_owned()))],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.success, 1, "{result:?}");
+    }
+
+    #[test]
+    fn unified_imports_non_prelude_types_are_explicit() {
+        let source = indoc::indoc! {r#"
+            import (ref, ref.{Ref}, fiber, fiber.{Fiber})
+            pub async fn fresh(value: a) Ref[a] { ref.make(value).await }
+            pub async fn forked(value: a) Fiber[a] { fiber.fork(async { value }).await }
+        "#};
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![(uri, Ok(source.to_owned()))],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.success, 1, "{result:?}");
+    }
+
+    #[test]
+    fn unified_imports_do_not_expose_non_prelude_bindings() {
+        for source in [
+            "pub fn value() String { Json.encode(1) }",
+            "pub fn value() String { json.encode(1) }",
+            "pub fn value() Task[()] { io.print(1) }",
+            "pub fn identity(value: Ref[Number]) Ref[Number] { value }",
+            "pub fn identity(value: Fiber[Number]) Fiber[Number] { value }",
+            "pub fn identity(value: SynchronizedRef[Number]) SynchronizedRef[Number] { value }",
+            "pub fn identity(value: Semaphore) Semaphore { value }",
+            "pub fn identity(value: Html) Html { value }",
+            "pub fn identity(value: Style) Style { value }",
+            "pub fn identity(value: Query[Number]) Query[Number] { value }",
+        ] {
+            let uri = url("app/src/main.ald");
+            let result = build_fixture_sync(
+                vec![(uri, Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies::default(),
+            );
+            assert_eq!(result.failed, 1, "{source}: {result:?}");
+        }
+    }
+
+    #[test]
+    fn unified_imports_bare_roots_never_fall_back_to_local_sources() {
+        let uri = url("app/src/main.ald");
+        let result = build_fixture_sync(
+            vec![
+                (
+                    uri,
+                    Ok("import not_bundled\npub fn value() Number { 1 }".to_owned()),
+                ),
+                (
+                    url("app/src/not_bundled.ald"),
+                    Ok("pub fn value() Number { 42 }".to_owned()),
+                ),
+            ],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.failed, 1, "{result:?}");
+    }
+
+    #[test]
+    fn unified_imports_namespace_reexports_preserve_nested_types_and_constructors() {
+        let source = indoc::indoc! {r#"
+            import ~/api
+            pub fn create() api::models::User { api.models.create() }
+            pub fn choose(value: api::models::Choice) Number {
+                match value {
+                    api::models::Choice::First => 1,
+                    api::models::Choice::Second => 2,
+                }
+            }
+            pub fn main() Number { choose(api::models::Choice::Second) }
+        "#};
+        let result = build_fixture_sync(vec![
+            (url("app/src/main.ald"), Ok(source.to_owned())),
+            (url("app/src/api.ald"), Ok("pub import ~/models".to_owned())),
+            (url("app/src/models.ald"), Ok("pub type User = { name: String }\npub enum Choice { First, Second }\npub fn create() User { { name: \"Alder\" } }".to_owned())),
+        ], BuildMode::Build, BuildDependencies::default());
+        assert_eq!(result.success, 3, "{result:?}");
+        let api = result
+            .interfaces
+            .iter()
+            .find(|interface| interface.module.path == ["api"])
+            .unwrap();
+        assert_eq!(api.modules.len(), 1);
+        assert!(api.values.is_empty());
+        assert!(api.types.is_empty());
+        assert_eq!(api.modules[0].module.path, ["models"]);
+    }
+
+    #[test]
+    fn unified_imports_namespace_chains_survive_serialized_interfaces() {
+        let models = dependency_interface(
+            "pub enum Choice { First, Second }\npub fn value() Choice { Choice::Second }\nfn secret() Number { 99 }",
+            &["models"],
+            &[],
+        );
+        let middle = dependency_interface(
+            "pub import ~/models",
+            &["middle"],
+            std::slice::from_ref(&models),
+        );
+        let root = dependency_interface(
+            "pub import ~/middle as api",
+            &[],
+            &[models.clone(), middle.clone()],
+        );
+        let dependencies = [models, middle, root]
+            .iter()
+            .map(|interface| bincode::deserialize(&bincode::serialize(interface).unwrap()).unwrap())
+            .collect::<Vec<InterfaceFile>>();
+        let source = indoc::indoc! {r#"
+            import @vendor/widgets as kit
+            pub fn value() kit::api::models::Choice { kit.api.models.value() }
+            pub fn main() Number {
+                match value() {
+                    kit::api::models::Choice::First => 1,
+                    kit::api::models::Choice::Second => 2,
+                }
+            }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("app/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Build,
+            BuildDependencies {
+                interfaces: dependencies.clone(),
+                ..BuildDependencies::default()
+            },
+        );
+        assert_eq!(result.success, 1, "{result:?}");
+        let private =
+            "import @vendor/widgets as kit\npub fn main() Number { kit.api.models.secret() }";
+        let result = build_fixture_sync(
+            vec![(url("app/src/main.ald"), Ok(private.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies {
+                interfaces: dependencies,
+                ..BuildDependencies::default()
+            },
+        );
+        assert_eq!(result.failed, 1, "{result:?}");
+    }
+
+    #[test]
+    fn unified_imports_public_bundled_names_preserve_defining_identity() {
+        let source = "pub import (json as codec, array.{map as transform})\nimport io";
+        let result = build_fixture_sync(
+            vec![(url("app/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.success, 1, "{result:?}");
+        let interface = &result.interfaces[0];
+        assert_eq!(interface.modules.len(), 1);
+        assert_eq!(interface.modules[0].exported_as, "codec");
+        assert_eq!(interface.modules[0].module.package, OwnedPackageId::Builtin);
+        assert_eq!(interface.modules[0].module.path, ["json"]);
+        assert_eq!(interface.values.len(), 1);
+        assert_eq!(interface.values[0].exported_as, "transform");
+        assert!(interface.types.is_empty());
+    }
+
+    #[test]
+    fn unified_imports_same_identity_duplicates_are_idempotent() {
+        let source = indoc::indoc! {r#"
+            import (json, json, array.{Array}, array.{Array}, option.{Option as Maybe})
+            pub import (array.{map as transform}, array.{map as transform}, json as codec, json as codec)
+            pub fn value() String { json.encode(transform([1], (x) -> x + 1)) }
+            pub fn maybe() Maybe[Number] { Some(42) }
+        "#};
+        let result = build_fixture_sync(
+            vec![(url("app/src/main.ald"), Ok(source.to_owned()))],
+            BuildMode::Check,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.success, 1, "{result:?}");
+        let interface = &result.interfaces[0];
+        assert_eq!(
+            interface
+                .values
+                .iter()
+                .filter(|value| value.exported_as == "transform")
+                .count(),
+            1
+        );
+        assert_eq!(
+            interface
+                .modules
+                .iter()
+                .filter(|module| module.exported_as == "codec")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn unified_imports_explicit_conflicts_do_not_depend_on_order() {
+        for source in [
+            "import (json as tools, io as tools)",
+            "import (io as tools, json as tools)",
+            "import (map, array.{map})",
+            "import (array.{map}, map)",
+            "import json\npub fn json() Number { 1 }",
+            "pub import (array.*, option.*)",
+        ] {
+            let result = build_fixture_sync(
+                vec![(url("app/src/main.ald"), Ok(source.to_owned()))],
+                BuildMode::Check,
+                BuildDependencies::default(),
+            );
+            assert_eq!(result.failed, 1, "{source}: {result:?}");
+        }
+    }
+
+    #[test]
+    fn unified_imports_lexical_values_and_explicit_modules_shadow_implicit_namespaces() {
+        let source = indoc::indoc! {r#"
+            import ~/array
+            pub fn local(string: { length: fn(Number) Number }) Number { string.length(42) }
+            pub fn main() Number { local({ length: (x) -> x }) + array.answer() }
+        "#};
+        let result = build_fixture_sync(
+            vec![
+                (url("app/src/main.ald"), Ok(source.to_owned())),
+                (
+                    url("app/src/array.ald"),
+                    Ok("pub fn answer() Number { 42 }".to_owned()),
+                ),
+            ],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.success, 2, "{result:?}");
+    }
+
+    #[test]
+    fn unified_imports_namespace_reexports_support_trait_bounds_and_methods() {
+        let source = indoc::indoc! {r#"
+            import ~/api
+            pub fn inspect(value: a) Number where a: api::models::Read {
+                api::models::Read::read(value)
+            }
+            pub fn main() Number { inspect(api::models::Token::Token) }
+        "#};
+        let model = indoc::indoc! {r#"
+            pub enum Token { Token }
+            pub trait Read[a] { fn read(value: a) Number }
+            impl Read[Token] { fn read(value: Token) Number { 42 } }
+        "#};
+        let result = build_fixture_sync(
+            vec![
+                (url("app/src/main.ald"), Ok(source.to_owned())),
+                (url("app/src/api.ald"), Ok("pub import ~/models".to_owned())),
+                (url("app/src/models.ald"), Ok(model.to_owned())),
+            ],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert_eq!(result.success, 3, "{result:?}");
     }
 
     async fn fixture_graph_with_dependencies(
@@ -2030,10 +2250,11 @@ mod tests {
     #[test]
     fn unused_module_bindings_respect_exports_recursion_and_initializers() {
         let source = indoc::indoc! {r#"
+            import io
             fn cycle_a() Number { cycle_b() }
             fn cycle_b() Number { cycle_a() }
             fn isolated() Number { 1 }
-            fn initialize() { Io.print("keep this effect") }
+            fn initialize() { io.print("keep this effect") }
             let ignored = initialize()
             let shadowed = 1
             pub fn exported(shadowed: Number) Number { shadowed }
@@ -2845,7 +3066,7 @@ mod tests {
             }
             impl Work[Number] {
                 fn broken(marker: Number) () { need((shared, "wrong")) }
-                fn valid(marker: Number) () { Array.push(shared, "ok") }
+                fn valid(marker: Number) () { array.push(shared, "ok") }
             }
         "#};
         let uri = url("app/src/main.ald");
@@ -2881,7 +3102,7 @@ mod tests {
             let shared = []
             fn zzaccept(value: (Array[Number], Bool)) { () }
             fn zbroken() { zzaccept((shared, "wrong")) }
-            fn avalid() { Array.push(shared, "text") }
+            fn avalid() { array.push(shared, "text") }
             fn unrelated() Bool { 42 }
         "#};
         let uri = url("app/src/main.ald");
@@ -3204,7 +3425,7 @@ mod tests {
 
     #[test]
     fn user_result_module_does_not_grant_error_tag_permission() {
-        let uri = url("project/src/Result.ald");
+        let uri = url("project/src/result.ald");
         let source = indoc::indoc! {r#"
             fn err(value: a) a { value }
             pub fn main() { err(:failed) }
@@ -3730,8 +3951,9 @@ mod tests {
             (
                 "effectful_payload",
                 indoc::indoc! {r#"
+                    import io
                     fn read(value: Number) Number {
-                        Io.print("pin")
+                        io.print("pin")
                         value
                     }
                     pub fn inspect(value: Result[Number, [:failed(Number)]], expected: Number) Number {
@@ -4065,9 +4287,10 @@ mod tests {
     #[test]
     fn synchronized_update_requires_a_task_returning_callback() {
         let source = indoc::indoc! {r#"
+            import synchronized_ref
             pub async fn main() {
-                let cell = SynchronizedRef.make(0).await
-                SynchronizedRef.update(cell, value -> value + 1).await
+                let cell = synchronized_ref.make(0).await
+                synchronized_ref.update(cell, value -> value + 1).await
             }
         "#};
         let result = build_fixture_sync(
@@ -4088,8 +4311,9 @@ mod tests {
     #[tokio::test]
     async fn structural_error_json_reports_missing_payload_codec() {
         assert_diagnostic_snapshot! {r#"
+            import json
             pub fn encode(value: Result[Number, [:callback(fn(Number) Number)]]) String {
-                Json.encode(value)
+                json.encode(value)
             }
         "#};
     }
@@ -4105,8 +4329,9 @@ mod tests {
     #[tokio::test]
     async fn fiber_for_each_requires_unit_callback_results() {
         assert_diagnostic_snapshot! {r#"
+            import fiber
             pub async fn main() {
-                Fiber.forEach([1, 2], value -> async { value + 1 }).await
+                fiber.forEach([1, 2], value -> async { value + 1 }).await
             }
         "#};
     }
@@ -4114,8 +4339,9 @@ mod tests {
     #[tokio::test]
     async fn fiber_map_requires_task_callback_results() {
         assert_diagnostic_snapshot! {r#"
+            import fiber
             pub async fn main() {
-                Fiber.map([1, 2], value -> value + 1).await
+                fiber.map([1, 2], value -> value + 1).await
             }
         "#};
     }
@@ -4137,18 +4363,20 @@ mod tests {
     fn stored_synchronization_contracts_preserve_inference_and_reject_shared_writes() {
         let producer = dependency_interface(
             indoc::indoc! {r#"
-                pub async fn fresh(value: a) SynchronizedRef[a] {
-                    SynchronizedRef.make(value).await
+                import semaphore
+                import synchronized_ref
+                pub async fn fresh(value: a) synchronized_ref::SynchronizedRef[a] {
+                    synchronized_ref.make(value).await
                 }
-                pub async fn gate() Semaphore { Semaphore.make(2).await }
-                pub fn protect(gate: Semaphore, task: Task[a]) Task[a] {
-                    Semaphore.withPermits(gate, 1, task)
+                pub async fn gate() semaphore::Semaphore { semaphore.make(2).await }
+                pub fn protect(gate: semaphore::Semaphore, task: Task[a]) Task[a] {
+                    semaphore.withPermits(gate, 1, task)
                 }
                 let payload = []
-                pub fn shared() { SynchronizedRef.make(payload) }
+                pub fn shared() { synchronized_ref.make(payload) }
                 pub async fn specialize() {
                     let cell = shared().await
-                    Array.push(SynchronizedRef.get(cell).await, 42)
+                    array.push(synchronized_ref.get(cell).await, 42)
                 }
             "#},
             &[],
@@ -4158,15 +4386,16 @@ mod tests {
         drop(producer);
         let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
         let source = indoc::indoc! {r#"
+            import synchronized_ref
             import @vendor/widgets.{ fresh, gate, protect, shared }
             pub async fn main() String {
                 let semaphore = gate().await
                 let number = protect(semaphore, fresh(42)).await
                 let text = protect(semaphore, fresh("hello")).await
-                SynchronizedRef.update(number, value -> async { value + 1 }).await
+                synchronized_ref.update(number, value -> async { value + 1 }).await
                 let cell = shared().await
-                Array.push(SynchronizedRef.get(cell).await, SynchronizedRef.get(number).await)
-                SynchronizedRef.get(text).await
+                array.push(synchronized_ref.get(cell).await, synchronized_ref.get(number).await)
+                synchronized_ref.get(text).await
             }
         "#};
         let result = build_fixture_sync(
@@ -4179,10 +4408,11 @@ mod tests {
         );
         assert!(result.is_success(), "{:#?}", result.modules);
         let source = indoc::indoc! {r#"
+            import synchronized_ref
             import @vendor/widgets.{ shared }
             pub async fn main() {
                 let cell = shared().await
-                SynchronizedRef.set(cell, ["wrong"]).await
+                synchronized_ref.set(cell, ["wrong"]).await
             }
         "#};
         let result = build_fixture_sync(
@@ -4316,10 +4546,11 @@ mod tests {
     fn stored_traversal_function_values_preserve_optional_slots_and_callback_types() {
         let producer = dependency_interface(
             indoc::indoc! {r#"
-                pub fn mapping() { Fiber.map }
-                pub fn each() { Fiber.forEach }
-                pub fn trying() { Fiber.tryMap }
-                pub fn tryingEach() { Fiber.tryForEach }
+                import fiber
+                pub fn mapping() { fiber.map }
+                pub fn each() { fiber.forEach }
+                pub fn trying() { fiber.tryMap }
+                pub fn tryingEach() { fiber.tryForEach }
             "#},
             &[],
             &[],
@@ -4378,7 +4609,8 @@ mod tests {
     fn stored_builtin_alias_contracts_preserve_record_payloads() {
         let producer = dependency_interface(
             indoc::indoc! {r#"
-                pub type Config = Fiber::MapOptions
+                import fiber
+                pub type Config = fiber::MapOptions
                 pub fn read(options: Config) Option[Number] { options.concurrency }
             "#},
             &[],
@@ -4431,12 +4663,13 @@ mod tests {
     fn stored_ref_contracts_preserve_generic_allocations_and_restrict_shared_payloads() {
         let producer = dependency_interface(
             indoc::indoc! {r#"
-                pub async fn fresh(value: a) Ref[a] { Ref.make(value).await }
+                import ref
+                pub async fn fresh(value: a) ref::Ref[a] { ref.make(value).await }
                 let payload = []
-                pub fn shared() { Ref.make(payload) }
+                pub fn shared() { ref.make(payload) }
                 pub async fn specialize() {
                     let cell = shared().await
-                    Array.push(Ref.get(cell).await, 42)
+                    array.push(ref.get(cell).await, 42)
                 }
             "#},
             &[],
@@ -4446,13 +4679,14 @@ mod tests {
         drop(producer);
         let stored: InterfaceFile = bincode::deserialize(&bytes).unwrap();
         let source = indoc::indoc! {r#"
+            import ref
             import @vendor/widgets.{ fresh, shared }
             pub async fn main() String {
                 let number = fresh(42).await
                 let text = fresh("hello").await
                 let cell = shared().await
-                Array.push(Ref.get(cell).await, Ref.get(number).await)
-                Ref.get(text).await
+                array.push(ref.get(cell).await, ref.get(number).await)
+                ref.get(text).await
             }
         "#};
         let result = build_fixture_sync(
@@ -4465,10 +4699,11 @@ mod tests {
         );
         assert!(result.is_success(), "{:#?}", result.modules);
         let source = indoc::indoc! {r#"
+            import ref
             import @vendor/widgets.{ shared }
             pub async fn main() {
                 let cell = shared().await
-                Ref.set(cell, ["wrong"]).await
+                ref.set(cell, ["wrong"]).await
             }
         "#};
         let result = build_fixture_sync(
@@ -4669,7 +4904,7 @@ mod tests {
                 let text = identity("hello").await
                 let inner: Task[Number] = nested().await
                 specialize().await
-                deferred(number).await + inner.await + String.length(text)
+                deferred(number).await + inner.await + string.length(text)
             }
         "#};
         let result = build_fixture_sync(
@@ -4731,8 +4966,8 @@ mod tests {
                     pub fn check() {
                         let first = expose(([], "kept"))
                         let second = expose(([], true))
-                        Array.push(first.0, 42)
-                        Array.push(second.0, 7)
+                        array.push(first.0, 42)
+                        array.push(second.0, 7)
                         let text: String = first.1
                         let flag: Bool = second.1
                     }
@@ -4744,7 +4979,7 @@ mod tests {
                     import @vendor/widgets.{ expose }
                     pub fn invalid() {
                         let pair = expose(([], "kept"))
-                        Array.push(pair.0, "wrong")
+                        array.push(pair.0, "wrong")
                     }
                 "#},
                 false,
@@ -4837,10 +5072,11 @@ mod tests {
     fn stored_traits_supply_default_helpers_to_new_implementations() {
         let producer = dependency_interface(
             indoc::indoc! {r#"
+                import task
                 pub trait Format[a] where a: Show {
                     async fn format(value: a, other: b) String where b: Show {
-                        Task.sleep(0).await
-                        String.concat(show(value), show(other))
+                        task.sleep(0).await
+                        string.concat(show(value), show(other))
                     }
                 }
             "#},
@@ -4915,7 +5151,7 @@ mod tests {
                 let number = identity(42)
                 let text = identity("hello")
                 writer()()
-                forward(number) + String.length(text)
+                forward(number) + string.length(text)
             }
         "#};
         let result = build_fixture_sync(
@@ -4980,7 +5216,7 @@ mod tests {
                 indoc::indoc! {r#"
                 import @vendor/widgets/facade.{ storage, same, call, specialize }
                 pub fn valid() {
-                    Array.push(storage, 42)
+                    array.push(storage, 42)
                     let number: Number = same(42)
                     let text: String = same("text")
                     specialize()
@@ -4993,7 +5229,7 @@ mod tests {
             (
                 indoc::indoc! {r#"
                 import @vendor/widgets/facade.{ storage }
-                pub fn invalid() { Array.push(storage, "wrong") }
+                pub fn invalid() { array.push(storage, "wrong") }
             "#},
                 false,
             ),
@@ -5056,7 +5292,7 @@ mod tests {
                 let number = identity`${42}`
                 let text = identity`${"hello"}`
                 let rendered = shown`${number}`
-                number + String.length(text) + String.length(rendered)
+                number + string.length(text) + string.length(rendered)
             }
         "#};
         let result = build_fixture_sync(
@@ -5453,7 +5689,7 @@ mod tests {
             pub fn main() Number {
                 let first = merge({ x: 20 }, { y: 22 })
                 let second = merge({ value: false }, { value: "text" })
-                first.x + first.y + String.length(second.value)
+                first.x + first.y + string.length(second.value)
             }
         "#};
         let result = build_fixture_sync(
@@ -7006,8 +7242,9 @@ mod tests {
     #[tokio::test]
     async fn renders_json_decode_without_an_instance() {
         assert_diagnostic_snapshot! {r#"
+            import json
             fn invalid() Result[fn(Number) Number, [:invalid_json(String)]] {
-                Json.decode("42")
+                json.decode("42")
             }
         "#};
     }
@@ -8230,8 +8467,9 @@ mod tests {
     #[tokio::test]
     async fn renders_async_scope_error_for_task_annotated_function() {
         assert_diagnostic_snapshot! {r#"
+            import task
             fn wait() Task[()] {
-                Task.sleep(1).await
+                task.sleep(1).await
             }
         "#};
     }
@@ -8239,8 +8477,9 @@ mod tests {
     #[tokio::test]
     async fn renders_async_scope_error_for_nested_lambda() {
         assert_diagnostic_snapshot! {r#"
+            import task
             async fn make() {
-                () -> Task.sleep(1).await
+                () -> task.sleep(1).await
             }
         "#};
     }
@@ -8287,7 +8526,8 @@ mod tests {
     #[tokio::test]
     async fn renders_await_outside_a_function_without_color() {
         assert_diagnostic_snapshot! {r#"
-            let invalid = Task.sleep(1).await
+            import task
+            let invalid = task.sleep(1).await
         "#};
     }
 
@@ -8392,7 +8632,7 @@ mod tests {
             url("project/src/main.ald"),
             indoc::indoc! {r#"
                 import ~/state
-            pub fn main() { Array.push(state.shared, "text") }
+            pub fn main() { array.push(state.shared, "text") }
         "#}
             .to_owned(),
         );
@@ -8444,14 +8684,14 @@ mod tests {
     #[tokio::test]
     async fn renders_invalid_builtin_argument_without_color() {
         assert_diagnostic_snapshot! {r#"
-            fn bad() Number { String.length(42) }
+            fn bad() Number { string.length(42) }
         "#};
     }
 
     #[tokio::test]
     async fn renders_unknown_builtin_member_without_color() {
         assert_diagnostic_snapshot! {r#"
-            fn bad() { Array.missing([1]) }
+            fn bad() { array.missing([1]) }
         "#};
     }
 

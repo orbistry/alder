@@ -37,9 +37,27 @@ impl<'a> Module<'a> {
     /// Top-level imports (including `pub import` re-exports). Imports inside
     /// `tests { }` are only reachable through `ItemKind::Tests`.
     pub fn imports(&self) -> impl Iterator<Item = &'a Import<'a>> + '_ {
-        self.items.iter().filter_map(|item| match &item.value.kind {
-            ItemKind::Import(import) => Some(*import),
-            _ => None,
+        self.import_entries().map(|(_, _, import)| import)
+    }
+
+    /// Flatten groups without losing an entry's region or public visibility.
+    pub fn import_entries(
+        &self,
+    ) -> impl Iterator<Item = (Visibility, Region, &'a Import<'a>)> + '_ {
+        self.items.iter().flat_map(|item| {
+            let single = match item.value.kind {
+                ItemKind::Import(import) => Some((item.value.visibility, item.region, import)),
+                _ => None,
+            };
+            let grouped = match item.value.kind {
+                ItemKind::ImportGroup(entries) => entries,
+                _ => &[],
+            };
+            single.into_iter().chain(
+                grouped
+                    .iter()
+                    .map(|entry| (item.value.visibility, entry.region, entry.value)),
+            )
         })
     }
 }
@@ -67,6 +85,7 @@ pub struct Attribute<'a> {
 #[derive(Debug)]
 pub enum ItemKind<'a> {
     Import(&'a Import<'a>),
+    ImportGroup(&'a [Located<&'a Import<'a>>]),
     /// `body: None` is a bodiless declaration; canonicalization requires `#[extern]`.
     Fn(&'a FnDecl<'a>),
     /// Includes `let card = style { … }`.
@@ -103,6 +122,8 @@ pub struct ModulePath<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ModuleRoot<'a> {
+    /// Compiler-shipped modules; never resolved against package sources.
+    StandardLibrary,
     /// `@author/package`
     Package { author: Name<'a>, package: Name<'a> },
     /// `~`

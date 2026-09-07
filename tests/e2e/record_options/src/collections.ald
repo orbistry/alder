@@ -1,43 +1,43 @@
 pub fn check() {
-    let nested: Map[String, Option[Number]] = Map.new()
+    let nested: Map[String, Option[Number]] = map.new()
     let alias = nested
-    let stored: () = Map.set(alias, "none", None)
-    Map.set(alias, "some", Some(42))
+    let stored: () = map.set(alias, "none", None)
+    map.set(alias, "some", Some(42))
     assert(stored == ())
-    assert(Map.get(nested, "missing") == None)
-    assert(Map.get(nested, "none") == Some(None))
-    assert(Map.get(nested, "some") == Some(Some(42)))
-    Map.set(alias, "none", Some(7))
-    assert(Map.get(nested, "none") == Some(Some(7)))
+    assert(map.get(nested, "missing") == None)
+    assert(map.get(nested, "none") == Some(None))
+    assert(map.get(nested, "some") == Some(Some(42)))
+    map.set(alias, "none", Some(7))
+    assert(map.get(nested, "none") == Some(Some(7)))
 
-    let units: Map[String, ()] = Map.new()
-    Map.set(units, "unit", ())
-    assert(Map.get(units, "unit") == Some(()))
-    assert(Map.get(units, "missing") == None)
+    let units: Map[String, ()] = map.new()
+    map.set(units, "unit", ())
+    assert(map.get(units, "unit") == Some(()))
+    assert(map.get(units, "missing") == None)
 
     let payload = { values: [1] }
-    let objects: Map[String, { values: Array[Number] }] = Map.new()
-    Map.set(objects, "payload", payload)
-    match Map.get(objects, "payload") {
-        Some(found) => { Array.push(found.values, 2) },
+    let objects: Map[String, { values: Array[Number] }] = map.new()
+    map.set(objects, "payload", payload)
+    match map.get(objects, "payload") {
+        Some(found) => { array.push(found.values, 2) },
         None => { assert(false) },
     }
     assert(payload.values == [1, 2])
 
     let key = { id: 1 }
-    let keys: Map[{ id: Number }, Number] = Map.new()
-    Map.set(keys, key, 42)
-    assert(Map.get(keys, key) == Some(42))
-    assert(Map.get(keys, { id: 1 }) == None)
-    let members: Set[{ id: Number }] = Set.new()
+    let keys: Map[{ id: Number }, Number] = map.new()
+    map.set(keys, key, 42)
+    assert(map.get(keys, key) == Some(42))
+    assert(map.get(keys, { id: 1 }) == None)
+    let members: Set[{ id: Number }] = set.new()
     let members_alias = members
-    let added: () = Set.add(members_alias, key)
+    let added: () = set.add(members_alias, key)
     assert(added == ())
-    assert(Set.has(members, key))
-    assert(!Set.has(members, { id: 1 }))
+    assert(set.has(members, key))
+    assert(!set.has(members, { id: 1 }))
 
-    let mapped: Option[Option[()]] = Option.map(Some(42), value -> None)
+    let mapped: Option[Option[()]] = option.map(Some(42), value -> None)
     assert(mapped == Some(None))
-    let mapped_unit: Option[()] = Option.map(Some(42), value -> ())
+    let mapped_unit: Option[()] = option.map(Some(42), value -> ())
     assert(mapped_unit == Some(()))
 }

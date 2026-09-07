@@ -181,7 +181,7 @@ fn node_import(ast: &EcmaAst) -> Option<&str> {
 fn builtin_modules() -> BTreeMap<&'static str, String> {
     BTreeMap::from([
         (
-            "Option",
+            "option",
             exports(&[
                 ("$optionSome", "some"),
                 ("$optionNone", "none"),
@@ -189,7 +189,7 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
             ]),
         ),
         (
-            "Result",
+            "result",
             exports(&[
                 ("$resultOk", "ok"),
                 ("$resultErr", "err"),
@@ -197,7 +197,7 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
             ]),
         ),
         (
-            "Array",
+            "array",
             exports(&[
                 ("$arrayLength", "length"),
                 ("$arrayIter", "iter"),
@@ -207,25 +207,25 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
             ]),
         ),
         (
-            "String",
+            "string",
             exports(&[("$stringLength", "length"), ("$stringConcat", "concat")]),
         ),
-        ("Number", exports(&[("$numberParse", "parse")])),
-        ("BigInt", exports(&[("$bigIntParse", "parse")])),
+        ("number", exports(&[("$numberParse", "parse")])),
+        ("bigint", exports(&[("$bigIntParse", "parse")])),
         (
-            "Map",
+            "map",
             exports(&[("$mapNew", "new"), ("$mapGet", "get"), ("$mapSet", "set")]),
         ),
         (
-            "Set",
+            "set",
             exports(&[("$setNew", "new"), ("$setHas", "has"), ("$setAdd", "add")]),
         ),
         (
-            "Json",
+            "json",
             exports(&[("$jsonEncodeWith", "encode"), ("$jsonDecodeWith", "decode")]),
         ),
         (
-            "Ref",
+            "ref",
             exports(&[
                 ("$refSame", "same"),
                 ("$refMake", "make"),
@@ -235,11 +235,11 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
                 ("$refModify", "modify"),
             ]),
         ),
-        ("Io", exports(&[("$ioPrint", "print")])),
-        ("Cli", exports(&[("$cliArgs", "args")])),
-        ("Task", exports(&[("$taskSleep", "sleep")])),
+        ("io", exports(&[("$ioPrint", "print")])),
+        ("cli", exports(&[("$cliArgs", "args")])),
+        ("task", exports(&[("$taskSleep", "sleep")])),
         (
-            "SynchronizedRef",
+            "synchronized_ref",
             exports(&[
                 ("$synchronizedRefMake", "make"),
                 ("$synchronizedRefGet", "get"),
@@ -249,14 +249,14 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
             ]),
         ),
         (
-            "Semaphore",
+            "semaphore",
             exports(&[
                 ("$semaphoreMake", "make"),
                 ("$semaphoreWithPermits", "withPermits"),
             ]),
         ),
         (
-            "Fiber",
+            "fiber",
             exports(&[
                 ("$fiberUnbounded", "unbounded"),
                 ("$fiberMapWithOptions", "map"),
@@ -273,7 +273,6 @@ fn builtin_modules() -> BTreeMap<&'static str, String> {
                 ("$fiberUninterruptible", "uninterruptible"),
             ]),
         ),
-        ("Http", String::new()),
     ])
 }
 

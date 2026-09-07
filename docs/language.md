@@ -34,19 +34,18 @@ A file is a module. There is no module header. Items are private unless
 marked `pub`. Every module in a package is importable; the `pub` items
 are the API.
 
-Imports are path-first: the module path, then optionally `.{ names }` or
-`.*`.
+Imports are path-first, with three disjoint roots. Bare paths name bundled
+standard-library modules, `~/` names the current package, and `@author/package`
+names an external package. Resolution never falls back between these roots.
+Bundled imports need no dependency declaration or download.
 
 ```alder
-import @alder/http                    // binds `http` (last segment, lowercase)
-import @alder/http as h               // binds `h`
-import @alder/http.{ get, Request }   // names into scope
-import @alder/http.*                  // every pub name into scope
-import ~/db/users                     // this package: binds `users`
-import ~/db/users.{ find }
-
-http.get(url)
-users.find(id)
+import json                          // compiler-shipped operations
+import array.{map}                   // selected public declaration
+import ~/db/users                    // binds the final segment, `users`
+import @acme/http as client           // external package, explicit alias
+import @acme/http.{Request}           // selected public type
+import ~/db/users.*                   // every public export
 ```
 
 - `@author/package` is a package; `import @author/package` is its root
@@ -58,18 +57,63 @@ users.find(id)
 - `~/` is the root of the current package. There is no `@/` alias and no
   special `~name.ald` index files. A directory's index is `dir/mod.ald` or
   a sibling `dir.ald`, Rust-style. Relative paths (`./`) do not exist.
-- User modules are namespaces bound to lowercase names; members are reached
-  with `.`. They are not first-class record values. Prelude modules are the
-  exception to the spelling convention: built-ins such as `Array`, `Http`,
-  and `Fiber` are bound with capitalized names (`Array.map`, `Http.get`,
-  `Fiber.all`). Qualified type and trait paths and enum constructors use `::`
-  (for example, the builtin configuration type `Fiber::MapOptions`).
+- All module namespaces use lowercase names, including bundled modules:
+  `array.map`, `string.length`, and explicitly imported `json.encode`.
+  Multiword bundled names use snake_case, such as `synchronized_ref`.
+  Members use `.`, while type, trait, and constructor paths use `::`:
+  `fiber::MapOptions`, `api::models::User`, and `Option::Some(value)`.
+  Namespace re-exports can be traversed without flattening their contents.
+  Modules are not first-class record values.
 - Re-exports are public imports:
 
 ```alder
 pub import ~/leaf.{ someFunc }
 pub import ~/leaf.*                   // typical for mod.ald
+pub import json as codec              // exports a namespace, not its members
+pub import @acme/http                 // exports the `http` namespace
 ```
+
+Ordinary and implicit imports never become exports automatically. Re-exports
+retain the original declaration/module identity and expose public names only.
+Conflicting explicit bindings are errors, independent of import order. Repeated
+imports of the same identity are idempotent. An explicit binding can shadow an
+implicit namespace; a lexical local can shadow a namespace inside its scope.
+Two explicit imports, or an explicit import and a module-level value declaration,
+cannot silently choose different meanings for the same value/namespace name.
+
+The prelude supplies primitive types, `Array`, `Map`, `Set`, `Option`, `Result`,
+`Ordering`, the `Task` type, their applicable constructors, and core traits
+(including `Json`). Ordinary implicit imports also supply `array`, `map`, `set`,
+`string`, `number`, `bigint`, `option`, and `result`. Explicit aliases and
+selective imports use exactly the same interfaces and identities as these
+implicit imports. Prelude generic methods such as `map(...)` remain callable;
+the operations namespace uses `map.new(...)`.
+
+Operations in `io`, `cli`, `json`, `task`, `fiber`, `ref`, `synchronized_ref`, and
+`semaphore` require imports. Their non-prelude types require a qualified path
+or a selective type import, for example `import ref.{Ref}`. `ArrayIterator` is
+available from `array`. Provisional HTTP, web, and data globals are not part of
+the prelude; their future modules remain deferred.
+
+Consecutive imports of one visibility format as a group, sorted by path within
+standard-library, local, and external sections (aliases do not affect sorting):
+
+```alder
+import (
+    array.{map},
+    json,
+
+    ~/models/user,
+
+    @acme/http as client,
+)
+```
+
+A single entry stays ungrouped. Public and ordinary imports stay separate, and
+imports never move across declarations. Attached comments move with entries;
+standalone notes within a run become a stable preamble. Dependencies initialize
+before their importer, in canonical module-identity order, exactly once. Import
+declaration order and formatting do not control initialization order.
 
 - Enum constructors are always qualified (`Shape::Circle(1)`) except in
   `match` arms, where the scrutinee type is known and `Circle(r) =>` is
@@ -85,7 +129,7 @@ count += 1
 
 let items = [1, 2]
 let alias = items      // same array, JS reference semantics
-Array.push(items, 3)   // alias observes the push
+array.push(items, 3)   // alias observes the push
 ```
 
 - Ordinary lets and parameters permit reassignment and field/index writes;
@@ -117,8 +161,8 @@ let block = x -> {
 }
 
 [1, 2, 3]
-    |> Array.map(x -> x * 2)
-    |> Array.filter(x -> x > 2)
+    |> array.map(x -> x * 2)
+    |> array.filter(x -> x > 2)
 ```
 
 - A return type is juxtaposed after the parameter list, begins on that same
@@ -137,7 +181,7 @@ let block = x -> {
   mutable payloads or implicitly wrap an ordinary function's returned value.
 - `value |> function(args...)` inserts `value` as the first argument.
   Partial application uses `_` placeholders: `add(1, _)` and
-  `Array.map(_, double)` each become a lambda with one parameter per `_`,
+  `array.map(_, double)` each become a lambda with one parameter per `_`,
   in order. That also selects another pipe position:
   `value |> function(first, _, third)`. Lambdas remain for anything more
   involved.
@@ -393,7 +437,7 @@ pub fn main() {
 ```
 
 The builtin `Iterator` trait is implemented by `ArrayIterator[a]`, created with
-`Array.iter(values)`. `next(iterator)` returns `Some(value)` and advances that
+`array.iter(values)`. `next(iterator)` returns `Some(value)` and advances that
 cursor, or returns `None` permanently after exhaustion. Separate iterators have
 independent cursors; aliases of one iterator share progress. Advancing does not
 remove source elements. Iteration is live: unread replacements and appends are
@@ -501,27 +545,30 @@ structured concurrency, interruption, and scopes without an `Effect` type
 in user code.
 
 ```alder
+// HTTP remains proposed; import it explicitly when available.
+import (fiber, http)
 async fn profile(id: Id) Result[Profile] {
-    let user = Http.get(`/users/${id}`).await?
-    let posts = Http.get(`/users/${id}/posts`).await?
+    let user = http.get(`/users/${id}`).await?
+    let posts = http.get(`/users/${id}/posts`).await?
     Ok({ user, posts })
 }
 
 async fn profiles() {
-    Fiber.all([profile(1), profile(2)]).await
+    fiber.all([profile(1), profile(2)]).await
 }
 ```
 
-For bounded traversal, use `Fiber.map(values, callback, options?)` with a
+For bounded traversal, use `fiber.map(values, callback, options?)` with a
 task-returning callback. Omitting options runs sequentially; a record such as
 `{ concurrency: 8 }` bounds active callbacks, including their scope cleanup.
-The configuration type is `Fiber::MapOptions`. Configuration and a shallow copy
+The configuration type is `fiber::MapOptions`. Configuration and a shallow copy
 of input membership are read at each execution; payload objects remain shared.
 Collected results retain input order.
 
 ```alder
+import fiber
 async fn profiles(ids: Array[Id]) Array[Result[Profile]] {
-    ids |> Fiber.map(id -> async { profile(id).await }, { concurrency: 8 }).await
+    ids |> fiber.map(id -> async { profile(id).await }, { concurrency: 8 }).await
 }
 ```
 
@@ -535,7 +582,7 @@ bounds fail at execution as defects, not recoverable Alder errors.
 - `Task` is a visible type. A plain function may return an existing task
   (`fn load(id: Id) Task[Result[User]]`); that annotation does not authorize
   await inside its body. An un-awaited async call is a `Task` value you can pass
-  to `Fiber.fork`, `Fiber.all`, or `Fiber.race`.
+  to `fiber.fork`, `fiber.all`, or `fiber.race`.
 - `async` adds exactly one Task layer, without flattening. For example,
   `async fn nested() Task[Number] { async { 42 } }` returns
   `Task[Task[Number]]`, requiring two awaits to obtain the number.
@@ -564,12 +611,12 @@ bounds fail at execution as defects, not recoverable Alder errors.
   To sequence multiple asynchronous stages, await each stage before its value
   is forwarded: `value |> start().await? |> transform().await?`. Omitting
   `.await` passes the `Task` itself.
-- `Fiber.fork` returns a fiber handle, `join` awaits it, `interrupt` requests
+- `fiber.fork` returns a fiber handle, `join` awaits it, `interrupt` requests
   cooperative interruption, `all` preserves input order, and `race` returns
   the first exit after interrupting and cleaning up its losers.
 - Every fiber owns its child scope. Leaving that scope interrupts and joins
   remaining children, then runs registered finalizers once in LIFO order.
-  `Fiber.scope`, `Fiber.addFinalizer`, and `Fiber.uninterruptible` expose the
+  `fiber.scope`, `fiber.addFinalizer`, and `fiber.uninterruptible` expose the
   minimal structured-cleanup surface.
 - `main` and test declarations may produce tasks. Generated entries recognize
   and run them on the kernel scheduler automatically.
@@ -613,7 +660,7 @@ handled separately, without changing current behavior in this documentation pass
 - `==` and `!=` are the `Eq` trait (see Traits): structural for records,
   enums, tuples, arrays, `Option`, and `Result`, derived automatically, a
   compile error on functions. Known primitives compile to `===`.
-  `Ref.same(a, b)` compares identity.
+  `ref.same(a, b)` compares identity.
 - `Map[k, v]` and `Set[a]` are JS Map/Set with identity keys. Record keys
   compare by reference; the docs warn about it. There is no structural
   dictionary in the first version.
@@ -621,18 +668,19 @@ handled separately, without changing current behavior in this documentation pass
 ## Shared cells
 
 `Ref[a]` is an opaque shared cell. Its operations return lazy reusable tasks:
-`Ref.make(value)`, `Ref.get(cell)`, `Ref.set(cell, value)`,
-`Ref.update(cell, value -> replacement)`, and
-`Ref.modify(cell, value -> (result, replacement))`.
+`ref.make(value)`, `ref.get(cell)`, `ref.set(cell, value)`,
+`ref.update(cell, value -> replacement)`, and
+`ref.modify(cell, value -> (result, replacement))`.
 `update` and `set` complete with unit; `modify` completes with `result`.
 
 ```alder
+import ref
 pub async fn main() {
-    let count = Ref.make(0).await
-    Ref.update(count, value -> value + 1).await
-    let previous = Ref.modify(count, value -> (value, value + 1)).await
+    let count = ref.make(0).await
+    ref.update(count, value -> value + 1).await
+    let previous = ref.modify(count, value -> (value, value + 1)).await
     assert previous == 1
-    assert Ref.get(count).await == 2
+    assert ref.get(count).await == 2
 }
 ```
 
@@ -643,10 +691,10 @@ payload stores it without executing it. A thrown defect leaves the cell's
 binding unchanged, but mutations through aliases are not rolled back.
 
 Each execution of a make task allocates a fresh cell, not a fresh copy of its
-argument. For example, repeated execution of `Ref.make([])` shares the array
+argument. For example, repeated execution of `ref.make([])` shares the array
 evaluated when that task was constructed. Allocate inside an async body when
 each run needs a fresh payload. Type inference keeps shared payloads from being
-instantiated at incompatible types. `Ref.same` remains an immediate identity
+instantiated at incompatible types. `ref.same` remains an immediate identity
 comparison, not a task operation.
 
 `SynchronizedRef[a]` supports transformations that may suspend. Its `make`,
@@ -654,14 +702,17 @@ comparison, not a task operation.
 `fn(a) Task[a]`, and `modify` takes `fn(a) Task[(b, a)]` and returns `Task[b]`.
 
 ```alder
+import fiber
+import synchronized_ref
+import task
 pub async fn main() {
-    let count = SynchronizedRef.make(0).await
-    let increment = SynchronizedRef.update(count, value -> async {
-        Task.sleep(0).await
+    let count = synchronized_ref.make(0).await
+    let increment = synchronized_ref.update(count, value -> async {
+        task.sleep(0).await
         value + 1
     })
-    Fiber.all([increment, increment]).await
-    assert SynchronizedRef.get(count).await == 2
+    fiber.all([increment, increment]).await
+    assert synchronized_ref.get(count).await == 2
 }
 ```
 
@@ -678,17 +729,19 @@ implicit error channel is added to these operations.
 
 ## Semaphores
 
-`Semaphore.make(capacity).await` creates a fixed-capacity semaphore.
-`Semaphore.withPermits(gate, count, task).await` waits for permits, runs the
+`semaphore.make(capacity).await` creates a fixed-capacity semaphore.
+`semaphore.withPermits(gate, count, task).await` waits for permits, runs the
 task in an owned scope, and releases permits after its children and finalizers
 finish. The wrapper is lazy and reusable; it preserves the task's result,
 including ordinary `Err` values, and releases on defects or interruption too.
 
 ```alder
+import fiber
+import semaphore
 pub async fn main() {
-    let gate = Semaphore.make(1).await
-    let protected = Semaphore.withPermits(gate, 1, async { 42 })
-    assert Fiber.all([protected, protected]).await == [42, 42]
+    let gate = semaphore.make(1).await
+    let protected = semaphore.withPermits(gate, 1, async { 42 })
+    assert fiber.all([protected, protected]).await == [42, 42]
 }
 ```
 
@@ -776,16 +829,19 @@ enum Shape {
     Circle(Number),
 }
 
+// Proposed compile-time modules; not implemented yet.
+import (fs, test as test_utils)
+
 macro assert_eq(left, right) {
     quote {
         let l = unquote(left)
         let r = unquote(right)
-        if l != r { Test.fail(unquote(stringify(left)), l, r) }
+        if l != r { test_utils.fail(unquote(stringify(left)), l, r) }
     }
 }
 
 comptime {
-    let routes = Fs.readDir("routes")
+    let routes = fs.readDir("routes")
     ...
 }
 ```

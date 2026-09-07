@@ -15,9 +15,11 @@ constraint generation, unification, and error presentation.
 
 - A module is identified by a package plus a slice of path segments. The
   package root is an empty slice. A basename is never a module key.
-- User module aliases are lowercase namespaces. Modules are not first-class
-  record values in M2. Prelude modules such as `Array`, `Http`, and `Fiber`
-  occupy a separate capitalized module namespace.
+- Module aliases, including bundled and implicit prelude operations, are
+  lowercase namespaces backed by ordinary public interfaces. Core types and
+  traits retain uppercase names. There is no separate uppercase module lookup.
+  `io`, `cli`, `json`, `task`, `fiber`, `ref`, `synchronized_ref`, and `semaphore`
+  require explicit imports; provisional HTTP/web/data globals are absent.
 - A logical non-root module path resolves to either `path.ald` or
   `path/mod.ald`. If both exist, resolution fails as ambiguous. The root is
   `src/mod.ald`.

@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/module.rs
-description: "pub fn add(a: Number, b: Number) Number {\n    a + b\n}\n\nfn greet(name: String) String {\n    `Hello ${name}`\n}\n\nlet inc = x -> x + 1\nlet block = (x) -> {\n    let y = x * 2\n    y + 1\n}\n\nlet big = [1, 2, 3]\n    |> Array.map(x -> x * 2)\n    |> Array.filter(x -> x > 2)\n"
+description: "pub fn add(a: Number, b: Number) Number {\n    a + b\n}\n\nfn greet(name: String) String {\n    `Hello ${name}`\n}\n\nlet inc = x -> x + 1\nlet block = (x) -> {\n    let y = x * 2\n    y + 1\n}\n\nlet big = [1, 2, 3]\n    |> array.map(x -> x * 2)\n    |> array.filter(x -> x > 2)\n"
 ---
 Module {
     items: [
@@ -1013,24 +1013,8 @@ Module {
                                                                     column: 13,
                                                                 },
                                                             },
-                                                            value: Path(
-                                                                Path {
-                                                                    segments: [
-                                                                        Located {
-                                                                            region: Region {
-                                                                                start: Position {
-                                                                                    line: 16,
-                                                                                    column: 8,
-                                                                                },
-                                                                                end: Position {
-                                                                                    line: 16,
-                                                                                    column: 13,
-                                                                                },
-                                                                            },
-                                                                            value: "Array",
-                                                                        },
-                                                                    ],
-                                                                },
+                                                            value: Var(
+                                                                "array",
                                                             ),
                                                         },
                                                         field: Located {
@@ -1203,24 +1187,8 @@ Module {
                                                             column: 13,
                                                         },
                                                     },
-                                                    value: Path(
-                                                        Path {
-                                                            segments: [
-                                                                Located {
-                                                                    region: Region {
-                                                                        start: Position {
-                                                                            line: 17,
-                                                                            column: 8,
-                                                                        },
-                                                                        end: Position {
-                                                                            line: 17,
-                                                                            column: 13,
-                                                                        },
-                                                                    },
-                                                                    value: "Array",
-                                                                },
-                                                            ],
-                                                        },
+                                                    value: Var(
+                                                        "array",
                                                     ),
                                                 },
                                                 field: Located {

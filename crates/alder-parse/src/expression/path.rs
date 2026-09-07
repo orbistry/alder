@@ -26,7 +26,7 @@ impl<'a> Parser<'a> {
         &mut self,
         start: Position,
     ) -> Result<&'a Located<Expr<'a>>, error::Expr<'a>> {
-        if self.peek_lower() {
+        if self.peek_lower() && !self.starts_namespace_path() {
             let name = self.located_lower(error::Expr::Start)?;
             if self.peek() == Some(b'!') && self.peek_at(1) == Some(b'(') {
                 return self.macro_call(start, name);
@@ -65,6 +65,16 @@ mod tests {
     use super::super::{assert_expression_error_snapshot, assert_expression_snapshot};
 
     #[test]
+    fn lowercase_namespace_constructor() {
+        assert_expression_snapshot!("api::models::User::New(42)");
+    }
+
+    #[test]
+    fn lowercase_namespace_value() {
+        assert_expression_snapshot!("api::client::send");
+    }
+
+    #[test]
     fn var_simple() {
         assert_expression_snapshot!("x");
     }
@@ -101,7 +111,7 @@ mod tests {
 
     #[test]
     fn path_dot_access() {
-        assert_expression_snapshot!("Array.map");
+        assert_expression_snapshot!("array.map");
     }
 
     #[test]

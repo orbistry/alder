@@ -1,3 +1,7 @@
+import (
+    fiber,
+    task,
+)
 pub fn preserve(value) { Some(value?) }
 
 pub fn explicit_exit(value, stop: Bool) {
@@ -38,13 +42,13 @@ pub fn isolated_lambda(value: Option[Number]) Number {
 }
 
 fn operand(value: Option[Number], events: Array[Number]) Option[Number] {
-    Array.push(events, 1)
+    array.push(events, 1)
     value
 }
 
 pub fn evaluate_once(value: Option[Number], events: Array[Number]) Option[Number] {
     let number = operand(value, events)?
-    Array.push(events, 2)
+    array.push(events, 2)
     Some(number)
 }
 
@@ -54,32 +58,32 @@ pub async fn interruption_waits_for_option_cleanup() {
     let requested = 0
     let completed = 0
     let events: Array[Number] = []
-    let child = Fiber.fork(Fiber.scope(async {
-        Fiber.addFinalizer(async {
+    let child = fiber.fork(fiber.scope(async {
+        fiber.addFinalizer(async {
             entered = true
-            while !release { Task.sleep(0).await }
-            Array.push(events, 1)
+            while !release { task.sleep(0).await }
+            array.push(events, 1)
         }).await
         let missing: Option[Number] = None
         let number = missing?
-        Array.push(events, 99)
+        array.push(events, 99)
         Some(number)
     })).await
-    while !entered { Task.sleep(0).await }
+    while !entered { task.sleep(0).await }
     let interrupt = async {
         requested += 1
-        Fiber.interrupt(child).await
+        fiber.interrupt(child).await
         completed += 1
     }
-    let first = Fiber.fork(interrupt).await
-    let second = Fiber.fork(interrupt).await
-    while requested != 2 { Task.sleep(0).await }
-    Task.sleep(0).await
+    let first = fiber.fork(interrupt).await
+    let second = fiber.fork(interrupt).await
+    while requested != 2 { task.sleep(0).await }
+    task.sleep(0).await
     assert(completed == 0)
     assert(events == [])
     release = true
-    Fiber.join(first).await
-    Fiber.join(second).await
+    fiber.join(first).await
+    fiber.join(second).await
     assert(completed == 2)
     assert(events == [1])
 }

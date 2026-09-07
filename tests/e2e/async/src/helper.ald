@@ -1,4 +1,5 @@
+import task
 pub async fn delayed(value: Number) Number {
-    Task.sleep(1).await
+    task.sleep(1).await
     value
 }

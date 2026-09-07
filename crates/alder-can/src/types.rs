@@ -8,6 +8,21 @@ use bumpalo::Bump;
 use crate::environment::Env;
 use crate::{Error, ErrorKind, TypeError};
 
+pub(crate) fn namespace_prefix<'a>(
+    bump: &'a Bump,
+    path: alder_source::Path<'a>,
+) -> Option<&'a str> {
+    (path.segments.len() > 1).then(|| {
+        &*bump.alloc_str(
+            &path.segments[..path.segments.len() - 1]
+                .iter()
+                .map(|segment| segment.value)
+                .collect::<Vec<_>>()
+                .join("::"),
+        )
+    })
+}
+
 /// Dependency-first order for local aliases. Enums deliberately remain nominal
 /// boundaries; an alias naming an enum does not expand its payload recursively.
 pub(crate) fn alias_order<'a>(
@@ -109,7 +124,7 @@ pub fn canonicalize_type<'a>(
         }
         SourceType::Named { path, args } => {
             let last = path.segments.last().expect("source paths are nonempty");
-            let qualifier = (path.segments.len() > 1).then(|| path.segments[0].value);
+            let qualifier = namespace_prefix(bump, path);
             if qualifier.is_none()
                 && args.is_empty()
                 && let Some(projection) = env.find_associated_type(last.value)
@@ -217,7 +232,7 @@ pub fn canonicalize_impl_head_type<'a>(
     };
 
     let last = path.segments.last().expect("source paths are nonempty");
-    let qualifier = (path.segments.len() > 1).then(|| path.segments[0].value);
+    let qualifier = namespace_prefix(bump, path);
     let binding = env
         .find_type(bump, path.region(), qualifier, last.value)
         .map_err(|error| vec![error])?;

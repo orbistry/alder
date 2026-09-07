@@ -1,13 +1,15 @@
-//! `import` items and module paths (`@author/package/seg`, `~/seg`).
+//! Individual and grouped imports of bundled, local, and external modules.
 //!
 //! Grammar (SPEC.md, language.md "Modules"):
 //!
 //! ```text
-//! import       = 'import' module_path [ 'as' lower_ident | '.' import_names ] ;
+//! import       = 'import' ( entry | '(' entry { ',' entry } [ ',' ] ')' ) ;
+//! entry        = module_path [ 'as' lower_ident | '.' import_names ] ;
 //! import_names = '{' import_name { ',' import_name } [ ',' ] '}' | '*' ;
 //! import_name  = ( lower_ident | upper_ident ) [ 'as' ( lower_ident | upper_ident ) ] ;
-//! reexport     = 'import' module_path '.' import_names ;      (* after 'pub' *)
-//! module_path  = '@' lower_ident '/' lower_ident { '/' lower_ident } | '~' { '/' lower_ident } ;
+//! module_path  = raw_lower { '/' raw_lower }
+//!              | '@' raw_lower '/' raw_lower { '/' raw_lower }
+//!              | '~' { '/' raw_lower } ;
 //! ```
 //!
 //! A module path is one token: no whitespace between its parts, and every
@@ -23,26 +25,57 @@
 //! What a bare import binds is validated here (§10.37): `import ~`
 //! has no segment (`Import::RootOnly`, at the `~`) and `import @alder/test`
 //! would bind a reserved word (`Import::ReservedBinding(Test)`, at the
-//! segment). `pub import` needs `.{ … }` or `.*` (§10.25,
-//! `Import::PubNeedsNames` at the end of the path when there is no tail, or
-//! at the `as` of an alias tail). `ImportTail::All` carries the region of
-//! `.*`.
+//! segment). Public imports accept the same forms. `ImportTail::All` carries
+//! the region of `.*`; groups retain the complete region of each entry.
 //!
 //! See docs/parser-internals.md §5.11.
 // OWNER: item/import.rs (Wave 3)
 
 use alder_region::{Located, Position, Region};
-use alder_source::{Import, ImportName, ImportTail, ModulePath, ModuleRoot, Name};
+use alder_source::{Import, ImportName, ImportTail, ItemKind, ModulePath, ModuleRoot, Name};
 use bumpalo::collections::Vec as BumpVec;
 
 use crate::keyword::Keyword;
 use crate::{Parser, error};
 
 impl<'a> Parser<'a> {
+    pub(crate) fn import_declaration(&mut self) -> Result<ItemKind<'a>, error::Import<'a>> {
+        self.chomp();
+        if self.peek() != Some(b'(') {
+            return self.import().map(ItemKind::Import);
+        }
+        let opening = self.get_position();
+        self.advance();
+        self.chomp();
+        let mut entries = BumpVec::new_in(self.bump);
+        loop {
+            let start = self.get_position();
+            let import = self.import()?;
+            entries.push(Located::at(Region::new(start, self.get_position()), import));
+            self.chomp();
+            match self.peek() {
+                Some(b')') => {
+                    self.advance();
+                    break;
+                }
+                Some(b',') => {
+                    self.advance();
+                    self.chomp();
+                    if self.peek() == Some(b')') {
+                        self.advance();
+                        break;
+                    }
+                }
+                _ => return Err(error::Import::GroupEnd(self.expected_end(opening))),
+            }
+        }
+        Ok(ItemKind::ImportGroup(entries.into_bump_slice()))
+    }
+
     /// After `import`. The bare tail (`ImportTail::Module`) is validated here: no
     /// segments (`import ~`) → Import::RootOnly; reserved last segment
     /// (`import @alder/test`) → Import::ReservedBinding(kw).
-    pub(crate) fn import(&mut self, is_pub: bool) -> Result<&'a Import<'a>, error::Import<'a>> {
+    pub(crate) fn import(&mut self) -> Result<&'a Import<'a>, error::Import<'a>> {
         self.chomp();
         let path = self.specialize(
             |bump, e, row, col| error::Import::Path(bump.alloc(e), row, col),
@@ -50,17 +83,13 @@ impl<'a> Parser<'a> {
         )?;
 
         // Look ahead past whitespace for a tail; a bare import consumes nothing
-        // more so the cursor stays at the path's end. `PubNeedsNames` points
-        // where the `.{ … }` / `.*` belongs: the end of the path, or the `as`
-        // that stands in its place — never the token after the whitespace.
-        let mut tail_start = path.region.end;
+        // more so the cursor stays at the path's end.
         let saved = self.save_state();
         self.chomp();
         let tail = if self.peek() == Some(b'.') {
             self.advance();
             self.import_tail()?
         } else if self.peek_keyword(b"as") {
-            tail_start = self.get_position();
             self.advance_by(2);
             self.chomp();
             ImportTail::Alias(self.located_lower(error::Import::Alias)?)
@@ -69,17 +98,11 @@ impl<'a> Parser<'a> {
             ImportTail::Module
         };
 
-        if is_pub && !matches!(tail, ImportTail::Names(_) | ImportTail::All(_)) {
-            return Err(error::Import::PubNeedsNames(
-                tail_start.line,
-                tail_start.column,
-            ));
-        }
         if let ImportTail::Module = tail {
             let bound = match (path.value.root, path.value.segments.last()) {
                 (_, Some(segment)) => *segment,
                 (ModuleRoot::Package { package, .. }, None) => package,
-                (ModuleRoot::Local(_), None) => {
+                (ModuleRoot::Local(_) | ModuleRoot::StandardLibrary, None) => {
                     let start = path.region.start;
                     return Err(error::Import::RootOnly(start.line, start.column));
                 }
@@ -170,6 +193,7 @@ impl<'a> Parser<'a> {
     /// `@author/package { '/' seg }` | `~ { '/' seg }`; author, package and segments via `raw_lower` (§2.4).
     pub(crate) fn module_path(&mut self) -> Result<Located<ModulePath<'a>>, error::ModulePath> {
         let start = self.get_position();
+        let mut segments = BumpVec::new_in(self.bump);
         let root = match self.peek() {
             Some(b'@') => {
                 self.advance();
@@ -182,12 +206,15 @@ impl<'a> Parser<'a> {
                 self.advance();
                 ModuleRoot::Local(Region::new(start, self.get_position()))
             }
+            Some(b'a'..=b'z') => {
+                segments.push(self.raw_lower(error::ModulePath::Segment)?);
+                ModuleRoot::StandardLibrary
+            }
             _ => {
                 let (row, col) = self.position();
                 return Err(error::ModulePath::Start(row, col));
             }
         };
-        let mut segments = BumpVec::new_in(self.bump);
         while self.peek() == Some(b'/') {
             self.advance();
             segments.push(self.raw_lower(error::ModulePath::Segment)?);
@@ -205,6 +232,66 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::super::{assert_item_error_snapshot, assert_item_snapshot};
+
+    #[test]
+    fn bundled_module() {
+        assert_item_snapshot!("import json");
+    }
+
+    #[test]
+    fn bundled_nested_module() {
+        assert_item_snapshot!("import http/router as routing");
+    }
+
+    #[test]
+    fn bundled_selected_names() {
+        assert_item_snapshot!("import array.{map as transform}");
+    }
+
+    #[test]
+    fn grouped_public_names() {
+        assert_item_snapshot!("pub import (array.{map}, ~/user.*, @acme/http)");
+    }
+
+    #[test]
+    fn grouped_comments() {
+        assert_item_snapshot!("import (\n// operations\njson, // encoding\nio,\n)");
+    }
+
+    #[test]
+    fn error_group_empty() {
+        assert_item_error_snapshot!("import ()");
+    }
+
+    #[test]
+    fn error_group_separator() {
+        assert_item_error_snapshot!("import (json io)");
+    }
+
+    #[test]
+    fn error_group_unclosed() {
+        assert_item_error_snapshot!("import (json");
+    }
+
+    #[test]
+    fn error_group_double_comma() {
+        assert_item_error_snapshot!("import (json,,io)");
+    }
+
+    #[test]
+    fn error_group_alias() {
+        assert_item_error_snapshot!("import (json as, io)");
+    }
+
+    #[test]
+    fn error_group_selection() {
+        assert_item_error_snapshot!("import (array.{map filter}, io)");
+    }
+
+    #[test]
+    fn error_group_wrong_close() {
+        assert_item_error_snapshot!("import (json]");
+    }
 
     #[test]
     fn package_root() {
@@ -335,7 +422,7 @@ mod tests {
 
     #[test]
     fn error_bad_root() {
-        assert_item_error_snapshot!("import http");
+        assert_item_error_snapshot!("import /http");
     }
 
     #[test]
@@ -389,28 +476,31 @@ mod tests {
     }
 
     #[test]
-    fn error_pub_needs_names() {
-        assert_item_error_snapshot!("pub import @alder/http");
+    fn public_namespace() {
+        assert_item_snapshot!("pub import @alder/http");
     }
 
     #[test]
-    fn error_pub_needs_names_alias() {
-        assert_item_error_snapshot!("pub import @alder/http as h");
+    fn public_namespace_alias() {
+        assert_item_snapshot!("pub import @alder/http as h");
     }
 
     #[test]
-    fn error_pub_needs_names_before_next_item() {
-        assert_item_error_snapshot!(
+    fn grouped_roots() {
+        assert_item_snapshot!(
             r#"
-            pub import @alder/http
-            let x = 1
+            import (
+                array.{map},
+                ~/models/user,
+                @acme/http as client,
+            )
             "#
         );
     }
 
     #[test]
-    fn error_pub_needs_names_alias_next_line() {
-        assert_item_error_snapshot!(
+    fn public_namespace_alias_next_line() {
+        assert_item_snapshot!(
             r#"
             pub import @alder/http
                 as h

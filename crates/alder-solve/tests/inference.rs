@@ -89,11 +89,12 @@ fn direct_error_group_annotations_share_structural_identity() {
     solve_input(
         &bump,
         indoc! {r#"
+        import json
         error First { :bad(Number), :missing }
         error Second { :missing, :bad(Number) }
         fn relay(value: First) Second { value }
         fn render(value: First) String { show(value) }
-        fn encode(value: Second) String { Json.encode(value) }
+        fn encode(value: Second) String { json.encode(value) }
         type Alias = First
         fn array(values: Array[Alias]) Array[Second] { values }
         fn record(value: { failure: First }) ({ failure: Second }) { value }
@@ -124,11 +125,12 @@ fn structural_error_json_requires_only_payload_codecs() {
     solve_input(
         &bump,
         indoc! {r#"
+        import json
         error First { :bad(Number), :missing }
         error Second { :missing, :bad(Number) }
-        fn first(value: Result[Number, First]) String { Json.encode(value) }
+        fn first(value: Result[Number, First]) String { json.encode(value) }
         fn second(text: String) Result[Result[Number, Second], [:invalid_json(String)]] {
-            Json.decode(text)
+            json.decode(text)
         }
     "#},
     )
@@ -142,8 +144,9 @@ fn structural_error_json_rejects_payloads_without_codecs() {
         solve_input(
             &bump,
             indoc! {r#"
+        import json
         fn encode(value: Result[Number, [:callback(fn(Number) Number)]]) String {
-            Json.encode(value)
+            json.encode(value)
         }
     "#}
         )
@@ -188,9 +191,10 @@ fn qualified_builtin_aliases_check_their_structural_payload() {
     solve_input(
         &bump,
         indoc! {r#"
-        fn defaults() Fiber::MapOptions { {} }
-        fn bounded() Fiber::MapOptions { { concurrency: 8 } }
-        fn read(options: Fiber::MapOptions) Option[Number] { options.concurrency }
+        import fiber
+        fn defaults() fiber::MapOptions { {} }
+        fn bounded() fiber::MapOptions { { concurrency: 8 } }
+        fn read(options: fiber::MapOptions) Option[Number] { options.concurrency }
     "#},
     )
     .expect("builtin alias must expand in caller annotations");
@@ -199,7 +203,8 @@ fn qualified_builtin_aliases_check_their_structural_payload() {
         solve_input(
             &bump,
             indoc! {r#"
-        fn invalid() Fiber::MapOptions { { concurrency: "eight" } }
+        import fiber
+        fn invalid() fiber::MapOptions { { concurrency: "eight" } }
     "#}
         )
         .is_err()
@@ -220,7 +225,7 @@ fn sparse_tuple_constraints_do_not_generalize_captured_arrays() {
         }
         fn numbers() {
             let pair = expose(([], ()))
-            Array.push(pair.0, 42)
+            array.push(pair.0, 42)
         }
         fn strings() {
             let pair = expose(([], ()))
@@ -553,7 +558,7 @@ fn singleton_error_constructors_fill_contextual_arrays_and_arguments() {
         fn accept(value: Result[Number, Failure]) { () }
         fn make() {
             let failures: Array[Result[Number, Failure]] = [
-                Err(:missing), Result.err(:failed(7)),
+                Err(:missing), result.err(:failed(7)),
             ]
             accept(Err(:failed(8)))
             failures
@@ -2851,7 +2856,7 @@ fn associative_record_overlays_do_not_generalize_captured_shared_arrays() {
         }
         fn write() {
             let records = views({}, {})
-            Array.push(records.0.items, 42)
+            array.push(records.0.items, 42)
         }
         fn invalid() Array[String] {
             let records = views({}, {})
@@ -2881,12 +2886,12 @@ fn associative_record_overlays_allow_fresh_array_factories() {
         }
         fn numbers() Array[Number] {
             let records = views({}, {})
-            Array.push(records.0.items, 42)
+            array.push(records.0.items, 42)
             records.1.items
         }
         fn strings() Array[String] {
             let records = views({}, {})
-            Array.push(records.1.items, "fresh")
+            array.push(records.1.items, "fresh")
             records.0.items
         }
     "#};
@@ -3197,10 +3202,11 @@ fn piped_record_overlay_exposes_optional_fields_before_access() {
 #[test]
 fn nested_async_lambda_in_assignment_index_does_not_suspend_the_function() {
     let source = indoc! {r#"
+        import task
         fn valid() Number {
             let values = [10]
             values[{
-                let deferred = () -> async { Task.sleep(1).await }
+                let deferred = () -> async { task.sleep(1).await }
                 0
             }] = 42
             values[0]
@@ -3271,8 +3277,9 @@ fn tagged_template_checks_interpolation_types() {
 #[test]
 fn json_module_decode_requires_a_json_instance() {
     let source = indoc! {r#"
+        import json
         fn invalid() Result[fn(Number) Number, [:invalid_json(String)]] {
-            Json.decode("42")
+            json.decode("42")
         }
     "#};
     assert!(solve_input(&Bump::new(), source).is_err());
@@ -3281,11 +3288,13 @@ fn json_module_decode_requires_a_json_instance() {
 #[test]
 fn json_module_generic_calls_require_the_declared_bound() {
     let source = indoc! {r#"
-        fn invalid(value: a) String { Json.encode(value) }
+        import json
+        fn invalid(value: a) String { json.encode(value) }
     "#};
     assert!(solve_input(&Bump::new(), source).is_err());
     let source = indoc! {r#"
-        fn valid(value: a) String where a: Json { Json.encode(value) }
+        import json
+        fn valid(value: a) String where a: Json { json.encode(value) }
     "#};
     let bump = Bump::new();
     let result = solve_input(&bump, source);
@@ -3730,7 +3739,7 @@ fn error_row_aliases_preserve_open_tails_and_concrete_tags() {
         fn run() Number {
             match propagate() {
                 Ok(value) => value,
-                Err(:missing(message)) => String.length(message),
+                Err(:missing(message)) => string.length(message),
                 Err(:timeout) => 42,
             }
         }
@@ -4042,7 +4051,7 @@ fn branch_results_cannot_hide_optional_fields_from_required_readers() {
         fn choose(flag: Bool, user: { name?: String }) {
             if flag { { name: "present" } } else { user }
         }
-        fn run() Number { String.length(choose(false, {}).name) }
+        fn run() Number { string.length(choose(false, {}).name) }
     "#};
     assert!(infer(&Bump::new(), source).is_err());
 }
@@ -4050,7 +4059,7 @@ fn branch_results_cannot_hide_optional_fields_from_required_readers() {
 #[test]
 fn pipes_cannot_turn_optional_fields_into_required_fields() {
     let source = indoc! {r#"
-        fn required(user: { name: String }) Number { String.length(user.name) }
+        fn required(user: { name: String }) Number { string.length(user.name) }
         fn optional(user: { name?: String }) Number { user |> required }
         fn run() Number { optional({}) }
     "#};
@@ -4062,7 +4071,7 @@ fn lambda_returns_cannot_turn_optional_fields_into_required_fields() {
     let source = indoc! {r#"
         fn run(user: { name?: String }) Number {
             let get = () { name: String } -> user
-            String.length(get().name)
+            string.length(get().name)
         }
     "#};
     assert!(infer(&Bump::new(), source).is_err());
@@ -4085,8 +4094,8 @@ fn shared_record_containers_cannot_weaken_field_presence() {
         fn run() Number {
             let users = [{ name: "present" }]
             let alias: Array[{ name?: String }] = users
-            Array.push(alias, {})
-            String.length(users[1].name)
+            array.push(alias, {})
+            string.length(users[1].name)
         }
     "#};
     assert!(infer(&Bump::new(), source).is_err());
@@ -4391,7 +4400,7 @@ fn independent_open_spreads_instantiate_separately_through_an_alias() {
         fn run() Number {
             let first = operation({ value: "discarded" }, { value: 42 })
             let second = operation({ value: false }, { value: "text" })
-            first.value + String.length(second.value)
+            first.value + string.length(second.value)
         }
     "#};
     let bump = Bump::new();
@@ -4481,7 +4490,7 @@ fn overlay_can_describe_a_known_overwrite_explicitly_in_its_result() {
         }
         fn run() Number {
             let result = replace({ marker: true, value: 42, extra: 7 })
-            String.length(result.value) + result.extra
+            string.length(result.value) + result.extra
         }
     "#};
     let bump = Bump::new();
@@ -4717,10 +4726,10 @@ fn overlay_factory_cannot_regeneralize_captured_mutable_payloads() {
         let shared = []
         fn factory() { patch -> merge({ values: shared }, patch) }
         fn run() {
-            Array.push(shared, 42)
+            array.push(shared, 42)
             let operation = factory()
             let strings: Array[String] = operation({ marker: true }).values
-            String.length(strings[0])
+            string.length(strings[0])
         }
     "#};
     assert!(solve_input(&Bump::new(), source).is_err());
@@ -5155,7 +5164,7 @@ fn record_rows_do_not_allow_fabricating_a_promised_tail() {
 #[test]
 fn optional_record_fields_cannot_satisfy_required_field_access() {
     let source = indoc! {r#"
-        fn required(user: { name: String }) Number { String.length(user.name) }
+        fn required(user: { name: String }) Number { string.length(user.name) }
         fn optional(user: { name?: String }) Number { required(user) }
         fn run() Number { optional({}) }
     "#};
@@ -5338,6 +5347,7 @@ fn potentially_reached_aggregate_exits_still_must_agree() {
 #[test]
 fn loop_break_values_determine_the_result_type() {
     let source = indoc! {r#"
+        import task
         fn answer() Number { loop { break 42 } }
         fn nested() Number {
             loop {
@@ -5348,7 +5358,7 @@ fn loop_break_values_determine_the_result_type() {
         }
         async fn suspended() Number {
             loop {
-                Task.sleep(1).await
+                task.sleep(1).await
                 break 42
             }
         }
@@ -5600,18 +5610,20 @@ fn method_bodies_reject_zero_iteration_return_paths() {
             }
         "#},
         indoc! {r#"
+            import task
             trait Read[a] {
                 async fn read(value: a, flag: Bool) Number {
-                    Task.sleep(0).await
+                    task.sleep(0).await
                     while flag { return 42 }
                 }
             }
         "#},
         indoc! {r#"
+            import task
             trait Read[a] { async fn read(value: a, flag: Bool) Number }
             impl Read[Number] {
                 async fn read(value: Number, flag: Bool) Number {
-                    Task.sleep(0).await
+                    task.sleep(0).await
                     while flag { return 42 }
                 }
             }
@@ -5642,8 +5654,9 @@ fn zero_iteration_loops_do_not_satisfy_a_return_contract() {
             }
         "#},
         indoc! {r#"
+            import task
             async fn missing(flag: Bool) Number {
-                Task.sleep(1).await
+                task.sleep(1).await
                 while flag { return 42 }
             }
         "#},
@@ -5713,7 +5726,7 @@ fn solve_input<'a>(
                 package: PackageId::Application,
                 path: &["Main"],
             },
-            imports: &[],
+            imports: alder_can::resolve_imports(bump, &parsed, PackageId::Application),
             interfaces: &[],
         },
         &parsed,
@@ -5734,7 +5747,7 @@ fn infer<'a>(bump: &'a Bump, input: &str) -> Result<Annotations<'a>, Vec<Error>>
                 package: PackageId::Application,
                 path: &["Main"],
             },
-            imports: &[],
+            imports: alder_can::resolve_imports(bump, &module, PackageId::Application),
             interfaces: &[],
         },
         &module,
@@ -5900,13 +5913,14 @@ fn synchronized_ref_accepts_task_callbacks_and_preserves_payload_types() {
     let result = solve_input(
         &bump,
         indoc! {r#"
-        async fn fresh(value: a) SynchronizedRef[a] { SynchronizedRef.make(value).await }
+        import synchronized_ref
+        async fn fresh(value: a) synchronized_ref::SynchronizedRef[a] { synchronized_ref.make(value).await }
         async fn run() String {
             let number = fresh(1).await
             let text = fresh("text").await
-            SynchronizedRef.update(number, value -> async { value + 1 }).await
-            SynchronizedRef.modify(number, value -> async { ("previous", value + 1) }).await
-            SynchronizedRef.get(text).await
+            synchronized_ref.update(number, value -> async { value + 1 }).await
+            synchronized_ref.modify(number, value -> async { ("previous", value + 1) }).await
+            synchronized_ref.get(text).await
         }
     "#},
     );
@@ -5917,17 +5931,19 @@ fn synchronized_ref_accepts_task_callbacks_and_preserves_payload_types() {
 fn synchronized_ref_rejects_synchronous_callback_and_incompatible_alias() {
     for source in [
         indoc! {r#"
+        import synchronized_ref
         async fn bad() {
-            let cell = SynchronizedRef.make(0).await
-            SynchronizedRef.update(cell, value -> value + 1).await
+            let cell = synchronized_ref.make(0).await
+            synchronized_ref.update(cell, value -> value + 1).await
         }
     "#},
         indoc! {r#"
+        import synchronized_ref
         async fn bad() String {
-            let cell = SynchronizedRef.make([]).await
+            let cell = synchronized_ref.make([]).await
             let alias = cell
-            SynchronizedRef.set(cell, [42]).await
-            let strings: Array[String] = SynchronizedRef.get(alias).await
+            synchronized_ref.set(cell, [42]).await
+            let strings: Array[String] = synchronized_ref.get(alias).await
             strings[0]
         }
     "#},
@@ -5953,11 +5969,12 @@ fn semaphore_preserves_independent_protected_result_types() {
     let result = solve_input(
         &bump,
         indoc! {r#"
-        async fn protect(gate: Semaphore, task: Task[a]) a {
-            Semaphore.withPermits(gate, 1, task).await
+        import semaphore
+        async fn protect(gate: semaphore::Semaphore, task: Task[a]) a {
+            semaphore.withPermits(gate, 1, task).await
         }
         async fn run() String {
-            let gate = Semaphore.make(2).await
+            let gate = semaphore.make(2).await
             let number = protect(gate, async { 42 }).await
             let text = protect(gate, async { "text" }).await
             text
@@ -5973,10 +5990,11 @@ fn ref_captured_function_cell_cannot_be_specialized_through_an_alias() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
+        import ref
         async fn bad() String {
-            let cell = Ref.make(value -> value).await
-            let read = () -> async { Ref.get(cell).await }
-            Ref.set(cell, (value: Number) -> value + 1).await
+            let cell = ref.make(value -> value).await
+            let read = () -> async { ref.get(cell).await }
+            ref.set(cell, (value: Number) -> value + 1).await
             let operation = read().await
             operation("wrong")
         }
@@ -6001,14 +6019,15 @@ fn ref_reusable_allocation_task_keeps_shared_array_payload_monomorphic() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
-        let allocation = Ref.make([])
+        import ref
+        let allocation = ref.make([])
         async fn write() {
             let cell = allocation.await
-            Array.push(Ref.get(cell).await, 42)
+            array.push(ref.get(cell).await, 42)
         }
         async fn read() String {
             let cell = allocation.await
-            let values: Array[String] = Ref.get(cell).await
+            let values: Array[String] = ref.get(cell).await
             values[0]
         }
     "#},
@@ -6032,13 +6051,14 @@ fn ref_fresh_array_factory_retains_independent_instantiations() {
     let result = solve_input(
         &bump,
         indoc! {r#"
-        async fn fresh() { Ref.make([]).await }
+        import ref
+        async fn fresh() { ref.make([]).await }
         async fn run() String {
             let numbers = fresh().await
             let strings = fresh().await
-            Ref.set(numbers, [42]).await
-            Ref.set(strings, ["text"]).await
-            Ref.get(strings).await[0]
+            ref.set(numbers, [42]).await
+            ref.set(strings, ["text"]).await
+            ref.get(strings).await[0]
         }
     "#},
     );
@@ -6051,14 +6071,15 @@ fn ref_operations_preserve_payload_and_callback_result_types() {
     let result = solve_input(
         &bump,
         indoc! {r#"
-        async fn fresh(value: a) Ref[a] { Ref.make(value).await }
+        import ref
+        async fn fresh(value: a) ref::Ref[a] { ref.make(value).await }
         async fn run() String {
             let number = fresh(1).await
             let text = fresh("text").await
-            Ref.set(number, 2).await
-            Ref.update(number, value -> value + 1).await
-            Ref.modify(number, value -> (Ref.same(number, number), value + 1)).await
-            Ref.get(text).await
+            ref.set(number, 2).await
+            ref.update(number, value -> value + 1).await
+            ref.modify(number, value -> (ref.same(number, number), value + 1)).await
+            ref.get(text).await
         }
     "#},
     );
@@ -6071,11 +6092,12 @@ fn ref_shared_payload_cannot_be_instantiated_incompatibly() {
     let errors = solve_input(
         &bump,
         indoc! {r#"
+        import ref
         async fn bad() String {
-            let cell = Ref.make([]).await
+            let cell = ref.make([]).await
             let alias = cell
-            Ref.set(cell, [42]).await
-            let strings: Array[String] = Ref.get(alias).await
+            ref.set(cell, [42]).await
+            let strings: Array[String] = ref.get(alias).await
             strings[0]
         }
     "#},
@@ -6102,9 +6124,9 @@ fn shared_array_cannot_be_instantiated_at_incompatible_types() {
             indoc! {r#"
         let shared = []
         fn bad() {
-            Array.push(shared, 42)
+            array.push(shared, 42)
             let strings: Array[String] = shared
-            String.length(strings[0])
+            string.length(strings[0])
         }
     "#}
         )
@@ -6119,11 +6141,11 @@ fn shared_map_cannot_be_instantiated_at_incompatible_types() {
         solve_input(
             &bump,
             indoc! {r#"
-        let shared = Map.new()
+        let shared = map.new()
         fn bad() {
-            Map.set(shared, "key", 42)
+            map.set(shared, "key", 42)
             let strings: Map[String, String] = shared
-            Map.get(strings, "key")
+            map.get(strings, "key")
         }
     "#}
         )
@@ -6141,9 +6163,9 @@ fn function_cannot_generalize_captured_shared_state() {
         let shared = []
         fn values() { shared }
         fn bad() {
-            Array.push(values(), 42)
+            array.push(values(), 42)
             let strings: Array[String] = values()
-            String.length(strings[0])
+            string.length(strings[0])
         }
     "#}
         )
@@ -6161,7 +6183,7 @@ fn shared_alias_cannot_regeneralize_state() {
         let shared = []
         let alias = shared
         fn bad() {
-            Array.push(shared, 42)
+            array.push(shared, 42)
             let strings: Array[String] = alias
         }
     "#}
@@ -6179,7 +6201,7 @@ fn shared_record_keeps_nested_state_monomorphic() {
             indoc! {r#"
         let shared = { items: [] }
         fn bad() {
-            Array.push(shared.items, 42)
+            array.push(shared.items, 42)
             let strings: Array[String] = shared.items
         }
     "#}
@@ -6195,10 +6217,10 @@ fn shared_set_keeps_its_element_type() {
         solve_input(
             &bump,
             indoc! {r#"
-        let shared = Set.new()
+        let shared = set.new()
         fn bad() {
-            Set.add(shared, 42)
-            Set.add(shared, "text")
+            set.add(shared, 42)
+            set.add(shared, "text")
         }
     "#}
         )
@@ -6213,15 +6235,16 @@ fn shared_task_cannot_regeneralize_captured_state() {
         solve_input(
             &bump,
             indoc! {r#"
+        import task
         let shared = []
         async fn operation() {
-            Task.sleep(0).await
+            task.sleep(0).await
             shared
         }
-        let task = operation()
+        let pending = operation()
         async fn bad() {
-            let numbers: Array[Number] = task.await
-            let strings: Array[String] = task.await
+            let numbers: Array[Number] = pending.await
+            let strings: Array[String] = pending.await
         }
     "#}
         )
@@ -6279,31 +6302,31 @@ fn array_factories_remain_polymorphic() {
 #[test]
 fn builtin_string_length_rejects_a_number() {
     let bump = Bump::new();
-    assert!(solve_input(&bump, "fn bad() Number { String.length(42) }").is_err());
+    assert!(solve_input(&bump, "fn bad() Number { string.length(42) }").is_err());
 }
 
 #[test]
 fn builtin_array_push_checks_the_element_type() {
     let bump = Bump::new();
-    assert!(solve_input(&bump, r#"fn bad() { Array.push(["text"], 42) }"#).is_err());
+    assert!(solve_input(&bump, r#"fn bad() { array.push(["text"], 42) }"#).is_err());
 }
 
 #[test]
 fn builtin_array_filter_requires_a_boolean_callback() {
     let bump = Bump::new();
-    assert!(solve_input(&bump, "fn bad() { Array.filter([1], x -> 42) }").is_err());
+    assert!(solve_input(&bump, "fn bad() { array.filter([1], x -> 42) }").is_err());
 }
 
 #[test]
 fn builtin_fiber_join_requires_a_fiber() {
     let bump = Bump::new();
-    assert!(solve_input(&bump, "fn bad() { Fiber.join(42) }").is_err());
+    assert!(solve_input(&bump, "import fiber\nfn bad() { fiber.join(42) }").is_err());
 }
 
 #[test]
 fn builtin_argument_count_is_checked() {
     let bump = Bump::new();
-    assert!(solve_input(&bump, "fn bad() { Array.length([1], 2) }").is_err());
+    assert!(solve_input(&bump, "fn bad() { array.length([1], 2) }").is_err());
 }
 
 #[test]
@@ -6314,7 +6337,7 @@ fn builtin_signature_survives_an_indirect_reference() {
             &bump,
             indoc! {r#"
         fn bad() {
-            let length = String.length
+            let length = string.length
             length(42)
         }
     "#}
@@ -6329,8 +6352,8 @@ fn builtin_calls_publish_their_actual_result_types() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-        fn numbers() { Array.map([1], x -> x) }
-        fn strings() { Array.map(["text"], x -> x) }
+        fn numbers() { array.map([1], x -> x) }
+        fn strings() { array.map(["text"], x -> x) }
     "#},
     )
     .expect("each builtin call independently instantiates its signature");
@@ -8068,7 +8091,7 @@ fn builtin_applicative_and_monad_instances_preserve_the_hkt_hierarchy() {
             fn result_bind(
                 value: Result[Number, [:failure(String)]],
             ) Result[String, [:failure(String)]] {
-                flat_map(value, (item) -> { Result.ok("done") })
+                flat_map(value, (item) -> { result.ok("done") })
             }
             fn monad_map(value: f[Number]) f[Number] where f: Monad {
                 map(value, (item) -> { item + 1 })
@@ -8115,13 +8138,13 @@ fn builtin_traversable_passes_method_level_applicative_evidence() {
         &bump,
         indoc! {r#"
             fn traverse_array(value: Array[Number]) Option[Array[String]] {
-                traverse(value, (item) -> { Option.some("item") })
+                traverse(value, (item) -> { option.some("item") })
             }
             fn traverse_option(value: Option[Number]) Array[Option[String]] {
                 traverse(value, (item) -> { ["item"] })
             }
             fn traverse_result(value: Result[Number, [:failed]]) Option[Result[String, [:failed]]] {
-                traverse(value, (item) -> { Option.some("item") })
+                traverse(value, (item) -> { option.some("item") })
             }
         "#},
     )
@@ -8148,7 +8171,7 @@ fn builtin_array_iterator_normalizes_its_item_projection() {
     let solved = solve_input(
         &bump,
         indoc! {r#"
-            fn first(values: Array[Number]) Option[Number] { next(Array.iter(values)) }
+            fn first(values: Array[Number]) Option[Number] { next(array.iter(values)) }
             fn generic(value: i) Option[Number]
                 where i: Iterator, i.Item == Number
             {
@@ -8299,7 +8322,7 @@ fn try_unwraps_result_value() {
         fn unwrap(
             value: Result[Number, [:failure(String)]],
         ) Result[Number, [:failure(String)]] {
-            Result.ok(value? + 1)
+            result.ok(value? + 1)
         }
     "#
     );
@@ -8761,8 +8784,9 @@ fn error_tag_cannot_be_bound_as_an_ordinary_value() {
 fn await_unwraps_task_inside_task_function() {
     assert_inference_snapshot!(
         r#"
+        import task
         async fn wait() () {
-            Task.sleep(1).await
+            task.sleep(1).await
         }
     "#
     );
@@ -9072,8 +9096,9 @@ fn explicit_async_nested_blocks_preserve_both_layers() {
 #[test]
 fn await_wraps_an_explicit_body_result_in_task() {
     assert_inference_snapshot! {r#"
+        import task
         async fn load(value: Number) Result[Number] {
-            Task.sleep(1).await
+            task.sleep(1).await
             Ok(value)
         }
     "#};
@@ -9082,16 +9107,17 @@ fn await_wraps_an_explicit_body_result_in_task() {
 #[test]
 fn await_inside_a_lambda_belongs_to_the_lambda() {
     assert_inference_snapshot! {r#"
+        import task
         fn makeWorker() fn(Number) Task[Number] {
             value -> async {
-                Task.sleep(1).await
+                task.sleep(1).await
                 value
             }
         }
 
         fn staysSynchronous() Number {
             let worker = value -> async {
-                Task.sleep(1).await
+                task.sleep(1).await
                 value
             }
             42
@@ -9102,8 +9128,9 @@ fn await_inside_a_lambda_belongs_to_the_lambda() {
 #[test]
 fn pipe_forwarding_precedes_await_and_try() {
     assert_inference_snapshot! {r#"
+        import task
         async fn load(value: Number) Result[Number] {
-            Task.sleep(1).await
+            task.sleep(1).await
             Ok(value)
         }
 

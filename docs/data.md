@@ -14,7 +14,7 @@ module, so the schema respects the target database exactly as Drizzle
 does.
 
 ```alder
-import @alder/sqlite.{ text, integer, timestamp, primaryKey }
+import sqlite.{ text, integer, timestamp, primaryKey }
 
 pub table users {
     id: integer() primaryKey autoIncrement
@@ -80,7 +80,8 @@ since` suggests `^since`.
   whose values are query expressions.
 - A `query` block produces a `Query[row]` value; `db.run` executes it
   against the provided `Db` context.
-- The block desugars to a chain API (`Query.select(...).from(...)`) so
+- The planned block desugars to an explicitly imported `query` module's chain
+  API (`query.select(...).from(...)`) so
   packages can extend and compose queries programmatically.
 - Escape hatch: `` sql`select ... ${id}` `` tagged template, checked
   against the schema where possible.

@@ -1,5 +1,16 @@
 # Public re-export hardening
 
+Current import-unification update: public namespace imports and aliases are
+implemented for bundled, local, and external roots, including groups. Namespace
+chains retain original identities across source builds and interface format 8.
+Same-identity imports/exports are idempotent; conflicting explicit names fail.
+Private declarations remain unavailable. Initialization imports are sorted and
+deduplicated by canonical module ID; formatter execution tests compare complete
+bundles and assert effects and exactly-once initialization.
+
+The checkpoint below is a historical audit. Its test counts and source-order
+initialization observation describe that revision, not the current contract.
+
 Status: named/wildcard re-export boundary audit complete for the contracts below.
 The broader module/cache review is reconciled in `module-identity-hardening.md`;
 final clean-tree release gates remain open.
@@ -31,7 +42,8 @@ not just interface-name checks. These establish the specified alias, privacy,
 namespace, ownership, and initialization audit boundaries without a production
 change. They do not establish every module/cache contract or whole-goal release
 readiness. Historical unfinished-audit statements below are superseded by this
-reconciliation; source-level public module-namespace imports remain unsupported.
+reconciliation. Source-level public module namespaces were unsupported at that
+checkpoint and are implemented by the update above.
 
 The driver accepted a facade containing `pub import ~/leaf.*` or
 `pub import ~/leaf.{ answer }`, but a consumer calling `facade.answer()` failed

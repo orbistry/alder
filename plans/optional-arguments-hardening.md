@@ -475,7 +475,7 @@ The traits CLI fixture now executes direct and imported calls, typed function
 values, lambdas, nested Option absence, and pipes. It verifies omitted and
 explicit None agree while Some(None) remains distinct. Its first run exposed a
 fixture name ambiguity with the existing NamedSome enum in main; qualifying
-Option.some fixed the fixture, and the real standalone CLI test passed. Negative
+option.some fixed the fixture, and the real standalone CLI test passed. Negative
 arity fixtures initially placed two declarations on one line; they were changed
 to indoc multiline source so they exercise type checking rather than parsing.
 After those corrections, all 378 solver integration tests, two solver unit
@@ -690,7 +690,7 @@ Explicit-constructor follow-up: permanent reproductions rejected both
 `take(Some({ value: 42 }))` when Payload's field was Option[Number]. Checked
 Some calls now constrain the constructor result before checking its argument,
 so ordinary field initialization receives the payload context. Only canonical
-builtin Some/Option.some receive this contextual treatment, not functions that
+builtin Some/option.some receive this contextual treatment, not functions that
 happen to share a spelling. Mutable payload aliases still require direct matching.
 The positive reproduction passes; 405 solver tests passed with the separate
 known-failing branch regression explicitly excluded. CLI execution passes for

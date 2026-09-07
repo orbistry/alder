@@ -1,9 +1,9 @@
 ---
 source: crates/alder-codegen/src/lib.rs
-description: "pub fn default_unit(value: Option[()], events: Array[Number]) () {\n    value ?? {\n        let ignored = Array.push(events, 1)\n        ()\n    }\n}\npub fn nested(value: Option[Option[Number]]) Option[Number] {\n    value ?? Some(42)\n}\n"
+description: "pub fn default_unit(value: Option[()], events: Array[Number]) () {\n    value ?? {\n        let ignored = array.push(events, 1)\n        ()\n    }\n}\npub fn nested(value: Option[Option[Number]]) Option[Number] {\n    value ?? Some(42)\n}\n"
 ---
 import { $optionSome, $optionUnbox } from "alder:kernel";
-import { push as $i_alder_3A_2F_2Fstd_2FArray_2Emjs_push } from "alder://std/Array.mjs";
+import { push as $i_alder_3A_2F_2Fstd_2Farray_2Emjs_push } from "alder://std/array.mjs";
 function $v_default_unit($a0, $a1) {
 	let $l0_value = $a0;
 	let $l1_events = $a1;
@@ -11,7 +11,7 @@ function $v_default_unit($a0, $a1) {
 	let $t1 = $t0;
 	if ($t1 === null) {
 		let $t2;
-		const $t3 = $i_alder_3A_2F_2Fstd_2FArray_2Emjs_push;
+		const $t3 = $i_alder_3A_2F_2Fstd_2Farray_2Emjs_push;
 		const $t4 = $t3($l1_events, 1);
 		let $l2_ignored = $t4;
 		$t2 = undefined;

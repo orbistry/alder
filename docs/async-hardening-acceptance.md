@@ -216,7 +216,7 @@ The four traversal worker implementations and optional-options adapters exist,
 with kernel, stored-interface, and CLI coverage for ordered collection, typed
 fail-fast behavior, parent cancellation, and cleanup joins. The public named
 unbounded configuration is now approved and implemented as the Number value
-`Fiber.unbounded`, used inside `{ concurrency: Fiber.unbounded }`. A compiled
+`fiber.unbounded`, used inside `{ concurrency: fiber.unbounded }`. A compiled
 CLI regression failed with unknown-name before implementation and now gates
 three callbacks until all have started, then checks ordered results. The same
 fixture exercises all four public traversal APIs with this value. The kernel

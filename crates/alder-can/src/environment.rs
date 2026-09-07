@@ -94,8 +94,7 @@ pub struct Env<'a> {
     pub providers: Vec<BTreeMap<&'a str, QualifiedName<'a>>>,
     pub associated_types: Vec<BTreeMap<&'a str, ProjectionType<'a>>>,
     pub control: ControlContext,
-    builtin_annotations: BTreeMap<ModuleId<'a>, BTreeMap<&'a str, &'a Annotation<'a>>>,
-    builtin_interfaces: RefCell<BTreeMap<ModuleId<'a>, Option<&'a Interface<'a>>>>,
+    interfaces: RefCell<BTreeMap<ModuleId<'a>, Option<&'a Interface<'a>>>>,
     next_local: Rc<Cell<u32>>,
     next_use: Rc<Cell<u32>>,
     assigned_bindings: Rc<RefCell<BTreeSet<QualifiedName<'a>>>>,
@@ -116,8 +115,7 @@ impl<'a> Env<'a> {
             providers: Vec::new(),
             associated_types: Vec::new(),
             control: ControlContext::default(),
-            builtin_annotations: BTreeMap::new(),
-            builtin_interfaces: RefCell::new(BTreeMap::new()),
+            interfaces: RefCell::new(BTreeMap::new()),
             next_local: Rc::new(Cell::new(0)),
             next_use: Rc::new(Cell::new(0)),
             assigned_bindings: Rc::new(RefCell::new(BTreeSet::new())),
@@ -129,7 +127,11 @@ impl<'a> Env<'a> {
         env.add_builtin_result(bump);
         env.add_builtin_option(bump);
         env.add_builtin_traits(bump);
-        env.add_builtin_modules();
+        // Bundled declaration headers bootstrap against canonical core types;
+        // they do not recursively import the user prelude while it is built.
+        if home.package != PackageId::Builtin {
+            env.add_builtin_modules(bump);
+        }
         env
     }
 
@@ -155,6 +157,21 @@ impl<'a> Env<'a> {
             ("Style", 0),
             ("Query", 1),
         ] {
+            if self.home.package != PackageId::Builtin
+                && matches!(
+                    name,
+                    "ArrayIterator"
+                        | "Fiber"
+                        | "Ref"
+                        | "Semaphore"
+                        | "SynchronizedRef"
+                        | "Html"
+                        | "Style"
+                        | "Query"
+                )
+            {
+                continue;
+            }
             self.types.insert(
                 name,
                 Candidate::Unique(TypeBinding {
@@ -331,67 +348,39 @@ impl<'a> Env<'a> {
         self.register_enum(reference, variants);
     }
 
-    fn add_builtin_modules(&mut self) {
+    fn add_builtin_modules(&mut self, bump: &'a Bump) {
         for name in [
-            "Array",
-            "String",
-            "Number",
-            "BigInt",
-            "Map",
-            "Set",
-            "Task",
-            "Fiber",
-            "Http",
-            "Io",
-            "Cli",
-            "Json",
-            "Option",
-            "Ref",
-            "Result",
-            "Semaphore",
-            "SynchronizedRef",
+            "array", "string", "number", "bigint", "map", "set", "option", "result",
         ] {
-            self.modules.insert(
-                name,
-                Candidate::Unique(ModuleBinding {
-                    module: ModuleId {
-                        package: PackageId::Builtin,
-                        path: builtin_module_path(name),
-                    },
-                    interface: None,
-                    region: Region::zero(),
-                }),
-            );
+            let module = ModuleId {
+                package: PackageId::Builtin,
+                path: bump.alloc_slice_copy(&[name]),
+            };
+            let interface = crate::interface::builtin_module_interface(bump, module)
+                .expect("prelude imports are bundled modules");
+            self.insert_module(name, Region::zero(), module, Some(interface))
+                .expect("prelude imports have unique names");
         }
     }
 
-    pub fn builtin_value(
-        &mut self,
+    pub(crate) fn register_interfaces(&self, interfaces: &'a [Interface<'a>]) {
+        self.interfaces.borrow_mut().extend(
+            interfaces
+                .iter()
+                .map(|interface| (interface.home, Some(interface))),
+        );
+    }
+
+    pub(crate) fn module_interface(
+        &self,
         bump: &'a Bump,
         module: ModuleId<'a>,
-        name: &'a str,
-    ) -> Option<ValueRef<'a>> {
-        let annotations = self
-            .builtin_annotations
-            .entry(module)
-            .or_insert_with(|| crate::interface::builtin_value_annotations(bump, module));
-        annotations.get(name).map(|annotation| ValueRef::Foreign {
-            reference: QualifiedName { module, name },
-            annotation,
-        })
-    }
-
-    fn builtin_interface(&self, bump: &'a Bump, module: ModuleId<'a>) -> Option<&'a Interface<'a>> {
-        if module.package != PackageId::Builtin {
-            return None;
-        }
-        if let Some(interface) = self.builtin_interfaces.borrow().get(&module) {
+    ) -> Option<&'a Interface<'a>> {
+        if let Some(interface) = self.interfaces.borrow().get(&module) {
             return *interface;
         }
-        let interface = crate::interface::builtin_type_interface(bump, module);
-        self.builtin_interfaces
-            .borrow_mut()
-            .insert(module, interface);
+        let interface = crate::interface::builtin_module_interface(bump, module);
+        self.interfaces.borrow_mut().insert(module, interface);
         interface
     }
 
@@ -403,7 +392,7 @@ impl<'a> Env<'a> {
         if let Some(definition) = self.aliases.get(&reference) {
             return Some(*definition);
         }
-        let interface = self.builtin_interface(bump, reference.module)?;
+        let interface = self.module_interface(bump, reference.module)?;
         let typ = interface
             .types
             .iter()
@@ -960,8 +949,16 @@ impl<'a> Env<'a> {
     }
 
     fn record_import_use(&self, region: Region) {
-        if self.import_bindings.contains_key(&region) {
-            self.used_imports.borrow_mut().insert(region);
+        if let Some(name) = self.import_bindings.get(&region) {
+            let mut used = self.used_imports.borrow_mut();
+            used.insert(region);
+            if *name != "*" {
+                used.extend(
+                    self.import_bindings
+                        .iter()
+                        .filter_map(|(&region, candidate)| (candidate == name).then_some(region)),
+                );
+            }
         }
     }
 
@@ -1032,6 +1029,11 @@ impl<'a> Env<'a> {
         region: Region,
         assignable: bool,
     ) -> Result<QualifiedName<'a>, Region> {
+        if let Some(Candidate::Unique(existing)) = self.modules.get(text)
+            && existing.region != Region::zero()
+        {
+            return Err(existing.region);
+        }
         if let Some(existing) = self.scopes[0].values.get(text) {
             let shadows_builtin = matches!(
                 existing.reference,
@@ -1078,6 +1080,37 @@ impl<'a> Env<'a> {
         }
     }
 
+    pub(crate) fn find_module_path(&self, bump: &'a Bump, path: &str) -> Option<ModuleBinding<'a>> {
+        let mut segments = path.split("::");
+        let mut binding = self.find_module(segments.next()?)?;
+        for name in segments {
+            let interface = self.module_interface(bump, binding.module)?;
+            let namespace = interface
+                .modules
+                .iter()
+                .find(|namespace| namespace.exported_as == name)?;
+            binding = ModuleBinding {
+                module: namespace.module,
+                interface: self.module_interface(bump, namespace.module),
+                region: binding.region,
+            };
+        }
+        binding.interface = self.module_interface(bump, binding.module);
+        Some(binding)
+    }
+
+    /// Lexical values and explicit selective imports shadow implicit operation
+    /// namespaces. Prelude trait methods still permit `map.new(...)` alongside
+    /// the unqualified generic `map(...)` method.
+    pub(crate) fn visible_module(&self, text: &str) -> Option<ModuleBinding<'a>> {
+        if let Some(value) = self.find_value(text)
+            && value.region != Region::zero()
+        {
+            return None;
+        }
+        self.find_module(text)
+    }
+
     pub fn insert_module(
         &mut self,
         text: &'a str,
@@ -1085,8 +1118,19 @@ impl<'a> Env<'a> {
         module: ModuleId<'a>,
         interface: Option<&'a Interface<'a>>,
     ) -> Result<(), Region> {
-        if let Some(Candidate::Unique(existing)) = self.modules.get(text) {
+        if let Some(existing) = self.scopes[0].values.get(text)
+            && existing.region != Region::zero()
+        {
             return Err(existing.region);
+        }
+        if let Some(Candidate::Unique(existing)) = self.modules.get(text)
+            && existing.module != module
+            && existing.region != Region::zero()
+        {
+            return Err(existing.region);
+        }
+        if let Some(interface) = interface {
+            self.interfaces.borrow_mut().insert(module, Some(interface));
         }
         self.modules.insert(
             text,
@@ -1106,8 +1150,18 @@ impl<'a> Env<'a> {
         reference: QualifiedName<'a>,
         annotation: &'a Annotation<'a>,
     ) -> Result<(), Region> {
-        if let Some(existing) = self.scopes[0].values.get(text) {
+        if let Some(Candidate::Unique(existing)) = self.modules.get(text)
+            && existing.region != Region::zero()
+        {
             return Err(existing.region);
+        }
+        if let Some(existing) = self.scopes[0].values.get(text) {
+            let same_identity = matches!(existing.reference, ValueRef::Foreign { reference: existing, .. } if existing == reference);
+            let implicit_method = existing.region == Region::zero()
+                && matches!(existing.reference, ValueRef::TraitMethod { .. });
+            if !same_identity && !implicit_method {
+                return Err(existing.region);
+            }
         }
         self.scopes[0].values.insert(
             text,
@@ -1131,7 +1185,9 @@ impl<'a> Env<'a> {
         reference: QualifiedName<'a>,
         arity: usize,
     ) -> Result<(), Region> {
-        if let Some(Candidate::Unique(existing)) = self.types.get(text) {
+        if let Some(Candidate::Unique(existing)) = self.types.get(text)
+            && existing.reference != reference
+        {
             return Err(existing.region);
         }
         if let Some(Candidate::Unique(existing)) = self.traits.get(text) {
@@ -1173,7 +1229,8 @@ impl<'a> Env<'a> {
         methods: &'a [MethodBinding<'a>],
     ) -> Result<(), Region> {
         if let Some(Candidate::Unique(existing)) = self.traits.get(text)
-            && existing.reference.module.package != PackageId::Builtin
+            && existing.reference != reference
+            && existing.region != Region::zero()
         {
             return Err(existing.region);
         }
@@ -1231,7 +1288,14 @@ impl<'a> Env<'a> {
     ) -> Result<ConstructorRef<'a>, Error<'a>> {
         let variant = segments.last().expect("source paths are nonempty");
         if segments.len() >= 3
-            && let Some(module) = self.find_module(segments[0].value)
+            && let Some(module) = self.find_module_path(
+                bump,
+                &segments[..segments.len() - 2]
+                    .iter()
+                    .map(|segment| segment.value)
+                    .collect::<Vec<_>>()
+                    .join("::"),
+            )
             && let Some(interface) = module.interface
             && let Some(enum_) = interface
                 .enums
@@ -1250,7 +1314,7 @@ impl<'a> Env<'a> {
                 annotation: interface_constructor_annotation(bump, enum_, *found),
             });
         }
-        if segments.len() >= 2 {
+        if segments.len() == 2 {
             let enum_name = segments[segments.len() - 2].value;
             if let Some(Candidate::Unique(binding)) = self.enums.get(enum_name)
                 && let Some(constructor) = binding
@@ -1263,8 +1327,10 @@ impl<'a> Env<'a> {
                 }
                 return Ok(*constructor);
             }
-        } else if allow_unqualified || matches!(variant.value, "Some" | "None" | "Ok" | "Err") {
-            let matches: Vec<_> = self
+        } else if segments.len() == 1
+            && (allow_unqualified || matches!(variant.value, "Some" | "None" | "Ok" | "Err"))
+        {
+            let mut matches: Vec<_> = self
                 .enums
                 .values()
                 .filter_map(|candidate| match candidate {
@@ -1276,6 +1342,8 @@ impl<'a> Env<'a> {
                     _ => None,
                 })
                 .collect();
+            matches.sort_by_key(|constructor| constructor.name);
+            matches.dedup_by_key(|constructor| constructor.name);
             if matches.len() == 1 {
                 for candidate in self.types.values() {
                     if let Candidate::Unique(binding) = candidate
@@ -1380,11 +1448,16 @@ impl<'a> Env<'a> {
         name: &'a str,
         binding: MethodBinding<'a>,
     ) -> Result<(), Region> {
+        if let Some(Candidate::Unique(existing)) = self.modules.get(name)
+            && existing.region != Region::zero()
+        {
+            return Err(existing.region);
+        }
         if let Some(existing) = self.scopes[0].values.get(name) {
             let shadows_builtin = matches!(
                 existing.reference,
                 ValueRef::TraitMethod { method, .. }
-                    if method.trait_.0.module.package == PackageId::Builtin
+                    if method == binding.id || existing.region == Region::zero()
             );
             if !shadows_builtin {
                 return Err(existing.region);
@@ -1495,7 +1568,7 @@ impl<'a> Env<'a> {
         name: &'a str,
     ) -> Result<TraitBinding<'a>, Error<'a>> {
         if let Some(qualifier) = qualifier {
-            if let Some(module) = self.find_module(qualifier)
+            if let Some(module) = self.find_module_path(bump, qualifier)
                 && let Some(interface) = module.interface
                 && let Some(trait_) = interface
                     .traits
@@ -1571,10 +1644,10 @@ impl<'a> Env<'a> {
         name: &'a str,
     ) -> Result<TypeBinding<'a>, Error<'a>> {
         if let Some(qualifier) = qualifier {
-            if let Some(module) = self.find_module(qualifier)
+            if let Some(module) = self.find_module_path(bump, qualifier)
                 && let Some(interface) = module
                     .interface
-                    .or_else(|| self.builtin_interface(bump, module.module))
+                    .or_else(|| self.module_interface(bump, module.module))
             {
                 if let Some(typ) = interface.types.iter().find(|typ| typ.exported_as == name) {
                     return Ok(TypeBinding {
@@ -1714,29 +1787,6 @@ fn interface_constructor_annotation<'a>(
         projection_equalities: &[],
         typ,
     })
-}
-
-fn builtin_module_path(name: &str) -> &'static [&'static str] {
-    match name {
-        "Array" => &["Array"],
-        "String" => &["String"],
-        "Number" => &["Number"],
-        "BigInt" => &["BigInt"],
-        "Map" => &["Map"],
-        "Set" => &["Set"],
-        "Task" => &["Task"],
-        "Fiber" => &["Fiber"],
-        "Http" => &["Http"],
-        "Io" => &["Io"],
-        "Cli" => &["Cli"],
-        "Json" => &["Json"],
-        "Option" => &["Option"],
-        "Ref" => &["Ref"],
-        "Semaphore" => &["Semaphore"],
-        "SynchronizedRef" => &["SynchronizedRef"],
-        "Result" => &["Result"],
-        _ => unreachable!("all builtin module names are listed"),
-    }
 }
 
 fn builtin_trait_id(name: &'static str) -> alder_ast::TraitId<'static> {

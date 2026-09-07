@@ -121,7 +121,7 @@ mod tests {
         )
         .await
         .unwrap_or_else(|_| panic!("{name}: execution did not finish within 30 seconds"))
-        .unwrap()
+        .unwrap_or_else(|error| panic!("{name}: {error:?}"))
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -204,7 +204,7 @@ mod tests {
             "let Some(value) = Some(1)",
             "fn read(input: Option[Number]) Number {\nlet Some(value) = input\nvalue\n}",
             "let read = (Some(value): Option[Number]) -> value",
-            "fn visit(values: Array[Option[Number]]) { for Some(value) in values { Io.print(value) } }",
+            "import io\nfn visit(values: Array[Option[Number]]) { for Some(value) in values { io.print(value) } }",
             "async fn read(Some(value): Option[Number]) Number { value }",
             "fn read(value: Option[Number]) Number { match value { Some(number) => number } }",
         ] {
@@ -306,6 +306,88 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn grouped_import_formatting_preserves_effects_and_namespace_initialization() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alder-import-format-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(
+            root.join("alder.jsonc"),
+            r#"{ "type": "application", "target": "standalone" }"#,
+        )
+        .unwrap();
+        let files = [
+            ("state.ald", "pub let events: Array[Number] = [0]\n"),
+            (
+                "a.ald",
+                "import ~/state as log\nlet initialized = array.push(log.events, 1)\n",
+            ),
+            (
+                "z.ald",
+                "import ~/state as log\nlet initialized = array.push(log.events, 2)\npub fn value() Number { 42 }\n",
+            ),
+            (
+                "facade.ald",
+                "pub import ~/z as worker\npub import ~/state as log\nlet initialized = array.push(log.events, 3)\n",
+            ),
+            (
+                "main.ald",
+                indoc::indoc! {r#"
+                // Last alphabetically, deliberately imported first.
+                import ~/z as last
+                import ~/facade as api
+                import ~/state.{events}
+                import ~/a
+                import json
+                import ~/z as again
+                pub fn main() {
+                    assert(json.encode(events) == "[0,1,2,3]")
+                    assert(api.log.events == events)
+                    assert(api.worker.value() == 42 && last.value() == again.value())
+                    array.push(events, 4)
+                    assert(api.log.events == [0, 1, 2, 3, 4])
+                }
+            "#},
+            ),
+        ];
+        let mut previous = None;
+        for formatted in [false, true] {
+            for (path, source) in files {
+                let source = if formatted {
+                    alder_fmt::format_source(source).unwrap()
+                } else {
+                    source.to_owned()
+                };
+                std::fs::write(root.join("src").join(path), source).unwrap();
+            }
+            let compiled = super::build::compile_ephemeral(&root, BuildMode::Build)
+                .await
+                .unwrap();
+            let bundle = super::build::bundle(&compiled, EntryKind::Standalone)
+                .await
+                .unwrap();
+            if let Some(previous) = &previous {
+                assert_eq!(&bundle, previous, "formatting changed executable code");
+            }
+            let status = tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                alder_runtime::execute(bundle.clone(), vec![]),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(status, 0);
+            previous = Some(bundle);
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn local_promise_extern_defects_retain_their_context() {
         let compiled = super::build::compile_ephemeral(&fixture("externs"), BuildMode::Build)
             .await
@@ -359,7 +441,7 @@ mod tests {
             dependency.join("src/facade.ald"),
             indoc::indoc! {r#"
                 pub import ~/api.{ answer as read, events as shared }
-                let initialized = Array.push(shared, 1)
+                let initialized = array.push(shared, 1)
             "#},
         )
         .unwrap();
@@ -367,7 +449,7 @@ mod tests {
             dependency.join("src/mod.ald"),
             indoc::indoc! {r#"
                 pub import ~/facade.*
-                let initialized = Array.push(shared, 2)
+                let initialized = array.push(shared, 2)
             "#},
         )
         .unwrap();
@@ -402,7 +484,7 @@ mod tests {
                 assert(api.answer().await == 42)
                 assert(read().await == 42 && facade.read().await == 42)
                 assert(shared == [1, 2])
-                Array.push(shared, 3)
+                array.push(shared, 3)
                 assert(api.events == [1, 2, 3] && facade.shared == [1, 2, 3])
             }
         "#},

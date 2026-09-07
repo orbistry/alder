@@ -1,0 +1,16 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: import ()
+---
+Import(
+    Path(
+        Start(
+            1,
+            9,
+        ),
+        1,
+        9,
+    ),
+    1,
+    1,
+)

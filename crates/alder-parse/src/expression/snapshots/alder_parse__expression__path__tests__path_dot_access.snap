@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/expression/path.rs
-description: Array.map
+description: array.map
 ---
 Located {
     region: Region {
@@ -25,24 +25,8 @@ Located {
                     column: 6,
                 },
             },
-            value: Path(
-                Path {
-                    segments: [
-                        Located {
-                            region: Region {
-                                start: Position {
-                                    line: 1,
-                                    column: 1,
-                                },
-                                end: Position {
-                                    line: 1,
-                                    column: 6,
-                                },
-                            },
-                            value: "Array",
-                        },
-                    ],
-                },
+            value: Var(
+                "array",
             ),
         },
         field: Located {

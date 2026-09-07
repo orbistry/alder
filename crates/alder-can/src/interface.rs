@@ -8,28 +8,28 @@ use bumpalo::Bump;
 
 use crate::Annotations;
 
-const BUILTIN_TRAITS_SOURCE: &str = include_str!("../stdlib/Traits.ald");
+const BUILTIN_TRAITS_SOURCE: &str = include_str!("../stdlib/traits.ald");
 
 const BUILTIN_VALUE_SOURCES: &[(&str, &str)] = &[
-    ("Array", include_str!("../stdlib/Array.ald")),
-    ("BigInt", include_str!("../stdlib/BigInt.ald")),
-    ("Cli", include_str!("../stdlib/Cli.ald")),
-    ("Fiber", include_str!("../stdlib/Fiber.ald")),
-    ("Io", include_str!("../stdlib/Io.ald")),
-    ("Json", include_str!("../stdlib/Json.ald")),
-    ("Map", include_str!("../stdlib/Map.ald")),
-    ("Number", include_str!("../stdlib/Number.ald")),
-    ("Option", include_str!("../stdlib/Option.ald")),
-    ("Ref", include_str!("../stdlib/Ref.ald")),
-    ("Result", include_str!("../stdlib/Result.ald")),
-    ("Semaphore", include_str!("../stdlib/Semaphore.ald")),
+    ("array", include_str!("../stdlib/array.ald")),
+    ("bigint", include_str!("../stdlib/bigint.ald")),
+    ("cli", include_str!("../stdlib/cli.ald")),
+    ("fiber", include_str!("../stdlib/fiber.ald")),
+    ("io", include_str!("../stdlib/io.ald")),
+    ("json", include_str!("../stdlib/json.ald")),
+    ("map", include_str!("../stdlib/map.ald")),
+    ("number", include_str!("../stdlib/number.ald")),
+    ("option", include_str!("../stdlib/option.ald")),
+    ("ref", include_str!("../stdlib/ref.ald")),
+    ("result", include_str!("../stdlib/result.ald")),
+    ("semaphore", include_str!("../stdlib/semaphore.ald")),
     (
-        "SynchronizedRef",
-        include_str!("../stdlib/SynchronizedRef.ald"),
+        "synchronized_ref",
+        include_str!("../stdlib/synchronized_ref.ald"),
     ),
-    ("Set", include_str!("../stdlib/Set.ald")),
-    ("String", include_str!("../stdlib/String.ald")),
-    ("Task", include_str!("../stdlib/Task.ald")),
+    ("set", include_str!("../stdlib/set.ald")),
+    ("string", include_str!("../stdlib/string.ald")),
+    ("task", include_str!("../stdlib/task.ald")),
 ];
 
 pub(crate) fn builtin_type_interface<'a>(
@@ -41,7 +41,7 @@ pub(crate) fn builtin_type_interface<'a>(
     }
     let (_, source) = BUILTIN_VALUE_SOURCES
         .iter()
-        .find(|(name, _)| module.path == [*name])?;
+        .find(|(name, _)| module.path.iter().copied().eq(name.split('/')))?;
     let parsed =
         alder_parse::parse_module(bump, source).expect("packaged stdlib declarations must parse");
     let headers = crate::canonicalize_headers(
@@ -57,13 +57,110 @@ pub(crate) fn builtin_type_interface<'a>(
     Some(bump.alloc(headers_from_module(bump, headers.module, &[])))
 }
 
+/// The bundled library uses the same public contracts as source and package
+/// modules. Primitive runtime types retain their canonical root identities;
+/// exporting one from its operations module does not declare a second type.
+pub fn builtin_module_interface<'a>(
+    bump: &'a Bump,
+    module: alder_ast::ModuleId<'a>,
+) -> Option<&'a Interface<'a>> {
+    let mut interface = *builtin_type_interface(bump, module)?;
+    interface.values =
+        bump.alloc_slice_fill_iter(builtin_value_annotations(bump, module).into_iter().map(
+            |(name, annotation)| InterfaceValue {
+                exported_as: name,
+                identity: InterfaceValueIdentity::Binding(alder_ast::QualifiedName {
+                    module,
+                    name,
+                }),
+                annotation,
+                kind: ValueKind::Extern,
+            },
+        ));
+    let exported_types: &[&str] = match module.path {
+        ["array"] => &["Array", "ArrayIterator"],
+        ["bigint"] => &["BigInt"],
+        ["fiber"] => &["Fiber"],
+        ["map"] => &["Map"],
+        ["number"] => &["Number"],
+        ["option"] => &["Option"],
+        ["ref"] => &["Ref"],
+        ["result"] => &["Result"],
+        ["semaphore"] => &["Semaphore"],
+        ["set"] => &["Set"],
+        ["string"] => &["String"],
+        ["synchronized_ref"] => &["SynchronizedRef"],
+        ["task"] => &["Task"],
+        _ => &[],
+    };
+    let env = crate::environment::Env::new(bump, module);
+    let mut types = interface.types.to_vec();
+    let mut enums = interface.enums.to_vec();
+    for &name in exported_types {
+        let crate::environment::Candidate::Unique(binding) = env.types[name] else {
+            unreachable!("runtime types have unique canonical identities");
+        };
+        let params =
+            bump.alloc_slice_fill_iter(["a", "b"].into_iter().take(binding.arity).map(|name| {
+                TypeParam {
+                    name: alder_region::Located::at_zero(name),
+                    kind: Kind::Type,
+                }
+            }));
+        if let Some(crate::environment::Candidate::Unique(enum_)) = env.enums.get(name) {
+            enums.push(InterfaceEnum {
+                exported_as: name,
+                reference: binding.reference,
+                params: enum_.variants[0].annotation.params,
+                result_kind: Kind::Type,
+                variants: bump.alloc_slice_fill_iter(enum_.variants.iter().map(|variant| {
+                    alder_ast::Variant {
+                        name: variant.name,
+                        index: variant.index,
+                        alternatives: variant.alternatives,
+                        payload: variant.payload,
+                    }
+                })),
+            });
+        } else {
+            types.push(InterfaceType {
+                exported_as: name,
+                reference: binding.reference,
+                params,
+                result_kind: Kind::Type,
+                body: PublicTypeBody::Opaque(OpaqueKind::Extern),
+            });
+        }
+    }
+    interface.types = bump.alloc_slice_copy(&types);
+    interface.enums = bump.alloc_slice_copy(&enums);
+    Some(bump.alloc(interface))
+}
+
+/// Closed compiler-shipped module inventory, never resolved via a registry.
+pub fn builtin_module_interfaces<'a>(bump: &'a Bump) -> Vec<Interface<'a>> {
+    BUILTIN_VALUE_SOURCES
+        .iter()
+        .map(|(name, _)| {
+            *builtin_module_interface(
+                bump,
+                alder_ast::ModuleId {
+                    package: alder_ast::PackageId::Builtin,
+                    path: bump.alloc_slice_fill_iter(name.split('/').collect::<Vec<_>>()),
+                },
+            )
+            .expect("every bundled declaration has an interface")
+        })
+        .collect()
+}
+
 pub(crate) fn builtin_value_annotations<'a>(
     bump: &'a Bump,
     module: alder_ast::ModuleId<'a>,
 ) -> std::collections::BTreeMap<&'a str, &'a alder_ast::Annotation<'a>> {
     let Some((_, source)) = BUILTIN_VALUE_SOURCES
         .iter()
-        .find(|(name, _)| module.path == [*name])
+        .find(|(name, _)| module.path.iter().copied().eq(name.split('/')))
     else {
         return Default::default();
     };
@@ -480,6 +577,7 @@ fn interface_from_module<'a>(
         let Some(interface) = imports
             .iter()
             .find(|interface| interface.home == import.module)
+            .or_else(|| builtin_module_interface(bump, import.module))
         else {
             continue;
         };
@@ -531,6 +629,14 @@ fn interface_from_module<'a>(
         }
     }
 
+    // Name conflicts have already been rejected during canonicalization.
+    // Repeating the same identity is an idempotent import, not a second export.
+    deduplicate_exports(&mut values, |value| (value.exported_as, value.identity));
+    deduplicate_exports(&mut types, |typ| (typ.exported_as, typ.reference));
+    deduplicate_exports(&mut enums, |enum_| (enum_.exported_as, enum_.reference));
+    deduplicate_exports(&mut traits, |trait_| (trait_.exported_as, trait_.id));
+    deduplicate_exports(&mut modules, |module| (module.exported_as, module.module));
+
     Interface {
         home: module.id,
         values: bump.alloc_slice_copy(&values),
@@ -541,6 +647,11 @@ fn interface_from_module<'a>(
         modules: bump.alloc_slice_copy(&modules),
         private_names: bump.alloc_slice_copy(&private_names),
     }
+}
+
+fn deduplicate_exports<T, K: Ord>(values: &mut Vec<T>, key: impl Fn(&T) -> K) {
+    let mut seen = std::collections::BTreeSet::new();
+    values.retain(|value| seen.insert(key(value)));
 }
 
 fn impl_is_externally_nameable(
@@ -731,6 +842,39 @@ mod tests {
     use super::{BUILTIN_TRAITS_SOURCE, BUILTIN_VALUE_SOURCES};
 
     #[test]
+    fn bundled_contracts_export_operations_and_original_runtime_types() {
+        let bump = bumpalo::Bump::new();
+        let interfaces = super::builtin_module_interfaces(&bump);
+        assert_eq!(interfaces.len(), BUILTIN_VALUE_SOURCES.len());
+        let fiber = interfaces
+            .iter()
+            .find(|interface| interface.home.path == ["fiber"])
+            .unwrap();
+        assert!(fiber.values.iter().any(|value| value.exported_as == "fork"));
+        let typ = fiber
+            .types
+            .iter()
+            .find(|typ| typ.exported_as == "Fiber")
+            .unwrap();
+        assert_eq!(typ.reference.module.package, alder_ast::PackageId::Builtin);
+        assert!(typ.reference.module.path.is_empty());
+        assert_eq!(typ.params.len(), 1);
+        let option = interfaces
+            .iter()
+            .find(|interface| interface.home.path == ["option"])
+            .unwrap();
+        let enum_ = option
+            .enums
+            .iter()
+            .find(|enum_| enum_.exported_as == "Option")
+            .unwrap();
+        assert!(enum_.reference.module.path.is_empty());
+        assert_eq!(enum_.variants.len(), 2);
+        assert_eq!(enum_.params.len(), 1);
+        assert_eq!(enum_.variants[0].name.enum_, enum_.reference);
+    }
+
+    #[test]
     fn packaged_builtin_values_match_the_workspace_stdlib() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../std");
         if !root.is_dir() {
@@ -751,7 +895,7 @@ mod tests {
         for (name, _) in BUILTIN_VALUE_SOURCES {
             let module = alder_ast::ModuleId {
                 package: alder_ast::PackageId::Builtin,
-                path: bump.alloc_slice_copy(&[*name]),
+                path: bump.alloc_slice_fill_iter(name.split('/').collect::<Vec<_>>()),
             };
             assert!(
                 !super::builtin_value_annotations(&bump, module).is_empty(),
@@ -765,7 +909,7 @@ mod tests {
         let bump = bumpalo::Bump::new();
         let module = alder_ast::ModuleId {
             package: alder_ast::PackageId::Builtin,
-            path: &["Fiber"],
+            path: &["fiber"],
         };
         let annotations = super::builtin_value_annotations(&bump, module);
         let annotation = annotations["unbounded"];
@@ -783,7 +927,7 @@ mod tests {
         let bump = bumpalo::Bump::new();
         let module = alder_ast::ModuleId {
             package: alder_ast::PackageId::Builtin,
-            path: &["Fiber"],
+            path: &["fiber"],
         };
         let interface = super::builtin_type_interface(&bump, module).unwrap();
         let options = interface
@@ -867,7 +1011,7 @@ mod tests {
     #[test]
     fn packaged_builtin_traits_match_the_workspace_stdlib() {
         let workspace_source =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../std/Traits.ald");
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../std/traits.ald");
         if workspace_source.is_file() {
             assert_eq!(
                 std::fs::read_to_string(workspace_source).unwrap(),

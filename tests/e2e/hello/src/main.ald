@@ -1,3 +1,4 @@
+import io
 pub fn main() {
-    Io.print("Hello from Alder")
+    io.print("Hello from Alder")
 }

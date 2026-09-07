@@ -1,3 +1,4 @@
+import json
 #[derive(Show, Hash, Json)]
 enum Node[a] { Links(Array[Option[Node[a]]], a) }
 
@@ -9,12 +10,12 @@ impl Ord[Children[a]] where a: Ord {
         let Children::Values(xs) = left
         let Children::Values(ys) = right
         let index = 0
-        while index < Array.length(xs) && index < Array.length(ys) {
+        while index < array.length(xs) && index < array.length(ys) {
             let order = compare(xs[index], ys[index])
             if order != Ordering::Equal { return order }
             index += 1
         }
-        compare(Array.length(xs), Array.length(ys))
+        compare(array.length(xs), array.length(ys))
     }
 }
 
@@ -33,20 +34,20 @@ fn expect_cycle(operation: String, callback: fn() a) ()
 pub fn check() {
     let links: Array[Result[Right, [:finished]]] = []
     let mutual = Left::Wrap { next: links }
-    Array.push(links, Ok(Right::Wrap(mutual)))
+    array.push(links, Ok(Right::Wrap(mutual)))
     assert show(mutual) == "Wrap { next: [Ok(Wrap(<cycle>))] }"
     expect_cycle("Hash", () -> hash(mutual))
-    expect_cycle("JSON", () -> Json.encode(mutual))
+    expect_cycle("JSON", () -> json.encode(mutual))
     links[0] = Err(:finished)
     assert show(mutual) == "Wrap { next: [Err(:finished)] }"
     let mutual_twin = Left::Wrap { next: [Err(:finished)] }
     assert hash(mutual) == hash(mutual_twin)
-    assert Json.encode(mutual) == Json.encode(mutual_twin)
+    assert json.encode(mutual) == json.encode(mutual_twin)
 
     let ordered_children: Array[Option[OrderedNode]] = []
     let ordered = OrderedNode::Links(Children::Values(ordered_children))
     assert compare(ordered, ordered) == Ordering::Equal
-    Array.push(ordered_children, Some(ordered))
+    array.push(ordered_children, Some(ordered))
     expect_cycle("Ord", () -> compare(ordered, ordered))
     expect_cycle("Ord", () -> compare(Some(Some(ordered)), Some(Some(ordered))))
     ordered_children[0] = None
@@ -55,19 +56,19 @@ pub fn check() {
     let children: Array[Option[Node[Number]]] = []
     let node = Node::Links(children, 42)
     let acyclic_hash = hash(node)
-    let acyclic_json = Json.encode(node)
-    Array.push(children, Some(node))
+    let acyclic_json = json.encode(node)
+    array.push(children, Some(node))
     assert show(node) == "Links([Some(<cycle>)], 42)"
     assert show(Some(Some(node))) == "Some(Some(Links([Some(<cycle>)], 42)))"
     expect_cycle("Hash", () -> hash(node))
-    expect_cycle("JSON", () -> Json.encode(node))
+    expect_cycle("JSON", () -> json.encode(node))
     children[0] = None
     assert show(node) == "Links([None], 42)"
     assert hash(node) != acyclic_hash
-    assert Json.encode(node) != acyclic_json
+    assert json.encode(node) != acyclic_json
     let shared = Node::Links([Some(node), Some(node)], 7)
     let copied = Node::Links([Some(node), Some(Node::Links([None], 42))], 7)
     assert hash(shared) == hash(copied)
-    assert Json.encode(shared) == Json.encode(copied)
+    assert json.encode(shared) == json.encode(copied)
     assert show(shared) == show(copied)
 }

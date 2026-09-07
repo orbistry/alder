@@ -80,7 +80,7 @@ assertion failed before the fix.
 
 ## Module API and imported dictionaries
 
-`Json.encode` and `Json.decode` now require `a: Json`. Their built-in module
+`json.encode` and `json.decode` now require `a: Json`. Their built-in module
 exports call `$jsonEncodeWith` and `$jsonDecodeWith`, forwarding the selected
 dictionary to its encode/decode method. The old unchecked kernel wrappers were
 removed. These APIs therefore share the primitive encoding limitations above
@@ -142,8 +142,9 @@ The initial end-to-end attempt using the then-derived
 `Failure` error group in `tests/e2e/traits` was rejected before execution:
 
 ```alder
+import json
 let decoded: Result[Result[JsonSecret, Failure], [:invalid_json(String)]] =
-    Json.decode("{\"$\":\"Ok\"}")
+    json.decode("{\"$\":\"Ok\"}")
 ```
 
 The diagnostic reports missing `Json[[:first(Number) | :later]]`, required by

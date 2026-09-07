@@ -263,7 +263,7 @@ mod tests {
             trait Monoid[a] {
                 fn empty() a
                 fn append(x: a, y: a) a
-                fn concat(xs: Array[a]) a { Array.fold(xs, empty(), append) }
+                fn concat(xs: Array[a]) a { array.fold(xs, empty(), append) }
             }
         "#
         );

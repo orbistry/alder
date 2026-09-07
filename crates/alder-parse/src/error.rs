@@ -91,10 +91,9 @@ pub enum Import<'a> {
     NameAlias(Row, Col),
     /// Expected `,` or `}`.
     NamesEnd(ExpectedEnd),
+    GroupEnd(ExpectedEnd),
     /// `as` not followed by a lowercase name.
     Alias(Row, Col),
-    /// `pub import @x/y` without `.{ … }` or `.*`.
-    PubNeedsNames(Row, Col),
     /// Bare `import @alder/test`: the last segment is a reserved word, so it cannot
     /// be bound — write `as name` or `.{ … }`. Position of the segment.
     ReservedBinding(Keyword, Row, Col),
@@ -105,7 +104,7 @@ pub enum Import<'a> {
 /// Segments are keyword-insensitive (`raw_lower`, §2.4): only their shape can fail.
 #[derive(Debug)]
 pub enum ModulePath {
-    /// Expected `@` or `~`.
+    /// Expected a bundled module name, `@`, or `~`.
     Start(Row, Col),
     Author(Row, Col),
     Slash(Row, Col),
@@ -972,7 +971,7 @@ pub enum BadOperator {
     Arrow,
     /// `|` (hint: `||`, or `|` only between match patterns)
     Bar,
-    /// `++` (hint: `Array.concat`, templates)
+    /// `++` (hint: `array.concat`, templates)
     PlusPlus,
     /// `::` (hint: paths only, no cons)
     DoubleColon,

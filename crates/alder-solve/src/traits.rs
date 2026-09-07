@@ -1455,7 +1455,7 @@ mod tests {
             assert_eq!(
                 database.instances(builtin_trait_id(trait_name)).len(),
                 instances,
-                "all {trait_name} instance headers come from std/Traits.ald"
+                "all {trait_name} instance headers come from std/traits.ald"
             );
         }
     }

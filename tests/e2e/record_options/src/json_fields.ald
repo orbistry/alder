@@ -1,3 +1,4 @@
+import json
 #[derive(Json)]
 enum Fields {
     Fields { constructor: Number, toString: String, hasOwnProperty?: Number }
@@ -5,14 +6,14 @@ enum Fields {
 
 pub fn check() {
     let original = Fields::Fields { constructor: 42, toString: "payload", hasOwnProperty: 7 }
-    let decoded: Result[Fields, [:invalid_json(String)]] = Json.decode(Json.encode(original))
+    let decoded: Result[Fields, [:invalid_json(String)]] = json.decode(json.encode(original))
     assert(match decoded {
         Ok(Fields::Fields { constructor, toString, hasOwnProperty }) => {
             constructor == 42 && toString == "payload" && hasOwnProperty == Some(7)
         },
         Err(_) => false,
     })
-    let missing: Result[Fields, [:invalid_json(String)]] = Json.decode(
+    let missing: Result[Fields, [:invalid_json(String)]] = json.decode(
         "{\"tag\":\"Fields\",\"value\":{\"constructor\":42,\"toString\":\"payload\"}}"
     )
     assert(match missing {

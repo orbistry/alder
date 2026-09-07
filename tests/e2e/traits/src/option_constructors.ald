@@ -1,8 +1,8 @@
 pub fn verify() {
     let absent: Option[Number] = None
     let present: Option[Number] = Some(42)
-    assert(absent == Option.none())
-    assert(present == Option.some(42))
+    assert(absent == option.none())
+    assert(present == option.some(42))
     assert(match absent { Some(_) => false, None => true })
     assert(match present { Some(value) => value == 42, None => false })
     let nested: Option[Option[Number]] = Some(None)

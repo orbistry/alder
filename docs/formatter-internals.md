@@ -1,8 +1,20 @@
 # Formatter preservation contract
 
-The current formatter changes horizontal indentation and trailing layout spaces,
-not token spelling or internal line breaks. It parses input before formatting
-and parses output before returning it.
+The formatter canonicalizes import runs, then changes horizontal indentation
+and trailing layout spaces elsewhere. It parses input before formatting and
+parses output before returning it.
+
+`imports.rs` flattens grouped entries with their source regions, retains
+visibility and import tails, and sorts each consecutive same-visibility run by
+root (bundled, local, external) and module path. Aliases do not affect sorting.
+One entry stays ungrouped; larger runs have one entry per line, trailing commas,
+and exactly one blank line between nonempty root sections. Declarations and
+visibility changes are boundaries. Adjacent leading and trailing comments
+travel with an entry. Blank-separated comments outside a run stay in place;
+standalone comments inside a run become a blank-separated preamble in their
+original order. Comments inside selections move before the owning import.
+Import and comment multisets are checked after this rewrite, including exact
+comment spelling and public visibility.
 
 `alder-parse::parse_module_with_verbatim` also returns byte ranges for templates
 (including interpolation), markup expressions, raw macro bodies/calls, and
@@ -17,10 +29,10 @@ delimiters so braces/backticks in payloads cannot affect surrounding indentation
 This deliberately leaves layout inside templates, markup, and raw macros alone.
 CRLF and literal carriage returns are not globally normalized.
 
-Before returning output it compares comment payloads, every verbatim source
+After normalizing imports, it compares comment payloads, every verbatim source
 slice, and each physical line's non-boundary-whitespace contents. Internal
 blank lines remain in place. Together with reparsing, these checks enforce the
-current restricted transformation contract; they are not a general-purpose AST
+restricted non-import transformation contract; they are not a general-purpose AST
 equivalence checker. Future token rewriting or line reflow must add an
 appropriate structural-equivalence check before broadening that contract.
 
@@ -32,3 +44,7 @@ regression confirming that an invalid file leaves earlier valid files untouched.
 An end-to-end CLI regression formats a temporary application, checks formatting
 idempotence, bundles it, and executes assertions on the multiline template's
 exact value and length. The test also requires a real indentation change.
+Import tests check root/path sorting, comment attachment, visibility boundaries,
+single-entry collapse, nested paths, CRLF, and idempotence. An execution test
+compares pre-format and post-format bundles byte-for-byte and asserts effects,
+shared identities, namespace re-export chains, and exactly-once initialization.

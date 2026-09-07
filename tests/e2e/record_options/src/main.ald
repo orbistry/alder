@@ -1,7 +1,12 @@
-import ~/spread_defaults
-import ~/collections
-import ~/json_fields
-import ~/mutual_overlays
+import (
+    fiber,
+    json,
+
+    ~/collections,
+    ~/json_fields,
+    ~/mutual_overlays,
+    ~/spread_defaults,
+)
 
 fn read(record: { value: Option[Number] }) Option[Number] { record.value }
 
@@ -81,11 +86,11 @@ pub async fn main() {
     assert(apply(if false { {} } else { {} }, read) == None)
     let trace = []
     let delayed = apply({ marker: {
-        Array.push(trace, 1)
+        array.push(trace, 1)
         42
-    } }, {
-        Array.push(trace, 2)
-        read_marked
+        } }, {
+            array.push(trace, 2)
+            read_marked
     })
     assert(delayed == None)
     assert(trace == [1, 2])
@@ -108,11 +113,11 @@ pub async fn main() {
     assert(omitted.value == Some(42))
     omitted.value = None
     assert(omitted == explicit)
-    let defaults: Fiber::MapOptions = {}
+    let defaults: fiber::MapOptions = {}
     let explicit_defaults: { concurrency: Option[Number] } = { concurrency: None }
     assert(defaults == explicit_defaults)
-    assert(Fiber.map([1, 2], value -> async { value * 2 }, defaults).await == [2, 4])
-    assert(Fiber.map([1, 2], value -> async { value * 2 }, explicit_defaults).await == [2, 4])
+    assert(fiber.map([1, 2], value -> async { value * 2 }, defaults).await == [2, 4])
+    assert(fiber.map([1, 2], value -> async { value * 2 }, explicit_defaults).await == [2, 4])
     let patch: { value?: String } = {}
     let replaced = merge({ value: 42, marker: true }, patch)
     assert(replaced.value == None)
@@ -125,13 +130,13 @@ pub async fn main() {
     assert(match fallback({ result: Ok(42) }, {}) { Ok(42) => true, _ => false })
     let absent_config = Config::Config {}
     let explicit_config = Config::Config { value: None, unit: None }
-    let decoded_missing: Result[Config, [:invalid_json(String)]] = Json.decode("{\"tag\":\"Config\",\"value\":{}}")
+    let decoded_missing: Result[Config, [:invalid_json(String)]] = json.decode("{\"tag\":\"Config\",\"value\":{}}")
     assert(decoded_missing == Ok(explicit_config))
-    let generic_missing: Result[Generic[MaybeNumber], [:invalid_json(String)]] = Json.decode("{\"tag\":\"Generic\",\"value\":{}}")
+    let generic_missing: Result[Generic[MaybeNumber], [:invalid_json(String)]] = json.decode("{\"tag\":\"Generic\",\"value\":{}}")
     assert(generic_missing == Ok(Generic::Generic { value: None }))
-    let required_missing: Result[Generic[Number], [:invalid_json(String)]] = Json.decode("{\"tag\":\"Generic\",\"value\":{}}")
+    let required_missing: Result[Generic[Number], [:invalid_json(String)]] = json.decode("{\"tag\":\"Generic\",\"value\":{}}")
     assert(match required_missing { Err(:invalid_json(_)) => true, _ => false })
-    assert(Json.encode(absent_config) == Json.encode(explicit_config))
+    assert(json.encode(absent_config) == json.encode(explicit_config))
     assert(absent_config == explicit_config)
     assert(hash(absent_config) == hash(explicit_config))
     assert(compare(absent_config, explicit_config) == Ordering::Equal)
@@ -141,7 +146,7 @@ pub async fn main() {
         _ => false,
     })
     let nested_config = Config::Config { value: Some(None), unit: () }
-    let nested_roundtrip: Result[Config, [:invalid_json(String)]] = Json.decode(Json.encode(nested_config))
+    let nested_roundtrip: Result[Config, [:invalid_json(String)]] = json.decode(json.encode(nested_config))
     assert(nested_roundtrip == Ok(nested_config))
     assert(nested_config != absent_config)
     assert(compare(absent_config, nested_config) == Ordering::Less)

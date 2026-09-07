@@ -515,7 +515,7 @@ mod tests {
 
     #[test]
     fn directive_for_iter_call() {
-        assert_markup_snapshot!("<ul>@for x in Array.range(0, n) { <li>{x}</li> }</ul>");
+        assert_markup_snapshot!("<ul>@for x in array.range(0, n) { <li>{x}</li> }</ul>");
     }
 
     // ---- @match -----------------------------------------------------------

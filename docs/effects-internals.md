@@ -290,7 +290,7 @@ directly. `?` evaluates its operand once, returns the same `Err` object
 unchanged, and extracts `_0` from `Ok`. Codegen constructs these forms as Oxc
 nodes owned by the Rolldown AST container.
 
-The built-in `Json.decode` contract returns the closed row
+The built-in `json.decode` contract returns the closed row
 `[:invalid_json(String)]`. Kernel decoders construct that tag, including path
 context in its payload, so JSON failures participate in the same typed row
 machinery as user errors.
@@ -350,7 +350,7 @@ Async blocks capture lexical bindings, not snapshots. Rebinding before a task
 runs is visible, shared objects remain shared, and repeated execution may
 observe changed state. Async function arguments evaluate at call time while
 the body runs only when the task executes. A test can return an async block as
-its tail expression: `test "wait" { async { Task.sleep(1).await } }`. The test
+its tail expression: `test "wait" { async { task.sleep(1).await } }`. The test
 runner executes returned tasks through the same root runner; the test itself
 does not implicitly authorize await. Broader explicit-async validation remains
 tracked in `plans/async-concurrency-hardening.md`.
@@ -427,8 +427,8 @@ invoking it.
 ### Fiber ABI and lifecycle
 
 The generated-code ABI is deliberately small: `$task`, `$tryPromise`,
-`$runMain`, and the kernel operations underlying `Task.sleep` and
-`Fiber.fork`, `join`, `interrupt`, `all`, `race`, `scope`, `addFinalizer`, and
+`$runMain`, and the kernel operations underlying `task.sleep` and
+`fiber.fork`, `join`, `interrupt`, `all`, `race`, `scope`, `addFinalizer`, and
 `uninterruptible`. Operations are small tagged objects yielded by generators;
 compiler-generated JavaScript never depends on runtime classes.
 
@@ -445,11 +445,11 @@ while closure is draining joins that drain; one added after closure runs
 immediately with the final exit. A failing finalizer changes a successful exit
 to failure but does not prevent remaining finalizers from running.
 
-`Fiber.all` preserves input order. The first child defect/interruption
+`fiber.all` preserves input order. The first child defect/interruption
 interrupts every sibling and waits for all cleanup before failing; an Alder
-`Err` remains a normal array element. `Fiber.race` selects the first terminal
+`Err` remains a normal array element. `fiber.race` selects the first terminal
 exit exactly once, interrupts every loser, and waits for loser cleanup before
-publishing the winner. `Fiber.scope(task)` runs the task as an owned child and
+publishing the winner. `fiber.scope(task)` runs the task as an owned child and
 does not let it outlive the call.
 
 The traversal kernels use a bounded worker pool and a fresh owned scope per
@@ -468,21 +468,21 @@ Pending parent interruption under an uninterruptible mask remains pending even
 when a traversal finishes with Err. Per-item provider context does not leak to
 the next item on the same worker.
 
-Public `Fiber.map`, `forEach`, `tryMap`, and `tryForEach` take
-`(values, callback, options?: MapOptions)`. `Fiber::MapOptions` is the structural
+Public `fiber.map`, `forEach`, `tryMap`, and `tryForEach` take
+`(values, callback, options?: MapOptions)`. `fiber::MapOptions` is the structural
 alias `{ concurrency?: Number }`. Omission, `None`, or an empty record selects
 sequential execution. For example:
 
 ```alder
-urls |> Fiber.map(url -> async { fetch(url).await }, { concurrency: 8 }).await
+urls |> fiber.map(url -> async { fetch(url).await }, { concurrency: 8 }).await
 ```
 
 The maintained kernel adapters unwrap optional options and read configuration
 once per task execution, not at task construction. Reusing a task therefore
 observes later mutations to its configuration record. Invalid bounds are
 RangeError defects, never clamped values or typed errors. The internal normalized
-limit accepts positive Infinity, exposed as the Number value `Fiber.unbounded`:
-`{ concurrency: Fiber.unbounded }`. This removes the configured worker limit,
+limit accepts positive Infinity, exposed as the Number value `fiber.unbounded`:
+`{ concurrency: fiber.unbounded }`. This removes the configured worker limit,
 not structured ownership, cancellation, cleanup, or scheduler fairness. It may
 start one operation per input and should be selected deliberately for large inputs.
 `forEach` requires a unit-completing task callback, and `tryForEach` requires

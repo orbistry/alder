@@ -1,14 +1,14 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "pub async fn main() {\n    Fiber.map([1, 2], value -> value + 1).await\n}\n"
+description: "import fiber\npub async fn main() {\n    fiber.map([1, 2], value -> value + 1).await\n}\n"
 ---
 alder::type::type_mismatch
 
   × type mismatch: expected `fn(Number) Task[a]`, found `fn(Number) Number`
-   ╭─[/project/src/main.ald:2:23]
- 1 │ pub async fn main() {
- 2 │     Fiber.map([1, 2], value -> value + 1).await
+   ╭─[/project/src/main.ald:3:23]
+ 2 │ pub async fn main() {
+ 3 │     fiber.map([1, 2], value -> value + 1).await
    ·                       ─────────┬────────
    ·                                ╰── argument 2 of `map` has an incompatible type
- 3 │ }
+ 4 │ }
    ╰────

@@ -1,0 +1,24 @@
+---
+source: crates/alder-parse/src/item/import.rs
+description: "import (array.{map filter}, io)"
+---
+Import(
+    NamesEnd(
+        ExpectedEnd {
+            opening: Position {
+                line: 1,
+                column: 15,
+            },
+            boundary: Position {
+                line: 1,
+                column: 19,
+            },
+            unexpected: Position {
+                line: 1,
+                column: 20,
+            },
+        },
+    ),
+    1,
+    1,
+)

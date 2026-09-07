@@ -1080,7 +1080,7 @@ pub enum ValueKind {
     TraitMethod,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum InterfaceValueIdentity<'a> {
     Binding(QualifiedName<'a>),
     TraitMethod(MethodId<'a>),

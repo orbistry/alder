@@ -180,9 +180,13 @@ impl<'a> Module<'a> {
     /// Top-level imports (including `pub import` re-exports). Imports inside
     /// `tests { }` are only reachable through `ItemKind::Tests`.
     pub fn imports(&self) -> impl Iterator<Item = &'a Import<'a>> + '_ {
-        self.items.iter().filter_map(|item| match &item.value.kind {
-            ItemKind::Import(import) => Some(*import),
-            _ => None,
+        self.items.iter().flat_map(|item| {
+            let (single, group) = match item.value.kind {
+                ItemKind::Import(import) => (Some(import), &[][..]),
+                ItemKind::ImportGroup(entries) => (None, entries),
+                _ => (None, &[][..]),
+            };
+            single.into_iter().chain(group.iter().map(|entry| entry.value))
         })
     }
 }
@@ -210,6 +214,7 @@ pub struct Attribute<'a> {
 #[derive(Debug)]
 pub enum ItemKind<'a> {
     Import(&'a Import<'a>),
+    ImportGroup(&'a [Located<&'a Import<'a>>]),
     /// `body: None` is a bodiless declaration; canonicalization requires `#[extern]`.
     Fn(&'a FnDecl<'a>),
     /// Includes `let card = style { … }`.
@@ -246,6 +251,8 @@ pub struct ModulePath<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ModuleRoot<'a> {
+    /// Bare, compiler-shipped standard-library path.
+    StandardLibrary,
     /// `@author/package`
     Package { author: Name<'a>, package: Name<'a> },
     /// `~`
@@ -499,7 +506,7 @@ pub enum PlaceStep<'a> {
 // ============================================================================
 
 /// `Upper { '::' Upper }` — enum name, constructor path, trait path, component name,
-/// or a module-style receiver (`Array` in `Array.map`); canonicalization decides.
+/// or a module-style receiver (`array` in `array.map`); canonicalization decides.
 #[derive(Clone, Copy, Debug)]
 pub struct Path<'a> {
     /// At least one segment.
@@ -534,7 +541,7 @@ pub enum Expr<'a> {
     Unit,
     // ---- names
     Var(&'a str),
-    /// `Some`, `Option::Some`, `Shape`, `Array` (in `Array.map`).
+    /// `Some`, `Option::Some`, `Shape`; lowercase module receivers use `Var`.
     Path(Path<'a>),
     /// `Show::show`
     PathVar { path: Path<'a>, name: Name<'a> },
@@ -1070,8 +1077,8 @@ pub enum Import<'a> {
     NamesEnd(ExpectedEnd),
     /// `as` not followed by a lowercase name.
     Alias(Row, Col),
-    /// `pub import @x/y` without `.{ … }` or `.*`.
-    PubNeedsNames(Row, Col),
+    /// Expected `,` or `)` in an import group, retaining its opening region.
+    GroupEnd(ExpectedEnd),
     /// Bare `import @alder/test`: the last segment is a reserved word, so it cannot
     /// be bound — write `as name` or `.{ … }`. Position of the segment.
     ReservedBinding(Keyword, Row, Col),
@@ -1082,7 +1089,7 @@ pub enum Import<'a> {
 /// Segments are keyword-insensitive (`raw_lower`, §2.4): only their shape can fail.
 #[derive(Debug)]
 pub enum ModulePath {
-    /// Expected `@` or `~`.
+    /// Expected a bare bundled path, `@`, or `~`.
     Start(Row, Col),
     Author(Row, Col),
     Slash(Row, Col),
@@ -1919,7 +1926,7 @@ pub enum BadOperator {
     Arrow,
     /// `|` (hint: `||`, or `|` only between match patterns)
     Bar,
-    /// `++` (hint: `Array.concat`, templates)
+    /// `++` (hint: `array.concat`, templates)
     PlusPlus,
     /// `::` (hint: paths only, no cons)
     DoubleColon,
@@ -2816,7 +2823,7 @@ One construct per test.
 
 **template.rs**: empty, text_only, single_hole, hole_at_start, hole_at_end, adjacent_holes, text_around_holes, nested_template, record_in_hole, escaped_backtick, escaped_dollar, dollar_without_brace, multiline_text, crlf_normalized, error_endless, error_hole_empty, error_hole_unclosed, error_hole_bad_expr, error_bad_escape.
 
-**expression/path.rs**: var_simple, var_camel, var_underscore_inside, path_bare, path_qualified, path_deep, path_var, path_dot_access (`Array.map`), record_ctor, record_ctor_shorthand, record_ctor_empty, error_reserved_word, error_path_dangling_colons, error_sql_word_outside_query_is_var (success: `select` is a plain var outside query).
+**expression/path.rs**: var_simple, var_camel, var_underscore_inside, path_bare, path_qualified, path_deep, path_var, path_dot_access (`array.map`), record_ctor, record_ctor_shorthand, record_ctor_empty, error_reserved_word, error_path_dangling_colons, error_sql_word_outside_query_is_var (success: `select` is a plain var outside query).
 
 **expression/tag.rs**: tag_bare, tag_with_arg, tag_with_args, tag_in_call, error_tag_no_name, error_tag_unclosed.
 
@@ -2856,7 +2863,7 @@ One construct per test.
 
 **item/attribute.rs**: attr_bare, attr_args, attr_derive, attr_multiple, error_attr_open, error_attr_unclosed, error_attr_name, error_attr_dangling.
 
-**item/import.rs**: package_root, package_nested, package_alias, package_names, package_names_alias, package_all, package_reserved_segment_names (`import @alder/test.{ fakeDb }` — `test` is a legal segment, §2.4), package_reserved_segment_alias (`import @alder/test as t`), package_reserved_segment_all, local_root (`import ~/db`), local_nested (`import ~/db/users`), local_names, local_root_only_names (`import ~.{ config }`), pub_reexport_names, pub_reexport_all, trailing_comma, error_bad_root, error_missing_slash, error_tail, error_alias_uppercase, error_names_alias_no_name (`.{ x as }` → `Import::NameAlias`), error_pub_needs_names, error_reserved_binding (bare `import @alder/test` → `Import::ReservedBinding(Test)`), error_root_only (bare `import ~` → `Import::RootOnly`).
+**item/import.rs**: package_root, package_nested, package_alias, package_names, package_names_alias, package_all, package_reserved_segment_names (`import @alder/test.{ fakeDb }` — `test` is a legal segment, §2.4), package_reserved_segment_alias (`import @alder/test as t`), package_reserved_segment_all, local_root (`import ~/db`), local_nested (`import ~/db/users`), local_names, local_root_only_names (`import ~.{ config }`), pub_reexport_names, pub_reexport_all, trailing_comma, error_bad_root, error_missing_slash, error_tail, error_alias_uppercase, error_names_alias_no_name (`.{ x as }` → `Import::NameAlias`), public_namespace, public_namespace_alias, grouped_roots, grouped_public_names, grouped_comments, error_group_separator, error_group_unclosed, error_reserved_binding (bare `import @alder/test` → `Import::ReservedBinding(Test)`), error_root_only (bare `import ~` → `Import::RootOnly`).
 
 **item/fn\_.rs**: fn_no_params, fn_params, fn_typed_params, fn_ret, fn_parameter_assignment, fn_pattern_param, fn_where_single, fn_where_multi, fn_where_plus, fn_where_assoc, fn_where_multiline_trailing_comma, fn_pub, fn_bodiless, fn_bodiless_with_extern_attr, fn_trailing_comma_params, error_no_name, error_params_unclosed, error_where_bad_bound, error_body.
 
@@ -2999,7 +3006,7 @@ Each item is a proposed SPEC.md / docs change unless marked _(internal)_.
 12. **Tagged templates** (`` sql`…` ``, `` css`…` ``) are a postfix op requiring adjacency; SPEC should add `postfix template`.
 13. **Arrow lambdas** have no leading `fn`: a single unannotated parameter may omit parentheses (`x -> x + 1`); zero, multiple, patterned, or annotated parameters use `(` [params] `)`, followed by an optional juxtaposed return type and the required `->`. The arrow stays on the lambda head's final line. Bodies accept `block | assignment | expression`; an assignment body such as `() -> count += 1` is a synthetic one-statement block.
 14. **HKT type application**: `Type::Var { name, args }` represents `f[a]`, `t[f[a]]`; SPEC's `type_app` gains `lower_ident [ '[' type { ',' type } ']' ]`. M3 adds source `Type::Hole` for `_`; the parser accepts it as a type atom and canonicalization restricts it to direct named-constructor arguments in impl heads such as `Result[_, e]`.
-15. **Uppercase module-style access** (`Array.map`, `Http.get`, `Fiber.all`) parses as `Access` on `Expr::Path`; canonicalization decides what the path denotes. Docs conflict with language.md's lowercase-module rule; flagged, not resolved here.
+15. **Module access** uses lowercase namespaces (`array.map`, explicitly imported `fiber.all`), parsed as `Access` on `Expr::Var`. Canonicalization distinguishes namespaces from lexical values. Qualified type/trait/constructor paths accept lowercase namespace prefixes (`api::models::User`, `option::Option::Some`); uppercase module aliases are not injected.
 16. **`component` names** may be lowercase (`pub component page(...)` in web.md) or uppercase; SPEC says upper only.
 17. **Patterns** accept negative number literals and the unit pattern `()` (for `Ok(())`); SPEC omits both. `_foo` keeps Elm's `WildcardNotVar` (identifiers start with a letter).
 18. **`_` placeholders** only as a whole call argument (parsed in `call_args`); elsewhere `Expr::Placeholder` error.
@@ -3009,7 +3016,7 @@ Each item is a proposed SPEC.md / docs change unless marked _(internal)_.
 22. **Markup text** is kept raw except that whitespace-only runs containing a newline are dropped (JSX rule); text stops at `@` only before `if`/`for`/`match`/`else`/`empty` + non-ident byte, so `a@b.com` is text. Element names accept dashes (custom elements); attribute names accept dashes. Element, attribute and close-tag names are keyword-insensitive (§2.4, §10.36).
 23. **`child_block` items** are `let` / `use` statements or children; other statement forms are not recognized there (write `{expr}`). SPEC: `child_block = '{' { let_decl | 'use' path | child } '}'`.
 24. **`@match` arm bodies** after `=>` must be an element, fragment, directive, or braced child block; bare text is `DirMatch::BareText` (it would swallow the next arm). A `{` after `=>` is always a child block.
-25. **`pub import`** requires `.{ … }` or `.*` (`Import::PubNeedsNames`), per SPEC's `reexport`.
+25. **`pub import`** accepts namespace, alias, selection, and wildcard forms, individually or grouped. `Import::GroupEnd` retains the opening delimiter when a separator or closing parenthesis is missing. `Module::import_entries()` flattens groups while retaining each entry's visibility and exact region.
 26. **Bodiless `fn`** parses as `FnDecl { body: None }` and `type Name` without `=` as `ItemKind::OpaqueType`; the `#[extern]` requirement (and the extern return type) is validated by canonicalization, not the parser. Trait `type Item = …` is `Trait::AssocTypeHasBody`.
 27. **Style values**: a number immediately followed by letters or `%` is `StyleValue::Dimension`; a `-` immediately followed by a digit starts a dimension too (`margin: -8px` → `Dimension` with `value` -8 and `text` `"-8"`), while `-` followed by anything else is an ordinary `expression()` (`Negate`); `{` after `:` in a style block is always a nested style; anything else is an expression. Chosen so the M8 style owner does not inherit a `Number::End` for the most common negative margin. Style bodies are parsed in M1 (SPEC allows deferral).
 28. **Table columns**: modifiers are bare identifiers after the builder; the next column is detected by `ident ':'` lookahead. **Schema fields**: a lowercase word after `:` starts the rule list, otherwise a type followed by `,` and rules.

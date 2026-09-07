@@ -1,16 +1,16 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "fn read(value: Number) Number {\n    Io.print(\"pin\")\n    value\n}\npub fn inspect(value: Result[Number, [:failed(Number)]], expected: Number) Number {\n    match value { Ok(_) => 0, Err(:failed(^read(expected))) => 1 }\n}\n"
+description: "import io\nfn read(value: Number) Number {\n    io.print(\"pin\")\n    value\n}\npub fn inspect(value: Result[Number, [:failed(Number)]], expected: Number) Number {\n    match value { Ok(_) => 0, Err(:failed(^read(expected))) => 1 }\n}\n"
 ---
 alder::type::non_exhaustive_match
 
   × this match does not cover every possible value
-   ╭─[/app/src/main.ald:6:5]
- 5 │ pub fn inspect(value: Result[Number, [:failed(Number)]], expected: Number) Number {
- 6 │     match value { Ok(_) => 0, Err(:failed(^read(expected))) => 1 }
+   ╭─[/app/src/main.ald:7:5]
+ 6 │ pub fn inspect(value: Result[Number, [:failed(Number)]], expected: Number) Number {
+ 7 │     match value { Ok(_) => 0, Err(:failed(^read(expected))) => 1 }
    ·     ───────────────────────────────┬──────────────────────────────
    ·                                    ╰── uncovered patterns include Err(_)
- 7 │ }
+ 8 │ }
    ╰────
   help: add the missing cases or a fallback arm; guarded patterns and pins do
         not guarantee coverage

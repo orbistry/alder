@@ -20,17 +20,18 @@ a library or a framework switch, not a target.
 
 - `cloudflare` runs on workerd. `standalone` runs on the embedded runtime
   inside the `alder` binary, with no platform underneath.
-- A CLI is `fn main()`. A TUI is `fn main() { Tui.run(App) }`. A server is
-  `fn main() { Http.serve(handler).await }`. Same target, same toolchain;
-  `Tui` and `Http.serve` are modules.
+- A CLI is `fn main()`. A proposed TUI imports `tui` and calls
+  `tui.run(App)`; a proposed server imports `http` and calls
+  `http.serve(handler).await` inside `async fn main()`. Same target, same
+  toolchain; these future modules require explicit imports.
 - The web framework switches on when `src/routes/` exists. A purely
   client-side app is the web framework with `ssr = false` and
   `prerender = true` on the root layout, producing static files; there is
   no separate browser target.
-- One standard library with target-gated modules (like Rust `cfg`). `Fs`,
-  `Tui`, and raw sockets are `standalone`-only; KV, D1, and the other
+- One proposed standard library with target-gated modules (like Rust `cfg`). `fs`,
+  `tui`, and raw sockets are `standalone`-only; KV, D1, and the other
   bindings are `cloudflare`-only; the web-standard surface is both.
-  Importing `Cloudflare.Kv` in a `standalone` package is a compile error.
+  Importing `cloudflare/kv` in a `standalone` package would be a compile error.
 - Library packages are target-neutral unless they declare a `target`; the
   compiler checks that only target-neutral code is reachable from them.
 - Multiple entry points (a worker, a migration CLI, a TUI admin) are
@@ -77,8 +78,8 @@ starve I/O.
 Every fiber owns a scope. A child is registered before it starts; completing a
 parent interrupts and joins live children before running LIFO finalizers.
 Interruption is cooperative and remains pending through uninterruptible
-cleanup. `Fiber.all` is ordered and fail-fast for defects/interruption;
-`Fiber.race` selects the first exit, interrupts every loser, and waits for
+cleanup. `fiber.all` is ordered and fail-fast for defects/interruption;
+`fiber.race` selects the first exit, interrupts every loser, and waits for
 loser cleanup. Typed Alder `Err` values are data, not fiber defects.
 
 A non-kernel extern declared `Task[a]` is the explicit Promise boundary. The
@@ -138,7 +139,7 @@ Rustls's process provider, avoiding feature-unification-dependent TLS startup.
 - CLI argument parsing is a stdlib derive, not a compiler feature:
   `#[derive(Args)]` on a record and `#[derive(Subcommand)]` on an enum,
   with doc comments as help text, optional fields as optional flags, and
-  `Cli.parse()` typed by annotation (clap's derive model).
+  `cli.parse()` typed by annotation (clap's derive model).
 - Binary size (~100MB) is accepted.
 - npm packages that need Node built-ins are out of scope for `extern`
   until wrapped by a first-party package.
@@ -155,6 +156,9 @@ attributes. The grammar stays generic; the `@alder/cloudflare` package
 interprets them and the compiler emits `wrangler.jsonc` and bindings.
 
 ```alder
+import cloudflare/kv
+import cloudflare/kv.{Kv}
+
 #[durable_object]
 type Counter = { count: Number }
 
@@ -164,7 +168,7 @@ impl DurableObject[Counter] {
 
 fn handler(req: Request) Response {
     use Kv                      // bound to the worker's KV namespace via wrangler config
-    Kv.get(cache, "key").await
+    kv.get(cache, "key").await
 }
 ```
 

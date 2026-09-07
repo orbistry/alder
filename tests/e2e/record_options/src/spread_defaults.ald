@@ -23,17 +23,17 @@ pub fn grouping(record) {
 
 pub fn known_overwrite(left, right: { r | x: Option[Number] }, trace) {
     { ..left, x: {
-        Array.push(trace, 1)
+        array.push(trace, 1)
         "discarded"
-    }, kept: true, ..right }
+        }, kept: true, ..right }
 }
 
 pub fn overwritten(left, right, trace) {
     { ..left, ..{ x: {
-        Array.push(trace, 1)
+        array.push(trace, 1)
         "discarded"
-    }, kept: true }, ..right, x: {
-        Array.push(trace, 2)
-        0
-    } }
+        }, kept: true }, ..right, x: {
+            array.push(trace, 2)
+            0
+        } }
 }

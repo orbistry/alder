@@ -78,29 +78,29 @@ pub fn check() {
     assert((42 |> show) == "42")
     assert(take_record({ value: 42 }) == Some({ value: Some(42) }))
     assert(take_record(Some({ value: 42 })) == Some({ value: Some(42) }))
-    assert(take_record(Option.some({ value: 42 })) == Some({ value: Some(42) }))
+    assert(take_record(option.some({ value: 42 })) == Some({ value: Some(42) }))
     let explicit_record: Option[RecordPayload] = Some({ value: 42 })
     assert(explicit_record == Some({ value: Some(42) }))
     let branch_events = []
     for flag in [true, false] {
         let expected = if flag { 42 } else { 7 }
         let branched = take_record(if flag {
-            Array.push(branch_events, 1)
+            array.push(branch_events, 1)
             { value: 42 }
-        } else {
-            Array.push(branch_events, 2)
-            { value: 7 }
+            } else {
+                array.push(branch_events, 2)
+                { value: 7 }
         })
         assert(branched == Some({ value: Some(expected) }))
         assert(take_record(match flag {
             true => ({ value: 42 }),
             false => ({ value: 7 }),
-        }) == branched)
+            }) == branched)
         assert(take_record(if flag {
             Some({ value: 42 })
-        } else {
-            Some({ value: 7 })
-        }) == branched)
+            } else {
+                Some({ value: 7 })
+            }) == branched)
         let field: { payload: Option[RecordPayload] } = {
             payload: if flag { { value: 42 } } else { { value: 7 } },
         }
@@ -119,12 +119,12 @@ pub fn check() {
     let overwrite_events = []
     let replacement = { value: Some(42) }
     let overwritten: RecordPayload = { value: {
-        Array.push(overwrite_events, 1)
+        array.push(overwrite_events, 1)
         true
-    }, ..{
-        Array.push(overwrite_events, 2)
-        replacement
-    } }
+        }, ..{
+            array.push(overwrite_events, 2)
+            replacement
+        } }
     assert(overwritten.value == Some(42))
     assert(overwrite_events == [1, 2])
     assert(spread_overwrite({}).value == None)
@@ -136,10 +136,10 @@ pub fn check() {
     assert(([{ value: 42 }] |> take_records) == Some([{ value: Some(42) }]))
     let pipe_events = []
     let piped = { value: {
-        Array.push(pipe_events, 1)
+        array.push(pipe_events, 1)
         42
-    } } |> ({
-        Array.push(pipe_events, 2)
+        } } |> ({
+        array.push(pipe_events, 2)
         take_record
     })
     assert(piped == Some({ value: Some(42) }))
@@ -160,11 +160,11 @@ pub fn check() {
     let field_events = []
     let ordered: { first: Option[Number], second: Option[Number] } = {
         first: {
-            Array.push(field_events, 1)
+            array.push(field_events, 1)
             20
         },
         second: {
-            Array.push(field_events, 2)
+            array.push(field_events, 2)
             22
         },
     }
@@ -181,9 +181,9 @@ pub fn check() {
     assert((42 |> preserve()) == Some(Some(42)))
     let events = []
     assert(preserve({
-        Array.push(events, 1)
+        array.push(events, 1)
         42
-    }) == Some(Some(42)))
+        }) == Some(Some(42)))
     assert(events == [1])
     assert(preserve() == None)
     assert(preserve(None) == None)

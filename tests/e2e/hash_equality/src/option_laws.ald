@@ -1,5 +1,6 @@
+import json
 fn round_trip(value: a) Result[a, [:invalid_json(String)]] where a: Json {
-    Json.decode(Json.encode(value))
+    json.decode(json.encode(value))
 }
 
 fn laws(values: Array[a]) where a: Hash + Json {
@@ -25,9 +26,9 @@ pub fn check() {
     laws(numbers)
     let units: Array[Option[Option[()]]] = [None, Some(None), Some(Some(()))]
     laws(units)
-    let deeper = Array.map(numbers, value -> Some(Some(value)))
+    let deeper = array.map(numbers, value -> Some(Some(value)))
     laws(deeper)
     for value in deeper {
-        assert Option.map(value, payload -> payload) == value
+        assert option.map(value, payload -> payload) == value
     }
 }

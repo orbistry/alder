@@ -59,7 +59,7 @@ greet("Ada", "Dr.")
 
 Only the trailing consecutive Option parameters are omittable. Earlier Option
 parameters remain required when followed by a non-Option parameter, so
-`Option.map(value: Option[a], transform: fn(a) b)` remains valid. This rule
+`option.map(value: Option[a], transform: fn(a) b)` remains valid. This rule
 applies equally to shorthand and explicit Option annotations and supersedes the
 earlier blanket required-after-Option prohibition. Positional callers cannot
 skip an earlier slot to fill a later one. No `opt` keyword, default expressions,
@@ -120,8 +120,8 @@ for map, forEach, tryMap, and tryForEach, retaining each operation's own callbac
 and result types:
 
 ```alder
-values |> Fiber.map(x -> async { process(x).await })
-values |> Fiber.map(
+values |> fiber.map(x -> async { process(x).await })
+values |> fiber.map(
     x -> async { process(x).await },
     { concurrency: 8 },
 )

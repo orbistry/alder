@@ -94,8 +94,7 @@ impl<'a> Parser<'a> {
                 |bump, e, row, col| error::Item::Import(bump.alloc(e), row, col),
                 |p| {
                     p.advance_by(word.len());
-                    p.import(matches!(visibility, Visibility::Pub(_)))
-                        .map(ItemKind::Import)
+                    p.import_declaration()
                 },
             )?,
             "fn" | "async" => self.specialize(
@@ -315,6 +314,9 @@ impl<'a> Parser<'a> {
 /// (`tests { }`).
 fn item_lower_bound(kind: &ItemKind<'_>, body_start: Position) -> Position {
     match kind {
+        ItemKind::ImportGroup(entries) => {
+            entries.last().map_or(body_start, |entry| entry.region.end)
+        }
         ItemKind::Import(import) => match import.tail {
             ImportTail::Module => import.path.region.end,
             ImportTail::Alias(name) => name.region.end,
@@ -496,7 +498,7 @@ mod tests {
 
     #[test]
     fn public_async_main() {
-        assert_item_snapshot!("pub async fn main() { Task.sleep(1).await }");
+        assert_item_snapshot!("pub async fn main() { task.sleep(1).await }");
     }
 
     #[test]

@@ -63,9 +63,10 @@ These are already in the docs; do not reopen them.
   its block's tail (parser change: `Stmt::Provide` → `Expr::Provide`,
   parsed by `primary` at the `provide` keyword; `docs/web.md`'s `handle`
   example depends on it).
-- Stdlib modules are bound with **capitalized names** by the prelude
-  (`Array.map`, `Http.get`, `Fiber.all`) even though user modules bind
-  lowercase; `docs/language.md` gets a sentence saying so.
+- All modules use lowercase namespace bindings. Basic operations are ordinary
+  implicit prelude imports; other bundled modules require explicit imports.
+  `docs/language.md` defines the current split. The original capitalized-prelude
+  milestone decision is superseded by `plans/import-unification.md`.
 - Operator precedence is resolved in canonicalization from the fixed
   table in `alder-source` (`BinOp::precedence()`), never in the parser.
 - Constructors are qualified except inside `match` arms and the prelude's
@@ -230,8 +231,8 @@ Design panel producing `docs/codegen-internals.md`:
   by rolldown/oxc from a `build.rs` into a `dist/` embedded with
   `include_str!`; public surface documented as the `extern` contract for
   the stdlib.
-- Stdlib layout: `std/` Alder sources, embedded; prelude module and
-  capitalized module bindings.
+- Stdlib layout: lowercase `std/` Alder sources and compiler-packaged copies;
+  ordinary public interfaces shared by explicit and implicit prelude imports.
 - `alder fmt` architecture: formatter over the source AST + comment side
   table, Wadler-style pretty printer (port ideas from `elm-format` only
   where the new grammar matches).

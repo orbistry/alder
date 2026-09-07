@@ -1,5 +1,9 @@
-import ~/error_display
-import ~/codec
+import (
+    json,
+
+    ~/codec,
+    ~/error_display,
+)
 
 enum Code { Value(Number) }
 
@@ -15,11 +19,11 @@ impl Hash[Code] {
 
 impl Json[Code] {
     fn encode(value: Code) String {
-        match value { Code::Value(number) => Json.encode([number]) }
+        match value { Code::Value(number) => json.encode([number]) }
     }
     fn decode(text: String) Result[Code, [:invalid_json(String)]] {
-        let values: Array[Number] = Json.decode(text)?
-        if Array.length(values) == 1 {
+        let values: Array[Number] = json.decode(text)?
+        if array.length(values) == 1 {
             Ok(Code::Value(values[0]))
         } else {
             Err(:invalid_json("expected one code number"))
@@ -44,7 +48,7 @@ fn second(value: Result[Number, Second]) String { show(value) }
 
 fn relay(value: First) Second { value }
 fn direct_render(value: Second) String { show(value) }
-fn direct_encode(value: First) String { Json.encode(value) }
+fn direct_encode(value: First) String { json.encode(value) }
 
 pub fn run() {
     let left: Result[Number, First] = Err(:bad(Code::Value(7)))
@@ -63,7 +67,7 @@ pub fn run() {
             assert direct_render(translated) == ":bad(custom)"
             let direct = direct_encode(translated)
             assert direct == "{\"tag\":\":bad\",\"fields\":[[7]]}"
-            let decoded: Result[Second, [:invalid_json(String)]] = Json.decode(direct)
+            let decoded: Result[Second, [:invalid_json(String)]] = json.decode(direct)
             assert match decoded { Ok(value) => value == translated, _ => false }
             let wrapped = WrappedFailure::Wrap(Some(None), left, translated)
             let twin = WrappedFailure::Wrap(Some(None), same, value)
@@ -85,7 +89,7 @@ pub fn run() {
         "{\"$\":\"Err\",\"_0\":{\"tag\":\":bad\",\"fields\":[]}}",
         "{\"$\":\"Err\",\"_0\":{\"tag\":\":bad\",\"fields\":[\"wrong\"]}}",
     ] {
-        let rejected: Result[Result[Number, First], [:invalid_json(String)]] = Json.decode(invalid)
+        let rejected: Result[Result[Number, First], [:invalid_json(String)]] = json.decode(invalid)
         assert match rejected { Err(:invalid_json(_)) => true, _ => false }
     }
     assert error_display.describe(left) == "Err(:bad(custom))"
@@ -96,7 +100,7 @@ pub fn run() {
     let nested: Option[Option[Number]] = Some(None)
     let failed: Result[Number, [:nested(Option[Option[Number]])]] = Err(:nested(nested))
     assert show(failed) == "Err(:nested(Some(None)))"
-    let nested_decoded: Result[Result[Number, [:nested(Option[Option[Number]])]], [:invalid_json(String)]] = Json.decode(Json.encode(failed))
+    let nested_decoded: Result[Result[Number, [:nested(Option[Option[Number]])]], [:invalid_json(String)]] = json.decode(json.encode(failed))
     assert match nested_decoded { Ok(value) => value == failed, _ => false }
     let tree: FailureTree[Option[Option[Number]]] = FailureTree::Nested(
         Err(:cause(FailureTree::Leaf(nested))),

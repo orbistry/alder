@@ -1,16 +1,16 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "pub fn encode(value: Result[Number, [:callback(fn(Number) Number)]]) String {\n    Json.encode(value)\n}\n"
+description: "import json\npub fn encode(value: Result[Number, [:callback(fn(Number) Number)]]) String {\n    json.encode(value)\n}\n"
 ---
 alder::trait::missing_instance
 
   × no implementation of `Json[fn(Number) Number]` was found
-   ╭─[/project/src/main.ald:2:5]
- 1 │ pub fn encode(value: Result[Number, [:callback(fn(Number) Number)]]) String {
- 2 │     Json.encode(value)
+   ╭─[/project/src/main.ald:3:5]
+ 2 │ pub fn encode(value: Result[Number, [:callback(fn(Number) Number)]]) String {
+ 3 │     json.encode(value)
    ·     ─────┬─────
    ·          ╰── this use needs trait evidence
- 3 │ }
+ 4 │ }
    ╰────
   help: check the operand type and the implementations available for
         `Json[fn(Number) Number]`; a new implementation must satisfy Alder's

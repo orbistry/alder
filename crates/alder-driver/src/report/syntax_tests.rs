@@ -543,7 +543,7 @@ syntax_case!(
 );
 syntax_case!(attribute_end, "#[derive(Show) type X", "Attribute(End(");
 syntax_case!(attribute_dangling, "#[extern]", "Dangling(");
-syntax_case!(import_path_start, "import http", "Path(Start(");
+syntax_case!(import_path_start, "import /http", "Path(Start(");
 syntax_case!(import_path_author, "import @/http", "Author(");
 syntax_case!(import_path_slash, "import @alder", "Slash(");
 syntax_case!(import_path_package, "import @alder/", "Package(");
@@ -565,11 +565,7 @@ syntax_case!(
     "import @alder/http.{ get Request }",
     "NamesEnd("
 );
-syntax_case!(
-    import_public_names,
-    "pub import @alder/http",
-    "PubNeedsNames("
-);
+syntax_case!(import_group_end, "pub import (json io)", "GroupEnd(");
 syntax_case!(
     import_reserved_binding,
     "import ~/db/type",

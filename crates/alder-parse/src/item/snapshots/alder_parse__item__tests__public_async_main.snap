@@ -1,6 +1,6 @@
 ---
 source: crates/alder-parse/src/item/mod.rs
-description: "pub async fn main() { Task.sleep(1).await }"
+description: "pub async fn main() { task.sleep(1).await }"
 ---
 Located {
     region: Region {
@@ -108,24 +108,8 @@ Located {
                                                                     column: 27,
                                                                 },
                                                             },
-                                                            value: Path(
-                                                                Path {
-                                                                    segments: [
-                                                                        Located {
-                                                                            region: Region {
-                                                                                start: Position {
-                                                                                    line: 1,
-                                                                                    column: 23,
-                                                                                },
-                                                                                end: Position {
-                                                                                    line: 1,
-                                                                                    column: 27,
-                                                                                },
-                                                                            },
-                                                                            value: "Task",
-                                                                        },
-                                                                    ],
-                                                                },
+                                                            value: Var(
+                                                                "task",
                                                             ),
                                                         },
                                                         field: Located {

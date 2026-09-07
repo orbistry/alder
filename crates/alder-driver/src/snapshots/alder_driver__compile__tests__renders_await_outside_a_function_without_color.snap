@@ -1,12 +1,13 @@
 ---
 source: crates/alder-driver/src/compile.rs
-description: "let invalid = Task.sleep(1).await\n"
+description: "import task\nlet invalid = task.sleep(1).await\n"
 ---
 alder::canonicalize::await_outside_async
 
   × `.await` needs an enclosing async body
-   ╭─[/project/src/main.ald:1:15]
- 1 │ let invalid = Task.sleep(1).await
+   ╭─[/project/src/main.ald:2:15]
+ 1 │ import task
+ 2 │ let invalid = task.sleep(1).await
    ·               ─────────┬─────────
    ·                        ╰── reported here
    ╰────

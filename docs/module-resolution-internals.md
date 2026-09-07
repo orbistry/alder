@@ -7,7 +7,10 @@ root `mod.ald` is empty; the package name is an import binding, not a path segme
 
 CLI check/build pass this metadata both to graph construction and compilation.
 Local imports retain the importing module's package; package imports select the
-named package. Graph edges use exact package/path lookup, not URI suffixes.
+named package. Bare imports select only compiler-shipped `Builtin` modules,
+with lowercase path segments; they never consult package sources or a registry.
+`alder-can::resolve_imports` supplies canonical identities for individual and
+grouped entries. Graph edges use exact package/path lookup, not URI suffixes.
 Consequently a `src` directory in a checkout ancestor or within a module path
 cannot redefine the project's source root.
 
@@ -85,7 +88,13 @@ the same validated maps. Missing metadata is rejected deterministically before
 interfaces or code are produced, without fabricated source labels. There are
 no metadata-free graph/build entry points or URI-based identity guesses.
 
-Remaining audits are tracked in `plans/compiler-hardening.md`, including
-cache consistency and
-public re-exports. Deterministic graph traversal alone does not establish
-determinism of every downstream artifact or initialization order.
+Public namespace imports preserve module identities in interface format 8;
+selective and wildcard re-exports preserve declaration identities. Hydrated
+interfaces retain namespace chains, and private names never enter their public
+lookup tables. There is no reader for earlier interface formats.
+
+Code generation sorts and deduplicates direct module initialization imports by
+canonical ESM module ID. Dependencies initialize before importers, and shared
+dependencies initialize once. Independent sibling order is canonical rather
+than source-declaration order, so formatter sorting cannot alter execution.
+The graph and bundler also retain deterministic identity-based traversal.

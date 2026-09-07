@@ -19,7 +19,12 @@ pub use error::{
     AttributeError, Error, ErrorKind, ExprError, ImportError, ItemError, NameError, PatternError,
     StmtError, TypeError,
 };
-pub use interface::{builtin_trait_interface, from_module, headers_from_module};
+pub use interface::{
+    builtin_module_interface, builtin_module_interfaces, builtin_trait_interface, from_module,
+    headers_from_module,
+};
+mod imports;
+pub use imports::resolve_imports;
 pub use value_scc::callable_dependencies;
 pub use value_scc::dependencies as value_dependencies;
 pub use value_scc::{

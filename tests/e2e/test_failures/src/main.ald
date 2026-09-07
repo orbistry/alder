@@ -1,24 +1,25 @@
+import task
 test "synchronous typed failure" {
     Err(:sync_failure)
 }
 
 test "asynchronous typed failure" {
     async {
-        Task.sleep(0).await
+        task.sleep(0).await
         Err(:async_failure)
     }
 }
 
 test "asynchronous defect" {
     async {
-        Task.sleep(0).await
+        task.sleep(0).await
         assert false
     }
 }
 
 test "later asynchronous success" {
     async {
-        Task.sleep(0).await
+        task.sleep(0).await
         assert true
     }
 }

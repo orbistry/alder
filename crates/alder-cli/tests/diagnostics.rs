@@ -93,6 +93,55 @@ struct Editor {
 }
 
 #[test]
+fn grouped_import_entry_regions_reach_cli_and_editor() {
+    let project = Project::new();
+    let source =
+        "import (\n    json,\n    not_bundled,\n)\npub fn main() String { json.encode(42) }\n";
+    project.source("main.ald", source);
+    for command in ["check", "build", "test"] {
+        let output = project.run(command);
+        assert!(!output.status.success());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(stderr.contains("cannot find imported module"), "{stderr}");
+        assert!(stderr.contains("src/main.ald:3:5"), "{stderr}");
+        assert!(
+            stderr.contains("bare paths refer only to bundled"),
+            "{stderr}"
+        );
+    }
+    let uri = url::Url::from_file_path(project.0.canonicalize().unwrap().join("src/main.ald"))
+        .unwrap()
+        .to_string();
+    let mut editor = Editor::new(&project);
+    editor.send(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}));
+    let initialized = editor.receive(|message| message["id"] == 1);
+    assert!(initialized["error"].is_null(), "{initialized}");
+    editor.send(json!({"jsonrpc":"2.0","method":"initialized","params":{}}));
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{
+            "uri":uri,"languageId":"alder","version":1,"text":source
+        }}}),
+    );
+    let diagnostics = editor.diagnostics(1);
+    assert_eq!(diagnostics.as_array().unwrap().len(), 1, "{diagnostics}");
+    assert_eq!(
+        diagnostics[0]["code"],
+        "alder::canonicalize::import_module_not_found"
+    );
+    assert_eq!(
+        diagnostics[0]["range"],
+        json!({"start":{"line":2,"character":4},"end":{"line":2,"character":15}})
+    );
+    let valid = "import (json, array)\npub fn main() String { json.encode(array.length([42])) }\n";
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+            "textDocument":{"uri":uri,"version":2},"contentChanges":[{"text":valid}]
+        }}),
+    );
+    assert_eq!(editor.diagnostics(2), json!([]));
+}
+
+#[test]
 fn parser_diagnostics_preserve_cli_links_and_editor_context() {
     let project = Project::new();
     let source = "pub fn main() { [\"😀\" 2] }";
@@ -513,17 +562,19 @@ fn cli_delivers_unused_warnings_without_removing_effects() {
     project.source(
         "library.ald",
         indoc::indoc! {r#"
-            let initialization = Io.print("import effect")
+            import io
+            let initialization = io.print("import effect")
             pub let value = 1
         "#},
     );
     project.source(
         "main.ald",
         indoc::indoc! {r#"
+            import io
             import ~/library.{ value }
             pub fn main() {
-                let unused = Io.print("local effect")
-                Io.print("main effect")
+                let unused = io.print("local effect")
+                io.print("main effect")
             }
         "#},
     );

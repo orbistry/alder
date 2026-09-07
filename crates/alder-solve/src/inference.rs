@@ -1277,7 +1277,7 @@ fn is_result_err_expr(expression: &Located<Expr<'_>>) -> bool {
             ..
         } => {
             reference.module.package == PackageId::Builtin
-                && reference.module.path == ["Result"]
+                && reference.module.path == ["result"]
                 && reference.name == "err"
         }
         _ => false,
@@ -1296,7 +1296,7 @@ fn is_option_some_expr(expression: &Located<Expr<'_>>) -> bool {
             ..
         } => {
             reference.module.package == PackageId::Builtin
-                && reference.module.path == ["Option"]
+                && reference.module.path == ["option"]
                 && reference.name == "some"
         }
         _ => false,

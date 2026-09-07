@@ -47,6 +47,9 @@ pub enum NameError<'a> {
 #[derive(Clone, Debug)]
 pub enum ImportError<'a> {
     Name(NameError<'a>),
+    ModuleNotFound {
+        module: ModuleId<'a>,
+    },
     NameNotFound {
         module: ModuleId<'a>,
         name: &'a str,
