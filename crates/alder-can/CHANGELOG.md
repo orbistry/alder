@@ -1,5 +1,21 @@
 # alder-can
 
+## 0.6.0 — 2026-09-07
+
+### Minor changes
+
+- [2cc1d05](https://github.com/orbistry/alder/commit/2cc1d057460100bce03b09d5cda3f8e7975f1a87) Unify bundled, local, and external imports with grouped syntax, lowercase
+  standard-library namespaces, explicit utility imports, identity-preserving
+  namespace re-exports, and canonical comment-preserving formatting. Share public
+  interfaces between prelude and explicit imports, reject conflicting bindings,
+  and make module initialization independent of import declaration order.
+  
+  Interface format 8 replaces earlier contracts without compatibility readers. — Thanks @rvcas!
+
+### Patch changes
+
+- Updated dependencies: alder-ast@0.3.1, alder-parse@0.5.0, alder-source@0.4.0
+
 ## 0.5.0 — 2026-09-06
 
 ### Minor changes

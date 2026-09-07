@@ -72,7 +72,7 @@ dependencies = [
 
 [[package]]
 name = "alder-ast"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "alder-region",
  "alder-source",
@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "alder-bundle"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "alder-codegen",
  "alder-kernel",
@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "alder-can"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "alder-ast",
  "alder-parse",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "alder-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "alder-bundle",
  "alder-config",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "alder-codegen"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "alder-ast",
  "alder-can",
@@ -188,7 +188,7 @@ dependencies = [
 
 [[package]]
 name = "alder-constrain"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "alder-ast",
  "alder-can",
@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "alder-driver"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "alder-ast",
  "alder-can",
@@ -228,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "alder-fmt"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "alder-parse",
  "alder-source",
@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "alder-language-server"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "alder-driver",
  "alder-report",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "alder-parse"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "alder-region",
  "alder-source",
@@ -310,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "alder-solve"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "alder-ast",
  "alder-can",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "alder-source"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "alder-region",
 ]
