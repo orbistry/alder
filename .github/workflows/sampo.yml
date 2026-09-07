@@ -9,6 +9,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# Publishing is irreversible: a second push must wait for the current release
+# to finish, then check the registry again instead of racing its publish plan.
+concurrency:
+  group: sampo-release
+  cancel-in-progress: false
+
 jobs:
   sampo:
     runs-on: ubuntu-latest
