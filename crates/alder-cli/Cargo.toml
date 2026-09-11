@@ -37,8 +37,3 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
 tower-lsp-server.workspace = true
 xz2.workspace = true
 zip.workspace = true
-
-[dev-dependencies]
-indoc.workspace = true
-serde_json = "1"
-tokio = { workspace = true, features = ["process", "time"] }

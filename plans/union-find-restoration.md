@@ -49,6 +49,12 @@ No commits, pushes, or publishing are authorized by this task.
 
 ## Final verification
 
+Subsequent CI correction: remove all CLI subprocess E2E suites after the fixture
+harness timed out in CI. This also removes the older subprocess diagnostic and
+reporting suites, per the user's request. Keep direct compiler/runtime tests,
+driver diagnostic snapshots, and reporting renderer unit tests. The counts and
+CLI fixture results below are historical local verification before that removal.
+
 All required checks pass locally without compiler/linker warnings or lint
 suppression:
 

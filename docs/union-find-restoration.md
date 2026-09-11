@@ -3,6 +3,14 @@
 The active program-inference path now uses a shared union-find type graph.
 This report records the architecture, measured comparison, and cleanup evidence.
 
+Subsequent CI correction: the CLI subprocess fixture harness exceeded its
+30-second command timeout in CI. At the user's request, all CLI subprocess E2E
+suites were removed (`tests/e2e.rs`, `tests/diagnostics.rs`, and
+`tests/reporting.rs`), along with their test-only dependencies. Direct compiler,
+runtime, diagnostic snapshot, and reporting renderer tests remain. Counts and
+CLI execution results below describe the original local verification, not the
+current test inventory or a successful CI run.
+
 ## Active architecture
 
 `alder_driver::build_with_reporter` → `alder_solve::solve` →
