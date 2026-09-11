@@ -1,5 +1,18 @@
 # alder-driver
 
+## 0.7.0 — 2026-09-11
+
+### Minor changes
+
+- [f001988](https://github.com/orbistry/alder/commit/f001988a97cea7cb6d4b246d59f0e941e96f745b) Remove unused `ModuleMeta`, `InterfaceCache::start_build`, and
+  `InterfaceCache::needs_rebuild` APIs that did not participate in source builds.
+  Remove the unused error-discarding `load_package_index` convenience method;
+  `load_package_index_checked` remains the validated loading API. — Thanks @rvcas!
+
+### Patch changes
+
+- Updated dependencies: alder-can@0.6.1, alder-codegen@0.5.1, alder-config@0.2.1, alder-constrain@0.5.2, alder-solve@0.5.2
+
 ## 0.6.0 — 2026-09-07
 
 ### Minor changes

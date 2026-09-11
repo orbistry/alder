@@ -1,5 +1,15 @@
 # alder-solve
 
+## 0.5.2 — 2026-09-11
+
+### Patch changes
+
+- [f001988](https://github.com/orbistry/alder/commit/f001988a97cea7cb6d4b246d59f0e941e96f745b) Restore shared inference types backed by weighted union-find and path compression.
+  Preserve Alder's kind checks, generic contracts, row/trait semantics, diagnostics,
+  and isolated recovery attempts. Add graph invariants and reproducible timing and
+  allocation benchmarks; remove the obsolete unlinked solver implementation. — Thanks @rvcas!
+- Updated dependencies: alder-can@0.6.1, alder-constrain@0.5.2
+
 ## 0.5.1 — 2026-09-07
 
 ### Patch changes

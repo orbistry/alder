@@ -1,5 +1,13 @@
 # alder-constrain
 
+## 0.5.2 — 2026-09-11
+
+### Patch changes
+
+- [f001988](https://github.com/orbistry/alder/commit/f001988a97cea7cb6d4b246d59f0e941e96f745b) Remove unlinked Elm-era canonicalization and constraint implementations from
+  source packages. The active Alder canonicalizer and requirement traversal remain
+  unchanged. — Thanks @rvcas!
+
 ## 0.5.1 — 2026-09-07
 
 ### Patch changes

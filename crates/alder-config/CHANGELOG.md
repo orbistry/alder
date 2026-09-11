@@ -1,5 +1,12 @@
 # alder-config
 
+## 0.2.1 — 2026-09-11
+
+### Patch changes
+
+- [f001988](https://github.com/orbistry/alder/commit/f001988a97cea7cb6d4b246d59f0e941e96f745b) Remove unused PubGrub and snapshot-testing dependencies. Configuration parsing
+  and dependency declarations are unchanged; registry resolution remains deferred. — Thanks @rvcas!
+
 ## 0.2.0 — 2026-09-03
 
 ### Minor changes
