@@ -12,13 +12,9 @@ pub struct Args {
 }
 
 impl Args {
-    pub async fn exec(self) -> Result<()> {
-        super::Cmd::Test(self).exec().await
-    }
-
-    pub(super) async fn exec_with(self, output: &crate::reporting::Output) -> Result<()> {
+    pub(super) async fn exec(self, output: &crate::reporting::Output) -> Result<()> {
         let started = std::time::Instant::now();
-        let compiled = super::build::compile_reported(&self.path, BuildMode::Test, output).await?;
+        let compiled = super::build::compile(&self.path, BuildMode::Test, output).await?;
         output.stage("bundling");
         output.status("Bundling", crate::reporting::display_path(&compiled.root));
         let bundle = super::build::bundle(&compiled, EntryKind::Test).await?;

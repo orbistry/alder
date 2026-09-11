@@ -16,13 +16,9 @@ pub struct Args {
 }
 
 impl Args {
-    pub async fn exec(self) -> Result<()> {
-        super::Cmd::Run(self).exec().await
-    }
-
-    pub(super) async fn exec_with(self, output: &crate::reporting::Output) -> Result<()> {
+    pub(super) async fn exec(self, output: &crate::reporting::Output) -> Result<()> {
         let started = std::time::Instant::now();
-        let compiled = super::build::compile_reported(&self.path, BuildMode::Build, output).await?;
+        let compiled = super::build::compile(&self.path, BuildMode::Build, output).await?;
         if compiled.target != Target::Standalone {
             return Err(miette!("alder run requires target: standalone"));
         }

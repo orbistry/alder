@@ -15,11 +15,13 @@ pub struct Cli {
 impl Default for Cli {
     fn default() -> Self {
         let options = crate::reporting::Options::from_startup(std::env::args_os().skip(1));
+
         let color = match options.color {
             crate::reporting::Color::Auto => clap::ColorChoice::Auto,
             crate::reporting::Color::Always => clap::ColorChoice::Always,
             crate::reporting::Color::Never => clap::ColorChoice::Never,
         };
+
         Self::from_arg_matches(&Self::command().color(color).get_matches())
             .unwrap_or_else(|error| error.exit())
     }
@@ -28,7 +30,7 @@ impl Default for Cli {
 impl Cli {
     pub async fn exec(self) -> miette::Result<()> {
         self.cmd
-            .exec_with(crate::reporting::Output::stderr(self.reporting))
+            .exec(crate::reporting::Output::stderr(self.reporting))
             .await
     }
 }

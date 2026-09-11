@@ -1,8 +1,8 @@
 # Compiler implementation map
 
-This map records the checked pipeline and inactive Elm-port remnants as audited
-on the compiler-hardening branch. Rust module declarations, not filenames or
-historical design snippets, determine what is compiled.
+This map records the checked pipeline after union-find restoration and removal
+of the inactive Elm-port remnants. Rust module declarations, not historical
+design snippets, determine what is compiled.
 
 ## Active checking path
 
@@ -17,11 +17,17 @@ requirement seeds with `alder_constrain::constrain`, builds a package-aware
 feed interface construction. Build/Test modes then call
 `alder_codegen::emit_solved_module`; Check mode does not emit an artifact.
 
-The active core inference implementation is `alder-solve/src/inference.rs`, with
+The active core inference implementation is `alder-solve/src/inference.rs`, using
+the shared type graph in `type_graph.rs`, with
 trait/coherence support in `traits.rs` and constructor-specializing pattern
 coverage/usefulness in `pattern_matrix.rs`. Inference checks all matches and
-binding sites after solving, before publishing annotations. It does not use the old rank-based
-union-find solver files listed below. The active constrain crate consists of
+binding sites after solving, before publishing annotations. Graph representatives
+use union-by-size and path compression; type constructors contain shared handles,
+not recursively owned type trees. Diagnostic variable IDs are independent of the
+weighted root. Generalization retains Alder's free-environment sets, mutation
+restrictions, and explicit universal contracts—not Elm's rank-pool semantics.
+Failed attempts discard their whole graph and deferred state before recovery.
+The active constrain crate consists of
 its `lib.rs` contract and `requirements.rs` traversal, not an Elm constraint tree.
 
 Two compiled lower-level APIs must not be confused with this path:
@@ -50,31 +56,31 @@ program launch statuses use this renderer directly. The runtime separately offer
 streams. No editor progress notifications, JSON backend, or browser/WASM backend
 is implemented by these seams.
 
-## Unlinked Elm-port files
+## Removed obsolete implementations
 
-The driver's compiled `ModuleMeta`, `InterfaceCache::start_build`, and
-`InterfaceCache::needs_rebuild` helpers also have no active build callers.
-They are not evidence of timestamp-based incremental reuse. Current source
+The unused driver `ModuleMeta`, `InterfaceCache::start_build`, and
+`InterfaceCache::needs_rebuild` helpers have been removed. Current source
 dependencies are rebuilt from source; only interface-only packages load saved
-interfaces/indexes through `Project::build_dependencies`. The optional
-`load_package_index` convenience method is likewise not the checked project
-loading path, which uses `load_package_index_checked` and reports errors.
+interfaces/indexes through `Project::build_dependencies`.
+The unused error-discarding `load_package_index` convenience method was removed;
+the project loading path retains `load_package_index_checked` and reports errors.
 
-The following files exist but have no reachable `mod`, `#[path]`, or `include!`
-edge from their crate root. Their internal tests are not workspace test coverage.
-They are retained historical material, not active alternatives to the pipeline.
+The following files were verified to have no reachable `mod`, `#[path]`, or
+`include!` edge, packaging consumer, or active fixture role before deletion.
+Their internal tests were never workspace test coverage. No referenced snapshots
+were removed with these files; the local `elm/` reference remains untouched.
 
-| Crate | Unlinked files under `src/` |
+| Crate | Removed files under `src/` |
 | --- | --- |
 | alder-can | `accumulate.rs`, `module.rs`, `environment/dups.rs`, `environment/foreign.rs`, `environment/local.rs` |
 | alder-constrain | `module.rs`, `expression.rs`, `pattern.rs`, `instantiate.rs`, `type_.rs`, `error_type.rs`, `error.rs`, `union_find.rs` |
 | alder-solve | `solve.rs`, `annotation.rs`, `unify.rs`, `occurs.rs` |
 
-For example, `alder-can/src/environment.rs` is active, but the old files in the
-similarly named directory are not declared by it. Likewise, the exported
-function `alder_solve::solve` comes from `inference.rs`, not `solve.rs`.
-No legacy files were deleted or re-enabled by this audit. Recheck crate roots
-and callers if these boundaries change.
+`alder-can/src/environment.rs` remains active. The exported function
+`alder_solve::solve` comes from `inference.rs`. There is no substitution-table
+fallback or alternative solver. The empty unpublished `tasks/stub` package and
+its workspace/CI references were also removed. See
+`union-find-restoration.md` for the audit inventory and measurement evidence.
 
 ## Deferred syntax versus executable behavior
 

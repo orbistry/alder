@@ -32,7 +32,7 @@ jobs:
       - name: Verify release packages
         # Use a fresh target directory: unreleased local versions can otherwise
         # reuse stale dependency artifacts from an earlier package verification.
-        run: cargo package --workspace --exclude stub --target-dir "$RUNNER_TEMP/alder-package"
+        run: cargo package --workspace --target-dir "$RUNNER_TEMP/alder-package"
 
   windows-build:
     runs-on: windows-2022

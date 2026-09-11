@@ -15,11 +15,7 @@ pub struct Args {
 }
 
 impl Args {
-    pub async fn exec(self) -> Result<()> {
-        super::Cmd::Check(self).exec().await
-    }
-
-    pub(super) async fn exec_with(self, output: &crate::reporting::Output) -> Result<()> {
+    pub(super) async fn exec(self, output: &crate::reporting::Output) -> Result<()> {
         let project = Project::load(&self.path).await.into_diagnostic()?;
         output.project("Checking", &project);
         let db = Arc::new(Mutex::new(Database::new(FileSystemSource::new())));

@@ -50,8 +50,10 @@ lambda. Fresh lambda names remain contextual inference variables; they do not
 introduce first-class rank-N polymorphism.
 
 This follows Elm's distinction between inferred variables and checked generic
-contracts, using explicit post-solve obligations instead of Elm's union-find
-rigid descriptors/rank pools. Current implementation and regression evidence,
+contracts, using explicit post-solve obligations instead of Elm's rigid
+descriptors/rank pools. Inference types themselves use the weighted union-find
+graph in `alder-solve/src/type_graph.rs`; its balancing weight does not govern
+generalization or rigidity. Current implementation and regression evidence,
 including serialized generic methods and executed cross-module calls, is mapped
 in `docs/generic-contract-hardening.md`. The broader joint-constraint and mutation
 audit remains in `plans/compiler-hardening.md`.

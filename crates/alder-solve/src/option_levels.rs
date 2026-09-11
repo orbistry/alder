@@ -186,9 +186,7 @@ fn solve_dense(nodes: usize, edges: &[Edge]) -> Result<Vec<usize>, Failure> {
         row[index] = Some(0);
     }
     // Type variables cannot have a negative number of Option layers.
-    for bound in &mut bounds[0] {
-        *bound = Some(0);
-    }
+    bounds[0].fill(Some(0));
     for edge in edges {
         strengthen(&mut bounds[edge.from][edge.to], edge.offset);
     }

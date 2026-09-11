@@ -10,10 +10,8 @@ license.workspace = true
 
 [dependencies]
 jsonc-parser.workspace = true
-pubgrub.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 indoc.workspace = true
-insta.workspace = true

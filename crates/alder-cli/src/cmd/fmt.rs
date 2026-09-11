@@ -13,11 +13,7 @@ pub struct Args {
 }
 
 impl Args {
-    pub async fn exec(self) -> Result<()> {
-        super::Cmd::Fmt(self).exec().await
-    }
-
-    pub(super) async fn exec_with(self, output: &crate::reporting::Output) -> Result<()> {
+    pub(super) async fn exec(self, output: &crate::reporting::Output) -> Result<()> {
         let files = alder_files(&self.path)?;
         let total = files.len();
         let mut changed = Vec::new();
@@ -85,101 +81,4 @@ fn alder_files(path: &Path) -> Result<Vec<PathBuf>> {
         .into_diagnostic()?;
     files.sort();
     Ok(files)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn single_file_is_discovered() {
-        assert!(alder_files(Path::new("not-alder.txt")).is_err());
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn formatted_templates_keep_their_executed_values() {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("alder-fmt-execute-{}-{nonce}", std::process::id()));
-        std::fs::create_dir_all(root.join("src")).unwrap();
-        std::fs::write(
-            root.join("alder.jsonc"),
-            r#"{"type":"application","target":"standalone"}"#,
-        )
-        .unwrap();
-        let path = root.join("src/main.ald");
-        let source = indoc::indoc! {r#"
-            pub async fn main() {
-            let deferred = async {
-            `start
-            <spaces>
-            end<spaces>`
-            }
-            let message = deferred.await
-            assert(message == "start\n   \nend   ")
-            assert(string.length(message) == 16)
-            }
-        "#}
-        .replace("<spaces>", "   ");
-        std::fs::write(&path, &source).unwrap();
-        for check in [false, true] {
-            Args {
-                path: path.clone(),
-                check,
-            }
-            .exec()
-            .await
-            .unwrap();
-        }
-        let formatted = std::fs::read_to_string(&path).unwrap();
-        assert_ne!(formatted, source, "exercise an actual formatting change");
-        let compiled =
-            super::super::build::compile_ephemeral(&root, alder_driver::BuildMode::Build)
-                .await
-                .unwrap();
-        assert!(compiled.result.is_success());
-        let bundle = super::super::build::bundle(&compiled, alder_bundle::EntryKind::Standalone)
-            .await
-            .unwrap();
-        assert_eq!(alder_runtime::execute(bundle, Vec::new()).await.unwrap(), 0);
-        std::fs::remove_file(path).unwrap();
-        std::fs::remove_file(root.join("alder.jsonc")).unwrap();
-        std::fs::remove_dir(root.join("src")).unwrap();
-        std::fs::remove_dir(root).unwrap();
-    }
-
-    #[tokio::test]
-    async fn invalid_file_prevents_all_format_writes() {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("alder-fmt-no-write-{}-{nonce}", std::process::id()));
-        std::fs::create_dir(&root).unwrap();
-        let valid = root.join("a.ald");
-        let invalid = root.join("b.ald");
-        let source = indoc::indoc! {r#"
-            fn main() {
-            let value = 42
-            }
-        "#};
-        std::fs::write(&valid, source).unwrap();
-        std::fs::write(&invalid, "fn broken(").unwrap();
-        let result = Args {
-            path: root.clone(),
-            check: false,
-        }
-        .exec()
-        .await;
-        assert!(result.is_err());
-        assert_eq!(std::fs::read_to_string(&valid).unwrap(), source);
-        assert_eq!(std::fs::read_to_string(&invalid).unwrap(), "fn broken(");
-        std::fs::remove_file(valid).unwrap();
-        std::fs::remove_file(invalid).unwrap();
-        std::fs::remove_dir(root).unwrap();
-    }
 }

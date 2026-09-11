@@ -53,7 +53,6 @@ orbistry/alder/
 │   ├── alder-language-server/  # LSP implementation
 │   └── alder-cli/              # CLI binary (`alder`), embeds deno_core
 ├── docs/                       # Design documents
-├── tasks/                      # Workspace tasks (currently a stub)
 ├── .alder/                     # Build artifacts (gitignored)
 └── alder.jsonc                 # Project config
 ```
@@ -64,7 +63,7 @@ orbistry/alder/
 
 The compiler began as an Elm port; the active modules now implement Alder's
 syntax and semantics. The descriptions below cover the current implementation,
-not the unlinked Elm-era files. See `docs/compiler-implementation-map.md`.
+not the removed Elm-era implementations. See `docs/compiler-implementation-map.md`.
 
 ### Project configuration (`alder-config`) ✅
 
@@ -172,7 +171,7 @@ not the unlinked Elm-era files. See `docs/compiler-implementation-map.md`.
 - `graph.rs`: Dependency graph construction with topological sort and cycle detection
 - `compile.rs`: Compilation orchestration (async source fetch, CPU-bound work off the executor)
 - `interface.rs`: Versioned semantic interface/index serialization and validation;
-  incremental rebuild helpers are not wired into the active build path
+  source-backed modules are rebuilt rather than timestamp-cached
 - `error.rs`: Driver error types with miette diagnostics
 
 **CLI (`crates/alder-cli/`):**
@@ -217,14 +216,18 @@ not the unlinked Elm-era files. See `docs/compiler-implementation-map.md`.
 
 **alder-solve:**
 
-- Inference in `inference.rs`, with record/error rows, aliases, higher-kinded
-  types, and occurs checks
+- Inference in `inference.rs` over the shared `type_graph.rs` union-find graph,
+  with record/error rows, aliases, higher-kinded types, and occurs checks
 - Generalization with mutation restrictions and universal-contract checking
 - Trait/coherence solving and dictionary evidence for code generation
 - Solved annotations and schemes feeding semantic interface construction
 - Post-inference pattern coverage and binding checks in `pattern_matrix.rs`
 
-The old rank-based Elm solver files are not active compiler modules.
+- [x] Restore weighted union-find with path compression, shared structural
+  descriptors, isolated recovery attempts, and focused graph/generalization
+  tests; remove the obsolete parallel implementations. Union weight is separate
+  from generalization, which uses free-variable sets and universal contracts.
+  See `plans/union-find-restoration.md` for validation and measurements.
 
 **Reference:** `elm/compiler/src/Type/`
 

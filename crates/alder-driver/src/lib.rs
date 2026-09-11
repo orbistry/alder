@@ -65,6 +65,6 @@ pub use compile::{
 pub use database::Database;
 pub use error::DriverError;
 pub use graph::DepGraph;
-pub use interface::{InterfaceCache, InterfaceFile, ModuleMeta, PackageInstanceIndexFile};
+pub use interface::{InterfaceCache, InterfaceFile, PackageInstanceIndexFile};
 pub use project::{Project, ProjectMember};
 pub use source::{FileSource, FileSystemSource, InMemorySource, OverlaySource};

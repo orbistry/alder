@@ -19,4 +19,7 @@ alder-region = { path = "../alder-region", version = "0.2.0" }
 indoc.workspace = true
 insta.workspace = true
 alder-parse = { path = "../alder-parse" }
-alder-source = { path = "../alder-source" }
+
+[[bench]]
+name = "inference"
+harness = false

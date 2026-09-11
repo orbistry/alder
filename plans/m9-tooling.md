@@ -14,7 +14,9 @@ protocol. The registry service itself is explicitly deferred past M9.
   are macros).
 - `alder-language-server` exists as a tower-lsp skeleton with no features
   against the new grammar.
-- `alder-config` uses pubgrub for resolution; `alder-cli` has the
+- `alder-config` parses dependency declarations; registry resolution with
+  pubgrub remains planned below (the unused dependency was removed).
+  `alder-cli` has the
   compiler-version proxy and GitHub-release download code from the Nash
   era.
 - `docs/tooling.md` is the design.

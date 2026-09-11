@@ -3,7 +3,6 @@
 mod owned;
 
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 use bumpalo::Bump;
 pub use owned::*;
@@ -239,39 +238,15 @@ fn belongs_to_package(package: &OwnedPackageId, module: &OwnedPackageId) -> bool
         )
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleMeta {
-    pub source_time: SystemTime,
-    pub last_compile: u64,
-    pub interface_hash: [u8; 32],
-}
-
-impl ModuleMeta {
-    pub fn new(source_time: SystemTime, build_id: u64, interface_hash: [u8; 32]) -> Self {
-        Self {
-            source_time,
-            last_compile: build_id,
-            interface_hash,
-        }
-    }
-}
-
 pub struct InterfaceCache {
     cache_dir: PathBuf,
-    build_id: u64,
 }
 
 impl InterfaceCache {
     pub fn new(project_root: &Path) -> Self {
         Self {
             cache_dir: project_root.join(".alder").join("interfaces"),
-            build_id: 0,
         }
-    }
-
-    pub fn start_build(&mut self) -> u64 {
-        self.build_id += 1;
-        self.build_id
     }
 
     pub fn interface_path(&self, module: &OwnedModuleId) -> PathBuf {
@@ -308,10 +283,6 @@ impl InterfaceCache {
         interface.save(&self.interface_path(&interface.module))
     }
 
-    pub fn load_package_index(&self, package: &OwnedPackageId) -> Option<PackageInstanceIndexFile> {
-        PackageInstanceIndexFile::load(&self.package_index_path(package)).ok()
-    }
-
     pub fn load_package_index_checked(
         &self,
         package: &OwnedPackageId,
@@ -321,18 +292,6 @@ impl InterfaceCache {
 
     pub fn save_package_index(&self, index: &PackageInstanceIndexFile) -> Result<(), DriverError> {
         index.save(&self.package_index_path(&index.package))
-    }
-
-    pub fn needs_rebuild(
-        &self,
-        meta: &ModuleMeta,
-        current_source_time: SystemTime,
-        dep_metas: &[&ModuleMeta],
-    ) -> bool {
-        current_source_time > meta.source_time
-            || dep_metas
-                .iter()
-                .any(|dependency| dependency.last_compile > meta.last_compile)
     }
 }
 

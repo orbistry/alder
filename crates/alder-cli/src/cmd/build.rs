@@ -20,12 +20,8 @@ pub struct Args {
 }
 
 impl Args {
-    pub async fn exec(self) -> Result<()> {
-        super::Cmd::Build(self).exec().await
-    }
-
-    pub(super) async fn exec_with(self, output: &crate::reporting::Output) -> Result<()> {
-        let compiled = compile_reported(&self.path, BuildMode::Build, output).await?;
+    pub(super) async fn exec(self, output: &crate::reporting::Output) -> Result<()> {
+        let compiled = compile(&self.path, BuildMode::Build, output).await?;
         let kind = match compiled.target {
             Target::Standalone => EntryKind::Standalone,
             Target::Cloudflare => EntryKind::Cloudflare,
@@ -56,31 +52,12 @@ pub(super) struct Compiled {
     pub result: BuildResult,
 }
 
-#[cfg(test)]
-pub(super) async fn compile(path: &PathBuf, mode: BuildMode) -> Result<Compiled> {
-    compile_inner(path, mode, true, &crate::reporting::Output::silent()).await
-}
-
-pub(super) async fn compile_reported(
+pub(super) async fn compile(
     path: &PathBuf,
     mode: BuildMode,
     output: &crate::reporting::Output,
 ) -> Result<Compiled> {
     output.stage("compilation");
-    compile_inner(path, mode, true, output).await
-}
-
-#[cfg(test)]
-pub(super) async fn compile_ephemeral(path: &PathBuf, mode: BuildMode) -> Result<Compiled> {
-    compile_inner(path, mode, false, &crate::reporting::Output::silent()).await
-}
-
-async fn compile_inner(
-    path: &PathBuf,
-    mode: BuildMode,
-    persist: bool,
-    output: &crate::reporting::Output,
-) -> Result<Compiled> {
     let project = Project::load(path).await.into_diagnostic()?;
     let target = project_target(&project.config)?;
     output.project("Compiling", &project);
@@ -107,9 +84,7 @@ async fn compile_inner(
     let result =
         build_with_reporter(db, &graph, mode, dependencies, Arc::new(output.clone())).await;
     report_diagnostics(&project.root, &result, output)?;
-    if persist {
-        persist_semantic_artifacts(&project.root, &result)?;
-    }
+    persist_semantic_artifacts(&project.root, &result)?;
     Ok(Compiled {
         root: project.root,
         target,

@@ -1,5 +1,9 @@
 # Release packaging verification
 
+Current workspace note: union-find cleanup removed the empty `tasks/stub`
+package. New packaging commands use `cargo package --workspace` without
+`--exclude stub`; commands below are historical evidence, not current recipes.
+
 ## Clean committed integration d9e7699
 
 `cargo package --workspace --exclude stub --offline --target-dir

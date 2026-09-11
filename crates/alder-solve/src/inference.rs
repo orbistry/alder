@@ -19,47 +19,12 @@ use crate::{
     UseAction, builtin_trait_id,
 };
 
-#[derive(Clone, Debug, PartialEq)]
-enum Ty<'a> {
-    Var(usize),
-    Con(QualifiedName<'a>),
-    App(Box<Ty<'a>>, Vec<Ty<'a>>),
-    Partial(QualifiedName<'a>, Vec<TySlot<'a>>),
-    Projection(
-        alder_ast::TraitId<'a>,
-        Vec<Ty<'a>>,
-        alder_ast::AssocTypeId<'a>,
-    ),
-    Fn(Vec<Ty<'a>>, Box<Ty<'a>>),
-    Unit,
-    Tuple(Vec<Ty<'a>>),
-    Record(BTreeMap<&'a str, Ty<'a>>, Option<Box<Ty<'a>>>),
-    RecordRow(Box<Ty<'a>>),
-    ErrorRow {
-        tags: BTreeMap<&'a str, Vec<Ty<'a>>>,
-        tail: Option<Box<Ty<'a>>>,
-    },
-    Any,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum VariableKind {
-    Unknown,
-    Type,
-    RecordRow,
-    ErrorRow,
-}
+use crate::type_graph::{Content, Ty, TySlot, TypeGraph, VariableKind};
 
 fn is_builtin_result(reference: QualifiedName<'_>) -> bool {
     reference.module.package == PackageId::Builtin
         && reference.module.path.is_empty()
         && reference.name == "Result"
-}
-
-#[derive(Clone, Debug, PartialEq)]
-enum TySlot<'a> {
-    Hole(u16),
-    Fixed(Ty<'a>),
 }
 
 fn resolve_obligations<'a>(
@@ -299,8 +264,8 @@ fn resolve_derived_variant_fields<'a>(
         let mut stack = Vec::new();
         let variable_names = vars
             .iter()
-            .filter_map(|(name, typ)| match typ {
-                Ty::Var(id) => Some((*id, *name)),
+            .filter_map(|(name, typ)| match typ.content().as_ref() {
+                Content::Var(id) => Some((*id, *name)),
                 _ => None,
             })
             .collect::<BTreeMap<_, _>>();
@@ -358,7 +323,11 @@ fn resolve_predicate<'a>(
     stack: &mut Vec<ResolutionFrame<'a>>,
     step: ResolutionStep<'a, '_>,
 ) -> Result<Evidence<'a>, SolveTraitError<'a>> {
-    let subject = predicate.args.first().cloned().unwrap_or(Ty::Unit);
+    let subject = predicate
+        .args
+        .first()
+        .cloned()
+        .unwrap_or(Ty::new(Content::Unit));
     let args = predicate
         .args
         .iter()
@@ -535,7 +504,8 @@ fn resolve_structural_capability<'a>(
         None
     };
     if let Some(capability) = capability
-        && let Some(Ty::ErrorRow { tags, tail: None }) = predicate.args.first()
+        && let Some(subject) = predicate.args.first()
+        && let Content::ErrorRow { tags, tail: None } = subject.content().as_ref()
     {
         let mut tag_evidence = Vec::with_capacity(tags.len());
         for (name, payloads) in tags {
@@ -567,13 +537,13 @@ fn resolve_structural_capability<'a>(
     let Some(subject) = predicate.args.first() else {
         return Ok(None);
     };
-    let structural = match subject {
-        Ty::Tuple(items) => Some((StructuralEqShape::Tuple, items.clone())),
-        Ty::Record(fields, None) => Some((
+    let structural = match subject.view() {
+        Content::Tuple(items) => Some((StructuralEqShape::Tuple, items.clone())),
+        Content::Record(fields, None) => Some((
             StructuralEqShape::Record(fields.keys().copied().collect()),
             fields.values().cloned().collect(),
         )),
-        Ty::ErrorRow { tags, tail: None } => Some((
+        Content::ErrorRow { tags, tail: None } => Some((
             StructuralEqShape::ErrorRow(
                 tags.iter()
                     .map(|(name, payloads)| (*name, payloads.len()))
@@ -617,8 +587,8 @@ fn builtin_instance_evidence<'a>(
     }
     let subject = predicate.args.first()?;
     let trait_name = predicate.trait_.0.name;
-    let nominal = match subject {
-        Ty::Partial(reference, _) => Some(reference.name),
+    let nominal = match subject.view() {
+        Content::Partial(reference, _) => Some(reference.name),
         _ => nominal_name(subject),
     };
     let container = match nominal {
@@ -668,7 +638,7 @@ fn builtin_instance_evidence<'a>(
         ("Ord", Some("Number")) => Intrinsic::OrdNumber,
         ("Ord", Some("String")) => Intrinsic::OrdString,
         ("Ord", Some("BigInt")) => Intrinsic::OrdBigInt,
-        ("Ord", _) if matches!(subject, Ty::Unit) => Intrinsic::OrdUnit,
+        ("Ord", _) if matches!((subject).view(), Content::Unit) => Intrinsic::OrdUnit,
         ("Num", Some("Number")) => Intrinsic::NumNumber,
         ("Num", Some("BigInt")) => Intrinsic::NumBigInt,
         ("Functor", Some("Array")) => Intrinsic::FunctorArray,
@@ -684,10 +654,10 @@ fn builtin_instance_evidence<'a>(
         ("Traversable", Some("Option")) => Intrinsic::TraversableOption,
         ("Traversable", Some("Result")) => Intrinsic::TraversableResult,
         ("Iterator", Some("ArrayIterator")) => Intrinsic::IteratorArray,
-        ("Show", None) if matches!(subject, Ty::Unit) => Intrinsic::ShowKernel,
-        ("Hash", None) if matches!(subject, Ty::Unit) => Intrinsic::HashKernel,
-        ("Json", None) if matches!(subject, Ty::Unit) => Intrinsic::JsonUnit,
-        ("Eq", None) if matches!(subject, Ty::Unit) => Intrinsic::EqUnit,
+        ("Show", None) if matches!((subject).view(), Content::Unit) => Intrinsic::ShowKernel,
+        ("Hash", None) if matches!((subject).view(), Content::Unit) => Intrinsic::HashKernel,
+        ("Json", None) if matches!((subject).view(), Content::Unit) => Intrinsic::JsonUnit,
+        ("Eq", None) if matches!((subject).view(), Content::Unit) => Intrinsic::EqUnit,
         _ => return None,
     };
     Some(Evidence::Intrinsic(intrinsic))
@@ -710,7 +680,7 @@ fn match_type<'a>(
         Type::Named {
             reference,
             args: [],
-        } if matches!(goal, Ty::ErrorRow { .. }) => {
+        } if matches!(goal.content().as_ref(), Content::ErrorRow { .. }) => {
             database.error_group(*reference).is_some_and(|tags| {
                 match_error_row(tags, RowExtension::Closed, goal, bindings, database)
             })
@@ -721,12 +691,12 @@ fn match_type<'a>(
             {
                 args.iter()
                     .zip(actual_args)
-                    .all(|(template, actual)| match_type(template, actual, bindings, database))
+                    .all(|(template, actual)| match_type(template, &actual, bindings, database))
             }
             _ => false,
         },
-        Type::Partial { constructor, slots } => match goal {
-            Ty::Partial(actual, actual_slots) => {
+        Type::Partial { constructor, slots } => match goal.content().as_ref() {
+            Content::Partial(actual, actual_slots) => {
                 constructor == actual
                     && slots.len() == actual_slots.len()
                     && slots
@@ -742,9 +712,9 @@ fn match_type<'a>(
             }
             _ => false,
         },
-        Type::Unit => matches!(goal, Ty::Unit),
-        Type::Tuple(items) => match goal {
-            Ty::Tuple(actual) if actual.len() == items.len() => items
+        Type::Unit => matches!(goal.content().as_ref(), Content::Unit),
+        Type::Tuple(items) => match goal.content().as_ref() {
+            Content::Tuple(actual) if actual.len() == items.len() => items
                 .iter()
                 .zip(actual)
                 .all(|(template, actual)| match_type(template, actual, bindings, database)),
@@ -757,7 +727,8 @@ fn match_type<'a>(
         },
         Type::ErrorRow { tags, ext } => match_error_row(tags, *ext, goal, bindings, database),
         Type::Record { fields, ext } => {
-            let Ty::Record(actual, tail) = goal else {
+            let content = goal.content();
+            let Content::Record(actual, tail) = content.as_ref() else {
                 return false;
             };
             let mut remaining = actual.clone();
@@ -772,7 +743,7 @@ fn match_type<'a>(
             match ext {
                 RowExtension::Closed => remaining.is_empty() && tail.is_none(),
                 RowExtension::Open(name) => {
-                    let residual = Ty::Record(remaining, tail.clone());
+                    let residual = Ty::new(Content::Record(remaining, tail.clone()));
                     match bindings.get(name) {
                         Some(bound) => *bound == residual,
                         None => {
@@ -783,8 +754,8 @@ fn match_type<'a>(
                 }
             }
         }
-        Type::Fn { params, ret } => match goal {
-            Ty::Fn(actual_params, actual_ret) => {
+        Type::Fn { params, ret } => match goal.content().as_ref() {
+            Content::Fn(actual_params, actual_ret) => {
                 params.len() == actual_params.len()
                     && params
                         .iter()
@@ -795,14 +766,15 @@ fn match_type<'a>(
             _ => false,
         },
         Type::Var { name, args } => {
-            let Ty::App(head, actual_args) = goal else {
+            let content = goal.content();
+            let Content::App(head, actual_args) = content.as_ref() else {
                 return false;
             };
             if args.len() > actual_args.len() {
                 return false;
             }
-            let constructor = match head.as_ref() {
-                Ty::Con(constructor) => {
+            let constructor = match head.content().as_ref() {
+                Content::Con(constructor) => {
                     // Use canonical constructor sections: abstract the leftmost
                     // arguments and retain any remaining fixed slots.
                     let Some(slots) = actual_args
@@ -819,9 +791,9 @@ fn match_type<'a>(
                     else {
                         return false;
                     };
-                    Ty::Partial(*constructor, slots)
+                    Ty::new(Content::Partial(*constructor, slots))
                 }
-                other if args.len() == actual_args.len() => other.clone(),
+                _ if args.len() == actual_args.len() => head.clone(),
                 _ => return false,
             };
             match bindings.get(name) {
@@ -846,7 +818,8 @@ fn match_error_row<'a>(
     bindings: &mut BTreeMap<&'a str, Ty<'a>>,
     database: &TraitDatabase<'a>,
 ) -> bool {
-    let Ty::ErrorRow { tags: actual, tail } = goal else {
+    let content = goal.content();
+    let Content::ErrorRow { tags: actual, tail } = content.as_ref() else {
         return false;
     };
     let mut remaining = actual.clone();
@@ -867,10 +840,10 @@ fn match_error_row<'a>(
     match ext {
         RowExtension::Closed => remaining.is_empty() && tail.is_none(),
         RowExtension::Open(name) => {
-            let residual = Ty::ErrorRow {
+            let residual = Ty::new(Content::ErrorRow {
                 tags: remaining,
                 tail: tail.clone(),
-            };
+            });
             match bindings.get(name) {
                 Some(bound) => *bound == residual,
                 None => {
@@ -884,39 +857,41 @@ fn match_error_row<'a>(
 
 fn substitute_type<'a>(typ: &'a Located<Type<'a>>, bindings: &BTreeMap<&'a str, Ty<'a>>) -> Ty<'a> {
     match &typ.value {
-        Type::Var { name, args: [] } => bindings.get(name).cloned().unwrap_or(Ty::Any),
+        Type::Var { name, args: [] } => {
+            bindings.get(name).cloned().unwrap_or(Ty::new(Content::Any))
+        }
         Type::Named { reference, args } => {
             let arguments = args
                 .iter()
                 .map(|argument| substitute_type(argument, bindings))
                 .collect::<Vec<_>>();
             if arguments.is_empty() {
-                Ty::Con(*reference)
+                Ty::new(Content::Con(*reference))
             } else {
-                Ty::App(Box::new(Ty::Con(*reference)), arguments)
+                Ty::new(Content::App(Ty::new(Content::Con(*reference)), arguments))
             }
         }
-        Type::Unit => Ty::Unit,
-        Type::Tuple(items) => Ty::Tuple(
+        Type::Unit => Ty::new(Content::Unit),
+        Type::Tuple(items) => Ty::new(Content::Tuple(
             items
                 .iter()
                 .map(|item| substitute_type(item, bindings))
                 .collect(),
-        ),
+        )),
         Type::Alias { target, .. } => match target {
             alder_ast::AliasType::Open(real) | alder_ast::AliasType::Filled(real) => {
                 substitute_type(real, bindings)
             }
         },
-        _ => Ty::Any,
+        _ => Ty::new(Content::Any),
     }
 }
 
-fn nominal_parts<'t, 'a>(typ: &'t Ty<'a>) -> Option<(QualifiedName<'a>, &'t [Ty<'a>])> {
-    match typ {
-        Ty::Con(name) => Some((*name, &[])),
-        Ty::App(head, args) => match head.as_ref() {
-            Ty::Con(name) => Some((*name, args)),
+fn nominal_parts<'a>(typ: &Ty<'a>) -> Option<(QualifiedName<'a>, Vec<Ty<'a>>)> {
+    match typ.content().as_ref() {
+        Content::Con(name) => Some((*name, Vec::new())),
+        Content::App(head, args) => match head.content().as_ref() {
+            Content::Con(name) => Some((*name, args.clone())),
             _ => None,
         },
         _ => None,
@@ -928,44 +903,44 @@ fn nominal_name<'a>(typ: &Ty<'a>) -> Option<&'a str> {
 }
 
 fn has_variable_head(typ: &Ty<'_>) -> bool {
-    match typ {
-        Ty::Var(_) => true,
-        Ty::App(head, _) => has_variable_head(head),
+    match typ.content().as_ref() {
+        Content::Var(_) => true,
+        Content::App(head, _) => has_variable_head(head),
         _ => false,
     }
 }
 
 fn collect_variables(typ: &Ty<'_>, variables: &mut impl Extend<usize>) {
-    match typ {
-        Ty::Var(variable) => {
+    match typ.content().as_ref() {
+        Content::Var(variable) => {
             variables.extend([*variable]);
         }
-        Ty::App(head, arguments) => {
+        Content::App(head, arguments) => {
             collect_variables(head, variables);
             for argument in arguments {
                 collect_variables(argument, variables);
             }
         }
-        Ty::Partial(_, slots) => {
+        Content::Partial(_, slots) => {
             for slot in slots {
                 if let TySlot::Fixed(typ) = slot {
                     collect_variables(typ, variables);
                 }
             }
         }
-        Ty::Projection(_, arguments, _) | Ty::Tuple(arguments) => {
+        Content::Projection(_, arguments, _) | Content::Tuple(arguments) => {
             for argument in arguments {
                 collect_variables(argument, variables);
             }
         }
-        Ty::Fn(arguments, result) => {
+        Content::Fn(arguments, result) => {
             for argument in arguments {
                 collect_variables(argument, variables);
             }
             collect_variables(result, variables);
         }
-        Ty::RecordRow(row) => collect_variables(row, variables),
-        Ty::Record(fields, tail) => {
+        Content::RecordRow(row) => collect_variables(row, variables),
+        Content::Record(fields, tail) => {
             for typ in fields.values() {
                 collect_variables(typ, variables);
             }
@@ -973,7 +948,7 @@ fn collect_variables(typ: &Ty<'_>, variables: &mut impl Extend<usize>) {
                 collect_variables(tail, variables);
             }
         }
-        Ty::ErrorRow { tags, tail } => {
+        Content::ErrorRow { tags, tail } => {
             for payloads in tags.values() {
                 for payload in payloads {
                     collect_variables(payload, variables);
@@ -983,7 +958,7 @@ fn collect_variables(typ: &Ty<'_>, variables: &mut impl Extend<usize>) {
                 collect_variables(tail, variables);
             }
         }
-        Ty::Con(_) | Ty::Unit | Ty::Any => {}
+        Content::Con(_) | Content::Unit | Content::Any => {}
     }
 }
 
@@ -1032,16 +1007,16 @@ fn diagnostic_variable_names(
 /// their structure here; reporting, not inference, chooses visible type names.
 fn diagnostic_resolved_type(typ: &Ty<'_>, names: &BTreeMap<usize, String>) -> DiagnosticType {
     use DiagnosticType as D;
-    match typ {
-        Ty::Var(id) => names.get(id).cloned().map_or(D::Hole, D::NamedVariable),
-        Ty::Con(name) => Infer::diagnostic_named_type(*name),
-        Ty::App(head, args) => D::Application(
+    match typ.content().as_ref() {
+        Content::Var(id) => names.get(id).cloned().map_or(D::Hole, D::NamedVariable),
+        Content::Con(name) => Infer::diagnostic_named_type(*name),
+        Content::App(head, args) => D::Application(
             Box::new(diagnostic_resolved_type(head, names)),
             args.iter()
                 .map(|arg| diagnostic_resolved_type(arg, names))
                 .collect(),
         ),
-        Ty::Partial(name, slots) => D::Application(
+        Content::Partial(name, slots) => D::Application(
             Box::new(Infer::diagnostic_named_type(*name)),
             slots
                 .iter()
@@ -1051,7 +1026,7 @@ fn diagnostic_resolved_type(typ: &Ty<'_>, names: &BTreeMap<usize, String>) -> Di
                 })
                 .collect(),
         ),
-        Ty::Projection(trait_, args, assoc) => D::Projection(
+        Content::Projection(trait_, args, assoc) => D::Projection(
             Box::new(D::Application(
                 Box::new(Infer::diagnostic_named_type(trait_.0)),
                 args.iter()
@@ -1060,22 +1035,22 @@ fn diagnostic_resolved_type(typ: &Ty<'_>, names: &BTreeMap<usize, String>) -> Di
             )),
             assoc.name.to_owned(),
         ),
-        Ty::Fn(params, ret) => D::Function(
+        Content::Fn(params, ret) => D::Function(
             params
                 .iter()
                 .map(|param| diagnostic_resolved_type(param, names))
                 .collect(),
             Box::new(diagnostic_resolved_type(ret, names)),
         ),
-        Ty::Unit => D::Unit,
-        Ty::Tuple(items) => D::Tuple(
+        Content::Unit => D::Unit,
+        Content::Tuple(items) => D::Tuple(
             items
                 .iter()
                 .map(|item| diagnostic_resolved_type(item, names))
                 .collect(),
         ),
-        Ty::RecordRow(row) => diagnostic_resolved_type(row, names),
-        Ty::Record(fields, tail) => D::Record(
+        Content::RecordRow(row) => diagnostic_resolved_type(row, names),
+        Content::Record(fields, tail) => D::Record(
             fields
                 .iter()
                 .map(|(name, typ)| ((*name).to_owned(), diagnostic_resolved_type(typ, names)))
@@ -1083,7 +1058,7 @@ fn diagnostic_resolved_type(typ: &Ty<'_>, names: &BTreeMap<usize, String>) -> Di
             tail.as_ref()
                 .map(|tail| Box::new(diagnostic_resolved_type(tail, names))),
         ),
-        Ty::ErrorRow { tags, tail } => D::ErrorRow(
+        Content::ErrorRow { tags, tail } => D::ErrorRow(
             tags.iter()
                 .map(|(name, payloads)| {
                     (
@@ -1098,7 +1073,7 @@ fn diagnostic_resolved_type(typ: &Ty<'_>, names: &BTreeMap<usize, String>) -> Di
             tail.as_ref()
                 .map(|tail| Box::new(diagnostic_resolved_type(tail, names))),
         ),
-        Ty::Any => D::Hole,
+        Content::Any => D::Hole,
     }
 }
 
@@ -1359,8 +1334,7 @@ struct Infer<'a, 'db> {
     record_overlays: Vec<RecordOverlay<'a>>,
     bump: &'a Bump,
     database: &'db TraitDatabase<'a>,
-    substitutions: Vec<Option<Ty<'a>>>,
-    variable_kinds: Vec<VariableKind>,
+    types: TypeGraph<'a>,
     obligations: Vec<Obligation<'a>>,
     givens: Vec<Given<'a>>,
     projection_equations: Vec<ProjectionEquation<'a>>,
@@ -1458,7 +1432,7 @@ struct RecoveredInference<'a> {
 }
 
 /// Each failed attempt is discarded in its entirety. In particular, neither
-/// partial substitutions nor deferred constraints/evidence survive a failure.
+/// graph unions/descriptors nor deferred constraints/evidence survive a failure.
 /// Removed bindings taint all transitive users (including writes and recursive
 /// peers). Rechecking is only for diagnostics: once any attempt failed, even a
 /// successful remainder must never escape as a checked module/interface.
@@ -1825,8 +1799,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         Self {
             bump,
             database,
-            substitutions: Vec::new(),
-            variable_kinds: Vec::new(),
+            types: TypeGraph::default(),
             obligations: Vec::new(),
             givens: Vec::new(),
             projection_equations: Vec::new(),
@@ -1875,24 +1848,21 @@ impl<'a, 'db> Infer<'a, 'db> {
     }
 
     fn fresh_with_kind(&mut self, kind: VariableKind) -> Ty<'a> {
-        let id = self.substitutions.len();
-        self.substitutions.push(None);
-        self.variable_kinds.push(kind);
-        Ty::Var(id)
+        self.types.fresh(kind)
     }
 
     fn fresh_error_row(&mut self) -> Ty<'a> {
-        Ty::ErrorRow {
+        Ty::new(Content::ErrorRow {
             tags: BTreeMap::new(),
-            tail: Some(Box::new(self.fresh_with_kind(VariableKind::ErrorRow))),
-        }
+            tail: Some(self.fresh_with_kind(VariableKind::ErrorRow)),
+        })
     }
 
     fn open_record(&mut self, fields: BTreeMap<&'a str, Ty<'a>>) -> Ty<'a> {
-        Ty::Record(
+        Ty::new(Content::Record(
             fields,
-            Some(Box::new(self.fresh_with_kind(VariableKind::RecordRow))),
-        )
+            Some(self.fresh_with_kind(VariableKind::RecordRow)),
+        ))
     }
 
     fn infer_module(&mut self, module: &'a Module<'a>) -> Result<InferenceResult<'a>, Error> {
@@ -1985,10 +1955,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         self.solve_tuple_projections()?;
         loop {
             let before = (
-                self.substitutions
-                    .iter()
-                    .filter(|typ| typ.is_some())
-                    .count(),
+                self.types.revision(),
                 self.record_overlays.len(),
                 self.error_row_inclusions.len(),
                 self.error_row_joins.len(),
@@ -1998,10 +1965,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             self.solve_tuple_shapes()?;
             self.solve_error_row_inclusions(&env)?;
             let after = (
-                self.substitutions
-                    .iter()
-                    .filter(|typ| typ.is_some())
-                    .count(),
+                self.types.revision(),
                 self.record_overlays.len(),
                 self.error_row_inclusions.len(),
                 self.error_row_joins.len(),
@@ -2038,8 +2002,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                     },
                 });
             }
-            let abi = match self.prune(scheme.typ.clone()) {
-                Ty::Fn(_, _) => BindingAbi::DirectFunction,
+            let abi = match self.prune(scheme.typ.clone()).view() {
+                Content::Fn(_, _) => BindingAbi::DirectFunction,
                 _ if scheme.predicates.is_empty() => BindingAbi::PlainValue,
                 _ => BindingAbi::EvidenceFactory,
             };
@@ -2069,14 +2033,14 @@ impl<'a, 'db> Infer<'a, 'db> {
         // call unifies a signature variable with its instantiated operand.
         let mut variable_names = BTreeMap::new();
         for (id, name) in std::mem::take(&mut self.variable_names) {
-            if let Ty::Var(id) = self.prune(Ty::Var(id)) {
+            if let Content::Var(id) = self.prune(self.types.variable(id)).view() {
                 variable_names.entry(id).or_insert(name);
             }
         }
         let generalized_variables = std::mem::take(&mut self.generalized_variables)
             .into_iter()
-            .filter_map(|id| match self.prune(Ty::Var(id)) {
-                Ty::Var(id) => Some(id),
+            .filter_map(|id| match self.prune(self.types.variable(id)).view() {
+                Content::Var(id) => Some(id),
                 _ => None,
             })
             .collect();
@@ -2158,7 +2122,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             .expect("value was predeclared")
             .typ
             .clone();
-        self.unify(placeholder, Ty::Fn(args, Box::new(ret)), region)?;
+        self.unify(placeholder, Ty::new(Content::Fn(args, ret)), region)?;
         let scheme = env.globals.get_mut(&name).expect("value was predeclared");
         scheme.predicates = predicates;
         scheme.projection_eqs = projection_eqs;
@@ -2169,9 +2133,9 @@ impl<'a, 'db> Infer<'a, 'db> {
         let mut errors = Vec::new();
         for (typ, region) in std::mem::take(&mut self.error_kind_checks) {
             let typ = self.prune(typ);
-            let valid = match &typ {
-                Ty::ErrorRow { .. } => true,
-                Ty::Var(id) => self.variable_kinds[*id] == VariableKind::ErrorRow,
+            let valid = match &typ.view() {
+                Content::ErrorRow { .. } => true,
+                Content::Var(id) => self.types.variable(*id).kind() == VariableKind::ErrorRow,
                 _ => false,
             };
             if !valid {
@@ -2323,7 +2287,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             ItemKind::Test(test) => {
                 let errors = self.fresh_error_row();
-                let result = self.named("Result", vec![Ty::Unit, errors]);
+                let result = self.named("Result", vec![Ty::new(Content::Unit), errors]);
                 self.infer_block(&mut env.clone(), test.body, Some(result))?;
             }
             ItemKind::Tests(items) => {
@@ -2397,7 +2361,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     .expect("extern function was predeclared");
                 scheme.predicates = predicates;
                 scheme.projection_eqs = projection_eqs;
-                self.unify_global(env, *name, Ty::Fn(args, Box::new(ret)), region)
+                self.unify_global(env, *name, Ty::new(Content::Fn(args, ret)), region)
             }
             ItemKind::Let(decl) => {
                 let value = if let Some(annotation) = decl.annotation {
@@ -2426,14 +2390,14 @@ impl<'a, 'db> Infer<'a, 'db> {
                 )?;
                 debug_assert!(predicates.is_empty());
                 debug_assert!(projection_eqs.is_empty());
-                let Ty::Fn(args, inferred) = typ else {
+                let Content::Fn(args, inferred) = typ.view() else {
                     unreachable!()
                 };
-                self.unify(*inferred, self.named("Html", Vec::new()), region)?;
+                self.unify(inferred, self.named("Html", Vec::new()), region)?;
                 self.unify_global(
                     env,
                     component.name,
-                    Ty::Fn(args, Box::new(self.named("Html", Vec::new()))),
+                    Ty::new(Content::Fn(args, self.named("Html", Vec::new()))),
                     region,
                 )
             }
@@ -2528,8 +2492,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             });
         }
         for (name, typ) in &vars {
-            if let Ty::Var(id) = typ {
-                self.variable_names.entry(*id).or_insert(name);
+            if let Content::Var(id) = typ.view() {
+                self.variable_names.entry(id).or_insert(name);
             }
         }
         let outer_givens = std::mem::take(&mut self.givens);
@@ -2617,7 +2581,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         let inferred = (|| {
             if let Some((expected, method_region)) = expected_method {
                 self.unify(
-                    Ty::Fn(args.clone(), Box::new(result.clone())),
+                    Ty::new(Content::Fn(args.clone(), result.clone())),
                     expected,
                     method_region,
                 )?;
@@ -2628,8 +2592,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
             }
             let field_context = if body.value.tail.is_some()
-                && matches!(self.prune(body_result.clone()), Ty::Record(..))
-            {
+                && matches!(
+                    (self.prune(body_result.clone())).view(),
+                    Content::Record(..)
+                ) {
                 Some(body_result.clone())
             } else {
                 None
@@ -2679,7 +2645,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     }
                 })?;
             }
-            let function_type = Ty::Fn(args, Box::new(self.prune(result)));
+            let function_type = Ty::new(Content::Fn(args, self.prune(result)));
             Ok((function_type, predicates, local_projection_equations))
         })();
         self.givens = outer_givens;
@@ -2757,10 +2723,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                     }
                     (Some(tail), _) => this.infer_expr(env, tail, return_type),
                     (None, Some(ExprExpectation::Exact(expected))) if falls_through => {
-                        this.check_value(Ty::Unit, expected.clone(), block.region)?;
+                        this.check_value(Ty::new(Content::Unit), expected.clone(), block.region)?;
                         Ok(this.prune(expected))
                     }
-                    (None, _) => Ok(Ty::Unit),
+                    (None, _) => Ok(Ty::new(Content::Unit)),
                 }?
             };
             if falls_through {
@@ -2855,7 +2821,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let mut nested = env.clone();
                 self.infer_pattern(&mut nested, pattern, item, false)?;
                 self.with_reachability(alder_ast::flow::expression(iter).falls_through, |this| {
-                    this.infer_loop_body(&mut nested, body, return_type, Ty::Unit)
+                    this.infer_loop_body(&mut nested, body, return_type, Ty::new(Content::Unit))
                 })?;
             }
             Stmt::While { condition, body } => {
@@ -2869,14 +2835,28 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.with_reachability(
                     alder_ast::flow::expression(condition).falls_through
                         && !matches!(condition.value, Expr::Bool(false)),
-                    |this| this.infer_loop_body(&mut env.clone(), body, return_type, Ty::Unit),
+                    |this| {
+                        this.infer_loop_body(
+                            &mut env.clone(),
+                            body,
+                            return_type,
+                            Ty::new(Content::Unit),
+                        )
+                    },
                 )?;
             }
             Stmt::Return(value) => {
-                let expected = return_type.unwrap_or(Ty::Unit);
+                let expected = return_type.unwrap_or(Ty::new(Content::Unit));
                 let actual = match value {
-                    Some(value) if matches!(self.prune(expected.clone()), Ty::Record(..)) => self
-                        .infer_checked_expr(env, value, expected.clone(), Some(expected.clone()))
+                    Some(value)
+                        if matches!((self.prune(expected.clone())).view(), Content::Record(..)) =>
+                    {
+                        self.infer_checked_expr(
+                            env,
+                            value,
+                            expected.clone(),
+                            Some(expected.clone()),
+                        )
                         .map_err(|error| {
                             if matches!(
                                 error.kind,
@@ -2886,15 +2866,18 @@ impl<'a, 'db> Infer<'a, 'db> {
                             } else {
                                 error
                             }
-                        })?,
+                        })?
+                    }
                     Some(value) => self.infer_expr(env, value, Some(expected.clone()))?,
-                    None => Ty::Unit,
+                    None => Ty::new(Content::Unit),
                 };
-                if matches!(self.prune(expected.clone()), Ty::Var(_))
+                if matches!((self.prune(expected.clone())).view(), Content::Var(_))
                     && let Some((_, errors)) = self.result_parts(actual.clone())
-                    && match self.prune(errors) {
-                        Ty::ErrorRow { .. } => true,
-                        Ty::Var(id) => self.variable_kinds[id] == VariableKind::ErrorRow,
+                    && match self.prune(errors).view() {
+                        Content::ErrorRow { .. } => true,
+                        Content::Var(id) => {
+                            self.types.variable(id).kind() == VariableKind::ErrorRow
+                        }
                         _ => false,
                     }
                 {
@@ -2912,7 +2895,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             Stmt::Break(value) => {
                 let actual = match value {
                     Some(value) => self.infer_expr(env, value, return_type)?,
-                    None => Ty::Unit,
+                    None => Ty::new(Content::Unit),
                 };
                 let expected = self
                     .loop_results
@@ -2969,8 +2952,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let mut reachable = alder_ast::flow::expression(tag).falls_through;
                 for part in *parts {
                     if let alder_ast::TemplatePart::Expr(argument) = part {
-                        let expected = match self.prune(function_type.clone()) {
-                            Ty::Fn(params, _) => params.get(args.len()).cloned(),
+                        let expected = match self.prune(function_type.clone()).view() {
+                            Content::Fn(params, _) => params.get(args.len()).cloned(),
                             _ => None,
                         };
                         args.push(self.with_reachability(reachable, |this| {
@@ -2991,7 +2974,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     }
                 }
                 let result = self.fresh();
-                let call_type = Ty::Fn(args, Box::new(result.clone()));
+                let call_type = Ty::new(Content::Fn(args, result.clone()));
                 self.unify(call_type, function_type, region)?;
                 self.solve_record_overlays()?;
                 // Tagged calls use the tag as a function value. Its reference
@@ -2999,7 +2982,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 Ok(self.prune(result))
             }
             Expr::Bool(_) => Ok(self.named("Bool", Vec::new())),
-            Expr::Unit => Ok(Ty::Unit),
+            Expr::Unit => Ok(Ty::new(Content::Unit)),
             Expr::Var { use_id, reference } => {
                 self.infer_reference(env, *use_id, *reference, region)
             }
@@ -3016,10 +2999,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                     })?);
                     reachable &= alder_ast::flow::expression(arg).falls_through;
                 }
-                Ok(Ty::ErrorRow {
+                Ok(Ty::new(Content::ErrorRow {
                     tags: BTreeMap::from([(name.value, payloads)]),
                     tail: None,
-                })
+                }))
             }
             Expr::Array(items) => {
                 let item_type = self.fresh();
@@ -3054,7 +3037,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     })?);
                     reachable &= alder_ast::flow::expression(item).falls_through;
                 }
-                Ok(Ty::Tuple(types))
+                Ok(Ty::new(Content::Tuple(types)))
             }
             Expr::Record(fields) => self.infer_record(env, fields, return_type),
             Expr::RecordConstructor {
@@ -3065,29 +3048,31 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let alder_ast::VariantPayload::Record(expected_fields) = constructor.payload else {
                     unreachable!("record constructor carries a record payload")
                 };
-                match constructor_type {
-                    Ty::Fn(expected_types, result)
+                match constructor_type.view() {
+                    Content::Fn(expected_types, result)
                         if expected_types.len() == expected_fields.len() =>
                     {
-                        let expected = Ty::Record(
+                        let expected = Ty::new(Content::Record(
                             expected_fields
                                 .iter()
                                 .zip(expected_types)
                                 .map(|(field, typ)| (field.name, typ))
                                 .collect(),
                             None,
-                        );
+                        ));
                         let record = self.bump.alloc(Located {
                             region,
                             value: Expr::Record(fields),
                         });
                         self.infer_checked_expr(env, record, expected, return_type)?;
-                        Ok(self.prune(*result))
+                        Ok(self.prune(result))
                     }
-                    result if expected_fields.is_empty() => Ok(result),
-                    actual => {
-                        Err(self.mismatch(region, actual, Ty::Fn(Vec::new(), Box::new(Ty::Any))))
-                    }
+                    _ if expected_fields.is_empty() => Ok(constructor_type),
+                    actual => Err(self.mismatch(
+                        region,
+                        Ty::new(actual),
+                        Ty::new(Content::Fn(Vec::new(), Ty::new(Content::Any))),
+                    )),
                 }
             }
             Expr::Call {
@@ -3200,7 +3185,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                     std::mem::replace(&mut self.return_origin, ret.map(|ret| ret.region));
                 let outer_loops = std::mem::take(&mut self.loop_results);
                 let outer_reachable = std::mem::replace(&mut self.reachable, true);
-                let body_type = if matches!(self.prune(body_result.clone()), Ty::Record(..)) {
+                let body_type = if matches!(
+                    (self.prune(body_result.clone())).view(),
+                    Content::Record(..)
+                ) {
                     self.infer_checked_expr(
                         &local,
                         body,
@@ -3222,7 +3210,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                             error.expected_by(ExpectationKind::Return, ret.map(|ret| ret.region))
                         })?;
                 }
-                Ok(Ty::Fn(args, Box::new(self.prune(result))))
+                Ok(Ty::new(Content::Fn(args, self.prune(result))))
             }
             Expr::If { .. } | Expr::Match { .. } => {
                 self.infer_branch_context(env, expression, return_type, None)
@@ -3264,7 +3252,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 Ok(self.named("Html", Vec::new()))
             }
-            Expr::MacroCall { .. } => Ok(Ty::Any),
+            Expr::MacroCall { .. } => Ok(Ty::new(Content::Any)),
         }
     }
 
@@ -3344,7 +3332,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             ValueRef::Module(_)
             | ValueRef::Provider(_)
             | ValueRef::QueryName(_)
-            | ValueRef::Opaque(_) => Ok(Ty::Any),
+            | ValueRef::Opaque(_) => Ok(Ty::new(Content::Any)),
         }
     }
 
@@ -3391,7 +3379,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         })?
                     };
                     (
-                        Ty::Record(BTreeMap::from([(name.value, typ)]), None),
+                        Ty::new(Content::Record(BTreeMap::from([(name.value, typ)]), None)),
                         value.region,
                     )
                 }
@@ -3412,7 +3400,12 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         let open_count = operands
             .iter()
-            .filter(|(typ, _)| matches!(self.prune(typ.clone()), Ty::Record(_, Some(_))))
+            .filter(|(typ, _)| {
+                matches!(
+                    (self.prune(typ.clone())).view(),
+                    Content::Record(_, Some(_))
+                )
+            })
             .count();
         if open_count > 0 {
             let result = self.open_record(BTreeMap::new());
@@ -3432,24 +3425,20 @@ impl<'a, 'db> Infer<'a, 'db> {
     fn merge_record_operands(&mut self, operands: Vec<(Ty<'a>, Region)>) -> Ty<'a> {
         let mut result = BTreeMap::new();
         for (operand, _) in operands {
-            let Ty::Record(fields, None) = self.prune(operand) else {
+            let Content::Record(fields, None) = self.prune(operand).view() else {
                 unreachable!("open record operands retain an explicit overlay constraint");
             };
             // Every stored field exists. A later Option field overwrites an
             // earlier field even when its runtime value is None.
             result.extend(fields);
         }
-        Ty::Record(result, None)
+        Ty::new(Content::Record(result, None))
     }
 
     fn solve_record_overlays(&mut self) -> Result<(), Error> {
         let mut pending = std::mem::take(&mut self.record_overlays);
         loop {
-            let bound_before = self
-                .substitutions
-                .iter()
-                .filter(|typ| typ.is_some())
-                .count();
+            let bound_before = self.types.revision();
             // Ordered overlay is a type-level function: equal input shapes
             // cannot independently choose incompatible output payloads. Keep
             // both constraints (and their sites), but identify their results.
@@ -3492,7 +3481,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     .collect::<Vec<_>>();
                 if operands
                     .iter()
-                    .all(|operand| matches!(operand, Ty::Record(_, None)))
+                    .all(|operand| matches!((operand).view(), Content::Record(_, None)))
                 {
                     let merged = self.merge_record_operands(
                         operands
@@ -3510,12 +3499,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             // Payload equalities can make another overlay solvable without
             // adding a field. Count bindings, not fresh variables, so repeated
             // checks that allocate no new information cannot sustain the loop.
-            progress |= self
-                .substitutions
-                .iter()
-                .filter(|typ| typ.is_some())
-                .count()
-                != bound_before;
+            progress |= self.types.revision() != bound_before;
             if !progress {
                 self.record_overlays = unresolved;
                 return Ok(());
@@ -3535,20 +3519,20 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<bool, Error> {
         let names = operands
             .iter()
-            .filter_map(|operand| match operand {
-                Ty::Record(fields, _) => Some(fields.keys().copied()),
+            .filter_map(|operand| match operand.view() {
+                Content::Record(fields, _) => Some(fields.into_keys()),
                 _ => None,
             })
             .flatten()
             .collect::<BTreeSet<_>>();
-        let Ty::Record(existing, _) = self.prune(overlay.result.clone()) else {
+        let Content::Record(existing, _) = self.prune(overlay.result.clone()).view() else {
             return Ok(false);
         };
         let mut additions = BTreeMap::new();
         for name in names {
             let mut selected = None;
             for operand in operands.iter().rev() {
-                let Ty::Record(fields, tail) = operand else {
+                let Content::Record(fields, tail) = operand.view() else {
                     break;
                 };
                 if let Some(typ) = fields.get(name) {
@@ -3563,8 +3547,11 @@ impl<'a, 'db> Infer<'a, 'db> {
             };
             if let Some(expected) = existing.get(name) {
                 self.check_value(
-                    Ty::Record(BTreeMap::from([(name, typ)]), None),
-                    Ty::Record(BTreeMap::from([(name, expected.clone())]), None),
+                    Ty::new(Content::Record(BTreeMap::from([(name, typ)]), None)),
+                    Ty::new(Content::Record(
+                        BTreeMap::from([(name, expected.clone())]),
+                        None,
+                    )),
                     overlay.region,
                 )?;
             } else {
@@ -3680,7 +3667,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             Pattern::Bool(_) => {
                 self.unify(self.named("Bool", Vec::new()), expected, pattern.region)?;
             }
-            Pattern::Unit => self.unify(Ty::Unit, expected, pattern.region)?,
+            Pattern::Unit => self.unify(Ty::new(Content::Unit), expected, pattern.region)?,
             Pattern::Constructor { constructor, args } => {
                 let constructor_type =
                     self.instantiate_annotation(constructor.annotation, pattern.region);
@@ -3693,7 +3680,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     }
                     self.unify(
                         constructor_type,
-                        Ty::Fn(arg_types.clone(), Box::new(expected)),
+                        Ty::new(Content::Fn(arg_types.clone(), expected)),
                         pattern.region,
                     )?;
                     for (arg, typ) in args.iter().zip(arg_types) {
@@ -3724,17 +3711,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 self.unify(
                     constructor_type,
-                    Ty::Fn(arg_types.clone(), Box::new(expected)),
+                    Ty::new(Content::Fn(arg_types.clone(), expected)),
                     pattern.region,
                 )?;
-                let record = Ty::Record(
+                let record = Ty::new(Content::Record(
                     declared
                         .iter()
                         .zip(arg_types)
                         .map(|(field, typ)| (field.name, typ))
                         .collect(),
                     None,
-                );
+                ));
                 for field in *fields {
                     let typ =
                         self.access_field(record.clone(), field.name.value, field.name.region)?;
@@ -3763,7 +3750,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
             }
             Pattern::Tag { name, args, .. } => {
-                if let Ty::ErrorRow { tags, tail: None } = self.prune(expected.clone()) {
+                if let Content::ErrorRow { tags, tail: None } = self.prune(expected.clone()).view()
+                {
                     let Some(payloads) = tags.get(name.value) else {
                         return Err(Error {
                             expectation: None,
@@ -3809,10 +3797,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let tail = self.fresh_with_kind(VariableKind::ErrorRow);
                 self.unify(
                     expected,
-                    Ty::ErrorRow {
+                    Ty::new(Content::ErrorRow {
                         tags: BTreeMap::from([(name.value, payloads)]),
-                        tail: Some(Box::new(tail)),
-                    },
+                        tail: Some(tail),
+                    }),
                     pattern.region,
                 )?;
             }
@@ -3829,7 +3817,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     )?;
                     types.push(typ);
                 }
-                self.unify(expected, Ty::Tuple(types), pattern.region)?;
+                self.unify(expected, Ty::new(Content::Tuple(types)), pattern.region)?;
             }
             Pattern::Array { elements, rest } => {
                 let item = self.fresh();
@@ -3897,8 +3885,9 @@ impl<'a, 'db> Infer<'a, 'db> {
         index: u32,
         region: Region,
     ) -> Result<Ty<'a>, Error> {
-        match self.prune(tuple) {
-            Ty::Tuple(items) => items.get(index as usize).cloned().ok_or(Error {
+        let tuple = self.prune(tuple);
+        match tuple.view() {
+            Content::Tuple(items) => items.get(index as usize).cloned().ok_or(Error {
                 expectation: None,
                 region,
                 kind: ErrorKind::TupleIndexOutOfBounds {
@@ -3906,7 +3895,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     length: items.len(),
                 },
             }),
-            tuple @ Ty::Var(_) => {
+            Content::Var(_) => {
                 for slot in 0..self.tuple_shapes.len() {
                     let operand = self.tuple_shapes[slot].tuple.clone();
                     if self.prune(operand) != tuple {
@@ -3943,28 +3932,24 @@ impl<'a, 'db> Infer<'a, 'db> {
                 });
                 Ok(result)
             }
-            actual => Err(self.mismatch(region, actual, Ty::Tuple(Vec::new()))),
+            _ => Err(self.mismatch(region, tuple, Ty::new(Content::Tuple(Vec::new())))),
         }
     }
 
     fn solve_tuple_projections(&mut self) -> Result<(), Error> {
         let mut pending = std::mem::take(&mut self.tuple_projections);
         while !pending.is_empty() {
-            let before = self
-                .substitutions
-                .iter()
-                .filter(|entry| entry.is_some())
-                .count();
+            let before = self.types.revision();
             let mut unresolved = Vec::new();
             let mut elements = BTreeMap::new();
             for projection in pending {
-                match self.prune(projection.tuple.clone()) {
-                    Ty::Var(id) => {
+                match self.prune(projection.tuple.clone()).view() {
+                    Content::Var(id) => {
                         let mut fixed = false;
                         for shape in self.tuple_shapes.clone() {
-                            if self.prune(shape.tuple) == Ty::Var(id) {
+                            if self.prune(shape.tuple) == self.types.variable(id) {
                                 let element = self.project_tuple(
-                                    Ty::Var(id),
+                                    self.types.variable(id),
                                     projection.index,
                                     projection.region,
                                 )?;
@@ -3984,8 +3969,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                         unresolved.push(projection);
                     }
                     known => {
-                        let element =
-                            self.project_tuple(known, projection.index, projection.region)?;
+                        let element = self.project_tuple(
+                            Ty::new(known),
+                            projection.index,
+                            projection.region,
+                        )?;
                         self.unify(projection.result, element, projection.region)?;
                     }
                 }
@@ -3994,24 +3982,18 @@ impl<'a, 'db> Infer<'a, 'db> {
             if pending.is_empty() {
                 break;
             }
-            if before
-                != self
-                    .substitutions
-                    .iter()
-                    .filter(|entry| entry.is_some())
-                    .count()
-            {
+            if before != self.types.revision() {
                 continue;
             }
             // Equal projections are unified before choosing a shape: this also
             // joins nested projection operands reached through different aliases.
             let mut shapes = BTreeMap::new();
             for projection in std::mem::take(&mut pending) {
-                let Ty::Var(id) = self.prune(projection.tuple.clone()) else {
+                let Content::Var(id) = self.prune(projection.tuple.clone()).view() else {
                     unreachable!("stable unresolved projection");
                 };
                 let shape = shapes.entry(id).or_insert_with(|| SparseTupleShape {
-                    tuple: Ty::Var(id),
+                    tuple: self.types.variable(id),
                     length: 2,
                     elements: BTreeMap::new(),
                     region: projection.region,
@@ -4028,8 +4010,8 @@ impl<'a, 'db> Infer<'a, 'db> {
         let mut unresolved: BTreeMap<usize, SparseTupleShape<'a>> = BTreeMap::new();
         for mut shape in std::mem::take(&mut self.tuple_shapes) {
             shape.tuple = self.prune(shape.tuple);
-            match shape.tuple.clone() {
-                Ty::Tuple(items) if items.len() as u64 == shape.length => {
+            match shape.tuple.clone().view() {
+                Content::Tuple(items) if items.len() as u64 == shape.length => {
                     for (index, expected) in shape.elements {
                         let Some(actual) = items.get(index as usize) else {
                             return Err(Error {
@@ -4044,7 +4026,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         self.unify(actual.clone(), expected, shape.region)?;
                     }
                 }
-                Ty::Var(id) => {
+                Content::Var(id) => {
                     for element in shape.elements.values() {
                         if self.occurs(id, element) {
                             return Err(Error {
@@ -4081,7 +4063,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                         expectation: None,
                         region: shape.region,
                         kind: ErrorKind::Mismatch {
-                            actual: self.diagnostic_type(actual, &mut BTreeMap::new()),
+                            actual: self.diagnostic_type(Ty::new(actual), &mut BTreeMap::new()),
                             expected: DiagnosticType::TupleShape(shape.length),
                         },
                     });
@@ -4097,7 +4079,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         let mut graph = BTreeMap::<usize, BTreeSet<usize>>::new();
         let mut regions = BTreeMap::new();
         for shape in self.tuple_shapes.clone() {
-            let Ty::Var(id) = self.prune(shape.tuple) else {
+            let Content::Var(id) = self.prune(shape.tuple).view() else {
                 continue;
             };
             let edges = graph.entry(id).or_default();
@@ -4159,8 +4141,8 @@ impl<'a, 'db> Infer<'a, 'db> {
         region: Region,
     ) -> Result<Ty<'a>, Error> {
         if let Some(return_type) = return_type.as_ref()
-            && matches!(self.prune(actual.clone()), Ty::Var(_))
-            && matches!(self.prune(return_type.clone()), Ty::Var(_))
+            && matches!((self.prune(actual.clone())).view(), Content::Var(_))
+            && matches!((self.prune(return_type.clone())).view(), Content::Var(_))
         {
             let value = self.fresh();
             self.try_constraints.push(TryConstraint {
@@ -4190,11 +4172,11 @@ impl<'a, 'db> Infer<'a, 'db> {
             return Ok(());
         }
         let body = self.prune(body.clone());
-        if matches!(result, Ty::Var(_)) {
+        if matches!((result).view(), Content::Var(_)) {
             if self.result_parts(body.clone()).is_some() {
                 self.require_result_parts(result.clone(), region)?;
-            } else if matches!(nominal_parts(&body), Some((name, [_]))
-                if name.module.package == PackageId::Builtin && name.module.path.is_empty()
+            } else if matches!(nominal_parts(&body), Some((name, args))
+                if args.len() == 1 && name.module.package == PackageId::Builtin && name.module.path.is_empty()
                     && name.name == "Option")
             {
                 let payload = self.fresh();
@@ -4207,9 +4189,12 @@ impl<'a, 'db> Infer<'a, 'db> {
                 // A recursive peer may not have contributed its return type
                 // yet. Do not default an undetermined carrier at this boundary;
                 // the SCC pass resolves it after checking every member.
-                if matches!(target, Ty::Var(_))
-                    && matches!(body, Ty::Var(_))
-                    && matches!(self.prune(constraint.actual.clone()), Ty::Var(_))
+                if matches!((target).view(), Content::Var(_))
+                    && matches!((body).view(), Content::Var(_))
+                    && matches!(
+                        (self.prune(constraint.actual.clone())).view(),
+                        Content::Var(_)
+                    )
                 {
                     self.try_constraints.push(constraint);
                     continue;
@@ -4248,7 +4233,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         let is_option = |typ: &Ty<'a>| {
             matches!(
                 nominal_parts(typ),
-                Some((reference, [_])) if reference.module.package == PackageId::Builtin
+                Some((reference, args)) if args.len() == 1 && reference.module.package == PackageId::Builtin
                     && reference.module.path.is_empty() && reference.name == "Option"
             )
         };
@@ -4421,7 +4406,8 @@ impl<'a, 'db> Infer<'a, 'db> {
     fn option_spine(&mut self, typ: Ty<'a>) -> (usize, Ty<'a>) {
         let mut depth = 0;
         let mut root = self.normalize_projection_root(typ);
-        while let Some((reference, [payload])) = nominal_parts(&root)
+        while let Some((reference, arguments)) = nominal_parts(&root)
+            && let [payload] = arguments.as_slice()
             && reference.module.package == PackageId::Builtin
             && reference.module.path.is_empty()
             && reference.name == "Option"
@@ -4453,7 +4439,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.option_spine(constraint.expected.clone());
                 let mut endpoints = Vec::with_capacity(2);
                 for root in [actual_root, expected_root] {
-                    endpoints.push(if let Ty::Var(id) = root {
+                    endpoints.push(if let Content::Var(id) = root.view() {
                         let next = variables.len() + 1;
                         variables
                             .entry(id)
@@ -4487,10 +4473,9 @@ impl<'a, 'db> Infer<'a, 'db> {
             // Payload equations can expose an outer variable through a nested
             // type. Rebuild the depth problem with those ordinary equalities
             // applied, rather than keeping stale spine nodes.
-            if variables
-                .keys()
-                .any(|id| self.prune(Ty::Var(*id)) != Ty::Var(*id))
-            {
+            if variables.keys().any(
+                |id| !matches!(self.types.variable(*id).view(), Content::Var(root) if root == *id),
+            ) {
                 continue;
             }
             // Row-kind variables are already known not to have outer Option
@@ -4498,7 +4483,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             // Preserve that kind while choosing wrapping for their uses.
             for (id, (node, _)) in &variables {
                 if matches!(
-                    self.variable_kinds[*id],
+                    self.types.variable(*id).kind(),
                     VariableKind::RecordRow | VariableKind::ErrorRow
                 ) {
                     edges.push(crate::option_levels::Edge {
@@ -4518,7 +4503,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 .flat_map(|contract| contract.variables.values().cloned())
                 .collect::<Vec<_>>();
             for universal in universals {
-                if let Ty::Var(id) = self.prune(universal)
+                if let Content::Var(id) = self.prune(universal).view()
                     && let Some((node, _)) = variables.get(&id)
                 {
                     edges.push(crate::option_levels::Edge {
@@ -4529,7 +4514,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
             }
             for shape in self.tuple_shapes.clone() {
-                if let Ty::Var(id) = self.prune(shape.tuple)
+                if let Content::Var(id) = self.prune(shape.tuple).view()
                     && let Some((node, _)) = variables.get(&id)
                 {
                     // A sparse tuple is known not to be an Option even though
@@ -4623,11 +4608,11 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         let (_, payload) = self.option_spine(expected);
         let fresh_record = matches!(expression.value, Expr::Record(_))
-            && matches!(payload, Ty::Record(..) | Ty::Var(_));
+            && matches!((payload).view(), Content::Record(..) | Content::Var(_));
         let fresh_array = matches!(expression.value, Expr::Array(_))
-            && (matches!(payload, Ty::Var(_))
-                || matches!(nominal_parts(&payload), Some((reference, [_]))
-                if reference.module.package == PackageId::Builtin
+            && (matches!((payload).view(), Content::Var(_))
+                || matches!(nominal_parts(&payload), Some((reference, args))
+                if args.len() == 1 && reference.module.package == PackageId::Builtin
                     && reference.module.path.is_empty() && reference.name == "Array"));
         if fresh_record || fresh_array {
             // A literal record/array is not itself an Option. Its fields still
@@ -4681,9 +4666,9 @@ impl<'a, 'db> Infer<'a, 'db> {
         })?;
         let mut args = Vec::with_capacity(arguments.len() + usize::from(leading.is_some()));
         if let Some(expected) = expected_result
-            && let Ty::Fn(_, result) = self.prune(function_type.clone())
+            && let Content::Fn(_, result) = self.prune(function_type.clone()).view()
         {
-            self.unify(*result, expected, region)?;
+            self.unify(result, expected, region)?;
         }
         let accepts_error_tag = is_result_err_expr(function);
         let callee = match function.value {
@@ -4717,8 +4702,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             .chain(arguments.iter().copied())
             .enumerate()
         {
-            let expected = match self.prune(function_type.clone()) {
-                Ty::Fn(params, _) => params.get(args.len()).cloned(),
+            let expected = match self.prune(function_type.clone()).view() {
+                Content::Fn(params, _) => params.get(args.len()).cloned(),
                 _ => None,
             };
             // Check each known parameter before inferring the next argument.
@@ -4764,12 +4749,12 @@ impl<'a, 'db> Infer<'a, 'db> {
                 })?;
             args.push(actual);
         }
-        if let Ty::Fn(params, _) = self.prune(function_type.clone())
+        if let Content::Fn(params, _) = self.prune(function_type.clone()).view()
             && args.len() < params.len()
             && params[args.len()..].iter().all(|param| {
                 matches!(
                     nominal_parts(&self.prune(param.clone())),
-                    Some((reference, [_])) if reference.module.package == PackageId::Builtin
+                    Some((reference, args)) if args.len() == 1 && reference.module.package == PackageId::Builtin
                         && reference.module.path.is_empty() && reference.name == "Option"
                 )
             })
@@ -4778,7 +4763,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 .insert(use_id, params.len() - args.len());
             args.extend_from_slice(&params[args.len()..]);
         }
-        if let Ty::Fn(params, _) = self.prune(function_type.clone())
+        if let Content::Fn(params, _) = self.prune(function_type.clone()).view()
             && args.len() != params.len()
         {
             return Err(Error {
@@ -4792,7 +4777,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             .expected_by(ExpectationKind::Call { callee }, None));
         }
         let result = self.fresh();
-        let call_type = Ty::Fn(args, Box::new(result.clone()));
+        let call_type = Ty::new(Content::Fn(args, result.clone()));
         let call_region = leading.map_or(region, |argument| argument.region);
         self.unify(call_type, function_type, call_region)
             .map_err(|error| error.expected_by(ExpectationKind::Call { callee }, None))?;
@@ -4864,8 +4849,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                     // that member would produce Option[T]. Intermediate members
                     // remain reads: an optional parent cannot be traversed as T.
                     let payload = if index + 1 == place.steps.len() {
-                        match self.prune(typ.clone()) {
-                            Ty::Record(fields, _) => fields.get(field.value).cloned(),
+                        match self.prune(typ.clone()).view() {
+                            Content::Record(fields, _) => fields.get(field.value).cloned(),
                             _ => None,
                         }
                     } else {
@@ -4906,16 +4891,16 @@ impl<'a, 'db> Infer<'a, 'db> {
         field: &'a str,
         region: Region,
     ) -> Result<Ty<'a>, Error> {
-        match self.prune(record) {
-            Ty::Record(fields, tail) => match fields.get(field) {
+        match self.prune(record).view() {
+            Content::Record(fields, tail) => match fields.get(field) {
                 Some(typ) => Ok(typ.clone()),
                 None if tail.is_some() => {
                     let result = self.fresh();
                     let fields = BTreeMap::from([(field, result.clone())]);
                     let fragment = self.open_record(fields);
                     self.unify(
-                        *tail.expect("open tail"),
-                        Ty::RecordRow(Box::new(fragment)),
+                        tail.expect("open tail"),
+                        Ty::new(Content::RecordRow(fragment)),
                         region,
                     )?;
                     Ok(result)
@@ -4929,17 +4914,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                     },
                 }),
             },
-            Ty::Var(id) => {
+            Content::Var(id) => {
                 let result = self.fresh();
                 let fields = BTreeMap::from([(field, result.clone())]);
                 let record = self.open_record(fields);
                 self.bind(id, record, region)?;
                 Ok(result)
             }
-            Ty::Any => Ok(Ty::Any),
+            Content::Any => Ok(Ty::new(Content::Any)),
             actual => {
                 let expected = self.open_record(BTreeMap::new());
-                Err(self.mismatch(region, actual, expected))
+                Err(self.mismatch(region, Ty::new(actual), expected))
             }
         }
     }
@@ -5317,7 +5302,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         for inclusion in &pending {
             self.free_vars(&inclusion.target, &mut protected);
-            if let Ty::ErrorRow { tags, .. } = &inclusion.source {
+            if let Content::ErrorRow { tags, .. } = &inclusion.source.view() {
                 for payload in tags.values().flatten() {
                     self.free_vars(payload, &mut protected);
                 }
@@ -5325,22 +5310,24 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         // A variable occurring only as a hidden source tail is existential:
         // choosing its empty row satisfies every upper bound. Eliminate that
-        // variable from this scheme, not from global substitutions. Input tails,
+        // variable from this scheme, not from the shared graph. Input tails,
         // payload variables, shared state, universals and intermediate targets
         // must retain their relationships.
         for inclusion in &mut pending {
-            if let Ty::ErrorRow { tail, .. } = &mut inclusion.source
+            let mut source = inclusion.source.view();
+            if let Content::ErrorRow { tail, .. } = &mut source
                 && let Some(value) = tail
-                && let Ty::Var(id) = **value
+                && let Content::Var(id) = (*value).view()
                 && !protected.contains(&id)
             {
                 *tail = None;
+                inclusion.source = Ty::new(source);
             }
         }
         pending.retain(|inclusion| {
             inclusion.exact_target
-                || !matches!(&inclusion.source,
-            Ty::ErrorRow { tags, tail: None } if tags.is_empty())
+                || !matches!(&(inclusion.source).view(),
+            Content::ErrorRow { tags, tail: None } if tags.is_empty())
         });
         pending
     }
@@ -5408,7 +5395,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         let replacements: BTreeMap<_, _> = scheme
             .quantified
             .iter()
-            .map(|id| (*id, self.fresh_with_kind(self.variable_kinds[*id])))
+            .map(|id| (*id, self.fresh_with_kind(self.types.variable(*id).kind())))
             .collect();
         let typ = self.replace_vars(&scheme.typ, &replacements);
         let shapes = scheme
@@ -5657,7 +5644,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         projection: alder_ast::ProjectionType<'a>,
         vars: &mut BTreeMap<&'a str, Ty<'a>>,
     ) -> Ty<'a> {
-        Ty::Projection(
+        Ty::new(Content::Projection(
             projection.trait_ref.trait_,
             projection
                 .trait_ref
@@ -5666,7 +5653,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 .map(|argument| self.from_ast(argument, vars))
                 .collect(),
             projection.assoc,
-        )
+        ))
     }
 
     fn predicate_from_trait_ref(
@@ -5877,9 +5864,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                 if is_builtin_result(*reference) && converted.len() == 1 {
                     converted.push(self.fresh_error_row());
                 }
-                self.apply(Ty::Con(*reference), converted)
+                self.apply(Ty::new(Content::Con(*reference)), converted)
             }
-            Type::Partial { constructor, slots } => Ty::Partial(
+            Type::Partial { constructor, slots } => Ty::new(Content::Partial(
                 *constructor,
                 slots
                     .iter()
@@ -5894,8 +5881,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                         TypeSlot::Fixed(typ) => TySlot::Fixed(self.from_ast(typ, vars)),
                     })
                     .collect(),
-            ),
-            Type::Projection(projection) => Ty::Projection(
+            )),
+            Type::Projection(projection) => Ty::new(Content::Projection(
                 projection.trait_ref.trait_,
                 projection
                     .trait_ref
@@ -5904,32 +5891,32 @@ impl<'a, 'db> Infer<'a, 'db> {
                     .map(|arg| self.from_ast(arg, vars))
                     .collect(),
                 projection.assoc,
-            ),
-            Type::Fn { params, ret } => Ty::Fn(
+            )),
+            Type::Fn { params, ret } => Ty::new(Content::Fn(
                 params
                     .iter()
                     .map(|param| self.from_ast(param, vars))
                     .collect(),
-                Box::new(self.from_ast(ret, vars)),
-            ),
-            Type::Unit => Ty::Unit,
-            Type::Tuple(items) => {
-                Ty::Tuple(items.iter().map(|item| self.from_ast(item, vars)).collect())
-            }
-            Type::Record { fields, ext } => Ty::Record(
+                self.from_ast(ret, vars),
+            )),
+            Type::Unit => Ty::new(Content::Unit),
+            Type::Tuple(items) => Ty::new(Content::Tuple(
+                items.iter().map(|item| self.from_ast(item, vars)).collect(),
+            )),
+            Type::Record { fields, ext } => Ty::new(Content::Record(
                 fields
                     .iter()
                     .map(|field| (field.name, self.from_ast(field.typ, vars)))
                     .collect(),
                 match ext {
                     RowExtension::Closed => None,
-                    RowExtension::Open(name) => Some(Box::new(
+                    RowExtension::Open(name) => Some(
                         vars.entry(name)
                             .or_insert_with(|| self.fresh_with_kind(VariableKind::RecordRow))
                             .clone(),
-                    )),
+                    ),
                 },
-            ),
+            )),
             Type::ErrorRow { tags, ext } => self.error_row_from_tags(tags, *ext, vars),
             Type::Alias { target, .. } => match target {
                 alder_ast::AliasType::Open(real) | alder_ast::AliasType::Filled(real) => {
@@ -5947,8 +5934,8 @@ impl<'a, 'db> Infer<'a, 'db> {
         let converted = match &typ.value {
             Type::Var { name, args: [] } => {
                 if let Some(existing) = vars.get(name) {
-                    if let Ty::Var(id) = existing {
-                        self.variable_kinds[*id] = VariableKind::ErrorRow;
+                    if let Content::Var(id) = existing.view() {
+                        self.types.variable(id).set_kind(VariableKind::ErrorRow);
                     }
                     let existing = existing.clone();
                     self.error_kind_checks.push((existing.clone(), typ.region));
@@ -5971,7 +5958,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                                 name: reference.name.to_owned(),
                             },
                         });
-                        return Ty::Any;
+                        return Ty::new(Content::Any);
                     }
                     let row = self.error_row_from_tags(tags, RowExtension::Closed, vars);
                     self.expanding_error_groups.remove(reference);
@@ -6014,8 +6001,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             RowExtension::Closed => None,
             RowExtension::Open(name) => {
                 let row = if let Some(existing) = vars.get(name) {
-                    if let Ty::Var(id) = existing {
-                        self.variable_kinds[*id] = VariableKind::ErrorRow;
+                    if let Content::Var(id) = existing.view() {
+                        self.types.variable(id).set_kind(VariableKind::ErrorRow);
                     }
                     existing.clone()
                 } else {
@@ -6023,16 +6010,16 @@ impl<'a, 'db> Infer<'a, 'db> {
                     vars.insert(name, row.clone());
                     row
                 };
-                Some(Box::new(row))
+                Some(row)
             }
         };
-        Ty::ErrorRow { tags, tail }
+        Ty::new(Content::ErrorRow { tags, tail })
     }
 
     fn result_parts(&mut self, typ: Ty<'a>) -> Option<(Ty<'a>, Ty<'a>)> {
-        match self.prune(typ) {
-            Ty::App(head, args)
-                if matches!(*head, Ty::Con(reference) if is_builtin_result(reference))
+        match self.prune(typ).view() {
+            Content::App(head, args)
+                if matches!((head).view(), Content::Con(reference) if is_builtin_result(reference))
                     && args.len() == 2 =>
             {
                 let mut args = args.into_iter();
@@ -6050,7 +6037,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         if let Some(parts) = self.result_parts(typ.clone()) {
             return Ok(parts);
         }
-        let Ty::Var(id) = self.prune(typ) else {
+        let Content::Var(id) = self.prune(typ).view() else {
             return Err(Error {
                 expectation: None,
                 region,
@@ -6078,7 +6065,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         let actual_parts = match self.result_parts(actual.clone()) {
             Some(parts) => parts,
             None => {
-                let Ty::Var(id) = self.prune(actual.clone()) else {
+                let Content::Var(id) = self.prune(actual.clone()).view() else {
                     return self.unify(actual, expected, region);
                 };
                 // An unknown returned value is another Result source, not an
@@ -6119,12 +6106,13 @@ impl<'a, 'db> Infer<'a, 'db> {
     }
 
     fn prune_error_row(&mut self, typ: Ty<'a>) -> Ty<'a> {
-        match self.prune(typ) {
-            Ty::Var(id) => Ty::ErrorRow {
+        let typ = self.prune(typ);
+        match typ.view() {
+            Content::Var(id) => Ty::new(Content::ErrorRow {
                 tags: BTreeMap::new(),
-                tail: Some(Box::new(Ty::Var(id))),
-            },
-            typ => typ,
+                tail: Some(self.types.variable(id)),
+            }),
+            _ => typ,
         }
     }
 
@@ -6137,15 +6125,15 @@ impl<'a, 'db> Infer<'a, 'db> {
         let source = self.prune_error_row(source);
         let target = self.prune_error_row(target);
         let (
-            Ty::ErrorRow {
+            Content::ErrorRow {
                 tags: mut source_tags,
                 tail: _,
             },
-            Ty::ErrorRow {
+            Content::ErrorRow {
                 tags: target_tags,
                 tail: target_tail,
             },
-        ) = (source.clone(), target.clone())
+        ) = (source.clone().view(), target.clone().view())
         else {
             return Err(self.mismatch(region, source, target));
         };
@@ -6175,15 +6163,15 @@ impl<'a, 'db> Infer<'a, 'db> {
         match target_tail {
             None if !source_tags.is_empty() => Err(self.mismatch(region, source, target)),
             None => Ok(()),
-            Some(target_tail) if source_tags.is_empty() => Ok(()),
+            Some(_) if source_tags.is_empty() => Ok(()),
             Some(target_tail) => {
                 let open_tail = self.fresh_with_kind(VariableKind::ErrorRow);
                 self.unify(
-                    *target_tail,
-                    Ty::ErrorRow {
+                    target_tail,
+                    Ty::new(Content::ErrorRow {
                         tags: source_tags,
-                        tail: Some(Box::new(open_tail)),
-                    },
+                        tail: Some(open_tail),
+                    }),
                     region,
                 )
             }
@@ -6220,11 +6208,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         // before choosing any flexible tail under a closed upper bound; choosing
         // that tail eagerly would discard errors from another input.
         loop {
-            let before = self
-                .substitutions
-                .iter()
-                .filter(|value| value.is_some())
-                .count();
+            let before = self.types.revision();
             for inclusion in self.error_row_inclusions.clone() {
                 self.propagate_error_row_inclusion(
                     inclusion.source,
@@ -6232,11 +6216,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     inclusion.region,
                 )?;
             }
-            let after = self
-                .substitutions
-                .iter()
-                .filter(|value| value.is_some())
-                .count();
+            let after = self.types.revision();
             if before != after {
                 continue;
             }
@@ -6257,20 +6237,20 @@ impl<'a, 'db> Infer<'a, 'db> {
             for inclusion in self.error_row_inclusions.clone() {
                 let source = self.prune(inclusion.source.clone());
                 let target = self.prune(inclusion.target.clone());
-                if let Ty::ErrorRow {
+                if let Content::ErrorRow {
                     tail: Some(target), ..
-                } = target
-                    && let Ty::Var(target) = *target
+                } = target.view()
+                    && let Content::Var(target) = (target).view()
                 {
                     if inclusion.exact_target {
                         exact_targets.insert(target, inclusion.region);
                     }
-                    match source {
-                        Ty::ErrorRow { tail: None, .. } => {}
-                        Ty::ErrorRow {
+                    match source.view() {
+                        Content::ErrorRow { tail: None, .. } => {}
+                        Content::ErrorRow {
                             tail: Some(source), ..
-                        } if matches!(*source, Ty::Var(_)) => {
-                            let Ty::Var(source) = *source else {
+                        } if matches!((source).view(), Content::Var(_)) => {
+                            let Content::Var(source) = (source).view() else {
                                 unreachable!()
                             };
                             dependencies.entry(target).or_default().insert(source);
@@ -6309,10 +6289,10 @@ impl<'a, 'db> Infer<'a, 'db> {
             for (target, region) in exact_targets {
                 self.bind(
                     target,
-                    Ty::ErrorRow {
+                    Ty::new(Content::ErrorRow {
                         tags: BTreeMap::new(),
                         tail: None,
-                    },
+                    }),
                     region,
                 )?;
                 closed = true;
@@ -6321,22 +6301,22 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let source = self.prune(inclusion.source.clone());
                 let target = self.prune(inclusion.target.clone());
                 if let (
-                    Ty::ErrorRow {
+                    Content::ErrorRow {
                         tail: Some(tail), ..
                     },
-                    Ty::ErrorRow { tail: None, .. },
-                ) = (&source, &target)
-                    && let Ty::Var(id) = **tail
+                    Content::ErrorRow { tail: None, .. },
+                ) = (&source.view(), &target.view())
+                    && let Content::Var(id) = (*tail).view()
                 {
                     if universals.contains(&id) {
                         return Err(self.mismatch(inclusion.region, source, target));
                     }
                     self.bind(
                         id,
-                        Ty::ErrorRow {
+                        Ty::new(Content::ErrorRow {
                             tags: BTreeMap::new(),
                             tail: None,
-                        },
+                        }),
                         inclusion.region,
                     )?;
                     closed = true;
@@ -6502,8 +6482,8 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             Pattern::Tag { name, args, .. } => {
                 let typ = self.pattern_types[&pattern.region].clone();
-                let alternatives = match self.prune(typ) {
-                    Ty::ErrorRow { tags, tail: None } => Some(
+                let alternatives = match self.prune(typ).view() {
+                    Content::ErrorRow { tags, tail: None } => Some(
                         tags.iter()
                             .map(|(name, args)| (format!(":{name}"), args.len()))
                             .collect(),
@@ -6539,7 +6519,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             Pattern::Record { fields, .. } => {
                 let typ = self.pattern_types[&pattern.region].clone();
-                let Ty::Record(declared, _) = self.prune(typ) else {
+                let Content::Record(declared, _) = self.prune(typ).view() else {
                     unreachable!("inferred record pattern")
                 };
                 let args = declared
@@ -6585,7 +6565,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 "Result" => {
                     let typ = self.pattern_types[&region].clone();
                     if let Some((_, errors)) = self.result_parts(typ)
-                        && matches!(self.prune(errors), Ty::ErrorRow { tags, tail: None } if tags.is_empty())
+                        && matches!((self.prune(errors)).view(), Content::ErrorRow { tags, tail: None } if tags.is_empty())
                     {
                         return vec![("Ok".into(), 1)];
                     }
@@ -6630,7 +6610,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             .collect::<Vec<_>>();
         let mut universals = BTreeMap::new();
         for (name, variable) in variables {
-            if let Ty::Var(id) = self.prune(variable) {
+            if let Content::Var(id) = self.prune(variable).view() {
                 universals.insert(id, name);
             }
         }
@@ -6642,7 +6622,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         let mut universals = BTreeMap::new();
         for contract in &contracts {
             for (name, variable) in &contract.variables {
-                if let Ty::Var(id) = self.prune(variable.clone()) {
+                if let Content::Var(id) = self.prune(variable.clone()).view() {
                     universals.insert(id, *name);
                 }
             }
@@ -6651,11 +6631,11 @@ impl<'a, 'db> Infer<'a, 'db> {
             let mut representatives = BTreeMap::new();
             let mut escaped = BTreeSet::new();
             for outer in contract.outer_free {
-                self.free_vars(&Ty::Var(outer), &mut escaped);
+                self.free_vars(&self.types.variable(outer), &mut escaped);
             }
             for (name, variable) in contract.variables {
                 let resolved = self.prune(variable);
-                let Ty::Var(id) = resolved else {
+                let Content::Var(id) = resolved.view() else {
                     return Err(Error {
                         expectation: None,
                         region: contract.region,
@@ -6668,7 +6648,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     });
                 };
                 for shape in self.tuple_shapes.clone() {
-                    if self.prune(shape.tuple) == Ty::Var(id) {
+                    if self.prune(shape.tuple) == self.types.variable(id) {
                         return Err(Error {
                             expectation: None,
                             region: contract.region,
@@ -6737,7 +6717,10 @@ impl<'a, 'db> Infer<'a, 'db> {
             "shared producers must not unfold repeatedly"
         );
         assert_eq!(expanded, vec![left.clone(), right.clone()]);
-        let middle = Ty::Record(BTreeMap::from([("marker", Ty::Unit)]), None);
+        let middle = Ty::new(Content::Record(
+            BTreeMap::from([("marker", Ty::new(Content::Unit))]),
+            None,
+        ));
         overlay.operands.insert(1, middle.clone());
         assert_eq!(
             self.expanded_overlay_operands(&overlay),
@@ -6772,12 +6755,12 @@ impl<'a, 'db> Infer<'a, 'db> {
             let operand = self.prune(operand);
             // Closed emptiness is the overlay identity. An open row with no
             // known fields is not empty: it may still overwrite any field.
-            if matches!(&operand, Ty::Record(fields, None) if fields.is_empty()) {
+            if matches!(&(operand).view(), Content::Record(fields, None) if fields.is_empty()) {
                 continue;
             }
             let producer = overlays.iter().enumerate().find(|(index, candidate)| {
                 !path.contains(index)
-                    && matches!(&operand, Ty::Record(_, Some(_)))
+                    && matches!(&(operand).view(), Content::Record(_, Some(_)))
                     && self.prune(candidate.result.clone()) == operand
             });
             if let Some((index, producer)) = producer {
@@ -6801,7 +6784,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             } else {
                 cyclic |= overlays.iter().enumerate().any(|(index, candidate)| {
                     path.contains(&index)
-                        && matches!(&operand, Ty::Record(_, Some(_)))
+                        && matches!(&(operand).view(), Content::Record(_, Some(_)))
                         && self.prune(candidate.result.clone()) == operand
                 });
                 // We visit right-to-left. An earlier identical input shape
@@ -6819,15 +6802,17 @@ impl<'a, 'db> Infer<'a, 'db> {
         // never the evaluation of the source operands.
         let mut overwritten = BTreeSet::new();
         expanded.retain_mut(|operand| {
-            if let Ty::Record(fields, None) = operand {
+            if let Content::Record(mut fields, None) = operand.view() {
                 fields.retain(|name, _| overwritten.insert(*name));
-                !fields.is_empty()
+                let keep = !fields.is_empty();
+                *operand = Ty::new(Content::Record(fields, None));
+                keep
             } else {
                 // Expanded acyclic leaves are input records, so their known
                 // fields are guaranteed even when their residual row is open.
                 // Opaque cyclic producer fields can instead be obligations;
                 // do not use those as proof of an overwrite.
-                if !cyclic && let Ty::Record(fields, Some(_)) = operand {
+                if !cyclic && let Content::Record(fields, Some(_)) = operand.view() {
                     overwritten.extend(fields.keys().copied());
                 }
                 true
@@ -6838,13 +6823,16 @@ impl<'a, 'db> Infer<'a, 'db> {
         // Grouping explicit fields into a spread literal cannot distinguish
         // otherwise identical overlay contracts. Never merge across an open
         // operand: it may overwrite any of the preceding fields.
-        let mut normalized = Vec::with_capacity(expanded.len());
+        let mut normalized: Vec<Ty<'a>> = Vec::with_capacity(expanded.len());
         for operand in expanded {
-            match (normalized.last_mut(), operand) {
-                (Some(Ty::Record(previous, None)), Ty::Record(fields, None)) => {
-                    previous.extend(fields);
-                }
-                (_, operand) => normalized.push(operand),
+            if let Some(previous) = normalized.last_mut()
+                && let Content::Record(mut fields, None) = previous.view()
+                && let Content::Record(next, None) = operand.view()
+            {
+                fields.extend(next);
+                *previous = Ty::new(Content::Record(fields, None));
+            } else {
+                normalized.push(operand);
             }
         }
         (normalized, cyclic)
@@ -6856,15 +6844,16 @@ impl<'a, 'db> Infer<'a, 'db> {
     ) -> Result<(), Error> {
         for overlay in self.record_overlays.clone() {
             let operands = self.expanded_overlay_operands(&overlay);
-            let Ty::Record(expected_fields, expected_tail) = self.prune(overlay.result) else {
+            let Content::Record(expected_fields, expected_tail) = self.prune(overlay.result).view()
+            else {
                 continue;
             };
             if let Some(expected_tail) = expected_tail
-                && let Ty::Var(expected_id) = self.prune(*expected_tail)
+                && let Content::Var(expected_id) = self.prune(expected_tail).view()
                 && universals.contains_key(&expected_id)
             {
                 for operand in &operands {
-                    if let Ty::Record(_, Some(tail)) = self.prune(operand.clone()) {
+                    if let Content::Record(_, Some(tail)) = self.prune(operand.clone()).view() {
                         let mut variables = BTreeSet::new();
                         self.free_vars(&tail, &mut variables);
                         if let Some(variable) = variables
@@ -6889,7 +6878,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             for (name, expected_type) in expected_fields {
                 let mut selected = None;
                 for operand in operands.iter().rev() {
-                    let Ty::Record(fields, tail) = self.prune(operand.clone()) else {
+                    let Content::Record(fields, tail) = self.prune(operand.clone()).view() else {
                         break;
                     };
                     if let Some(typ) = fields.get(name) {
@@ -6912,8 +6901,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                     }
                 }
                 if let Some(typ) = selected {
-                    let actual = Ty::Record(BTreeMap::from([(name, typ)]), None);
-                    let expected = Ty::Record(BTreeMap::from([(name, expected_type)]), None);
+                    let actual = Ty::new(Content::Record(BTreeMap::from([(name, typ)]), None));
+                    let expected = Ty::new(Content::Record(
+                        BTreeMap::from([(name, expected_type)]),
+                        None,
+                    ));
                     self.check_value(actual, expected, overlay.region)?;
                 }
             }
@@ -6932,12 +6924,12 @@ impl<'a, 'db> Infer<'a, 'db> {
         for inclusion in self.error_row_inclusions.clone() {
             let source = self.prune(inclusion.source.clone());
             let target = self.prune(inclusion.target.clone());
-            let tail_variable = |row: Ty<'a>| match row {
-                Ty::Var(id) => Some(id),
-                Ty::ErrorRow {
+            let tail_variable = |row: Ty<'a>| match row.view() {
+                Content::Var(id) => Some(id),
+                Content::ErrorRow {
                     tail: Some(tail), ..
-                } => match *tail {
-                    Ty::Var(id) => Some(id),
+                } => match (tail).view() {
+                    Content::Var(id) => Some(id),
                     _ => None,
                 },
                 _ => None,
@@ -6979,12 +6971,12 @@ impl<'a, 'db> Infer<'a, 'db> {
         if let Some((left_value, left_errors)) = self.result_parts(left.clone())
             && let Some((right_value, right_errors)) = self.result_parts(right.clone())
             && matches!(
-                self.prune_error_row(left_errors.clone()),
-                Ty::ErrorRow { .. }
+                (self.prune_error_row(left_errors.clone())).view(),
+                Content::ErrorRow { .. }
             )
             && matches!(
-                self.prune_error_row(right_errors.clone()),
-                Ty::ErrorRow { .. }
+                (self.prune_error_row(right_errors.clone())).view(),
+                Content::ErrorRow { .. }
             )
         {
             // Result alternatives widen only the error set. Their success
@@ -7022,14 +7014,17 @@ impl<'a, 'db> Infer<'a, 'db> {
             return Ok(joined);
         }
         self.unify(right.clone(), left.clone(), region)?;
-        let joined = match (self.prune(left.clone()), self.prune(right.clone())) {
-            (Ty::Record(mut fields, tail), Ty::Record(other, _)) => {
+        let joined = match (
+            self.prune(left.clone()).view(),
+            self.prune(right.clone()).view(),
+        ) {
+            (Content::Record(mut fields, tail), Content::Record(other, _)) => {
                 for (name, typ) in other {
                     fields.entry(name).or_insert(typ);
                 }
-                Ty::Record(fields, tail)
+                Ty::new(Content::Record(fields, tail))
             }
-            (left, _) => left,
+            _ => self.prune(left),
         };
         Ok(joined)
     }
@@ -7112,7 +7107,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                                 )
                             })?;
                 } else {
-                    self.unify(Ty::Unit, result.clone(), region)?;
+                    self.unify(Ty::new(Content::Unit), result.clone(), region)?;
                 }
                 Ok(self.prune(result))
             }
@@ -7198,11 +7193,11 @@ impl<'a, 'db> Infer<'a, 'db> {
         region: Region,
     ) -> Result<Ty<'a>, Error> {
         let actual = self.prune(actual);
-        let Ty::Record(mut fields, tail) = actual else {
+        let Content::Record(mut fields, tail) = actual.view() else {
             return Ok(actual);
         };
         let mut defaults = BTreeMap::new();
-        if let Ty::Record(expected_fields, _) = self.prune(expected) {
+        if let Content::Record(expected_fields, _) = self.prune(expected).view() {
             for (name, typ) in expected_fields {
                 if fields.contains_key(name) {
                     continue;
@@ -7210,7 +7205,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 // Omission is a None initializer, so it constrains an unknown
                 // field type just like an explicitly supplied None would.
                 // Universal contracts are still checked before publication.
-                if matches!(self.prune(typ.clone()), Ty::Var(_)) {
+                if matches!((self.prune(typ.clone())).view(), Content::Var(_)) {
                     let payload = self.fresh();
                     self.unify(typ.clone(), self.named("Option", vec![payload]), region)?;
                 }
@@ -7229,14 +7224,17 @@ impl<'a, 'db> Infer<'a, 'db> {
             // input may overwrite None, but never has to provide the default.
             let result = self.open_record(BTreeMap::new());
             self.record_overlays.push(RecordOverlay {
-                operands: vec![Ty::Record(defaults, None), Ty::Record(fields, tail)],
+                operands: vec![
+                    Ty::new(Content::Record(defaults, None)),
+                    Ty::new(Content::Record(fields, tail)),
+                ],
                 result: result.clone(),
                 region,
             });
             Ok(result)
         } else {
             fields.extend(defaults);
-            Ok(Ty::Record(fields, tail))
+            Ok(Ty::new(Content::Record(fields, tail)))
         }
     }
 
@@ -7262,7 +7260,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         } = expression.value
             && is_option_some_expr(function)
             && (self.option_spine(expected.clone()).0 > 0
-                || matches!(self.prune(expected.clone()), Ty::Var(_)))
+                || matches!((self.prune(expected.clone())).view(), Content::Var(_)))
         {
             return self.infer_call(
                 env,
@@ -7287,17 +7285,17 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
         if let Expr::Record(fields) = expression.value
             && (matches!(
-                self.prune(expected.clone()),
-                Ty::Var(_) | Ty::Record(_, Some(_))
+                (self.prune(expected.clone())).view(),
+                Content::Var(_) | Content::Record(_, Some(_))
             ) || fields
                 .iter()
                 .any(|field| matches!(field, RecordField::Spread(_))))
         {
             let actual = self.infer_record_fields(env, fields, return_type, true)?;
             if matches!(
-                self.prune(expected.clone()),
-                Ty::Var(_) | Ty::Record(_, Some(_))
-            ) && let Ty::Record(actual_fields, _) = self.prune(actual.clone())
+                (self.prune(expected.clone())).view(),
+                Content::Var(_) | Content::Record(_, Some(_))
+            ) && let Content::Record(actual_fields, _) = self.prune(actual.clone()).view()
             {
                 // Retain the literal's known fields while later constraints
                 // establish its contextual shape. Validate it before
@@ -7317,7 +7315,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             && fields
                 .iter()
                 .all(|field| matches!(field, RecordField::Field { .. }))
-            && let Ty::Record(expected_fields, _) = self.prune(expected.clone())
+            && let Content::Record(expected_fields, _) = self.prune(expected.clone()).view()
         {
             let mut actual_fields = BTreeMap::new();
             let mut reachable = true;
@@ -7355,7 +7353,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             // an existing mutable record alias. Materialize them in codegen so
             // a later spread observes the same field as explicit None.
             let actual = self.default_record_fields(
-                Ty::Record(actual_fields, None),
+                Ty::new(Content::Record(actual_fields, None)),
                 expected.clone(),
                 expression.region,
             )?;
@@ -7366,7 +7364,7 @@ impl<'a, 'db> Infer<'a, 'db> {
         // the annotation rather than treating construction as a conversion of
         // an already-shared invariant container.
         if let Expr::Array(items) = expression.value {
-            if matches!(self.prune(expected.clone()), Ty::Var(_)) {
+            if matches!((self.prune(expected.clone())).view(), Content::Var(_)) {
                 let item = self.fresh();
                 self.unify(
                     expected.clone(),
@@ -7375,8 +7373,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 )?;
             }
             let expected = self.prune(expected);
-            if let Ty::App(head, args) = &expected
-                && **head == self.named("Array", Vec::new())
+            if let Content::App(head, args) = &expected.view()
+                && *head == self.named("Array", Vec::new())
                 && args.len() == 1
             {
                 let mut reachable = true;
@@ -7417,26 +7415,35 @@ impl<'a, 'db> Infer<'a, 'db> {
     }
 
     fn unify(&mut self, left: Ty<'a>, right: Ty<'a>, region: Region) -> Result<(), Error> {
+        if left.equivalent(&right) {
+            return Ok(());
+        }
         let left = self.normalize_projection_root(left);
         let right = self.normalize_projection_root(right);
+        if left.equivalent(&right) {
+            return Ok(());
+        }
         if let Some(result) = self.unify_higher_kinded_pattern(&left, &right, region) {
             return result;
         }
         if let Some(result) = self.unify_higher_kinded_pattern(&right, &left, region) {
             return result;
         }
-        match (left, right) {
-            (Ty::Any, _) | (_, Ty::Any) => Ok(()),
-            (Ty::Var(left), Ty::Var(right)) if left == right => Ok(()),
-            (Ty::Var(id), typ) | (typ, Ty::Var(id)) => self.bind(id, typ, region),
-            (Ty::Unit, Ty::Unit) => Ok(()),
-            (Ty::RecordRow(left), Ty::RecordRow(right)) => self.unify(*left, *right, region),
-            (Ty::Con(left), Ty::Con(right)) if left == right => Ok(()),
-            (Ty::App(left_head, left_args), Ty::App(right_head, right_args))
+        let result = match (left.view(), right.view()) {
+            (Content::Any, _) | (_, Content::Any) => Ok(()),
+            (Content::Var(left), Content::Var(right)) if left == right => Ok(()),
+            (Content::Var(id), _) => self.bind(id, right.clone(), region),
+            (_, Content::Var(id)) => self.bind(id, left.clone(), region),
+            (Content::Unit, Content::Unit) => Ok(()),
+            (Content::RecordRow(left), Content::RecordRow(right)) => {
+                self.unify(left, right, region)
+            }
+            (Content::Con(left), Content::Con(right)) if left == right => Ok(()),
+            (Content::App(left_head, left_args), Content::App(right_head, right_args))
                 if left_args.len() == right_args.len() =>
             {
                 let result = self
-                    .unify((*left_head).clone(), (*right_head).clone(), region)
+                    .unify((left_head).clone(), (right_head).clone(), region)
                     .and_then(|()| {
                         left_args
                             .iter()
@@ -7448,16 +7455,16 @@ impl<'a, 'db> Infer<'a, 'db> {
                 result.map_err(|error| {
                     self.enclosing_mismatch(
                         error,
-                        Ty::App(left_head, left_args),
-                        Ty::App(right_head, right_args),
+                        Ty::new(Content::App(left_head, left_args)),
+                        Ty::new(Content::App(right_head, right_args)),
                     )
                 })
             }
-            (Ty::Partial(left, left_slots), Ty::Partial(right, right_slots))
+            (Content::Partial(left, left_slots), Content::Partial(right, right_slots))
                 if left == right && left_slots.len() == right_slots.len() =>
             {
-                let actual = Ty::Partial(left, left_slots.clone());
-                let expected = Ty::Partial(right, right_slots.clone());
+                let actual = Ty::new(Content::Partial(left, left_slots.clone()));
+                let expected = Ty::new(Content::Partial(right, right_slots.clone()));
                 for (left_slot, right_slot) in left_slots.into_iter().zip(right_slots) {
                     match (left_slot, right_slot) {
                         (TySlot::Hole(left), TySlot::Hole(right)) if left == right => {}
@@ -7470,8 +7477,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 Ok(())
             }
             (
-                Ty::Projection(left_trait, left_args, left_assoc),
-                Ty::Projection(right_trait, right_args, right_assoc),
+                Content::Projection(left_trait, left_args, left_assoc),
+                Content::Projection(right_trait, right_args, right_assoc),
             ) if left_trait == right_trait
                 && left_assoc == right_assoc
                 && left_args.len() == right_args.len() =>
@@ -7481,46 +7488,57 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 Ok(())
             }
-            (Ty::Fn(left_args, left_ret), Ty::Fn(right_args, right_ret))
+            (Content::Fn(left_args, left_ret), Content::Fn(right_args, right_ret))
                 if left_args.len() == right_args.len() =>
             {
                 let result = left_args
                     .iter()
                     .zip(&right_args)
                     .try_for_each(|(left, right)| self.unify(left.clone(), right.clone(), region))
-                    .and_then(|()| self.unify((*left_ret).clone(), (*right_ret).clone(), region));
+                    .and_then(|()| self.unify((left_ret).clone(), (right_ret).clone(), region));
                 result.map_err(|error| {
                     self.enclosing_mismatch(
                         error,
-                        Ty::Fn(left_args, left_ret),
-                        Ty::Fn(right_args, right_ret),
+                        Ty::new(Content::Fn(left_args, left_ret)),
+                        Ty::new(Content::Fn(right_args, right_ret)),
                     )
                 })
             }
-            (Ty::Tuple(left), Ty::Tuple(right)) if left.len() == right.len() => {
+            (Content::Tuple(left), Content::Tuple(right)) if left.len() == right.len() => {
                 let result = left
                     .iter()
                     .zip(&right)
                     .try_for_each(|(left, right)| self.unify(left.clone(), right.clone(), region));
                 result.map_err(|error| {
-                    self.enclosing_mismatch(error, Ty::Tuple(left), Ty::Tuple(right))
+                    self.enclosing_mismatch(
+                        error,
+                        Ty::new(Content::Tuple(left)),
+                        Ty::new(Content::Tuple(right)),
+                    )
                 })
             }
-            (Ty::Record(left, left_open), Ty::Record(right, right_open)) => {
+            (Content::Record(left, left_open), Content::Record(right, right_open)) => {
                 self.unify_records(left, left_open, right, right_open, region)
             }
             (
-                Ty::ErrorRow {
+                Content::ErrorRow {
                     tags: left_tags,
                     tail: left_tail,
                 },
-                Ty::ErrorRow {
+                Content::ErrorRow {
                     tags: right_tags,
                     tail: right_tail,
                 },
             ) => self.unify_error_rows(left_tags, left_tail, right_tags, right_tail, region),
-            (left, right) => Err(self.mismatch(region, left, right)),
+            _ => Err(self.mismatch(region, left.clone(), right.clone())),
+        };
+        // Record compatibility can retain different optional fields, and Any
+        // accepts a type without equating it. Only coalesce structures whose
+        // descriptors agree after their children have been checked.
+        if result.is_ok() && left == right {
+            left.union(&right, right.content(), right.kind());
         }
+        result
     }
 
     fn enclosing_mismatch(&mut self, mut error: Error, actual: Ty<'a>, expected: Ty<'a>) -> Error {
@@ -7542,14 +7560,14 @@ impl<'a, 'db> Infer<'a, 'db> {
         let mut current = self.prune(typ);
         let mut seen = Vec::new();
         loop {
-            let Ty::Projection(trait_, args, assoc) = current.clone() else {
+            let Content::Projection(trait_, args, assoc) = current.clone().view() else {
                 return current;
             };
             let args = args
                 .into_iter()
                 .map(|argument| self.prune(argument))
                 .collect::<Vec<_>>();
-            current = Ty::Projection(trait_, args.clone(), assoc);
+            current = Ty::new(Content::Projection(trait_, args.clone(), assoc));
             if seen.contains(&current) {
                 return current;
             }
@@ -7558,15 +7576,16 @@ impl<'a, 'db> Infer<'a, 'db> {
             let equations = self.projection_equations.clone();
             let mut assumed = None;
             for equation in equations {
-                let projection = match self.prune(equation.projection) {
-                    Ty::Projection(trait_, args, assoc) => Ty::Projection(
+                let projection = self.prune(equation.projection);
+                let projection = match projection.view() {
+                    Content::Projection(trait_, args, assoc) => Ty::new(Content::Projection(
                         trait_,
                         args.into_iter()
                             .map(|argument| self.prune(argument))
                             .collect(),
                         assoc,
-                    ),
-                    other => other,
+                    )),
+                    _ => projection,
                 };
                 if projection == current {
                     assumed = Some(self.prune(equation.typ));
@@ -7607,16 +7626,17 @@ impl<'a, 'db> Infer<'a, 'db> {
     }
 
     fn normalize_type(&mut self, typ: Ty<'a>) -> Ty<'a> {
-        match self.normalize_projection_root(typ) {
-            Ty::App(head, args) => {
-                let head = self.normalize_type(*head);
+        let typ = self.normalize_projection_root(typ);
+        match typ.view() {
+            Content::App(head, args) => {
+                let head = self.normalize_type(head);
                 let args = args
                     .into_iter()
                     .map(|argument| self.normalize_type(argument))
                     .collect();
                 self.apply(head, args)
             }
-            Ty::Partial(constructor, slots) => Ty::Partial(
+            Content::Partial(constructor, slots) => Ty::new(Content::Partial(
                 constructor,
                 slots
                     .into_iter()
@@ -7625,13 +7645,13 @@ impl<'a, 'db> Infer<'a, 'db> {
                         TySlot::Fixed(typ) => TySlot::Fixed(self.normalize_type(typ)),
                     })
                     .collect(),
-            ),
-            Ty::Projection(trait_, args, assoc) => {
+            )),
+            Content::Projection(trait_, args, assoc) => {
                 let args = args
                     .into_iter()
                     .map(|argument| self.normalize_type(argument))
                     .collect::<Vec<_>>();
-                let projection = Ty::Projection(trait_, args, assoc);
+                let projection = Ty::new(Content::Projection(trait_, args, assoc));
                 let normalized = self.normalize_projection_root(projection.clone());
                 if normalized == projection {
                     projection
@@ -7639,28 +7659,28 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.normalize_type(normalized)
                 }
             }
-            Ty::Fn(params, ret) => Ty::Fn(
+            Content::Fn(params, ret) => Ty::new(Content::Fn(
                 params
                     .into_iter()
                     .map(|param| self.normalize_type(param))
                     .collect(),
-                Box::new(self.normalize_type(*ret)),
-            ),
-            Ty::Tuple(items) => Ty::Tuple(
+                self.normalize_type(ret),
+            )),
+            Content::Tuple(items) => Ty::new(Content::Tuple(
                 items
                     .into_iter()
                     .map(|item| self.normalize_type(item))
                     .collect(),
-            ),
-            Ty::RecordRow(row) => Ty::RecordRow(Box::new(self.normalize_type(*row))),
-            Ty::Record(fields, open) => Ty::Record(
+            )),
+            Content::RecordRow(row) => Ty::new(Content::RecordRow(self.normalize_type(row))),
+            Content::Record(fields, open) => Ty::new(Content::Record(
                 fields
                     .into_iter()
                     .map(|(name, typ)| (name, self.normalize_type(typ)))
                     .collect(),
-                open.map(|tail| Box::new(self.normalize_type(*tail))),
-            ),
-            Ty::ErrorRow { tags, tail } => Ty::ErrorRow {
+                open.map(|tail| self.normalize_type(tail)),
+            )),
+            Content::ErrorRow { tags, tail } => Ty::new(Content::ErrorRow {
                 tags: tags
                     .into_iter()
                     .map(|(name, payloads)| {
@@ -7673,9 +7693,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                         )
                     })
                     .collect(),
-                tail: tail.map(|tail| Box::new(self.normalize_type(*tail))),
-            },
-            other => other,
+                tail: tail.map(|tail| self.normalize_type(tail)),
+            }),
+            _ => typ,
         }
     }
 
@@ -7685,16 +7705,16 @@ impl<'a, 'db> Infer<'a, 'db> {
         rigid: &Ty<'a>,
         region: Region,
     ) -> Option<Result<(), Error>> {
-        let Ty::App(head, pattern_args) = pattern else {
+        let Content::App(head, pattern_args) = pattern.view() else {
             return None;
         };
-        let Ty::Var(head_var) = self.prune((**head).clone()) else {
+        let Content::Var(head_var) = self.prune((head).clone()).view() else {
             return None;
         };
-        let (constructor, rigid_args) = match self.prune(rigid.clone()) {
-            Ty::Con(constructor) => (constructor, Vec::new()),
-            Ty::App(head, args) => match *head {
-                Ty::Con(constructor) => (constructor, args),
+        let (constructor, rigid_args) = match self.prune(rigid.clone()).view() {
+            Content::Con(constructor) => (constructor, Vec::new()),
+            Content::App(head, args) => match (head).view() {
+                Content::Con(constructor) => (constructor, args),
                 _ => return None,
             },
             _ => return None,
@@ -7705,7 +7725,7 @@ impl<'a, 'db> Infer<'a, 'db> {
 
         let concrete_arguments = pattern_args
             .iter()
-            .all(|argument| !matches!(self.prune(argument.clone()), Ty::Var(_)));
+            .all(|argument| !matches!((self.prune(argument.clone())).view(), Content::Var(_)));
         if concrete_arguments {
             for (pattern_arg, rigid_arg) in pattern_args.iter().zip(&rigid_args) {
                 if let Err(error) = self.unify(pattern_arg.clone(), rigid_arg.clone(), region) {
@@ -7723,13 +7743,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                     }
                 })
                 .collect();
-            return Some(self.bind(head_var, Ty::Partial(constructor, slots), region));
+            return Some(self.bind(
+                head_var,
+                Ty::new(Content::Partial(constructor, slots)),
+                region,
+            ));
         }
 
         let mut variables = Vec::with_capacity(pattern_args.len());
         let mut seen = BTreeSet::new();
         for argument in pattern_args {
-            let Ty::Var(variable) = self.prune(argument.clone()) else {
+            let Content::Var(variable) = self.prune(argument.clone()).view() else {
                 return Some(Err(Error {
                     expectation: None,
                     region,
@@ -7747,7 +7771,9 @@ impl<'a, 'db> Infer<'a, 'db> {
         }
 
         for (variable, rigid_arg) in variables.iter().zip(&rigid_args) {
-            if let Err(error) = self.unify(Ty::Var(*variable), rigid_arg.clone(), region) {
+            if let Err(error) =
+                self.unify(self.types.variable(*variable), rigid_arg.clone(), region)
+            {
                 return Some(Err(error));
             }
         }
@@ -7762,15 +7788,19 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
             })
             .collect();
-        Some(self.bind(head_var, Ty::Partial(constructor, slots), region))
+        Some(self.bind(
+            head_var,
+            Ty::new(Content::Partial(constructor, slots)),
+            region,
+        ))
     }
 
     fn unify_records(
         &mut self,
         mut left: BTreeMap<&'a str, Ty<'a>>,
-        left_open: Option<Box<Ty<'a>>>,
+        left_open: Option<Ty<'a>>,
         mut right: BTreeMap<&'a str, Ty<'a>>,
-        right_open: Option<Box<Ty<'a>>>,
+        right_open: Option<Ty<'a>>,
         region: Region,
     ) -> Result<(), Error> {
         if (right_open.is_none() && left.keys().any(|name| !right.contains_key(name)))
@@ -7781,8 +7811,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                 expectation: None,
                 region,
                 kind: ErrorKind::RecordFieldsMismatch {
-                    actual: self.diagnostic_type(Ty::Record(left, left_open), &mut names),
-                    expected: self.diagnostic_type(Ty::Record(right, right_open), &mut names),
+                    actual: self
+                        .diagnostic_type(Ty::new(Content::Record(left, left_open)), &mut names),
+                    expected: self
+                        .diagnostic_type(Ty::new(Content::Record(right, right_open)), &mut names),
                 },
             });
         }
@@ -7796,11 +7828,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                     let mut names = BTreeMap::new();
                     error.kind = ErrorKind::Mismatch {
                         actual: self.diagnostic_type(
-                            Ty::Record(left.clone(), left_open.clone()),
+                            Ty::new(Content::Record(left.clone(), left_open.clone())),
                             &mut names,
                         ),
                         expected: self.diagnostic_type(
-                            Ty::Record(right.clone(), right_open.clone()),
+                            Ty::new(Content::Record(right.clone(), right_open.clone())),
                             &mut names,
                         ),
                     };
@@ -7820,18 +7852,18 @@ impl<'a, 'db> Infer<'a, 'db> {
         match (left_open, right_open) {
             (None, None) => Ok(()),
             (Some(tail), None) => self.unify(
-                *tail,
-                Ty::RecordRow(Box::new(Ty::Record(right, None))),
+                tail,
+                Ty::new(Content::RecordRow(Ty::new(Content::Record(right, None)))),
                 region,
             ),
             (None, Some(tail)) => self.unify(
-                *tail,
-                Ty::RecordRow(Box::new(Ty::Record(left, None))),
+                tail,
+                Ty::new(Content::RecordRow(Ty::new(Content::Record(left, None)))),
                 region,
             ),
             (Some(left_tail), Some(right_tail)) => {
-                let left_tail = self.prune(*left_tail);
-                let right_tail = self.prune(*right_tail);
+                let left_tail = self.prune(left_tail);
+                let right_tail = self.prune(right_tail);
                 if left_tail == right_tail {
                     return if left.is_empty() && right.is_empty() {
                         Ok(())
@@ -7846,12 +7878,18 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let shared = self.fresh_with_kind(VariableKind::RecordRow);
                 self.unify(
                     left_tail,
-                    Ty::RecordRow(Box::new(Ty::Record(right, Some(Box::new(shared.clone()))))),
+                    Ty::new(Content::RecordRow(Ty::new(Content::Record(
+                        right,
+                        Some(shared.clone()),
+                    )))),
                     region,
                 )?;
                 self.unify(
                     right_tail,
-                    Ty::RecordRow(Box::new(Ty::Record(left, Some(Box::new(shared))))),
+                    Ty::new(Content::RecordRow(Ty::new(Content::Record(
+                        left,
+                        Some(shared),
+                    )))),
                     region,
                 )
             }
@@ -7861,19 +7899,19 @@ impl<'a, 'db> Infer<'a, 'db> {
     fn unify_error_rows(
         &mut self,
         mut left: BTreeMap<&'a str, Vec<Ty<'a>>>,
-        left_tail: Option<Box<Ty<'a>>>,
+        left_tail: Option<Ty<'a>>,
         mut right: BTreeMap<&'a str, Vec<Ty<'a>>>,
-        right_tail: Option<Box<Ty<'a>>>,
+        right_tail: Option<Ty<'a>>,
         region: Region,
     ) -> Result<(), Error> {
-        let actual = Ty::ErrorRow {
+        let actual = Ty::new(Content::ErrorRow {
             tags: left.clone(),
             tail: left_tail.clone(),
-        };
-        let expected = Ty::ErrorRow {
+        });
+        let expected = Ty::new(Content::ErrorRow {
             tags: right.clone(),
             tail: right_tail.clone(),
-        };
+        });
         let common = left
             .keys()
             .filter(|name| right.contains_key(*name))
@@ -7905,11 +7943,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                     return Err(self.mismatch(region, actual, expected));
                 }
                 self.unify(
-                    *left_tail,
-                    Ty::ErrorRow {
+                    left_tail,
+                    Ty::new(Content::ErrorRow {
                         tags: right,
                         tail: None,
-                    },
+                    }),
                     region,
                 )
             }
@@ -7918,17 +7956,17 @@ impl<'a, 'db> Infer<'a, 'db> {
                     return Err(self.mismatch(region, actual, expected));
                 }
                 self.unify(
-                    *right_tail,
-                    Ty::ErrorRow {
+                    right_tail,
+                    Ty::new(Content::ErrorRow {
                         tags: left,
                         tail: None,
-                    },
+                    }),
                     region,
                 )
             }
             (Some(left_tail), Some(right_tail)) => {
-                let left_tail = self.prune(*left_tail);
-                let right_tail = self.prune(*right_tail);
+                let left_tail = self.prune(left_tail);
+                let right_tail = self.prune(right_tail);
                 if left_tail == right_tail {
                     return if left.is_empty() && right.is_empty() {
                         Ok(())
@@ -7942,18 +7980,18 @@ impl<'a, 'db> Infer<'a, 'db> {
                 let left_binding = if right.is_empty() {
                     shared.clone()
                 } else {
-                    Ty::ErrorRow {
+                    Ty::new(Content::ErrorRow {
                         tags: right,
-                        tail: Some(Box::new(shared.clone())),
-                    }
+                        tail: Some(shared.clone()),
+                    })
                 };
                 let right_binding = if left.is_empty() {
                     shared
                 } else {
-                    Ty::ErrorRow {
+                    Ty::new(Content::ErrorRow {
                         tags: left,
-                        tail: Some(Box::new(shared)),
-                    }
+                        tail: Some(shared),
+                    })
                 };
                 self.unify(left_tail, left_binding, region)?;
                 self.unify(right_tail, right_binding, region)
@@ -7963,26 +8001,22 @@ impl<'a, 'db> Infer<'a, 'db> {
 
     fn bind(&mut self, id: usize, typ: Ty<'a>, region: Region) -> Result<(), Error> {
         let typ = self.prune(typ);
-        let incoming = match &typ {
-            Ty::Var(other) => self.variable_kinds[*other],
-            Ty::ErrorRow { .. } => VariableKind::ErrorRow,
-            Ty::RecordRow(_) => VariableKind::RecordRow,
-            Ty::Any => VariableKind::Unknown,
+        let incoming = match &typ.view() {
+            Content::Var(other) => self.types.variable(*other).kind(),
+            Content::ErrorRow { .. } => VariableKind::ErrorRow,
+            Content::RecordRow(_) => VariableKind::RecordRow,
+            Content::Any => VariableKind::Unknown,
             _ => VariableKind::Type,
         };
-        let current = self.variable_kinds[id];
+        let current = self.types.variable(id).kind();
         let merged = match (current, incoming) {
             (VariableKind::Unknown, kind) | (kind, VariableKind::Unknown) => kind,
             (left, right) if left == right => left,
-            _ => return Err(self.mismatch(region, Ty::Var(id), typ)),
+            _ => return Err(self.mismatch(region, self.types.variable(id), typ)),
         };
-        self.variable_kinds[id] = merged;
-        if let Ty::Var(other) = &typ {
-            self.variable_kinds[*other] = merged;
-        }
         if self.occurs(id, &typ) {
             let mut names = BTreeMap::new();
-            let variable = self.diagnostic_type(Ty::Var(id), &mut names);
+            let variable = self.diagnostic_type(self.types.variable(id), &mut names);
             let containing_type = self.diagnostic_type(typ, &mut names);
             return Err(Error {
                 expectation: None,
@@ -7992,72 +8026,108 @@ impl<'a, 'db> Infer<'a, 'db> {
                 },
             });
         }
-        self.substitutions[id] = Some(typ);
+        self.types.bind(id, &typ, merged);
         Ok(())
     }
 
     fn prune(&mut self, typ: Ty<'a>) -> Ty<'a> {
-        match typ {
-            Ty::RecordRow(row) => match self.prune(*row) {
-                Ty::Record(fields, Some(tail)) if fields.is_empty() => self.prune(*tail),
-                row => Ty::RecordRow(Box::new(row)),
-            },
-            Ty::Record(mut fields, tail) => {
+        match typ.content().as_ref() {
+            Content::RecordRow(row) => {
+                let normalized = self.prune((*row).clone());
+                match normalized.content().as_ref() {
+                    Content::Record(fields, Some(tail)) if fields.is_empty() => {
+                        self.prune((*tail).clone())
+                    }
+                    _ if normalized.equivalent(row) => typ,
+                    _ => Ty::new(Content::RecordRow(normalized)),
+                }
+            }
+            Content::Record(fields, tail) => {
                 let Some(tail) = tail else {
-                    return Ty::Record(fields, None);
+                    return typ;
                 };
-                match self.prune(*tail) {
-                    Ty::RecordRow(row) => match *row {
-                        Ty::Record(inherited, tail) => {
+                let normalized = self.prune((*tail).clone());
+                match normalized.content().as_ref() {
+                    Content::RecordRow(row) => match row.content().as_ref() {
+                        Content::Record(inherited, inherited_tail) => {
+                            let mut fields = fields.clone();
                             for (name, field) in inherited {
-                                fields.entry(name).or_insert(field);
+                                fields.entry(name).or_insert_with(|| field.clone());
                             }
-                            Ty::Record(fields, tail)
+                            Ty::new(Content::Record(fields, inherited_tail.clone()))
                         }
-                        _ => unreachable!("record-row substitutions contain record fragments"),
+                        _ => unreachable!("record-row descriptors contain record fragments"),
                     },
-                    tail => Ty::Record(fields, Some(Box::new(tail))),
+                    _ if normalized.equivalent(tail) => typ,
+                    _ => Ty::new(Content::Record(fields.clone(), Some(normalized.clone()))),
                 }
             }
-            Ty::Var(id) => match self.substitutions[id].clone() {
-                Some(bound) => {
-                    let pruned = self.prune(bound);
-                    self.substitutions[id] = Some(pruned.clone());
-                    pruned
+            Content::App(head, args) => {
+                let normalized_head = self.prune((*head).clone());
+                let mut normalized_args = None;
+                for (index, arg) in args.iter().enumerate() {
+                    let normalized = self.prune(arg.clone());
+                    if !normalized.equivalent(arg) {
+                        normalized_args.get_or_insert_with(|| args.clone())[index] = normalized;
+                    }
                 }
-                None => Ty::Var(id),
-            },
-            Ty::App(head, args) => {
-                let head = self.prune(*head);
-                let args = args.into_iter().map(|arg| self.prune(arg)).collect();
-                self.apply(head, args)
+                if normalized_args.is_none()
+                    && normalized_head.equivalent(head)
+                    && !matches!(
+                        normalized_head.content().as_ref(),
+                        Content::App(..) | Content::Partial(..)
+                    )
+                {
+                    typ
+                } else {
+                    self.apply(
+                        normalized_head,
+                        normalized_args.unwrap_or_else(|| args.clone()),
+                    )
+                }
             }
-            Ty::ErrorRow { mut tags, tail } => {
-                for payloads in tags.values_mut() {
-                    for payload in payloads {
-                        *payload = self.prune(payload.clone());
+            Content::ErrorRow { tags, tail } => {
+                let mut normalized_tags = None;
+                for (name, payloads) in tags {
+                    for (index, payload) in payloads.iter().enumerate() {
+                        let normalized = self.prune(payload.clone());
+                        if !normalized.equivalent(payload) {
+                            normalized_tags
+                                .get_or_insert_with(|| tags.clone())
+                                .get_mut(name)
+                                .expect("existing tag")[index] = normalized;
+                        }
                     }
                 }
                 let Some(tail) = tail else {
-                    return Ty::ErrorRow { tags, tail: None };
+                    return match normalized_tags {
+                        Some(tags) => Ty::new(Content::ErrorRow { tags, tail: None }),
+                        None => typ,
+                    };
                 };
-                match self.prune(*tail) {
-                    Ty::ErrorRow {
+                let normalized_tail = self.prune((*tail).clone());
+                match normalized_tail.content().as_ref() {
+                    Content::ErrorRow {
                         tags: inherited,
-                        tail,
+                        tail: inherited_tail,
                     } => {
+                        let mut tags = normalized_tags.unwrap_or_else(|| tags.clone());
                         for (name, payloads) in inherited {
-                            tags.entry(name).or_insert(payloads);
+                            tags.entry(name).or_insert_with(|| payloads.clone());
                         }
-                        Ty::ErrorRow { tags, tail }
+                        Ty::new(Content::ErrorRow {
+                            tags,
+                            tail: inherited_tail.clone(),
+                        })
                     }
-                    tail => Ty::ErrorRow {
-                        tags,
-                        tail: Some(Box::new(tail)),
-                    },
+                    _ if normalized_tags.is_none() && normalized_tail.equivalent(tail) => typ,
+                    _ => Ty::new(Content::ErrorRow {
+                        tags: normalized_tags.unwrap_or_else(|| tags.clone()),
+                        tail: Some(normalized_tail.clone()),
+                    }),
                 }
             }
-            other => other,
+            _ => typ,
         }
     }
 
@@ -8065,12 +8135,12 @@ impl<'a, 'db> Infer<'a, 'db> {
         if arguments.is_empty() {
             return head;
         }
-        match head {
-            Ty::App(head, mut existing) => {
+        match head.view() {
+            Content::App(head, mut existing) => {
                 existing.append(&mut arguments);
-                Ty::App(head, existing)
+                Ty::new(Content::App(head, existing))
             }
-            Ty::Partial(constructor, slots) => {
+            Content::Partial(constructor, slots) => {
                 let mut supplied = arguments.into_iter();
                 let mut remaining_hole = 0;
                 let mut filled = Vec::with_capacity(slots.len());
@@ -8090,8 +8160,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 let rest = supplied.collect::<Vec<_>>();
                 if complete {
-                    let base = Ty::App(
-                        Box::new(Ty::Con(constructor)),
+                    let base = Ty::new(Content::App(
+                        Ty::new(Content::Con(constructor)),
                         filled
                             .into_iter()
                             .map(|slot| match slot {
@@ -8099,87 +8169,87 @@ impl<'a, 'db> Infer<'a, 'db> {
                                 TySlot::Hole(_) => unreachable!("complete partial has no holes"),
                             })
                             .collect(),
-                    );
+                    ));
                     if rest.is_empty() {
                         base
                     } else {
-                        Ty::App(Box::new(base), rest)
+                        Ty::new(Content::App(base, rest))
                     }
                 } else {
                     debug_assert!(rest.is_empty());
-                    Ty::Partial(constructor, filled)
+                    Ty::new(Content::Partial(constructor, filled))
                 }
             }
-            other => Ty::App(Box::new(other), arguments),
+            _ => Ty::new(Content::App(head, arguments)),
         }
     }
 
     fn occurs(&mut self, needle: usize, typ: &Ty<'a>) -> bool {
-        match self.prune(typ.clone()) {
-            Ty::Var(id) => id == needle,
-            Ty::Con(_) => false,
-            Ty::App(head, args) => {
+        match self.prune(typ.clone()).view() {
+            Content::Var(id) => id == needle,
+            Content::Con(_) => false,
+            Content::App(head, args) => {
                 self.occurs(needle, &head) || args.iter().any(|arg| self.occurs(needle, arg))
             }
-            Ty::Tuple(args) => args.iter().any(|arg| self.occurs(needle, arg)),
-            Ty::Partial(_, slots) => slots.iter().any(|slot| match slot {
+            Content::Tuple(args) => args.iter().any(|arg| self.occurs(needle, arg)),
+            Content::Partial(_, slots) => slots.iter().any(|slot| match slot {
                 TySlot::Hole(_) => false,
                 TySlot::Fixed(typ) => self.occurs(needle, typ),
             }),
-            Ty::Projection(_, args, _) => args.iter().any(|arg| self.occurs(needle, arg)),
-            Ty::Fn(args, ret) => {
+            Content::Projection(_, args, _) => args.iter().any(|arg| self.occurs(needle, arg)),
+            Content::Fn(args, ret) => {
                 args.iter().any(|arg| self.occurs(needle, arg)) || self.occurs(needle, &ret)
             }
-            Ty::RecordRow(row) => self.occurs(needle, &row),
-            Ty::Record(fields, tail) => {
+            Content::RecordRow(row) => self.occurs(needle, &row),
+            Content::Record(fields, tail) => {
                 fields.values().any(|typ| self.occurs(needle, typ))
                     || tail.is_some_and(|tail| self.occurs(needle, &tail))
             }
-            Ty::ErrorRow { tags, tail } => {
+            Content::ErrorRow { tags, tail } => {
                 tags.values().flatten().any(|typ| self.occurs(needle, typ))
                     || tail.is_some_and(|tail| self.occurs(needle, &tail))
             }
-            Ty::Unit | Ty::Any => false,
+            Content::Unit | Content::Any => false,
         }
     }
 
     fn free_vars(&mut self, typ: &Ty<'a>, result: &mut BTreeSet<usize>) {
-        match self.prune(typ.clone()) {
-            Ty::Var(id) => {
+        match self.prune(typ.clone()).view() {
+            Content::Var(id) => {
                 result.insert(id);
             }
-            Ty::Con(_) => {}
-            Ty::App(head, args) => {
+            Content::Con(_) => {}
+            Content::App(head, args) => {
                 self.free_vars(&head, result);
                 for arg in &args {
                     self.free_vars(arg, result);
                 }
             }
-            Ty::Tuple(args) => {
+            Content::Tuple(args) => {
                 for arg in &args {
                     self.free_vars(arg, result);
                 }
             }
-            Ty::Partial(_, slots) => {
+            Content::Partial(_, slots) => {
                 for slot in &slots {
                     if let TySlot::Fixed(typ) = slot {
                         self.free_vars(typ, result);
                     }
                 }
             }
-            Ty::Projection(_, args, _) => {
+            Content::Projection(_, args, _) => {
                 for arg in &args {
                     self.free_vars(arg, result);
                 }
             }
-            Ty::Fn(args, ret) => {
+            Content::Fn(args, ret) => {
                 for arg in &args {
                     self.free_vars(arg, result);
                 }
                 self.free_vars(&ret, result);
             }
-            Ty::RecordRow(row) => self.free_vars(&row, result),
-            Ty::Record(fields, tail) => {
+            Content::RecordRow(row) => self.free_vars(&row, result),
+            Content::Record(fields, tail) => {
                 for typ in fields.values() {
                     self.free_vars(typ, result);
                 }
@@ -8187,7 +8257,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.free_vars(&tail, result);
                 }
             }
-            Ty::ErrorRow { tags, tail } => {
+            Content::ErrorRow { tags, tail } => {
                 for typ in tags.values().flatten() {
                     self.free_vars(typ, result);
                 }
@@ -8195,21 +8265,25 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.free_vars(&tail, result);
                 }
             }
-            Ty::Unit | Ty::Any => {}
+            Content::Unit | Content::Any => {}
         }
     }
 
     fn replace_vars(&mut self, typ: &Ty<'a>, replacements: &BTreeMap<usize, Ty<'a>>) -> Ty<'a> {
-        match self.prune(typ.clone()) {
-            Ty::Var(id) => replacements.get(&id).cloned().unwrap_or(Ty::Var(id)),
-            Ty::Con(name) => Ty::Con(name),
-            Ty::App(head, args) => Ty::App(
-                Box::new(self.replace_vars(&head, replacements)),
+        let typ = self.prune(typ.clone());
+        match typ.view() {
+            Content::Var(id) => replacements
+                .get(&id)
+                .cloned()
+                .unwrap_or(self.types.variable(id)),
+            Content::Con(name) => Ty::new(Content::Con(name)),
+            Content::App(head, args) => Ty::new(Content::App(
+                self.replace_vars(&head, replacements),
                 args.iter()
                     .map(|arg| self.replace_vars(arg, replacements))
                     .collect(),
-            ),
-            Ty::Partial(name, slots) => Ty::Partial(
+            )),
+            Content::Partial(name, slots) => Ty::new(Content::Partial(
                 name,
                 slots
                     .iter()
@@ -8218,35 +8292,37 @@ impl<'a, 'db> Infer<'a, 'db> {
                         TySlot::Fixed(typ) => TySlot::Fixed(self.replace_vars(typ, replacements)),
                     })
                     .collect(),
-            ),
-            Ty::Projection(trait_, args, assoc) => Ty::Projection(
+            )),
+            Content::Projection(trait_, args, assoc) => Ty::new(Content::Projection(
                 trait_,
                 args.iter()
                     .map(|arg| self.replace_vars(arg, replacements))
                     .collect(),
                 assoc,
-            ),
-            Ty::Fn(args, ret) => Ty::Fn(
+            )),
+            Content::Fn(args, ret) => Ty::new(Content::Fn(
                 args.iter()
                     .map(|arg| self.replace_vars(arg, replacements))
                     .collect(),
-                Box::new(self.replace_vars(&ret, replacements)),
-            ),
-            Ty::Tuple(items) => Ty::Tuple(
+                self.replace_vars(&ret, replacements),
+            )),
+            Content::Tuple(items) => Ty::new(Content::Tuple(
                 items
                     .iter()
                     .map(|item| self.replace_vars(item, replacements))
                     .collect(),
-            ),
-            Ty::RecordRow(row) => Ty::RecordRow(Box::new(self.replace_vars(&row, replacements))),
-            Ty::Record(fields, open) => Ty::Record(
+            )),
+            Content::RecordRow(row) => {
+                Ty::new(Content::RecordRow(self.replace_vars(&row, replacements)))
+            }
+            Content::Record(fields, open) => Ty::new(Content::Record(
                 fields
                     .iter()
                     .map(|(name, typ)| (*name, self.replace_vars(typ, replacements)))
                     .collect(),
-                open.map(|tail| Box::new(self.replace_vars(&tail, replacements))),
-            ),
-            Ty::ErrorRow { tags, tail } => Ty::ErrorRow {
+                open.map(|tail| self.replace_vars(&tail, replacements)),
+            )),
+            Content::ErrorRow { tags, tail } => Ty::new(Content::ErrorRow {
                 tags: tags
                     .iter()
                     .map(|(name, payloads)| {
@@ -8260,10 +8336,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                     })
                     .collect(),
                 tail: tail
-                    .as_deref()
-                    .map(|tail| Box::new(self.replace_vars(tail, replacements))),
-            },
-            other => other,
+                    .as_ref()
+                    .map(|tail| self.replace_vars(tail, replacements)),
+            }),
+            _ => typ,
         }
     }
 
@@ -8381,45 +8457,46 @@ impl<'a, 'db> Infer<'a, 'db> {
     }
 
     fn collect_kind_arities(&mut self, typ: &Ty<'a>, arities: &mut BTreeMap<usize, usize>) {
-        match self.prune(typ.clone()) {
-            Ty::Var(id) => {
+        match self.prune(typ.clone()).view() {
+            Content::Var(id) => {
                 arities.entry(id).or_insert(0);
             }
-            Ty::Con(_) | Ty::Unit | Ty::Any => {}
-            Ty::App(head, args) => {
-                match self.prune(*head) {
-                    Ty::Var(id) => {
+            Content::Con(_) | Content::Unit | Content::Any => {}
+            Content::App(head, args) => {
+                let head = self.prune(head);
+                match head.view() {
+                    Content::Var(id) => {
                         arities
                             .entry(id)
                             .and_modify(|arity| *arity = (*arity).max(args.len()))
                             .or_insert(args.len());
                     }
-                    other => self.collect_kind_arities(&other, arities),
+                    _ => self.collect_kind_arities(&head, arities),
                 }
                 for arg in &args {
                     self.collect_kind_arities(arg, arities);
                 }
             }
-            Ty::Partial(_, slots) => {
+            Content::Partial(_, slots) => {
                 for slot in &slots {
                     if let TySlot::Fixed(typ) = slot {
                         self.collect_kind_arities(typ, arities);
                     }
                 }
             }
-            Ty::Projection(_, args, _) | Ty::Tuple(args) => {
+            Content::Projection(_, args, _) | Content::Tuple(args) => {
                 for arg in &args {
                     self.collect_kind_arities(arg, arities);
                 }
             }
-            Ty::Fn(args, ret) => {
+            Content::Fn(args, ret) => {
                 for arg in &args {
                     self.collect_kind_arities(arg, arities);
                 }
                 self.collect_kind_arities(&ret, arities);
             }
-            Ty::RecordRow(row) => self.collect_kind_arities(&row, arities),
-            Ty::Record(fields, tail) => {
+            Content::RecordRow(row) => self.collect_kind_arities(&row, arities),
+            Content::Record(fields, tail) => {
                 for typ in fields.values() {
                     self.collect_kind_arities(typ, arities);
                 }
@@ -8427,7 +8504,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     self.collect_kind_arities(&tail, arities);
                 }
             }
-            Ty::ErrorRow { tags, tail } => {
+            Content::ErrorRow { tags, tail } => {
                 for typ in tags.values().flatten() {
                     self.collect_kind_arities(typ, arities);
                 }
@@ -8455,23 +8532,23 @@ impl<'a, 'db> Infer<'a, 'db> {
         typ: &Ty<'a>,
         names: &mut BTreeMap<usize, &'a str>,
     ) -> &'a Located<Type<'a>> {
-        let typ = match self.prune(typ.clone()) {
-            Ty::Var(id) => {
+        let typ = match self.prune(typ.clone()).view() {
+            Content::Var(id) => {
                 let name = self.type_var_name(id, names);
                 Type::Var { name, args: &[] }
             }
-            Ty::Con(reference) => Type::Named {
+            Content::Con(reference) => Type::Named {
                 reference,
                 args: &[],
             },
-            Ty::App(head, args) => match self.prune(*head) {
-                Ty::Con(reference) => Type::Named {
+            Content::App(head, args) => match self.prune(head).view() {
+                Content::Con(reference) => Type::Named {
                     reference,
                     args: self
                         .bump
                         .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
                 },
-                Ty::Var(id) => {
+                Content::Var(id) => {
                     let name = self.type_var_name(id, names);
                     Type::Var {
                         name,
@@ -8482,7 +8559,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 }
                 other => panic!("unsupported public type application head: {other:?}"),
             },
-            Ty::Partial(constructor, slots) => Type::Partial {
+            Content::Partial(constructor, slots) => Type::Partial {
                 constructor,
                 slots: self
                     .bump
@@ -8491,28 +8568,30 @@ impl<'a, 'db> Infer<'a, 'db> {
                         TySlot::Fixed(typ) => TypeSlot::Fixed(self.to_ast(typ, names)),
                     })),
             },
-            Ty::Projection(trait_, args, assoc) => Type::Projection(alder_ast::ProjectionType {
-                trait_ref: alder_ast::TraitRef {
-                    trait_,
-                    args: self
-                        .bump
-                        .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
-                },
-                assoc,
-            }),
-            Ty::Fn(params, ret) => Type::Fn {
+            Content::Projection(trait_, args, assoc) => {
+                Type::Projection(alder_ast::ProjectionType {
+                    trait_ref: alder_ast::TraitRef {
+                        trait_,
+                        args: self
+                            .bump
+                            .alloc_slice_fill_iter(args.iter().map(|arg| self.to_ast(arg, names))),
+                    },
+                    assoc,
+                })
+            }
+            Content::Fn(params, ret) => Type::Fn {
                 params: self
                     .bump
                     .alloc_slice_fill_iter(params.iter().map(|param| self.to_ast(param, names))),
                 ret: self.to_ast(&ret, names),
             },
-            Ty::Unit | Ty::Any => Type::Unit,
-            Ty::Tuple(items) => Type::Tuple(
+            Content::Unit | Content::Any => Type::Unit,
+            Content::Tuple(items) => Type::Tuple(
                 self.bump
                     .alloc_slice_fill_iter(items.iter().map(|item| self.to_ast(item, names))),
             ),
-            Ty::RecordRow(row) => return self.to_ast(&row, names),
-            Ty::Record(fields, open) => Type::Record {
+            Content::RecordRow(row) => return self.to_ast(&row, names),
+            Content::Record(fields, open) => Type::Record {
                 fields: self
                     .bump
                     .alloc_slice_fill_iter(fields.iter().enumerate().map(
@@ -8523,14 +8602,14 @@ impl<'a, 'db> Infer<'a, 'db> {
                         },
                     )),
                 ext: match open {
-                    Some(tail) => match *tail {
-                        Ty::Var(id) => RowExtension::Open(self.type_var_name(id, names)),
+                    Some(tail) => match (tail).view() {
+                        Content::Var(id) => RowExtension::Open(self.type_var_name(id, names)),
                         _ => unreachable!("record tails are pruned before publication"),
                     },
                     None => RowExtension::Closed,
                 },
             },
-            Ty::ErrorRow { tags, tail } => {
+            Content::ErrorRow { tags, tail } => {
                 let tags = self.bump.alloc_slice_fill_iter(tags.iter().enumerate().map(
                     |(index, (name, payloads))| alder_ast::ErrorTagType {
                         index: index as u16,
@@ -8542,8 +8621,8 @@ impl<'a, 'db> Infer<'a, 'db> {
                 ));
                 let ext = match tail {
                     None => RowExtension::Closed,
-                    Some(tail) => match self.prune(*tail) {
-                        Ty::Var(id) => RowExtension::Open(self.type_var_name(id, names)),
+                    Some(tail) => match self.prune(tail).view() {
+                        Content::Var(id) => RowExtension::Open(self.type_var_name(id, names)),
                         other => panic!("pruned error-row tail is not a variable: {other:?}"),
                     },
                 };
@@ -8567,13 +8646,13 @@ impl<'a, 'db> Infer<'a, 'db> {
 
     fn named(&self, name: &'a str, args: Vec<Ty<'a>>) -> Ty<'a> {
         self.apply(
-            Ty::Con(QualifiedName {
+            Ty::new(Content::Con(QualifiedName {
                 module: ModuleId {
                     package: PackageId::Builtin,
                     path: &[],
                 },
                 name,
-            }),
+            })),
             args,
         )
     }
@@ -8596,40 +8675,40 @@ impl<'a, 'db> Infer<'a, 'db> {
         names: &mut BTreeMap<usize, usize>,
     ) -> DiagnosticType {
         use DiagnosticType as D;
-        match self.prune(typ) {
-            Ty::Var(id) => {
+        match self.prune(typ).view() {
+            Content::Var(id) => {
                 let next = names.len();
                 D::Variable(*names.entry(id).or_insert(next))
             }
-            Ty::Con(name) => Self::diagnostic_named_type(name),
-            Ty::App(head, args) => D::Application(
-                Box::new(self.diagnostic_type(*head, names)),
+            Content::Con(name) => Self::diagnostic_named_type(name),
+            Content::App(head, args) => D::Application(
+                Box::new(self.diagnostic_type(head, names)),
                 args.into_iter()
                     .map(|arg| self.diagnostic_type(arg, names))
                     .collect(),
             ),
-            Ty::Fn(args, ret) => D::Function(
+            Content::Fn(args, ret) => D::Function(
                 args.into_iter()
                     .map(|arg| self.diagnostic_type(arg, names))
                     .collect(),
-                Box::new(self.diagnostic_type(*ret, names)),
+                Box::new(self.diagnostic_type(ret, names)),
             ),
-            Ty::Unit => D::Unit,
-            Ty::Tuple(items) => D::Tuple(
+            Content::Unit => D::Unit,
+            Content::Tuple(items) => D::Tuple(
                 items
                     .into_iter()
                     .map(|item| self.diagnostic_type(item, names))
                     .collect(),
             ),
-            Ty::RecordRow(row) => self.diagnostic_type(*row, names),
-            Ty::Record(fields, tail) => D::Record(
+            Content::RecordRow(row) => self.diagnostic_type(row, names),
+            Content::Record(fields, tail) => D::Record(
                 fields
                     .into_iter()
                     .map(|(name, typ)| (name.to_owned(), self.diagnostic_type(typ, names)))
                     .collect(),
-                tail.map(|tail| Box::new(self.diagnostic_type(*tail, names))),
+                tail.map(|tail| Box::new(self.diagnostic_type(tail, names))),
             ),
-            Ty::Partial(reference, slots) => D::Application(
+            Content::Partial(reference, slots) => D::Application(
                 Box::new(Self::diagnostic_named_type(reference)),
                 slots
                     .into_iter()
@@ -8639,7 +8718,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                     })
                     .collect(),
             ),
-            Ty::Projection(trait_, args, assoc) => D::Projection(
+            Content::Projection(trait_, args, assoc) => D::Projection(
                 Box::new(D::Application(
                     Box::new(Self::diagnostic_named_type(trait_.0)),
                     args.into_iter()
@@ -8648,7 +8727,7 @@ impl<'a, 'db> Infer<'a, 'db> {
                 )),
                 assoc.name.to_owned(),
             ),
-            Ty::ErrorRow { tags, tail } => D::ErrorRow(
+            Content::ErrorRow { tags, tail } => D::ErrorRow(
                 tags.into_iter()
                     .map(|(name, args)| {
                         (
@@ -8659,9 +8738,9 @@ impl<'a, 'db> Infer<'a, 'db> {
                         )
                     })
                     .collect(),
-                tail.map(|tail| Box::new(self.diagnostic_type(*tail, names))),
+                tail.map(|tail| Box::new(self.diagnostic_type(tail, names))),
             ),
-            Ty::Any => D::Hole,
+            Content::Any => D::Hole,
         }
     }
 
@@ -8684,7 +8763,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             .collect::<BTreeSet<_>>();
         let mut names = BTreeMap::new();
         for (id, name) in declared {
-            if let Ty::Var(id) = self.prune(Ty::Var(id))
+            if let Content::Var(id) = self.prune(self.types.variable(id)).view()
                 && let Some(index) = indices.get(&id)
             {
                 names.entry(*index).or_insert_with(|| name.to_owned());
@@ -8756,6 +8835,177 @@ fn generated_type_name_rank(name: &str) -> usize {
     }
 }
 
+#[cfg(test)]
+mod graph_tests {
+    use super::*;
+
+    fn with_infer(test: impl FnOnce(&mut Infer<'_, '_>)) {
+        let bump = Bump::new();
+        let parsed = alder_parse::parse_module(&bump, "").unwrap();
+        let canonical = alder_can::canonicalize(
+            &bump,
+            alder_can::Context {
+                home: ModuleId {
+                    package: PackageId::Application,
+                    path: &["main"],
+                },
+                imports: &[],
+                interfaces: &[],
+            },
+            &parsed,
+        )
+        .unwrap();
+        let database = TraitDatabase::build(&bump, canonical.module, &[]);
+        test(&mut Infer::new(&bump, &database, &[]));
+    }
+
+    #[test]
+    fn occurs_check_follows_union_links_without_mutating_the_rejected_class() {
+        with_infer(|infer| {
+            let first = infer.fresh();
+            let alias = infer.fresh();
+            infer
+                .unify(first.clone(), alias.clone(), Region::zero())
+                .unwrap();
+            let revision = infer.types.revision();
+            let recursive = Ty::new(Content::Fn(vec![first.clone()], Ty::new(Content::Unit)));
+            let error = infer
+                .unify(alias.clone(), recursive, Region::zero())
+                .unwrap_err();
+            assert!(matches!(error.kind, ErrorKind::InfiniteType { .. }));
+            assert!(first.equivalent(&alias));
+            assert_eq!(first.view(), Content::Var(1));
+            assert_eq!(first.kind(), VariableKind::Unknown);
+            assert_eq!(infer.types.revision(), revision);
+        });
+    }
+
+    #[test]
+    fn row_kind_mismatch_does_not_change_either_descriptor() {
+        with_infer(|infer| {
+            let record = infer.fresh_with_kind(VariableKind::RecordRow);
+            let error = infer.fresh_with_kind(VariableKind::ErrorRow);
+            assert!(
+                infer
+                    .unify(record.clone(), error.clone(), Region::zero())
+                    .is_err()
+            );
+            assert!(!record.equivalent(&error));
+            assert_eq!(record.kind(), VariableKind::RecordRow);
+            assert_eq!(error.kind(), VariableKind::ErrorRow);
+            assert_eq!(infer.types.revision(), 0);
+        });
+    }
+
+    #[test]
+    fn checked_structures_coalesce_and_clone_without_copying_children() {
+        with_infer(|infer| {
+            let variable = infer.fresh();
+            let left = Ty::new(Content::Tuple(vec![variable.clone(), variable]));
+            let right = Ty::new(Content::Tuple(vec![
+                Ty::new(Content::Unit),
+                Ty::new(Content::Unit),
+            ]));
+            infer
+                .unify(left.clone(), right.clone(), Region::zero())
+                .unwrap();
+            assert!(left.equivalent(&right));
+            assert!(infer.prune(left.clone()).equivalent(&left));
+            assert!(left.clone().equivalent(&right));
+        });
+    }
+
+    #[test]
+    fn generalization_uses_environment_membership_not_union_weight() {
+        with_infer(|infer| {
+            let outer = infer.fresh();
+            let generic = infer.fresh();
+            for _ in 0..64 {
+                let alias = infer.fresh();
+                infer.unify(alias, generic.clone(), Region::zero()).unwrap();
+            }
+            let Content::Var(outer_id) = outer.view() else {
+                panic!("outer variable")
+            };
+            let Content::Var(generic_id) = generic.view() else {
+                panic!("generic variable")
+            };
+            let name = QualifiedName {
+                module: ModuleId {
+                    package: PackageId::Application,
+                    path: &["main"],
+                },
+                name: "generic",
+            };
+            let mut env = Env::default();
+            infer.predeclare(&mut env, name);
+            let typ = Ty::new(Content::Fn(
+                vec![generic.clone()],
+                Ty::new(Content::Tuple(vec![generic.clone(), outer.clone()])),
+            ));
+            infer.unify_global(&env, name, typ, Region::zero()).unwrap();
+            infer.generalize_global(&mut env, name, &BTreeSet::from([outer_id]), true);
+            let scheme = &env.globals[&name];
+            assert_eq!(scheme.quantified, vec![generic_id]);
+            let first = infer.instantiate(scheme, Region::zero());
+            let second = infer.instantiate(scheme, Region::zero());
+            let Content::Fn(first_args, first_ret) = first.view() else {
+                panic!("function")
+            };
+            let Content::Fn(second_args, second_ret) = second.view() else {
+                panic!("function")
+            };
+            assert!(!first_args[0].equivalent(&second_args[0]));
+            infer
+                .unify(
+                    first_args[0].clone(),
+                    Ty::new(Content::Unit),
+                    Region::zero(),
+                )
+                .unwrap();
+            assert!(matches!(second_args[0].view(), Content::Var(_)));
+            assert!(matches!(generic.view(), Content::Var(_)));
+            for ret in [first_ret, second_ret] {
+                let Content::Tuple(items) = ret.view() else {
+                    panic!("tuple")
+                };
+                assert!(items[1].equivalent(&outer));
+            }
+        });
+    }
+
+    #[test]
+    fn retry_discards_partial_unions_and_deferred_constraints() {
+        with_infer(|attempt| {
+            let value = attempt.fresh();
+            let left = Ty::new(Content::Tuple(vec![value.clone(), Ty::new(Content::Unit)]));
+            let right = Ty::new(Content::Tuple(vec![
+                attempt.named("Number", vec![]),
+                attempt.named("String", vec![]),
+            ]));
+            assert!(attempt.unify(left, right, Region::zero()).is_err());
+            assert!(matches!(value.view(), Content::Con(_)));
+            let row = attempt.fresh_error_row();
+            attempt.error_row_inclusions.push(ErrorRowInclusion {
+                exact_target: false,
+                source: row.clone(),
+                target: row,
+                region: Region::zero(),
+            });
+            // This is the same fresh-attempt boundary used by infer_recovering.
+            *attempt = Infer::new(attempt.bump, attempt.database, &[]);
+            let retry = attempt.fresh();
+            assert_eq!(retry.view(), Content::Var(0));
+            assert_eq!(retry.kind(), VariableKind::Unknown);
+            assert!(!retry.equivalent(&value));
+            assert_eq!(attempt.types.revision(), 0);
+            assert!(attempt.error_row_inclusions.is_empty());
+            assert!(attempt.obligations.is_empty());
+            assert!(attempt.calls.is_empty());
+        });
+    }
+}
+
 #[test]
 fn instance_cycle_guard_compares_all_arguments_and_nominal_identities() {
     let bump = Bump::new();
@@ -8781,20 +9031,20 @@ fn instance_cycle_guard_compares_all_arguments_and_nominal_identities() {
     let ItemKind::Trait(trait_) = canonical.module.items[0].value.kind else {
         panic!("fixture declares a trait")
     };
-    let left = Ty::Con(QualifiedName {
+    let left = Ty::new(Content::Con(QualifiedName {
         module: ModuleId {
             package: PackageId::Application,
             path: &["left"],
         },
         name: "Token",
-    });
-    let right = Ty::Con(QualifiedName {
+    }));
+    let right = Ty::new(Content::Con(QualifiedName {
         module: ModuleId {
             package: PackageId::Application,
             path: &["right"],
         },
         name: "Token",
-    });
+    }));
     let names = BTreeMap::new();
     let generalized = BTreeSet::new();
     let step = ResolutionStep {
@@ -8804,7 +9054,7 @@ fn instance_cycle_guard_compares_all_arguments_and_nominal_identities() {
     };
     let active = Predicate {
         trait_: trait_.id,
-        args: vec![left.clone(), Ty::Unit],
+        args: vec![left.clone(), Ty::new(Content::Unit)],
     };
     let mut stack = vec![ResolutionFrame {
         predicate: active.clone(),
@@ -8819,8 +9069,14 @@ fn instance_cycle_guard_compares_all_arguments_and_nominal_identities() {
         },
     }];
     for args in [
-        vec![right, Ty::Unit],
-        vec![left, Ty::Tuple(vec![Ty::Unit, Ty::Unit])],
+        vec![right, Ty::new(Content::Unit)],
+        vec![
+            left,
+            Ty::new(Content::Tuple(vec![
+                Ty::new(Content::Unit),
+                Ty::new(Content::Unit),
+            ])),
+        ],
     ] {
         let error = resolve_predicate(
             &bump,

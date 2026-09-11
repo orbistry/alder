@@ -8868,7 +8868,7 @@ mod tests {
     /// Elm 0.19.1 crashes on this exact shape ("Map.!: given key is not an
     /// element in the map") because `getVarNames`' visit marks persist
     /// across `toAnnotation` calls, leaving `pong`'s `Forall` empty. Alder
-    /// deliberately fixes that (see `alder-solve/src/annotation.rs`).
+    /// collects annotation names independently in `inference.rs`.
     #[tokio::test]
     async fn test_cross_module_mutual_recursion() {
         let mem = InMemorySource::new();
