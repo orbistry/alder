@@ -1,6 +1,6 @@
 [package]
 name = "alder-solve"
-version = "0.5.1"
+version = "0.5.2"
 edition.workspace = true
 description = "The entry point of alder's type inference system. Implements type inference and specialization of traits."
 homepage.workspace = true
@@ -11,8 +11,8 @@ license.workspace = true
 bumpalo.workspace = true
 num-bigint.workspace = true
 alder-ast = { path = "../alder-ast", version = "0.3.1" }
-alder-can = { path = "../alder-can", version = "0.6.0" }
-alder-constrain = { path = "../alder-constrain", version = "0.5.1" }
+alder-can = { path = "../alder-can", version = "0.6.1" }
+alder-constrain = { path = "../alder-constrain", version = "0.5.2" }
 alder-region = { path = "../alder-region", version = "0.2.0" }
 
 [dev-dependencies]

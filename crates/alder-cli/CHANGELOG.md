@@ -1,5 +1,15 @@
 # alder-cli
 
+## 0.5.1 — 2026-09-11
+
+### Patch changes
+
+- [f001988](https://github.com/orbistry/alder/commit/f001988a97cea7cb6d4b246d59f0e941e96f745b) Use one options-aware command execution path and remove the redundant compile
+  wrapper and constant persistence flag. Remove subprocess-based CLI end-to-end
+  tests and their test-only dependencies; retain direct compiler, runtime, and
+  reporting renderer tests. — Thanks @rvcas!
+- Updated dependencies: alder-bundle@0.4.1, alder-config@0.2.1, alder-driver@0.7.0, alder-language-server@0.2.2
+
 ## 0.5.0 — 2026-09-07
 
 ### Minor changes

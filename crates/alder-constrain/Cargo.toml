@@ -1,6 +1,6 @@
 [package]
 name = "alder-constrain"
-version = "0.5.1"
+version = "0.5.2"
 edition.workspace = true
 description = """
 Responsible for building the set of constraints that are used \

@@ -1,5 +1,11 @@
 # alder-codegen
 
+## 0.5.1 — 2026-09-11
+
+### Patch changes
+
+- Updated dependencies: alder-solve@0.5.2
+
 ## 0.5.0 — 2026-09-07
 
 ### Minor changes
