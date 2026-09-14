@@ -392,8 +392,8 @@ No macro implementation is part of the current provider/context discussion.
 
 Implementation extends the original counter slice into the routed application
 workflow in `plans/m6-web.md`; requirement-by-requirement evidence lives in
-`plans/m6-acceptance.md`. M6 is not declared complete while the authorized live
-Cloudflare preview verification remains open. Macros/comptime and services/layers DI remain deferred;
+`plans/m6-acceptance.md`. The authorized live Cloudflare preview deployment and
+smoke verification passed on 2026-09-14. Macros/comptime and services/layers DI remain deferred;
 route discovery is a compiler pass. Automated regressions use direct compiler
 and kernel APIs, not CLI subprocess tests; manual CLI fixture checks are allowed.
 
@@ -412,7 +412,7 @@ and kernel APIs, not CLI subprocess tests; manual CLI fixture checks are allowed
 - [x] `alder dev` on vendored Miniflare, generated browser entries, diagnostics/recovery and state-preserving HMR; `alder deploy` generating `wrangler.jsonc`
 - [x] Cloudflare bindings via traits and attributes
 - [x] Standalone embedded-V8 and local Cloudflare dev/production browser workflow verification
-- [ ] Authorized real Cloudflare preview deployment and smoke verification (exact account, Worker name and authentication required)
+- [x] Authorized real Cloudflare preview deployment and smoke verification (`alder-test.rvcas.workers.dev`, 2026-09-14; evidence in the acceptance ledger)
 
 ### M7: Data layer
 

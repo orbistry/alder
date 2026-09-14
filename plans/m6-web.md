@@ -14,9 +14,10 @@ Workers and the same app running self-hosted on `standalone`.
 The full application implementation is now present. The detailed
 [acceptance ledger](m6-acceptance.md) records direct regressions and real-browser,
 standalone, Miniflare, HMR, prerender, and deployment dry-run evidence. Workspace
-formatting, strict Clippy, and tests pass. A real preview deployment is still an
-open external gate: no exact destination/account authorization was supplied.
-Do not equate the implemented deploy command or a dry run with that exit criterion.
+formatting, strict Clippy, and tests pass. The final external gate passed on
+2026-09-14: the user-authorized `alder-test` Worker was deployed through
+`vpx wrangler`, and the live application passed Chrome and HTTP smoke checks.
+The acceptance ledger records the URL, version, and exact verification scope.
 
 Current user instructions are in [web-development.md](../docs/web-development.md)
 and [the full example](../examples/web-full/README.md). The counter-slice account
