@@ -390,6 +390,11 @@ No macro implementation is part of the current provider/context discussion.
 
 ### M6: Web vertical slice
 
+Start with the typed component/state → DOM → SSR/hydration counter slice in
+`plans/m6-web.md`. Macros/comptime and services/layers DI remain deferred;
+route discovery is a compiler pass. Automated regressions use direct compiler
+and kernel APIs, not CLI subprocess tests; manual CLI fixture checks are allowed.
+
 - [ ] Typed markup checking against an HTML schema
 - [ ] `component` and `state`, compile-time dependency tracking, DOM codegen
 - [ ] SSR renderer and hydration in the kernel

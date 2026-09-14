@@ -16,24 +16,25 @@ name = "alder"
 path = "src/main.rs"
 
 [dependencies]
+alder-bundle = { path = "../alder-bundle", version = "0.4.1" }
+alder-config = { path = "../alder-config", version = "0.2.1" }
+alder-driver = { path = "../alder-driver", version = "0.7.0" }
+alder-fmt = { path = "../alder-fmt", version = "0.3.0" }
+alder-language-server = { path = "../alder-language-server", version = "0.2.2" }
+alder-runtime = { path = "../alder-runtime", version = "0.3.0" }
 anstream = "1"
 anstyle = "1"
 clap.workspace = true
+color-print.workspace = true
 dirs.workspace = true
 futures.workspace = true
-miette.workspace = true
-url.workspace = true
-supports-hyperlinks = "3.2"
-alder-config = { path = "../alder-config", version = "0.2.1" }
-alder-bundle = { path = "../alder-bundle", version = "0.4.1" }
-alder-driver = { path = "../alder-driver", version = "0.7.0" }
-alder-fmt = { path = "../alder-fmt", version = "0.3.0" }
-alder-runtime = { path = "../alder-runtime", version = "0.3.0" }
-alder-language-server = { path = "../alder-language-server", version = "0.2.2" }
-octocrab.workspace = true
 glob.workspace = true
+miette.workspace = true
+octocrab.workspace = true
+supports-hyperlinks = "3.2"
 tar.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
+tokio = { workspace = true, features = ["io-std", "macros", "rt-multi-thread"] }
 tower-lsp-server.workspace = true
+url.workspace = true
 xz2.workspace = true
 zip.workspace = true

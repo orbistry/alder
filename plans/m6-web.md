@@ -9,6 +9,40 @@ miniflare, `alder deploy` generating `wrangler.jsonc`, and Cloudflare
 bindings via traits and attributes. The slice ends with a deployed page on
 Workers and the same app running self-hosted on `standalone`.
 
+## Current scope and sequencing
+
+Start with the component-to-hydration slice below, not the entire milestone.
+Macros/comptime (M5) and statically checked services/layers dependency injection
+remain deferred and are not prerequisites for this work. Preserve existing
+context behavior; do not implement new DI syntax, provider checking, or migration.
+Later hooks/bindings work must not claim the deferred DI guarantees.
+
+The first deliverable is a small Alder counter component with typed props,
+typed markup, an event handler, local `state`, and a derived value: render it
+on the server, hydrate the existing nodes, and update text/attributes in the
+browser without re-running the component or replacing the hydrated DOM.
+
+Acceptance for this first slice:
+
+- [ ] Write `docs/web-internals.md` contracts for markup/props/event checking,
+  state dependencies, derived values, component ownership/disposal, DOM lowering,
+  SSR escaping, hydration identity, and mismatch behavior before implementation.
+- [ ] Compile the counter from Alder source through the real compiler pipeline;
+  no hand-written JavaScript substitute or identity/ordinary-function stubs.
+- [ ] Reject invalid markup, props, and handlers with source-aware diagnostics
+  for the supported surface. Keep explicit diagnostics for unsupported features.
+- [ ] Verify initial SSR output, safe escaping, hydration node reuse, event
+  attachment, state/derived updates, independent component instances, and cleanup.
+- [ ] Add direct compiler and kernel regression tests, plus a fixture under
+  `tests/e2e/` for optional manual CLI/browser confirmation.
+- [ ] Pass workspace formatting, strict Clippy, and tests; update docs, SPEC
+  progress, and a changeset for the implementation without marking all M6 done.
+
+Reactive directives/keyed lists and the remaining component surface follow this
+counter slice. Routing, remote functions, hooks/stores, async resources, forms,
+HMR, dev-server tooling, platform adapters, and deployment remain later work;
+do not expand the initial goal to implement them.
+
 ## Starting state
 
 - Hardening rejects executable `state` expressions and `component` declarations
@@ -19,9 +53,8 @@ Workers and the same app running self-hosted on `standalone`.
 - Standalone markup also has an executable-codegen guard. The old descriptor
   lowering silently replaced directive children with undefined and was removed;
   implement actual rendering rather than relying on that historical output.
-- M2b: codegen, kernel, `alder run`/`build`. M4: fibers, context,
-  error rows. M5: macros (used for route discovery via `comptime` and for
-  derives).
+- M2b: codegen, kernel, `alder run`/`build`. M4: fibers, existing runtime
+  context, error rows. Built-in derives remain available without M5 macros.
 - Parser: markup with `@if`/`@for`/`@match`, `component`, `state(...)`,
   keyword-insensitive element names.
 - `docs/web.md` is the design; `docs/runtime.md` Cloudflare and Targets
@@ -54,6 +87,9 @@ Workers and the same app running self-hosted on `standalone`.
 
 ## Settled decisions
 
+- Route discovery is a compiler pass over `src/routes/`, producing `Routes`,
+  `PageData`, and server/client entry points; it does not require user macros
+  or `comptime`. Future compile-time filesystem APIs are separate user features.
 - Svelte 5 runes model: compile-time dependency tracking, components run
   once, `state(x)` bound to an ordinary writable `let`.
 - JSX-shaped typed markup with `@` directives (TSRX rules: statements in
@@ -87,10 +123,7 @@ Workers and the same app running self-hosted on `standalone`.
 5. Hydration data format. **JSON with a devalue-style encoder for
    enums, `Map`, `Set`, `BigInt`, and `Date`, matching the M2 enum
    representation.**
-6. Route discovery. **A compiler pass over `src/routes/` (not a user
-   macro) producing the `Routes` module, `PageData` types, and the
-   server/client entry points; `comptime` `Fs` is for user code.**
-7. Query/command caching for remote functions. **Follow SvelteKit: query
+6. Query/command caching for remote functions. **Follow SvelteKit: query
    results cached by argument key per page, invalidated by commands in the
    same module and by explicit `refresh`.**
 
@@ -98,7 +131,9 @@ Workers and the same app running self-hosted on `standalone`.
 
 ### Wave 0: contract
 
-Design panel producing `docs/web-internals.md`:
+Write `docs/web-internals.md`, settling the first-slice contracts first. The
+remaining contracts below are addressed when their respective waves begin;
+they do not gate the counter slice:
 
 - Markup checking: schema tables, component prop typing from records with
   optional fields, children typing, event typing.
@@ -110,7 +145,8 @@ Design panel producing `docs/web-internals.md`:
   typing, layouts, error boundaries, page option inheritance, prerender.
 - Server boundary: reachability analysis from the client entry, remote
   stub generation (typed HTTP with the `Result` carried), `+page.server`
-  loads/actions, hooks with typed context (`provide` inside `handle`).
+  loads/actions, hooks with existing runtime context. Public service/provider
+  syntax and static DI guarantees remain deferred to the DI plan.
 - Stores: request scoping via the fiber context map.
 - Cloudflare: `DurableObject`, `Queue`, `Workflow` traits; binding
   attributes; `wrangler.jsonc` generation; miniflare vendoring layout
@@ -118,7 +154,11 @@ Design panel producing `docs/web-internals.md`:
 - Kernel modules: `dom`, `ssr`, `hydrate`, `signals`, `router`,
   `resource`, `stores`.
 
-### Wave 1: components (parallel)
+### Wave 1: components
+
+Land the counter slice described above first, then expand to the full component
+criteria. Resources and form primitives below are follow-on work, not counter
+acceptance requirements.
 
 - Markup checker (`alder-can`/`alder-constrain`).
 - Reactivity compiler and DOM codegen (`alder-codegen`).
@@ -127,14 +167,14 @@ Design panel producing `docs/web-internals.md`:
 - Tests: a browser-less DOM (a small DOM shim in the kernel test suite or
   `deno_dom`) driving component tests under deno_core in `cargo test`.
 
-### Wave 2: routing and server (parallel)
+### Wave 2: routing and server
 
 - Routing pass and generated modules.
 - Server boundary and remote stubs; hooks; stores.
 - Page options and prerender.
 - Kernel `router`, request pipeline, error boundaries.
 
-### Wave 3: platform (parallel)
+### Wave 3: platform
 
 - Cloudflare traits/attributes, bindings through context,
   `wrangler.jsonc` generation, `alder deploy`.
@@ -151,6 +191,19 @@ Design panel producing `docs/web-internals.md`:
   request-level tests plus the DOM shim.
 - Docs, SPEC M6 ticked, changeset, critic pass.
 
+## Testing policy
+
+- Rust unit/integration tests call compiler, driver, and kernel APIs directly.
+  Do not add tests that spawn the Alder CLI, `cargo run`, or `cargo build` to
+  exercise fixtures; do not restore the removed CLI subprocess E2E harness.
+- Exercise emitted JavaScript in the existing runtime test harness and use a
+  deterministic DOM shim for fast component/hydration regressions in CI.
+- Manual CLI invocations on `tests/e2e/` fixtures are allowed for development
+  confirmation. Record commands and results separately from automated coverage.
+- Platform process/deployment smoke checks belong to explicit, opt-in manual
+  validation, not the ordinary `cargo test` acceptance path. Deployments still
+  require authorization for the specific target.
+
 ## Tests to add (minimum)
 
 - Markup errors: unknown element, unknown attribute, bad value type, bad
@@ -163,8 +216,8 @@ Design panel producing `docs/web-internals.md`:
 - Boundary: server-only import from a component is rejected with a path;
   remote stub round-trip with a `Result` error; hooks provide/`use`.
 - Cloudflare: generated `wrangler.jsonc` snapshot; a Durable Object impl
-  type-checks; miniflare boots the built worker in `cargo test` when
-  available (skip with a clear message otherwise).
+  type-checks via direct compiler APIs; boot the built worker in miniflare
+  as an explicit manual platform smoke check, outside `cargo test`.
 
 ## Risks
 

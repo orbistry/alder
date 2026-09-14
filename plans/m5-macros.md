@@ -1,5 +1,9 @@
 # M5: Macros and comptime
 
+Status: deferred. M6 components/SSR/hydration can proceed without this milestone.
+Framework route discovery is a compiler pass, not a macro/comptime prerequisite;
+see `plans/m6-web.md`. Keep the existing compiler-built-in derives until M5 resumes.
+
 Real macros: Alder functions from syntax to syntax, compiled to JavaScript
 and executed at build time inside the compiler's embedded V8, with
 Elixir-style `quote`/`unquote` and Jai-style `comptime` blocks. Attribute,
@@ -54,7 +58,7 @@ ones from M3.
    dependency and used immediately; macros cannot see types.** Type-aware
    macros are out of scope.
 4. Compile-time I/O. **Read-only access to the package source tree
-   (`import fs`, then `fs.readDir` and `fs.readFile`) for things like route discovery;
+   (`import fs`, then `fs.readDir` and `fs.readFile`) for user-defined build inputs;
    nothing else.** Network and writes are denied.
 5. Caching. **Content-addressed on (macro source hash, dependency
    interface hashes, input tokens); stored under `.alder/macros/`.**

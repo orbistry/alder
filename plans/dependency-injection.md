@@ -4,6 +4,10 @@ Status: architectural direction agreed; implementation deferred at the user's
 request. Do not start this plan automatically. Macros/comptime are also deferred
 and are not a prerequisite for compiler-understood DI annotations.
 
+M6's initial components/SSR/hydration slice proceeds independently of this plan.
+Do not add DI implementation or migrate runtime context as part of that slice;
+see `plans/m6-web.md` for scope and the no-CLI-subprocess-testing policy.
+
 Design authority: `docs/dependency-injection.md`. This plan replaces the older
 M4 proposal to make body-level `use` and nested `provide` the primary public DI
 interface. Existing context runtime behavior remains intact until migration.
@@ -56,8 +60,10 @@ interface. Existing context runtime behavior remains intact until migration.
 - [ ] Positive and negative source-aware tests for all static checks in the design.
 - [ ] Cross-module and serialized-interface requirements; callbacks, aliases,
   recursion, async capture, and indirect calls cannot erase requirements.
-- [ ] Actual CLI execution checks construction order, sharing, lexical capture,
-  fresh test roots, overrides, and absence of context leakage.
+- [ ] Direct compiler/kernel tests check construction order, sharing, lexical
+  capture, fresh test roots, overrides, and absence of context leakage. Optional
+  manual CLI runs on `tests/e2e/` fixtures supplement these checks; Rust tests
+  must not invoke the CLI or nest Cargo builds/runs.
 - [ ] Runtime tests cover failed/cancelled startup, exactly-once cleanup,
   dependency-ordered teardown, scoped work, and escaped-resource rejection.
 - [ ] CLI/editor diagnostics identify requirement and registration sites.

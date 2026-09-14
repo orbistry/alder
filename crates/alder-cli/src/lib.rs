@@ -13,21 +13,18 @@ pub use cli::Cli;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub const BANNER: &str = r#"
-      ___           ___           ___           ___
-     /\  \         /\  \         /\  \         /\__\
-    /::\  \       /::\  \       /::\  \       /:/  /
-   /:/\:\  \     /:/\:\  \     /:/\ \  \     /:/__/
-  /:/  \:\  \   /::\~\:\  \   _\:\~\ \  \   /::\  \ ___
- /:/__/ \:\__\ /:/\:\ \:\__\ /\ \:\ \ \__\ /:/\:\  /\__\
- \:\  \  \/__/ \/__\:\/:/  / \:\ \:\ \/__/ \/__\:\/:/  /
-  \:\  \            \::/  /   \:\ \:\__\        \::/  /
-   \:\  \           /:/  /     \:\/:/  /        /:/  /
-    \:\__\         /:/  /       \::/  /        /:/  /
-     \/__/         \/__/         \/__/         \/__/
+pub const BANNER: &str = color_print::cstr!(
+    r#"
+     ___       __       _______   _______ .______      
+    /   \     |  |     |       \ |   ____||   _  \     
+   /  ^  \    |  |     |  .--.  ||  |__   |  |_)  |    
+  /  /_\  \   |  |     |  |  |  ||   __|  |      /     
+ /  _____  \  |  `----.|  '--'  ||  |____ |  |\  \----.
+/__/     \__\ |_______||_______/ |_______|| _| `._____|
 
- The Alder programming language.
+ The <green><bold>Alder</bold></green> programming language.
 
- repo: https://github.com/orbistry/alder
- docs: https://github.com/orbistry/alder
- chat: https://discord.gg/3qQGrKT3eE"#;
+ <magenta>repo:</magenta> <blue><italic><dim>https://github.com/orbistry/alder</dim></italic></blue>
+ <magenta>docs:</magenta> <blue><italic><dim>https://alder-script.dev</dim></italic></blue>
+ <magenta>chat:</magenta> <blue><italic><dim>https://discord.gg/3qQGrKT3eE</dim></italic></blue>"#
+);
