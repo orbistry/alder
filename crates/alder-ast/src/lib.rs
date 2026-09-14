@@ -171,6 +171,9 @@ pub struct Module<'a> {
     /// Resolved module bindings written anywhere in this module, including
     /// nested functions. Flow-insensitive; used by the value restriction.
     pub assigned_bindings: &'a [QualifiedName<'a>],
+    /// Local and imported bindings implemented as request/browser-scoped cells.
+    pub store_bindings: &'a [QualifiedName<'a>],
+    pub value_store_dependencies: &'a [(QualifiedName<'a>, &'a [QualifiedName<'a>])],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -551,7 +554,10 @@ pub enum ValueRef<'a> {
         annotation: &'a Annotation<'a>,
     },
     Module(ModuleId<'a>),
-    Provider(QualifiedName<'a>),
+    Provider {
+        provider: QualifiedName<'a>,
+        typ: Node<'a, Type<'a>>,
+    },
     QueryName(&'a str),
     /// An unresolved identifier inside a deferred M2-owned DSL body.
     Opaque(&'a str),
@@ -647,6 +653,7 @@ pub enum Expr<'a> {
     Loop(Node<'a, Block<'a>>),
     Provide {
         provider: QualifiedName<'a>,
+        typ: Node<'a, Type<'a>>,
         value: Node<'a, Expr<'a>>,
         body: Node<'a, Block<'a>>,
     },
@@ -983,6 +990,8 @@ pub enum Markup<'a> {
 #[derive(Debug)]
 pub struct Element<'a> {
     pub name: Located<ElementName<'a>>,
+    /// Ordinary value reference retaining imported annotation and use evidence.
+    pub component_value: Option<Node<'a, Expr<'a>>>,
     pub attrs: &'a [Attr<'a>],
     pub children: &'a [Node<'a, Child<'a>>],
     pub self_closing: bool,
@@ -1078,6 +1087,7 @@ pub enum ValueKind {
     Schema,
     Extern,
     TraitMethod,
+    Store,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -1088,6 +1098,7 @@ pub enum InterfaceValueIdentity<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct InterfaceValue<'a> {
+    pub store_dependencies: &'a [QualifiedName<'a>],
     pub exported_as: &'a str,
     pub identity: InterfaceValueIdentity<'a>,
     pub annotation: &'a Annotation<'a>,

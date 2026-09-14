@@ -8,6 +8,19 @@ Design lives in [`docs/`](docs/). The draft grammar and the roadmap live in
 
 ## Development
 
+Run the source-only web example with SSR, hydration, routing, and HMR:
+
+```sh
+cargo run -p alder-cli -- dev examples/web-full
+cargo run -p alder-cli -- build examples/web-full
+cargo run -p alder-cli -- run examples/web-full/dist/server.mjs -- --port 3000
+```
+
+See [web development](docs/web-development.md) for the smallest two-file app,
+Cloudflare setup, production artifacts, browser checks, and deployment. The
+[M6 acceptance ledger](plans/m6-acceptance.md) separates implemented/local
+verification from the explicitly authorized live-preview deployment gate.
+
 Runnable examples live in [`tests/e2e/`](tests/e2e/) alongside their assertions.
 For example:
 

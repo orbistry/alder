@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View(props: { count: Number }) { <button onClick={() -> { props.count += 1 }}>{props.count}</button> }"
+---
+alder::codegen
+
+  × derived component bindings are read-only
+   ╭─[/project/src/main.ald:1:73]
+ 1 │ pub component View(props: { count: Number }) { <button onClick={() -> { props.count += 1 }}>{props.count}</button> }
+   ·                                                                         ────────┬───────
+   ·                                                                                 ╰── code generation failed here
+   ╰────

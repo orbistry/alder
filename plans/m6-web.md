@@ -11,7 +11,22 @@ Workers and the same app running self-hosted on `standalone`.
 
 ## Current scope and sequencing
 
-Start with the component-to-hydration slice below, not the entire milestone.
+The full application implementation is now present. The detailed
+[acceptance ledger](m6-acceptance.md) records direct regressions and real-browser,
+standalone, Miniflare, HMR, prerender, and deployment dry-run evidence. Workspace
+formatting, strict Clippy, and tests pass. A real preview deployment is still an
+open external gate: no exact destination/account authorization was supplied.
+Do not equate the implemented deploy command or a dry run with that exit criterion.
+
+Current user instructions are in [web-development.md](../docs/web-development.md)
+and [the full example](../examples/web-full/README.md). The counter-slice account
+below is historical, retained to explain the implementation sequence.
+
+The active goal is now the **entire M6 milestone**, building on the completed
+counter slice below. Connect filesystem routes, `alder dev`, SSR, browser
+hydration, and reload-on-save early, then continue through all remaining waves.
+Track requirement-level implementation and verification in
+`plans/m6-acceptance.md`; a working first browser loop does not complete M6.
 Macros/comptime (M5) and statically checked services/layers dependency injection
 remain deferred and are not prerequisites for this work. Preserve existing
 context behavior; do not implement new DI syntax, provider checking, or migration.
@@ -24,26 +39,52 @@ browser without re-running the component or replacing the hydrated DOM.
 
 Acceptance for this first slice:
 
-- [ ] Write `docs/web-internals.md` contracts for markup/props/event checking,
+- [x] Write `docs/web-internals.md` contracts for markup/props/event checking,
   state dependencies, derived values, component ownership/disposal, DOM lowering,
   SSR escaping, hydration identity, and mismatch behavior before implementation.
-- [ ] Compile the counter from Alder source through the real compiler pipeline;
+- [x] Compile the counter from Alder source through the real compiler pipeline;
   no hand-written JavaScript substitute or identity/ordinary-function stubs.
-- [ ] Reject invalid markup, props, and handlers with source-aware diagnostics
+- [x] Reject invalid markup, props, and handlers with source-aware diagnostics
   for the supported surface. Keep explicit diagnostics for unsupported features.
-- [ ] Verify initial SSR output, safe escaping, hydration node reuse, event
+- [x] Verify initial SSR output, safe escaping, hydration node reuse, event
   attachment, state/derived updates, independent component instances, and cleanup.
-- [ ] Add direct compiler and kernel regression tests, plus a fixture under
+- [x] Add direct compiler and kernel regression tests, plus a fixture under
   `tests/e2e/` for optional manual CLI/browser confirmation.
-- [ ] Pass workspace formatting, strict Clippy, and tests; update docs, SPEC
+- [x] Pass workspace formatting, strict Clippy, and tests; update docs, SPEC
   progress, and a changeset for the implementation without marking all M6 done.
 
-Reactive directives/keyed lists and the remaining component surface follow this
-counter slice. Routing, remote functions, hooks/stores, async resources, forms,
-HMR, dev-server tooling, platform adapters, and deployment remain later work;
-do not expand the initial goal to implement them.
+Reactive directives/keyed lists, routing, remotes, hooks/stores, async resources,
+the M6 form/action surface, HMR, development tooling, both runtime adapters, and
+deployment are all in the active goal. The historical counter-only scope is
+superseded. Macros/comptime, the DI redesign, and unrelated M7/M8 work remain out
+of scope; do not use those deferred milestones to silently omit M6 guarantees.
 
-## Starting state
+## First-slice implementation (historical)
+
+The counter now compiles through parse/canonicalization/inference, direct Oxc
+lowering, Rolldown, and V8. The checked-in seven-element HTML subset and `onClick`
+`fn() ()` handler contract are intentionally smaller than the eventual schema
+and event-object design below. `html.renderToString` is available after explicit
+import; browser hosts call kernel mount/hydrate entry points. No platform
+bootstrap or adapter was added. Detailed boundaries and test locations are in
+`docs/web-internals.md`.
+
+Verification (2026-09-14): `cargo fmt --all`,
+`cargo clippy --all-targets --all-features -- -D warnings`, and
+`cargo test --quiet` pass. The focused coverage includes 26 driver web tests
+and five kernel web tests. A manual
+`cargo run --manifest-path ../../../Cargo.toml -p alder-cli -- run` from
+`tests/e2e/web` also passed and printed the expected SSR counter with values
+2 and 4. Hydration was verified with the deterministic DOM shim, not a real
+browser or platform deployment. No CLI subprocess tests were added.
+
+At that checkpoint, follow-on component work still included the full schema, custom elements,
+component tags/children composition, directives/keyed lists, richer event types,
+and reactive patterns excluded by first-slice diagnostics. That checkpoint did
+not complete routing, resources, forms, HMR, or deployment. Current implementation
+and verification supersede that scope; DI and macros remain intentionally deferred.
+
+## Starting state (historical)
 
 - Hardening rejects executable `state` expressions and `component` declarations
   with source-aware diagnostics until this milestone implements their actual
@@ -99,33 +140,47 @@ do not expand the initial goal to implement them.
   `hooks.server.ald`, `hooks.client.ald`, `*.remote.ald`); no
   `alder.jsonc` render-mode default; page options as exported values.
 - JavaScript required in the browser; no progressive enhancement.
-- Remote modules and `+page.server.ald` are the only server boundaries;
-  no per-function attribute.
+- Remote modules, server page/layout companions, endpoints, and server hooks
+  are server boundaries; no per-function boundary attribute.
 - Cloudflare concepts are traits plus attributes; bindings arrive through
   context; `alder deploy` owns wrangler config and migrations.
 - Dev server: vendored miniflare for cloudflare, deno_core with HMR for
   standalone; never `wrangler dev` or Vite.
 
-## Open decisions (recommendation in bold)
+## Resolved implementation decisions
 
-1. HTML schema source. **Generate the element/attribute schema from the
-   WHATWG HTML spec data (via a checked-in JSON derived from
-   `@webref/elements`/`html-element-attributes`) into a Rust table at
-   build time; ARIA attributes included; `data-*` always allowed.**
-2. Event handler typing. **`onClick={e -> ...}` where `e` is typed per
-   event from the schema; handlers may return `()` or a `Task[()]`.**
-3. Reactivity granularity. **Per-expression signals (Solid-style
-   effects) generated by the compiler; no VDOM.** Text nodes and
-   attributes each get their own effect.
-4. Resources. **`resource(() -> task)` in the kernel returning a signal of
-   `Loading | Ready(a) | Failed(e)`, suspending SSR until resolved, with
-   serialized results hydrated.**
-5. Hydration data format. **JSON with a devalue-style encoder for
-   enums, `Map`, `Set`, `BigInt`, and `Date`, matching the M2 enum
-   representation.**
-6. Query/command caching for remote functions. **Follow SvelteKit: query
-   results cached by argument key per page, invalidated by commands in the
-   same module and by explicit `refresh`.**
+1. HTML schema: checked-in Rust tables generated offline from a pinned,
+   compressed WHATWG index with a source digest. ARIA and `data-*` are supported;
+   refresh is explicit and ordinary builds never fetch schema data. See
+   `tools/html-schema.md` for the input and commands.
+2. Events: schema-typed event records, with zero-argument compatibility;
+   handlers return Unit or Task[Unit]. InputEvent fields are restricted to
+   statically known text controls. Runtime defects reach owner-scoped client hooks.
+3. Reactivity: per-expression compiler-generated dependencies and direct DOM
+   subscriptions, no virtual DOM. Keyed regions retain owners and nodes.
+4. Resources: `html.resource(() -> task)` yields typed Loading/Ready/Failed,
+   owns cancellation, suspends SSR, and transfers resolved values for hydration.
+5. Transport: validated tagged JSON graphs preserve enums, nested Options,
+   Map/Set/BigInt/Date, identity and cycles; executable/accessor/host values are
+   rejected and traversal budgets apply symmetrically. Only browser-reachable
+   stores enter hydration snapshots.
+6. Queries: browser argument-keyed cache per page, bounded to 256 entries and
+   30 seconds. Commands invalidate their module, actions invalidate all modules,
+   explicit refresh bypasses caches, and navigation rejects late old-page cache
+   writes. Server calls do not share query caches across requests.
+7. Navigation: universal loads run in the browser. Ancestor universal loads also
+   run on the server when downstream server loads need their trusted data;
+   explicit server return records are transferred, never browser-derived data
+   sent back as trusted server input. Initial SSR/CSR bootstrap and HMR resolve
+   data on the server. Exact semantics are in `docs/web-internals.md`.
+8. Error boundaries render inside their same-directory layouts and exclude
+   descendant layouts. A failed enclosing layout needs an ancestor boundary;
+   otherwise server output is a sanitized 500, and client replacement preserves
+   its last good tree.
+9. Build/deploy: public assets and generated outputs are staged with rollback;
+   prerender uses local target providers. Deploy requires an exact Worker/account,
+   preserves existing variables/secrets, and never invents resource IDs or
+   destructive migration history. The live-preview acceptance gate is separate.
 
 ## Work breakdown
 

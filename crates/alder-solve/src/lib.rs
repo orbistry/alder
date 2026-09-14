@@ -1,5 +1,6 @@
 //! Alder type inference over the canonical AST.
 
+mod html_schema;
 mod inference;
 mod option_levels;
 mod pattern_matrix;
@@ -17,6 +18,8 @@ pub use traits::{CoherenceError, InstanceHeader, TraitDatabase, TraitHeader, bui
 
 #[derive(Clone, Debug)]
 pub struct SolveOutput<'a> {
+    /// Final state initializer types used to validate hot-state compatibility.
+    pub state_types: BTreeMap<Region, &'a alder_region::Located<alder_ast::Type<'a>>>,
     pub annotations: Annotations<'a>,
     pub schemes: Annotations<'a>,
     pub bindings: BTreeMap<alder_ast::QualifiedName<'a>, BindingEvidence<'a>>,
@@ -153,6 +156,7 @@ pub enum Intrinsic {
     EqBigInt,
     EqUnit,
     EqOrdering,
+    EqCloudflareHandle,
     OrdNumber,
     OrdString,
     OrdBigInt,

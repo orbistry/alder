@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { let child = <span />\n<div /> }"
+---
+alder::codegen
+
+  × executable markup is supported only as a component's final expression
+   ╭─[/project/src/main.ald:1:36]
+ 1 │ pub component View() { let child = <span />
+   ·                                    ────┬───
+   ·                                        ╰── code generation failed here
+ 2 │ <div /> }
+   ╰────

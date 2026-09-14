@@ -373,6 +373,9 @@ fn collect_markup<'a>(markup: &'a Markup<'a>, out: &mut Vec<RequirementSeed<'a>>
 }
 
 fn collect_element<'a>(element: &'a alder_ast::Element<'a>, out: &mut Vec<RequirementSeed<'a>>) {
+    if let Some(value) = element.component_value {
+        expr(value, out);
+    }
     for attr in element.attrs {
         if let Some(AttrValue::Expr(value)) = attr.value {
             expr(value, out);

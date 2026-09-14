@@ -1,8 +1,8 @@
 # Formatter preservation contract
 
-The formatter canonicalizes import runs, then changes horizontal indentation
-and trailing layout spaces elsewhere. It parses input before formatting and
-parses output before returning it.
+The formatter canonicalizes import runs, lays out parsed markup, then changes
+horizontal indentation and trailing layout spaces elsewhere. It parses input
+before formatting and parses output before returning it.
 
 `imports.rs` flattens grouped entries with their source regions, retains
 visibility and import tails, and sorts each consecutive same-visibility run by
@@ -23,18 +23,35 @@ second approximation of the language grammar. Parser backtracking truncates
 the range side table together with the comment side table. The ordinary source
 AST is unchanged.
 
-The formatter preserves every physical line intersecting a verbatim range,
+`markup.rs` formats outer markup spans using parsed elements, attributes,
+children, and directive blocks. Literal text has already undergone the folding
+rules in [markup-whitespace.md](markup-whitespace.md). Structural children are
+indented on separate lines; prose wraps at single separating spaces. Mixed
+inline children stay adjacent, with optional line breaks around the whole
+sequence only when its boundary whitespace is unaffected. Long unbreakable
+tokens and semantically significant inline sequences may exceed the width.
+Embedded code blocks expand at brace boundaries while preserving existing
+statement newlines, comments, literal/template payloads, and raw macros.
+Whitespace-sensitive `<pre>`/`<textarea>` subtrees remain verbatim.
+
+The markup pass compares complete parsed Debug structures before and after,
+excluding only `Region`/`Position` metadata. Quoted payloads are scanned intact,
+so location-shaped text is not erased. This checks expression structure, child
+order, normalized text, exact literal values, and comments; a parse or semantic
+mismatch fails before any files are written. It does not equate arbitrary AST
+rewrites, merge text nodes, or replace text with expression holes.
+
+After the markup pass, the indentation pass preserves every physical line intersecting a verbatim range,
 including its original line ending. It masks those ranges when counting code
 delimiters so braces/backticks in payloads cannot affect surrounding indentation.
-This deliberately leaves layout inside templates, markup, and raw macros alone.
+This leaves the already formatted markup and literal/template/raw macro payloads alone.
 CRLF and literal carriage returns are not globally normalized.
 
-After normalizing imports, it compares comment payloads, every verbatim source
+After markup layout, it compares comment payloads, every verbatim source
 slice, and each physical line's non-boundary-whitespace contents. Internal
 blank lines remain in place. Together with reparsing, these checks enforce the
-restricted non-import transformation contract; they are not a general-purpose AST
-equivalence checker. Future token rewriting or line reflow must add an
-appropriate structural-equivalence check before broadening that contract.
+restricted indentation transformation contract; the markup pass has its own
+structural-equivalence guard described above.
 
 Tests separately check cooked literal values, byte preservation, and idempotence.
 They cover whitespace-only lines, trailing spaces, nested interpolation/escapes,

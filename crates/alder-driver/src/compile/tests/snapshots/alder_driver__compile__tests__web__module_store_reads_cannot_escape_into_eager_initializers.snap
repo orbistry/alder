@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "let count: Number = state(1)\nfn read() Number { count }\npub let eager = read()"
+---
+alder::codegen
+
+  × module stores cannot be read by eager module initializers; read them
+  │ inside a function or component
+   ╭─[/project/src/main.ald:3:17]
+ 2 │ fn read() Number { count }
+ 3 │ pub let eager = read()
+   ·                 ───┬──
+   ·                    ╰── code generation failed here
+   ╰────

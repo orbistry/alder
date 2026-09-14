@@ -1,11 +1,11 @@
 //! `#[name]` / `#[name(args)]` attributes.
 //!
 //! Grammar (SPEC.md):
-//! `attribute = '#[' lower_ident [ '(' [ expression { ',' expression } ] ')' ] ']' ;`
+//! `attribute = '#[' (lower_ident | 'query') [ '(' [ expression { ',' expression } ] ')' ] ']' ;`
 //!
 //! Arguments are ordinary expressions: `#[derive(Show, Eq)]` yields two
 //! `Expr::Path`s and `#[extern("m", "n")]` two `Expr::Str`s; what an
-//! attribute means is decided later. The name is a `lower_name` (a reserved
+//! attribute means is decided later. The name is a `lower_name` or `query` (a reserved
 //! word such as `#[test]` is `Attribute::Name`). Error positions: `Open` at
 //! the `#`, `Name` / `Arg` / `ArgEnd` / `End` at the offending byte,
 //! `Dangling` at the EOF or `}` that follows the last attribute.
@@ -47,7 +47,11 @@ impl<'a> Parser<'a> {
         let opening = self.get_position();
         self.advance(); // `[`
         self.chomp();
-        let name = self.located_lower(error::Attribute::Name)?;
+        let name = if self.peek_keyword(b"query") {
+            self.raw_lower(error::Attribute::Name)?
+        } else {
+            self.located_lower(error::Attribute::Name)?
+        };
         self.chomp();
         let args = if self.peek() == Some(b'(') {
             self.attribute_args()?
@@ -106,6 +110,11 @@ mod tests {
             type Response
             "#
         );
+    }
+
+    #[test]
+    fn attr_query() {
+        assert_item_snapshot!("#[query] fn cached() { 1 }");
     }
 
     #[test]

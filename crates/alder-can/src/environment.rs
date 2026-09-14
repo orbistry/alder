@@ -37,6 +37,12 @@ pub struct TypeBinding<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub struct ProviderBinding<'a> {
+    pub reference: QualifiedName<'a>,
+    pub typ: &'a alder_region::Located<alder_ast::Type<'a>>,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct EnumBinding<'a> {
     pub reference: QualifiedName<'a>,
     pub variants: &'a [ConstructorRef<'a>],
@@ -91,7 +97,7 @@ pub struct Env<'a> {
     pub enums: BTreeMap<&'a str, Candidate<'a, EnumBinding<'a>>>,
     pub traits: BTreeMap<&'a str, Candidate<'a, TraitBinding<'a>>>,
     pub modules: BTreeMap<&'a str, Candidate<'a, ModuleBinding<'a>>>,
-    pub providers: Vec<BTreeMap<&'a str, QualifiedName<'a>>>,
+    pub providers: Vec<BTreeMap<&'a str, ProviderBinding<'a>>>,
     pub associated_types: Vec<BTreeMap<&'a str, ProjectionType<'a>>>,
     pub control: ControlContext,
     interfaces: RefCell<BTreeMap<ModuleId<'a>, Option<&'a Interface<'a>>>>,
@@ -112,7 +118,7 @@ impl<'a> Env<'a> {
             enums: BTreeMap::new(),
             traits: BTreeMap::new(),
             modules: BTreeMap::new(),
-            providers: Vec::new(),
+            providers: vec![BTreeMap::new()],
             associated_types: Vec::new(),
             control: ControlContext::default(),
             interfaces: RefCell::new(BTreeMap::new()),
@@ -391,6 +397,11 @@ impl<'a> Env<'a> {
     ) -> Option<crate::aliases::Definition<'a>> {
         if let Some(definition) = self.aliases.get(&reference) {
             return Some(*definition);
+        }
+        // Local opaque types are not aliases. In a bundled module, consulting
+        // its own interface here would recursively rebuild those same headers.
+        if reference.module == self.home {
+            return None;
         }
         let interface = self.module_interface(bump, reference.module)?;
         let typ = interface
@@ -981,11 +992,13 @@ impl<'a> Env<'a> {
 
     pub fn push_scope(&mut self) {
         self.scopes.push(Scope::default());
+        self.providers.push(BTreeMap::new());
     }
 
     pub fn pop_scope(&mut self) {
         assert!(self.scopes.len() > 1, "cannot pop the module scope");
         self.scopes.pop();
+        self.providers.pop();
     }
 
     pub fn fresh_local(&mut self, text: &'a str) -> LocalName<'a> {
@@ -1272,7 +1285,7 @@ impl<'a> Env<'a> {
         })
     }
 
-    pub fn find_provider(&self, text: &str) -> Option<QualifiedName<'a>> {
+    pub fn find_provider(&self, text: &str) -> Option<ProviderBinding<'a>> {
         self.providers
             .iter()
             .rev()

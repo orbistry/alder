@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "import html\npub component View() { let data = html.resource(() -> 42)\n<span /> }"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `fn() Task[Result[a, b]]`, found `fn() Number`
+   ╭─[/project/src/main.ald:2:49]
+ 1 │ import html
+ 2 │ pub component View() { let data = html.resource(() -> 42)
+   ·                                                 ────┬───
+   ·                                                     ╰── argument 1 of `resource` has an incompatible type
+ 3 │ <span /> }
+   ╰────

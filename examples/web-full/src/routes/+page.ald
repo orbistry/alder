@@ -1,0 +1,54 @@
+import (
+    html,
+    html.{Resource},
+
+    ~/counter,
+    ~/greetings,
+)
+
+pub component page() {
+    let greeting = html.resource(() -> greetings.greet("Alder"))
+    let commandMessage = state("No command has run yet.")
+    let commandCount = state(0)
+
+    <main>
+        <h2>Shared state, remote queries, and commands</h2>
+        <button id="increment" onClick={() -> counter.increment()}>
+            Increment shared browser count
+        </button>
+        <p>This page sees the same store: <strong id="page-count">{counter.count}</strong></p>
+        <section>
+            <h3>Remote resource</h3>
+            @match greeting {
+                Resource::Loading => <p id="greeting-loading">Loading greeting…</p>,
+                Resource::Ready(value) => <p id="greeting">{value.message}; server request count: {value.requestCount}</p>,
+                Resource::Failed(:invalid_name(reason)) => <p id="greeting-error">{reason}</p>,
+            }
+            <button id="refresh" onClick={() -> html.refresh(greeting)}>Refresh query</button>
+            <button
+                id="command"
+                onClick={() -> async {
+                    let reply = greetings.celebrate("Alder").await
+                    match reply {
+                        Ok(value) => {
+                            commandMessage = value.message
+                            commandCount = value.requestCount
+                        },
+                        Err(:invalid_name(reason)) => {
+                            commandMessage = reason
+                        },
+                    }
+                    html.refresh(greeting)
+                }}
+            >
+                Run command, then refresh query
+            </button>
+            <p id="command-message">{commandMessage}</p>
+            <p>Command request count: <strong id="command-count">{commandCount}</strong></p>
+        </section>
+        <p>
+            The command changes only its server request's store. Refresh starts a fresh request; it
+            is not a database mutation.
+        </p>
+    </main>
+}

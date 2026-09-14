@@ -28,7 +28,8 @@ pub use imports::resolve_imports;
 pub use value_scc::callable_dependencies;
 pub use value_scc::dependencies as value_dependencies;
 pub use value_scc::{
-    StatementLocalDependencies, expression_local_dependencies, statement_local_dependencies,
+    StatementLocalDependencies, callable_value_dependencies, expression_local_dependencies,
+    expression_value_dependencies, pattern_local_bindings, statement_local_dependencies,
 };
 pub use warning::{BindingForm, Warning, WarningKind};
 

@@ -45,7 +45,7 @@ Located {
                             },
                         },
                         value: Text(
-                            "\n    two\n    lines\n",
+                            "two lines",
                         ),
                     },
                 ],

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { let count = state(0)\nlet doubled = { count += 1\ncount * 2 }\n<span>{doubled}</span> }"
+---
+alder::codegen
+
+  × reactive computations cannot contain statements or assignments
+   ╭─[/project/src/main.ald:2:17]
+ 1 │ pub component View() { let count = state(0)
+ 2 │ let doubled = { count += 1
+   ·                 ─────┬────
+   ·                      ╰── code generation failed here
+ 3 │ count * 2 }
+   ╰────

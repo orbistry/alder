@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <button><span><button /></span></button> }"
+---
+alder::type::invalid_markup
+
+  × this element cannot be nested inside `<button>`
+   ╭─[/project/src/main.ald:1:39]
+ 1 │ pub component View() { <button><span><button /></span></button> }
+   ·                                       ───┬──
+   ·                                          ╰── these types are incompatible
+   ╰────

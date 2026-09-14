@@ -1,0 +1,40 @@
+import (
+    html,
+    map,
+)
+
+pub let prerender = true
+pub let entries = [{ id: "ada" }, { id: "grace" }]
+
+pub component page(props: { data: PageData }) {
+    let status = state("No form has been submitted.")
+    let submitted = fields -> async {
+        match fields {
+            Ok(values) => match map.get(values, "name") {
+                Some([name]) => {
+                    status = "Submitting…"
+                    let reply = actions.save({ name }).await
+                    status = match reply {
+                        Ok(value) => value.message,
+                        Err(:invalid_name(reason)) => reason,
+                    }
+                },
+                _ => { status = "Supply exactly one name." },
+            },
+            Err(_) => { status = "This form must contain text fields only." },
+        }
+    }
+    <article>
+        <h3 id="user-id">User: {props.data.id}</h3>
+        <p id="viewer">Hook-provided viewer: {props.data.viewer}</p>
+        <p>
+            Fresh server request count: <strong id="request-count">{props.data.requestCount}</strong>
+        </p>
+        <form id="name-form" onSubmit={html.submit(submitted)}>
+            <label for="name">Your name</label>
+            <input id="name" name="name" value="Ada" />
+            <button type="submit">Submit typed action</button>
+        </form>
+        <p id="form-status" aria-live="polite">{status}</p>
+    </article>
+}

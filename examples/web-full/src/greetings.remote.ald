@@ -1,0 +1,24 @@
+import (
+    string,
+
+    ~/counter,
+)
+
+#[query]
+pub async fn greet(name: String) Result[{ message: String, requestCount: Number }, [:invalid_name(String)]] {
+    if string.length(name) == 0 {
+        Err(:invalid_name("A name is required."))
+    } else {
+        Ok({ message: string.concat("Hello, ", name), requestCount: counter.read() })
+    }
+}
+
+#[command]
+pub async fn celebrate(name: String) Result[{ message: String, requestCount: Number }, [:invalid_name(String)]] {
+    if string.length(name) == 0 {
+        Err(:invalid_name("A name is required."))
+    } else {
+        counter.increment()
+        Ok({ message: string.concat("Welcome back, ", name), requestCount: counter.read() })
+    }
+}

@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <button onClick={() -> { let value = state(0) }} /> }"
+---
+alder::codegen
+
+  × state is supported only in direct component-body let bindings
+   ╭─[/project/src/main.ald:1:61]
+ 1 │ pub component View() { <button onClick={() -> { let value = state(0) }} /> }
+   ·                                                             ────┬───
+   ·                                                                 ╰── code generation failed here
+   ╰────

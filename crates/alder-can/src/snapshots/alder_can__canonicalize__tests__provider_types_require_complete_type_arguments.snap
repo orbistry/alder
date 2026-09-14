@@ -1,0 +1,25 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "type Session[a] = { user: a }\nfn read() { use Session }"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 17,
+            },
+            end: Position {
+                line: 2,
+                column: 24,
+            },
+        },
+        kind: Type(
+            BadArity {
+                name: "Session",
+                expected: 1,
+                actual: 0,
+            },
+        ),
+    },
+]

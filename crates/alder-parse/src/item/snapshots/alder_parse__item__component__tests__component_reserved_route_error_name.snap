@@ -1,0 +1,36 @@
+---
+source: crates/alder-parse/src/item/component.rs
+description: "component error() {}"
+---
+ComponentDecl {
+    name: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 11,
+            },
+            end: Position {
+                line: 1,
+                column: 16,
+            },
+        },
+        value: "error",
+    },
+    params: [],
+    body: Located {
+        region: Region {
+            start: Position {
+                line: 1,
+                column: 19,
+            },
+            end: Position {
+                line: 1,
+                column: 21,
+            },
+        },
+        value: Block {
+            stmts: [],
+            tail: None,
+        },
+    },
+}

@@ -1,0 +1,67 @@
+import http.{Request, Response}
+
+#[extern]
+pub type DurableObjectState
+#[extern]
+pub type WorkflowStep
+
+impl Eq[DurableObjectState] {
+    fn eq(left: DurableObjectState, right: DurableObjectState) Bool { sameObjectState(left, right) }
+}
+impl Eq[WorkflowStep] {
+    fn eq(left: WorkflowStep, right: WorkflowStep) Bool { sameWorkflowStep(left, right) }
+}
+
+#[extern("alder:kernel", "$cloudflareHandleEq")]
+fn sameObjectState(left: DurableObjectState, right: DurableObjectState) Bool
+#[extern("alder:kernel", "$cloudflareHandleEq")]
+fn sameWorkflowStep(left: WorkflowStep, right: WorkflowStep) Bool
+
+#[extern]
+pub type Kv
+#[extern]
+pub type R2
+#[extern]
+pub type D1
+#[extern]
+pub type Hyperdrive
+#[extern]
+pub type Service
+#[extern]
+pub type DurableObjectNamespace
+#[extern]
+pub type QueueBinding
+#[extern]
+pub type WorkflowBinding
+
+pub type WorkflowEvent[payload] = { payload: payload, instanceId: String }
+
+pub trait DurableObject[object] {
+    fn initObject(storage: DurableObjectState) Task[object]
+    fn fetch(object: object, request: Request) Task[Response]
+}
+
+pub trait Queue[consumer, message] where message: Json {
+    fn initConsumer() consumer
+    fn consume(consumer: consumer, messages: Array[message]) Task[()]
+}
+
+pub trait Workflow[workflow, payload, output] where payload: Json, output: Json {
+    fn initWorkflow() workflow
+    fn run(workflow: workflow, event: WorkflowEvent[payload], step: WorkflowStep) Task[output]
+}
+
+#[extern("alder:kernel", "$cloudflareKvGet")]
+pub fn kvGet(namespace: Kv, key: String) Task[Result[Option[String], [:cloudflare_error(String)]]]
+
+#[extern("alder:kernel", "$cloudflareKvPut")]
+pub fn kvPut(namespace: Kv, key: String, value: String) Task[Result[(), [:cloudflare_error(String)]]]
+
+#[extern("alder:kernel", "$cloudflareStorageGet")]
+pub fn storageGet(storage: DurableObjectState, key: String) Task[Result[Option[a], [:cloudflare_error(String) | :invalid_json(String)]]] where a: Json
+
+#[extern("alder:kernel", "$cloudflareStoragePut")]
+pub fn storagePut(storage: DurableObjectState, key: String, value: a) Task[Result[(), [:cloudflare_error(String)]]] where a: Json
+
+#[extern("alder:kernel", "$cloudflareStep")]
+pub fn step(step: WorkflowStep, name: String, run: fn() Task[a]) Task[a] where a: Json

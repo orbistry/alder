@@ -349,17 +349,22 @@ pub fn canonicalize_expr<'a>(
                     provider_name.value,
                 )
                 .map_err(|error| vec![error])?;
+            let typ = canonicalize_provider_type(bump, env, name)?;
             let value = canonicalize_expr(bump, env, value)?;
             env.providers.push(BTreeMap::from([(
                 provider_name.value,
-                provider_type.reference,
+                crate::environment::ProviderBinding {
+                    reference: provider_type.reference,
+                    typ,
+                },
             )]));
-            let body = canonicalize_block(bump, env, body)?;
+            let body = canonicalize_block(bump, env, body);
             env.providers.pop();
             CanExpr::Provide {
                 provider: provider_type.reference,
+                typ,
                 value,
-                body,
+                body: body?,
             }
         }
         SourceExpr::State(expr) => CanExpr::State(canonicalize_expr(bump, env, expr)?),
@@ -395,22 +400,37 @@ pub fn canonicalize_block<'a>(
     source: &'a Located<alder_source::Block<'a>>,
 ) -> Result<&'a Located<CanBlock<'a>>, Vec<Error<'a>>> {
     env.push_scope();
-    let mut statements = Vec::with_capacity(source.value.stmts.len());
-    for statement in source.value.stmts {
-        statements.push(canonicalize_stmt(bump, env, statement)?);
-    }
-    let tail = match source.value.tail {
-        Some(tail) => Some(canonicalize_expr(bump, env, tail)?),
-        None => None,
-    };
+    let result = (|| {
+        let mut statements = Vec::with_capacity(source.value.stmts.len());
+        for statement in source.value.stmts {
+            statements.push(canonicalize_stmt(bump, env, statement)?);
+        }
+        let tail = match source.value.tail {
+            Some(tail) => Some(canonicalize_expr(bump, env, tail)?),
+            None => None,
+        };
+        Ok(bump.alloc(Located::at(
+            source.region,
+            CanBlock {
+                statements: bump.alloc_slice_copy(&statements),
+                tail,
+            },
+        )))
+    })();
     env.pop_scope();
-    Ok(bump.alloc(Located::at(
-        source.region,
-        CanBlock {
-            statements: bump.alloc_slice_copy(&statements),
-            tail,
-        },
-    )))
+    result.map(|block| &*block)
+}
+
+fn canonicalize_provider_type<'a>(
+    bump: &'a Bump,
+    env: &Env<'a>,
+    path: alder_source::Path<'a>,
+) -> Result<&'a Located<alder_ast::Type<'a>>, Vec<Error<'a>>> {
+    let source = bump.alloc(Located::at(
+        path.region(),
+        alder_source::Type::Named { path, args: &[] },
+    ));
+    canonicalize_type(bump, env, &Default::default(), source)
 }
 
 pub(crate) fn canonicalize_stmt<'a>(
@@ -447,6 +467,17 @@ pub(crate) fn canonicalize_stmt<'a>(
                     name.value,
                 )
                 .map_err(|error| vec![error])?;
+            let typ = canonicalize_provider_type(bump, env, path)?;
+            env.providers
+                .last_mut()
+                .expect("provider lexical scope")
+                .insert(
+                    name.value,
+                    crate::environment::ProviderBinding {
+                        reference: provider.reference,
+                        typ,
+                    },
+                );
             CanStmt::Use {
                 provider: provider.reference,
             }
@@ -576,13 +607,24 @@ fn canonicalize_path_expr<'a>(
         if let Some(provider) = env.find_provider(name) {
             return Ok(CanExpr::Var {
                 use_id: env.fresh_use(),
-                reference: ValueRef::Provider(provider),
+                reference: ValueRef::Provider {
+                    provider: provider.reference,
+                    typ: provider.typ,
+                },
             });
         }
         if let Some(module) = env.find_module(name) {
             return Ok(CanExpr::Var {
                 use_id: env.fresh_use(),
                 reference: ValueRef::Module(module.module),
+            });
+        }
+        // Component names are uppercase values, not enum constructors. Keep
+        // their ordinary callable/first-class value identity at expression sites.
+        if let Some(binding) = env.find_value(name) {
+            return Ok(CanExpr::Var {
+                use_id: env.fresh_use(),
+                reference: binding.reference,
             });
         }
         if !matches!(name, "Some" | "None" | "Ok" | "Err")
@@ -601,6 +643,23 @@ fn canonicalize_path_expr<'a>(
                 region,
                 ErrorKind::Expr(ExprError::UnqualifiedConstructor { enum_name, variant }),
             )]);
+        }
+    }
+    if path.segments.len() > 1 {
+        let name = path.segments.last().expect("paths are nonempty");
+        let prefix = crate::types::namespace_prefix(bump, path);
+        if let Some(prefix) = prefix
+            && let Some(module) = env.find_module_path(bump, prefix)
+            && let Some(interface) = module.interface
+            && let Some(value) = interface
+                .values
+                .iter()
+                .find(|value| value.exported_as == name.value)
+        {
+            return Ok(CanExpr::Var {
+                use_id: env.fresh_use(),
+                reference: interface_value_ref(*value),
+            });
         }
     }
     env.find_constructor(bump, region, path.segments, false)
@@ -937,12 +996,26 @@ fn canonicalize_element<'a>(
     env: &mut Env<'a>,
     source: &'a alder_source::Element<'a>,
 ) -> Result<&'a CanElement<'a>, Vec<Error<'a>>> {
+    let component_value = match source.name.value {
+        alder_source::ElementName::Component(path) => Some(&*bump.alloc(Located::at(
+            source.name.region,
+            canonicalize_path_expr(bump, env, source.name.region, path)?,
+        ))),
+        alder_source::ElementName::Tag(_) => None,
+    };
     let name = Located::at(
         source.name.region,
         match source.name.value {
             alder_source::ElementName::Tag(name) => CanElementName::Tag(name),
-            alder_source::ElementName::Component(path) => {
-                CanElementName::Component(resolve_component(bump, env, path)?)
+            alder_source::ElementName::Component(_) => {
+                match component_value.expect("component reference").value {
+                    CanExpr::Var {
+                        reference:
+                            ValueRef::TopLevel(reference) | ValueRef::Foreign { reference, .. },
+                        ..
+                    } => CanElementName::Component(reference),
+                    _ => return Err(vec![unknown_value(source.name.region, "component")]),
+                }
             }
         },
     );
@@ -961,43 +1034,11 @@ fn canonicalize_element<'a>(
     }
     Ok(bump.alloc(CanElement {
         name,
+        component_value,
         attrs: bump.alloc_slice_copy(&attrs),
         children: canonicalize_children(bump, env, source.children)?,
         self_closing: source.self_closing,
     }))
-}
-
-fn resolve_component<'a>(
-    bump: &'a Bump,
-    env: &Env<'a>,
-    path: alder_source::Path<'a>,
-) -> Result<alder_ast::QualifiedName<'a>, Vec<Error<'a>>> {
-    let name = path.segments.last().expect("component path is nonempty");
-    if path.segments.len() == 1 {
-        if let Some(binding) = env.find_value(name.value) {
-            return match binding.reference {
-                ValueRef::TopLevel(reference) | ValueRef::Foreign { reference, .. } => {
-                    Ok(reference)
-                }
-                _ => Err(vec![unknown_value(name.region, name.value)]),
-            };
-        }
-    } else if let Some(module) = env.find_module(path.segments[0].value) {
-        return Ok(alder_ast::QualifiedName {
-            module: module.module,
-            name: name.value,
-        });
-    }
-    Err(vec![
-        env.find_type(
-            bump,
-            path.region(),
-            crate::types::namespace_prefix(bump, path),
-            name.value,
-        )
-        .err()
-        .unwrap_or_else(|| unknown_value(name.region, name.value)),
-    ])
 }
 
 fn canonicalize_children<'a>(

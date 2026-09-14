@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <button disabled={42} /> }"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Bool`, found `Number`
+   ╭─[/project/src/main.ald:1:42]
+ 1 │ pub component View() { <button disabled={42} /> }
+   ·                                          ─┬
+   ·                                           ╰── these types are incompatible
+   ╰────

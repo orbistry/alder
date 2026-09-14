@@ -47,6 +47,32 @@ pub async fn bundle(
     entry_module: &str,
     kind: EntryKind,
 ) -> Result<String, Error> {
+    let modules: Vec<_> = modules.into_iter().collect();
+    let application_modules = modules
+        .iter()
+        .map(|module| module.module_id.clone())
+        .collect::<Vec<_>>();
+    let support_kind = match kind {
+        EntryKind::Standalone => support::EntryKind::Standalone,
+        EntryKind::Cloudflare => support::EntryKind::Cloudflare,
+        EntryKind::Test => support::EntryKind::Test,
+    };
+    if !modules
+        .iter()
+        .any(|module| module.module_id == entry_module)
+    {
+        return Err(Error::MissingEntry(entry_module.to_owned()));
+    }
+    let entry = support::entry_module(entry_module, support_kind, &application_modules);
+    bundle_entry(modules.into_iter().chain([entry]), "alder:entry").await
+}
+
+/// Bundle an already-generated entry AST, without imposing a main/fetch ABI.
+/// Web applications use distinct generated server and browser entries.
+pub async fn bundle_entry(
+    modules: impl IntoIterator<Item = EmittedModule>,
+    entry_module: &str,
+) -> Result<String, Error> {
     let mut modules: Vec<_> = modules.into_iter().collect();
     modules.sort_by(|left, right| left.module_id.cmp(&right.module_id));
     if !modules
@@ -61,10 +87,6 @@ pub async fn bundle(
         }
     }
 
-    let application_modules = modules
-        .iter()
-        .map(|module| module.module_id.clone())
-        .collect::<Vec<_>>();
     let mut sources = BTreeMap::new();
     sources.insert(
         "alder:kernel".to_owned(),
@@ -73,16 +95,6 @@ pub async fn bundle(
     for (name, code) in builtin_modules() {
         sources.insert(format!("alder://std/{name}.mjs"), code);
     }
-    let support_kind = match kind {
-        EntryKind::Standalone => support::EntryKind::Standalone,
-        EntryKind::Cloudflare => support::EntryKind::Cloudflare,
-        EntryKind::Test => support::EntryKind::Test,
-    };
-    let generated_support = [support::entry_module(
-        entry_module,
-        support_kind,
-        &application_modules,
-    )];
     let origins = modules
         .iter()
         .filter_map(|module| {
@@ -103,7 +115,6 @@ pub async fn bundle(
         .collect();
     let asts: BTreeMap<_, _> = modules
         .into_iter()
-        .chain(generated_support)
         .map(|module| (module.module_id, module.ast))
         .collect();
     let resolution_errors = Arc::new(Mutex::new(Vec::new()));
@@ -119,7 +130,7 @@ pub async fn bundle(
         BundlerOptions {
             input: Some(vec![InputItem {
                 name: Some("main".to_owned()),
-                import: "alder:entry".to_owned(),
+                import: entry_module.to_owned(),
             }]),
             cwd: Some(std::env::current_dir()?),
             format: Some(OutputFormat::Esm),
@@ -180,6 +191,52 @@ fn node_import(ast: &EcmaAst) -> Option<&str> {
 
 fn builtin_modules() -> BTreeMap<&'static str, String> {
     BTreeMap::from([
+        (
+            "html",
+            exports(&[
+                ("$webSsr", "renderToString"),
+                ("$webSsrAsyncString", "renderToStringAsync"),
+                ("$webResourceDeclaration", "resource"),
+                ("$webResourceRefresh", "refresh"),
+                ("$webResourceCancel", "cancel"),
+                ("$webPreventDefault", "preventDefault"),
+                ("$webFormValues", "formValues"),
+                ("$webSubmit", "submit"),
+            ]),
+        ),
+        (
+            "cloudflare",
+            exports(&[
+                ("$cloudflareKvGet", "kvGet"),
+                ("$cloudflareKvPut", "kvPut"),
+                ("$cloudflareStorageGet", "storageGet"),
+                ("$cloudflareStoragePut", "storagePut"),
+                ("$cloudflareStep", "step"),
+            ]),
+        ),
+        (
+            "http",
+            exports(&[
+                ("$httpText", "text"),
+                ("$httpJson", "json"),
+                ("$httpEmpty", "empty"),
+                ("$httpRedirect", "redirect"),
+                ("$httpStatus", "status"),
+                ("$httpResponseHeader", "responseHeader"),
+                ("$httpWithHeader", "withHeader"),
+                ("$httpRequest", "request"),
+                ("$httpMethod", "method"),
+                ("$httpRequestUrl", "requestUrl"),
+                ("$httpRequestHeader", "requestHeader"),
+                ("$httpPathname", "pathname"),
+                ("$httpSearchParam", "searchParam"),
+                ("$httpReadText", "readText"),
+                ("$httpReadForm", "readForm"),
+                ("$httpReadJson", "readJson"),
+                ("$httpResponseText", "responseText"),
+                ("$httpFetch", "fetch"),
+            ]),
+        ),
         (
             "option",
             exports(&[
@@ -347,6 +404,13 @@ impl Plugin for VirtualModules {
         if self.contains(args.specifier) {
             return Ok(Some(HookResolveIdOutput::from_id(args.specifier)));
         }
+        if args.specifier == "cloudflare:workers" {
+            return Ok(Some(HookResolveIdOutput {
+                id: args.specifier.into(),
+                external: Some(rolldown_common::ResolvedExternal::Bool(true)),
+                ..Default::default()
+            }));
+        }
         if args.specifier.starts_with("node:") {
             return Err(std::io::Error::other(format!(
                 "Node compatibility imports are not supported: {}",
@@ -473,6 +537,7 @@ mod tests {
             ast: rolldown_ecmascript::EcmaCompiler::parse("fixture.mjs", code, Default::default())
                 .unwrap(),
             dependencies: Vec::new(),
+            store_keys: Vec::new(),
         }
     }
 

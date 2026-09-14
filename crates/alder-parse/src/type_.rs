@@ -252,7 +252,7 @@ impl<'a> Parser<'a> {
         }
 
         // The first name is either the extension variable (`r |`) or a field.
-        let name = self.located_lower(TRecord::Field)?;
+        let name = self.field_name(TRecord::Field)?;
         let saved = self.save_state();
         self.chomp();
         let ext = if self.peek() == Some(b'|') {
@@ -262,7 +262,7 @@ impl<'a> Parser<'a> {
                 let (row, col) = self.position();
                 return Err(TRecord::ExtField(row, col));
             }
-            let first = self.located_lower(TRecord::Field)?;
+            let first = self.field_name(TRecord::Field)?;
             fields.push(self.field_type_after_name(first)?);
             Some(name)
         } else {
@@ -281,7 +281,7 @@ impl<'a> Parser<'a> {
                         self.advance();
                         break;
                     }
-                    let name = self.located_lower(TRecord::Field)?;
+                    let name = self.field_name(TRecord::Field)?;
                     fields.push(self.field_type_after_name(name)?);
                 }
                 Some(b'}') => {
@@ -725,6 +725,11 @@ mod tests {
     #[test]
     fn record_optional_field() {
         assert_type_snapshot!("{ nickname?: String }");
+    }
+
+    #[test]
+    fn record_error_boundary_field() {
+        assert_type_snapshot!("{ error: String }");
     }
 
     #[test]

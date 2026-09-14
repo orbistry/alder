@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View(props) { <div /> }"
+---
+alder::codegen
+
+  × component props require explicit type annotations
+   ╭─[/project/src/main.ald:1:20]
+ 1 │ pub component View(props) { <div /> }
+   ·                    ──┬──
+   ·                      ╰── code generation failed here
+   ╰────

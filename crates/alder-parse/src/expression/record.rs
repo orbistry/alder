@@ -58,7 +58,7 @@ impl<'a> Parser<'a> {
                     fields.push(RecordField::Spread(expr));
                 }
                 _ => {
-                    let name = self.located_lower(error::Record::Field)?;
+                    let name = self.field_name(error::Record::Field)?;
                     self.chomp();
                     let value = match self.peek() {
                         Some(b':') => {
@@ -109,7 +109,7 @@ impl<'a> Parser<'a> {
                 Some(b'}') => true,
                 Some(b'.') => p.peek_at(1) == Some(b'.'),
                 Some(b) if b.is_ascii_lowercase() => {
-                    if p.lower_name(|_, _| ()).is_err() {
+                    if p.field_name(|_, _| ()).is_err() {
                         return false;
                     }
                     p.chomp();

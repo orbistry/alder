@@ -9,7 +9,7 @@ A single `alder` binary (crate `alder-cli`) that embeds V8 via
 
 | Command         | Purpose                                                              |
 | --------------- | -------------------------------------------------------------------- |
-| `alder init`    | Scaffold a package or application                                    |
+| `alder init`    | Planned: scaffold a package or application                           |
 | `alder check`   | Type-check without emitting JavaScript                               |
 | `alder build`   | Compile and bundle (rolldown) for the package target                 |
 | `alder run`     | Run `standalone` targets on the embedded runtime                     |
@@ -17,17 +17,17 @@ A single `alder` binary (crate `alder-cli`) that embeds V8 via
 | `alder test`    | Run `test` declarations on the target's runtime                      |
 | `alder fmt`     | Formatter                                                            |
 | `alder lsp`     | Language server over stdio                                           |
-| `alder db ...`  | Migrations, push, studio (see `data.md`)                             |
-| `alder deploy`  | Generate config, run migrations, deploy                              |
-| `alder publish` | Publish a package to the registry                                    |
-| `alder docs`    | Generate documentation                                               |
+| `alder db ...`  | Planned: migrations, push, studio (see `data.md`)                     |
+| `alder deploy`  | Build/configure/deploy a Worker, or validate with `--dry-run`          |
+| `alder publish` | Planned: publish a package to the registry                           |
+| `alder docs`    | Planned: generate documentation                                      |
 
 Compiler version proxying stays: `"compiler": "X.Y.Z"` in `alder.jsonc`
 makes the binary exec the matching cached version.
 
 ### Current CLI output
 
-The implemented `check`, `build`, `run`, `test`, and `fmt` commands use static,
+The implemented `check`, `build`, `run`, `dev`, `deploy`, `test`, and `fmt` commands use static,
 aligned statuses on stderr. Default output identifies projects and meaningful
 work; `--verbose` (`-v`) adds module, phase, file, and compiler-selection details.
 `--quiet` (`-q`) suppresses routine statuses and successful summaries, but retains
@@ -72,8 +72,13 @@ compiler versions must themselves support those options.
 - `cloudflare` target: a vendored miniflare shipped as compiler support
   files (not a static part of the binary). No delegation to `wrangler dev`
   or Vite.
-- `server` and `tui` targets: deno_core with HMR.
-- HMR preserves signal and store state across component reloads.
+- `standalone` web applications: embedded V8/deno_http with HMR.
+- HMR preserves compatible signal and store state; incompatible component
+  signatures reset local state with an explicit console reason. Compile errors
+  retain the current page and recover after source correction. Route and public
+  file edits are watched. Stop and restart dev when switching runtime targets.
+- [Web development](web-development.md) documents create/dev/build/run commands,
+  browser checks, shutdown, and the explicit deployment authorization boundary.
 
 ## Testing
 

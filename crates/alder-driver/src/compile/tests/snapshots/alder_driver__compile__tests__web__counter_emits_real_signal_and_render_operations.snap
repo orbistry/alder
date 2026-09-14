@@ -1,0 +1,53 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+expression: "result.artifacts[&uri].code()"
+---
+import { $webComponent, $webInput, $webMemo, $webState } from "alder:kernel";
+function $v_Counter($a0) {
+	return $webComponent(($owner) => {
+		const $l0_props = $webInput($owner, $a0);
+		const $l1_count = $webState($owner, $l0_props["value"]["initial"], "count");
+		const $l2_doubled = $webMemo($owner, [$l1_count], () => {
+			const $t0 = $l1_count["value"];
+			return $t0 * 2;
+		});
+		return ($render) => {
+			$render["open"]("section");
+			$render["attr"]("title", () => {
+				return $l0_props["value"]["label"];
+			}, [$l0_props]);
+			$render["open"]("button");
+			$render["eventValue"]("click", () => {
+				return () => {
+					let $t1;
+					$l1_count["value"] += 1;
+					$t1 = undefined;
+					return $t1;
+				};
+			}, [$l1_count]);
+			$render["attr"]("disabled", () => {
+				const $t2 = $l1_count["value"];
+				return $t2 >= 5;
+			}, [$l1_count]);
+			$render["value"](() => {
+				return $l0_props["value"]["label"];
+			}, [$l0_props]);
+			$render["close"]();
+			$render["open"]("span");
+			$render["attr"]("title", () => {
+				return ["Count ", String($l1_count["value"])]["join"]("");
+			}, [$l1_count]);
+			$render["value"](() => {
+				return $l1_count["value"];
+			}, [$l1_count]);
+			$render["close"]();
+			$render["open"]("strong");
+			$render["value"](() => {
+				return $l2_doubled["value"];
+			}, [$l2_doubled]);
+			$render["close"]();
+			$render["close"]();
+		};
+	}, "alder://app/main.mjs::Counter", "state:count:alder://std/mod.mjs::Number[]");
+}
+export { $v_Counter as Counter };

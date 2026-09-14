@@ -138,6 +138,7 @@ fn resolve_obligations<'a>(
     if errors.is_empty() {
         let schemes = result.annotations.clone();
         Ok(SolveOutput {
+            state_types: result.state_types,
             annotations: result.annotations,
             schemes,
             bindings: result.bindings,
@@ -624,6 +625,11 @@ fn builtin_instance_evidence<'a>(
         }
     }
     let intrinsic = match (trait_name, nominal) {
+        ("Eq", Some("DurableObjectState" | "WorkflowStep"))
+            if implementation.module.path == ["cloudflare"] =>
+        {
+            Intrinsic::EqCloudflareHandle
+        }
         ("Show", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::ShowKernel,
         ("Hash", Some("Number" | "String" | "Bool" | "BigInt")) => Intrinsic::HashKernel,
         ("Json", Some("Number")) => Intrinsic::JsonNumber,
@@ -1144,6 +1150,7 @@ struct Obligation<'a> {
 }
 
 struct InferenceResult<'a> {
+    state_types: BTreeMap<Region, &'a Located<Type<'a>>>,
     omitted_record_fields: BTreeMap<Region, Vec<&'a str>>,
     option_tries: BTreeSet<Region>,
     omitted_arguments: BTreeMap<UseId, usize>,
@@ -1369,6 +1376,7 @@ struct Infer<'a, 'db> {
     option_lifts: Vec<OptionLift<'a>>,
     omitted_record_fields: BTreeMap<Region, Vec<&'a str>>,
     record_initializers: Vec<(Ty<'a>, Ty<'a>, Region)>,
+    state_types: BTreeMap<Region, Ty<'a>>,
     ignored_callable_regions: BTreeSet<Region>,
     body_recovery: Option<BodyRecovery>,
 }
@@ -1591,6 +1599,8 @@ fn infer_recovering<'a>(
             items,
             value_sccs,
             assigned_bindings: original.assigned_bindings,
+            store_bindings: original.store_bindings,
+            value_store_dependencies: original.value_store_dependencies,
         });
     }
     errors.sort_by_key(|error| error.region);
@@ -1838,6 +1848,7 @@ impl<'a, 'db> Infer<'a, 'db> {
             omitted_record_fields: BTreeMap::new(),
             option_lifts: Vec::new(),
             record_initializers: Vec::new(),
+            state_types: BTreeMap::new(),
             ignored_callable_regions: BTreeSet::new(),
             body_recovery: None,
         }
@@ -2044,7 +2055,12 @@ impl<'a, 'db> Infer<'a, 'db> {
                 _ => None,
             })
             .collect();
+        let state_types = std::mem::take(&mut self.state_types)
+            .into_iter()
+            .map(|(region, typ)| (region, self.to_ast(&typ, &mut BTreeMap::new())))
+            .collect();
         Ok(InferenceResult {
+            state_types,
             option_tries: std::mem::take(&mut self.option_tries),
             omitted_arguments: std::mem::take(&mut self.omitted_arguments),
             argument_lifts: std::mem::take(&mut self.argument_lifts),
@@ -3124,7 +3140,12 @@ impl<'a, 'db> Infer<'a, 'db> {
                 self.infer_try_type(actual, return_type, region)
                     .map_err(|error| error.expected_by(ExpectationKind::Propagation, None))
             }
-            Expr::Pin(expr) | Expr::State(expr) => self.infer_expr(env, expr, return_type),
+            Expr::Pin(expr) => self.infer_expr(env, expr, return_type),
+            Expr::State(expr) => {
+                let typ = self.infer_expr(env, expr, return_type)?;
+                self.state_types.insert(expr.region, typ.clone());
+                Ok(typ)
+            }
             Expr::Negate { use_id, expr } => {
                 let actual = self.infer_expr(env, expr, return_type)?;
                 self.record_builtin_obligation(
@@ -3224,8 +3245,11 @@ impl<'a, 'db> Infer<'a, 'db> {
                     Ok(self.fresh())
                 }
             }
-            Expr::Provide { value, body, .. } => {
-                self.infer_expr(env, value, return_type.clone())?;
+            Expr::Provide {
+                typ, value, body, ..
+            } => {
+                let expected = self.from_ast(typ, &mut BTreeMap::new());
+                self.infer_checked_expr(env, value, expected, return_type.clone())?;
                 self.infer_block(&mut env.clone(), body, return_type)
             }
             Expr::Style(style) => {
@@ -3329,10 +3353,10 @@ impl<'a, 'db> Infer<'a, 'db> {
                 );
                 Ok(typ)
             }
-            ValueRef::Module(_)
-            | ValueRef::Provider(_)
-            | ValueRef::QueryName(_)
-            | ValueRef::Opaque(_) => Ok(Ty::new(Content::Any)),
+            ValueRef::Provider { typ, .. } => Ok(self.from_ast(typ, &mut BTreeMap::new())),
+            ValueRef::Module(_) | ValueRef::QueryName(_) | ValueRef::Opaque(_) => {
+                Ok(Ty::new(Content::Any))
+            }
         }
     }
 
@@ -5012,13 +5036,590 @@ impl<'a, 'db> Infer<'a, 'db> {
         element: &'a alder_ast::Element<'a>,
         return_type: Option<Ty<'a>>,
     ) -> Result<(), Error> {
+        let invalid = |region, message| Error {
+            region,
+            expectation: None,
+            kind: ErrorKind::InvalidMarkup { message },
+        };
+        let alder_ast::ElementName::Tag(tag) = element.name.value else {
+            return self.infer_component_element(env, element, return_type);
+        };
+        let schema = crate::html_schema::element(tag);
+        if schema.is_none() && !crate::html_schema::custom(tag) {
+            return Err(invalid(
+                element.name.region,
+                format!("unknown HTML element `<{tag}>`; custom element names must contain a dash"),
+            ));
+        }
+        let mut names = BTreeSet::new();
         for attr in element.attrs {
-            if let Some(alder_ast::AttrValue::Expr(expr)) = attr.value {
-                self.infer_expr(env, expr, return_type.clone())?;
+            let name = attr.name.value;
+            if !names.insert(name) {
+                return Err(invalid(
+                    attr.name.region,
+                    format!("duplicate markup attribute `{name}`"),
+                ));
+            }
+            if let Some(event) = crate::html_schema::event(name) {
+                // Input also bubbles from controls such as checkboxes/selects,
+                // where the native object is Event, not InputEvent.
+                let event = if name == "onInput" {
+                    let text_input = tag == "textarea"
+                        || (tag == "input"
+                            && match element
+                                .attrs
+                                .iter()
+                                .find(|attribute| attribute.name.value == "type")
+                            {
+                                None => true,
+                                Some(attribute) => {
+                                    matches!(attribute.value, Some(alder_ast::AttrValue::Str(value)) if matches!(value.value.to_ascii_lowercase().as_str(), "text" | "search" | "tel" | "url" | "email" | "password"))
+                                }
+                            });
+                    if text_input { "InputEvent" } else { "Event" }
+                } else {
+                    event
+                };
+                let Some(alder_ast::AttrValue::Expr(expr)) = attr.value else {
+                    return Err(invalid(
+                        attr.name.region,
+                        format!("event `{name}` requires a function expression"),
+                    ));
+                };
+                let actual = self.infer_expr(env, expr, return_type.clone())?;
+                let actual = self.prune(actual);
+                let Content::Fn(arguments, result) = actual.view() else {
+                    return Err(invalid(
+                        expr.region,
+                        format!(
+                            "event `{name}` requires a function accepting zero arguments or one {event}"
+                        ),
+                    ));
+                };
+                match arguments.as_slice() {
+                    [] => {}
+                    [argument] => {
+                        let expected = self.web_event_type(event);
+                        self.unify(argument.clone(), expected, expr.region)?;
+                    }
+                    _ => {
+                        return Err(invalid(
+                            expr.region,
+                            format!("event `{name}` requires zero arguments or one {event}"),
+                        ));
+                    }
+                }
+                let result = self.prune(result);
+                if let Some((head, args)) = nominal_parts(&result)
+                    && head.module.package == PackageId::Builtin
+                    && head.name == "Task"
+                    && args.len() == 1
+                {
+                    self.unify(args[0].clone(), Ty::new(Content::Unit), expr.region)?;
+                } else {
+                    self.unify(result, Ty::new(Content::Unit), expr.region)?;
+                }
+                continue;
+            }
+            let expected = if let Some(typ) = crate::html_schema::attribute(tag, name) {
+                self.named(
+                    match typ {
+                        crate::html_schema::AttributeType::String => "String",
+                        crate::html_schema::AttributeType::Number => "Number",
+                        crate::html_schema::AttributeType::Bool => "Bool",
+                    },
+                    vec![],
+                )
+            } else {
+                return Err(invalid(
+                    attr.name.region,
+                    format!("attribute `{name}` is not supported on `<{tag}>`"),
+                ));
+            };
+            let (actual, region) = match attr.value {
+                Some(alder_ast::AttrValue::Expr(expr)) => (
+                    self.infer_expr(env, expr, return_type.clone())?,
+                    expr.region,
+                ),
+                Some(alder_ast::AttrValue::Str(value)) => {
+                    (self.named("String", vec![]), value.region)
+                }
+                None => (self.named("Bool", vec![]), attr.name.region),
+            };
+            self.unify(actual, expected, region)?;
+        }
+        if schema.is_some_and(|schema| schema.void) && !element.children.is_empty() {
+            return Err(invalid(
+                element.name.region,
+                format!("void element `<{tag}>` cannot have children"),
+            ));
+        }
+        if schema.is_some_and(|schema| schema.phrasing_children) {
+            Self::check_phrasing_children(element.children, tag)?;
+        }
+        Self::check_content_children(element.children, tag)?;
+        if matches!(tag, "a" | "button" | "form") {
+            Self::check_interactive_descendants(element.children, tag)?;
+        }
+        if matches!(tag, "textarea" | "title") {
+            self.infer_text_children(env, element.children, tag, return_type)?;
+        } else {
+            for child in element.children {
+                self.infer_child(env, child, return_type.clone())?;
             }
         }
-        for child in element.children {
-            self.infer_child(env, child, return_type.clone())?;
+        Ok(())
+    }
+
+    fn infer_text_children(
+        &mut self,
+        env: &Env<'a>,
+        children: &'a [&'a Located<Child<'a>>],
+        tag: &str,
+        return_type: Option<Ty<'a>>,
+    ) -> Result<(), Error> {
+        for child in children {
+            let valid = match &child.value {
+                Child::Text(_) => true,
+                Child::Hole(expr) => {
+                    let typ = self.infer_expr(env, expr, return_type.clone())?;
+                    matches!(self.prune(typ).view(), Content::Con(name) if name.module.package == PackageId::Builtin && matches!(name.name, "String" | "Number" | "BigInt" | "Bool"))
+                }
+                Child::Fragment(children) => {
+                    self.infer_text_children(env, children, tag, return_type.clone())?;
+                    true
+                }
+                _ => false,
+            };
+            if !valid {
+                return Err(Error {
+                    region: child.region,
+                    expectation: None,
+                    kind: ErrorKind::InvalidMarkup {
+                        message: format!(
+                            "`<{tag}>` accepts only text and primitive text holes; directives and Html values need DOM region anchors"
+                        ),
+                    },
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn infer_component_element(
+        &mut self,
+        env: &Env<'a>,
+        element: &'a alder_ast::Element<'a>,
+        return_type: Option<Ty<'a>>,
+    ) -> Result<(), Error> {
+        let invalid = |region, message| Error {
+            region,
+            expectation: None,
+            kind: ErrorKind::InvalidMarkup { message },
+        };
+        let function = element.component_value.expect("canonical component value");
+        let typ = self.infer_expr(env, function, return_type.clone())?;
+        let Content::Fn(args, result) = self.prune(typ).view() else {
+            return Err(invalid(
+                element.name.region,
+                "component tags require a callable Html value".to_owned(),
+            ));
+        };
+        self.unify(result, self.named("Html", vec![]), element.name.region)?;
+        let mut fields = Vec::new();
+        let mut names = BTreeSet::new();
+        for attr in element.attrs {
+            if !names.insert(attr.name.value) {
+                return Err(invalid(
+                    attr.name.region,
+                    format!("duplicate component prop `{}`", attr.name.value),
+                ));
+            }
+            let value = match attr.value {
+                Some(alder_ast::AttrValue::Expr(expr)) => expr,
+                Some(alder_ast::AttrValue::Str(value)) => self
+                    .bump
+                    .alloc(Located::at(value.region, Expr::Str(value.value))),
+                None => self
+                    .bump
+                    .alloc(Located::at(attr.name.region, Expr::Bool(true))),
+            };
+            fields.push(RecordField::Field {
+                name: attr.name,
+                value,
+            });
+        }
+        if !element.children.is_empty() {
+            if names.contains("children") {
+                return Err(invalid(
+                    element.name.region,
+                    "component children cannot be supplied both as a prop and nested markup"
+                        .to_owned(),
+                ));
+            }
+            let value = self.bump.alloc(Located::at(
+                element.name.region,
+                Expr::Markup(
+                    self.bump
+                        .alloc(alder_ast::Markup::Fragment(element.children)),
+                ),
+            ));
+            fields.push(RecordField::Field {
+                name: Located::at(element.name.region, "children"),
+                value,
+            });
+        }
+        match args.as_slice() {
+            [] if fields.is_empty() => Ok(()),
+            [props] if matches!(self.prune(props.clone()).view(), Content::Record(..)) => {
+                let record = self.bump.alloc(Located::at(
+                    element.name.region,
+                    Expr::Record(self.bump.alloc_slice_copy(&fields)),
+                ));
+                self.infer_checked_expr(env, record, props.clone(), return_type)?;
+                Ok(())
+            }
+            _ => Err(invalid(
+                element.name.region,
+                "component tags require zero parameters or one record parameter".to_owned(),
+            )),
+        }
+    }
+
+    fn web_event_type(&self, event: &str) -> Ty<'a> {
+        let mut fields = BTreeMap::from([
+            ("timeStamp", self.named("Number", vec![])),
+            ("bubbles", self.named("Bool", vec![])),
+            ("cancelable", self.named("Bool", vec![])),
+            ("defaultPrevented", self.named("Bool", vec![])),
+            ("isTrusted", self.named("Bool", vec![])),
+        ]);
+        if matches!(
+            event,
+            "MouseEvent" | "PointerEvent" | "WheelEvent" | "KeyboardEvent"
+        ) {
+            for name in ["altKey", "ctrlKey", "metaKey", "shiftKey"] {
+                fields.insert(name, self.named("Bool", vec![]));
+            }
+        }
+        if matches!(event, "MouseEvent" | "PointerEvent" | "WheelEvent") {
+            for name in [
+                "clientX", "clientY", "screenX", "screenY", "button", "buttons",
+            ] {
+                fields.insert(name, self.named("Number", vec![]));
+            }
+        }
+        if event == "PointerEvent" {
+            for name in [
+                "pointerId",
+                "width",
+                "height",
+                "pressure",
+                "tiltX",
+                "tiltY",
+                "twist",
+            ] {
+                fields.insert(name, self.named("Number", vec![]));
+            }
+            fields.insert("pointerType", self.named("String", vec![]));
+            fields.insert("isPrimary", self.named("Bool", vec![]));
+        }
+        if event == "WheelEvent" {
+            for name in ["deltaX", "deltaY", "deltaZ", "deltaMode"] {
+                fields.insert(name, self.named("Number", vec![]));
+            }
+        }
+        if event == "KeyboardEvent" {
+            fields.insert("key", self.named("String", vec![]));
+            fields.insert("code", self.named("String", vec![]));
+            fields.insert("repeat", self.named("Bool", vec![]));
+            fields.insert("isComposing", self.named("Bool", vec![]));
+        }
+        if event == "InputEvent" {
+            fields.insert("inputType", self.named("String", vec![]));
+            fields.insert("isComposing", self.named("Bool", vec![]));
+        }
+        Ty::new(Content::Record(fields, None))
+    }
+
+    fn check_phrasing_block(block: &Located<ChildBlock<'a>>, parent: &str) -> Result<(), Error> {
+        for item in block.value.items {
+            if let ChildItem::Child(child) = item {
+                Self::check_phrasing_children(&[*child], parent)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_interactive_descendants(
+        children: &[&Located<Child<'a>>],
+        ancestor: &str,
+    ) -> Result<(), Error> {
+        for child in children {
+            match &child.value {
+                Child::Element(element) => {
+                    if let alder_ast::ElementName::Tag(tag) = element.name.value {
+                        let has = |name| {
+                            element
+                                .attrs
+                                .iter()
+                                .any(|attribute| attribute.name.value == name)
+                        };
+                        let interactive = match tag {
+                            "button" | "details" | "embed" | "iframe" | "label" | "select" | "textarea" => true,
+                            "a" => has("href"),
+                            "audio" | "video" => has("controls"),
+                            "img" => has("usemap"),
+                            "input" => !element.attrs.iter().any(|attribute| attribute.name.value == "type" && matches!(attribute.value, Some(alder_ast::AttrValue::Str(value)) if value.value.eq_ignore_ascii_case("hidden"))),
+                            _ => false,
+                        };
+                        let forbidden = match ancestor {
+                            "form" => tag == "form",
+                            "a" => tag == "a" || interactive || has("tabindex"),
+                            "button" => interactive || has("tabindex"),
+                            _ => false,
+                        };
+                        if forbidden {
+                            return Err(Error {
+                                region: element.name.region,
+                                expectation: None,
+                                kind: ErrorKind::InvalidMarkup {
+                                    message: format!(
+                                        "`<{tag}>` is not a valid descendant of `<{ancestor}>`"
+                                    ),
+                                },
+                            });
+                        }
+                        // Template contents belong to a separate document fragment.
+                        if tag == "template" {
+                            continue;
+                        }
+                    }
+                    Self::check_interactive_descendants(element.children, ancestor)?;
+                }
+                Child::Fragment(children) => {
+                    Self::check_interactive_descendants(children, ancestor)?
+                }
+                Child::If {
+                    branches,
+                    final_else,
+                } => {
+                    for branch in *branches {
+                        Self::check_interactive_block(branch.body, ancestor)?;
+                    }
+                    if let Some(block) = final_else {
+                        Self::check_interactive_block(block, ancestor)?;
+                    }
+                }
+                Child::For { body, empty, .. } => {
+                    Self::check_interactive_block(body, ancestor)?;
+                    if let Some(block) = empty {
+                        Self::check_interactive_block(block, ancestor)?;
+                    }
+                }
+                Child::Match { arms, .. } => {
+                    for arm in *arms {
+                        Self::check_interactive_block(arm.body, ancestor)?;
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn check_interactive_block(
+        block: &Located<ChildBlock<'a>>,
+        ancestor: &str,
+    ) -> Result<(), Error> {
+        for item in block.value.items {
+            if let ChildItem::Child(child) = item {
+                Self::check_interactive_descendants(&[*child], ancestor)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_content_children(children: &[&Located<Child<'a>>], parent: &str) -> Result<(), Error> {
+        for child in children {
+            match &child.value {
+                Child::Element(element) => {
+                    if let alder_ast::ElementName::Tag(tag) = element.name.value {
+                        let allowed = match parent {
+                            "table" => matches!(
+                                tag,
+                                "caption"
+                                    | "colgroup"
+                                    | "thead"
+                                    | "tbody"
+                                    | "tfoot"
+                                    | "script"
+                                    | "template"
+                            ),
+                            "thead" | "tbody" | "tfoot" => {
+                                matches!(tag, "tr" | "script" | "template")
+                            }
+                            "tr" => matches!(tag, "td" | "th" | "script" | "template"),
+                            "colgroup" => matches!(tag, "col" | "template"),
+                            "ul" | "ol" | "menu" => matches!(tag, "li" | "script" | "template"),
+                            "dl" => matches!(tag, "dt" | "dd" | "div" | "script" | "template"),
+                            "html" => matches!(tag, "head" | "body"),
+                            "head" => matches!(
+                                tag,
+                                "title"
+                                    | "base"
+                                    | "link"
+                                    | "meta"
+                                    | "style"
+                                    | "script"
+                                    | "noscript"
+                                    | "template"
+                            ),
+                            "picture" => matches!(tag, "source" | "img" | "script" | "template"),
+                            "option" | "textarea" | "title" => false,
+                            _ => true,
+                        };
+                        let valid_parent = match tag {
+                            "td" | "th" => parent == "tr",
+                            "tr" => matches!(parent, "tbody" | "thead" | "tfoot"),
+                            "caption" | "colgroup" | "tbody" | "thead" | "tfoot" => {
+                                parent == "table"
+                            }
+                            "col" => parent == "colgroup",
+                            "li" => matches!(parent, "ul" | "ol" | "menu"),
+                            "dt" | "dd" => matches!(parent, "dl" | "div"),
+                            "summary" => parent == "details",
+                            "head" | "body" => parent == "html",
+                            "base" => parent == "head",
+                            "source" => matches!(parent, "picture" | "video" | "audio"),
+                            "track" => matches!(parent, "video" | "audio"),
+                            _ => true,
+                        };
+                        if !allowed || !valid_parent {
+                            return Err(Error {
+                                region: element.name.region,
+                                expectation: None,
+                                kind: ErrorKind::InvalidMarkup {
+                                    message: format!(
+                                        "`<{tag}>` is not a valid child of `<{parent}>`"
+                                    ),
+                                },
+                            });
+                        }
+                    }
+                }
+                Child::Fragment(children) => Self::check_content_children(children, parent)?,
+                Child::If {
+                    branches,
+                    final_else,
+                } => {
+                    for branch in *branches {
+                        Self::check_content_block(branch.body, parent)?;
+                    }
+                    if let Some(block) = final_else {
+                        Self::check_content_block(block, parent)?;
+                    }
+                }
+                Child::For { body, empty, .. } => {
+                    Self::check_content_block(body, parent)?;
+                    if let Some(block) = empty {
+                        Self::check_content_block(block, parent)?;
+                    }
+                }
+                Child::Match { arms, .. } => {
+                    for arm in *arms {
+                        Self::check_content_block(arm.body, parent)?;
+                    }
+                }
+                Child::Text(text)
+                    if !text.trim().is_empty()
+                        && matches!(
+                            parent,
+                            "table"
+                                | "thead"
+                                | "tbody"
+                                | "tfoot"
+                                | "tr"
+                                | "colgroup"
+                                | "ul"
+                                | "ol"
+                                | "menu"
+                                | "head"
+                                | "html"
+                                | "picture"
+                        ) =>
+                {
+                    return Err(Error {
+                        region: child.region,
+                        expectation: None,
+                        kind: ErrorKind::InvalidMarkup {
+                            message: format!("text is not a valid child of `<{parent}>`"),
+                        },
+                    });
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn check_content_block(block: &Located<ChildBlock<'a>>, parent: &str) -> Result<(), Error> {
+        for item in block.value.items {
+            if let ChildItem::Child(child) = item {
+                Self::check_content_children(&[*child], parent)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_phrasing_children(
+        children: &[&Located<Child<'a>>],
+        parent: &str,
+    ) -> Result<(), Error> {
+        for child in children {
+            match &child.value {
+                Child::Element(element) => {
+                    if matches!(element.name.value, alder_ast::ElementName::Tag(tag) if crate::html_schema::element(tag).is_some_and(|schema| !schema.phrasing))
+                        || (parent == "button"
+                            && matches!(element.name.value, alder_ast::ElementName::Tag("button")))
+                    {
+                        return Err(Error {
+                            region: element.name.region,
+                            expectation: None,
+                            kind: ErrorKind::InvalidMarkup {
+                                message: format!(
+                                    "this element cannot be nested inside `<{parent}>`"
+                                ),
+                            },
+                        });
+                    }
+                    Self::check_phrasing_children(element.children, parent)?;
+                }
+                Child::Fragment(children) => Self::check_phrasing_children(children, parent)?,
+                Child::If {
+                    branches,
+                    final_else,
+                } => {
+                    for branch in *branches {
+                        Self::check_phrasing_block(branch.body, parent)?;
+                    }
+                    if let Some(block) = final_else {
+                        Self::check_phrasing_block(block, parent)?;
+                    }
+                }
+                Child::For { body, empty, .. } => {
+                    Self::check_phrasing_block(body, parent)?;
+                    if let Some(block) = empty {
+                        Self::check_phrasing_block(block, parent)?;
+                    }
+                }
+                Child::Match { arms, .. } => {
+                    for arm in *arms {
+                        Self::check_phrasing_block(arm.body, parent)?;
+                    }
+                }
+                _ => {}
+            }
         }
         Ok(())
     }
@@ -5038,7 +5639,15 @@ impl<'a, 'db> Infer<'a, 'db> {
             }
             Child::Text(_) => {}
             Child::Hole(expr) => {
-                self.infer_expr(env, expr, return_type)?;
+                let typ = self.infer_expr(env, expr, return_type)?;
+                if !matches!(self.prune(typ).view(), Content::Con(name) if name.module.package == PackageId::Builtin && matches!(name.name, "String" | "Number" | "BigInt" | "Bool" | "Html"))
+                {
+                    return Err(Error {
+                        region: expr.region,
+                        expectation: None,
+                        kind: ErrorKind::InvalidMarkup { message: "markup holes require a concrete String, Number, BigInt, Bool, or Html value".to_owned() },
+                    });
+                }
             }
             Child::If {
                 branches,

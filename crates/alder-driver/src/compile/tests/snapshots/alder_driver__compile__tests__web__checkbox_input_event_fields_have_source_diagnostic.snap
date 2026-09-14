@@ -1,0 +1,15 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <input type=\"checkbox\" onInput={event -> { let kind = event.inputType\n() }} /> }"
+---
+alder::type::record_fields_mismatch
+
+  × record fields do not match: expected `{ bubbles: Bool, cancelable: Bool,
+  │ defaultPrevented: Bool, isTrusted: Bool, timeStamp: Number }`, found `{ b
+  │ | inputType: a }`
+   ╭─[/project/src/main.ald:1:56]
+ 1 │ ╭─▶ pub component View() { <input type="checkbox" onInput={event -> { let kind = event.inputType
+ 2 │ ├─▶ () }} /> }
+   · ╰──── these types are incompatible
+   ╰────
+  help: unexpected fields: `inputType`

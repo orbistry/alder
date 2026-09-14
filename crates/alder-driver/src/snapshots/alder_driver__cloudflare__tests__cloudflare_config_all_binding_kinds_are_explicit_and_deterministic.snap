@@ -1,0 +1,88 @@
+---
+source: crates/alder-driver/src/cloudflare.rs
+expression: "serde_json::to_string_pretty(&config).unwrap()"
+---
+{
+  "name": "fixture",
+  "compatibility_date": "2026-09-14",
+  "main": "./worker.mjs",
+  "no_bundle": true,
+  "find_additional_modules": false,
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "./client",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "account_id": "0123456789abcdef0123456789abcdef",
+  "exports": {
+    "Counter": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "queues": {
+    "consumers": [
+      {
+        "queue": "events"
+      }
+    ],
+    "producers": [
+      {
+        "binding": "EVENTS",
+        "queue": "events"
+      }
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "0123456789abcdef0123456789abcdef"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "files"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "database",
+      "database_id": "01234567-89ab-cdef-0123-456789abcdef"
+    }
+  ],
+  "hyperdrive": [
+    {
+      "binding": "SQL",
+      "id": "0123456789abcdef0123456789abcdef"
+    }
+  ],
+  "services": [
+    {
+      "binding": "API",
+      "service": "backend"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COUNTERS",
+        "class_name": "Counter"
+      }
+    ]
+  },
+  "workflows": [
+    {
+      "binding": "JOBS",
+      "name": "jobs",
+      "class_name": "Job"
+    }
+  ]
+}

@@ -641,6 +641,11 @@ These annotations are compiler constructs and do not require macros.
 
 The existing `use`/`provide` syntax and fiber-local runtime context are a
 provisional mechanism, not an implementation of these static guarantees.
+`use Session` makes the current `Session` provider available by that name for
+the remainder of its lexical block; imported service aliases retain their
+declared field types. `provide` checks the supplied value against the declared
+concrete type. Missing runtime providers still fail dynamically; the compiler
+does not infer or verify provider availability across calls.
 `provide Provider = value { ... }` is a value-producing expression; await still
 requires an explicit async boundary. Migration to the new DI model will be
 handled separately, without changing current behavior in this documentation pass.
@@ -758,6 +763,14 @@ Markup looks like JSX but is a typed HTML DSL: elements, attributes, and
 children are checked against a schema, not stringly typed. Expressions
 are embedded with `{expr}`. Control flow in child position uses `@`
 directives with no wrapping braces, following Octane's TSRX.
+
+Markup indentation is not rendered: whitespace-only multiline runs disappear,
+and wrapped prose folds to single separating spaces. Same-line spaces remain
+intentional. Use `{" "}` for a space across an element/expression line boundary;
+no space is inserted automatically between children. Runtime strings are never
+folded. Literal `<pre>` and `<textarea>` subtrees preserve whitespace, with
+source line endings normalized to LF. See the
+[whitespace contract and examples](markup-whitespace.md).
 
 ```alder
 <ul class={styles.list}>

@@ -1,0 +1,7 @@
+import html.{Html}
+
+pub component layout(props: { children: Html }) {
+    <section>
+        <h2>User directory</h2><p>This section is rendered by a nested layout.</p>{props.children}
+    </section>
+}

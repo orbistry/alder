@@ -1,18 +1,23 @@
 # Alder Web Framework
 
-**Status: current direction, everything provisional.**
+The M6 implementation includes typed components, reactive directives, SSR and
+hydration, filesystem routes, server loads/actions, remote functions, hooks,
+request-isolated stores, prerendering, and both runtime adapters. Its full
+acceptance status is tracked in [m6-acceptance.md](../plans/m6-acceptance.md);
+implementation and local verification do not imply a completed live deployment.
 
-The planned Alder metaframework will provide routing, SSR/SSG/CSR, components with
-fine-grained reactivity, stores, typed styles, forms, and JSON APIs.
-JavaScript is required in the browser; there is no progressive
-enhancement mode.
+Start with [web-development.md](web-development.md) and the source-only
+[full example](../examples/web-full/README.md). No handwritten JavaScript
+bootstrap is required. Framework modules use explicit imports such as
+`import html` and `import http.{Request, Response}`; there are no global `Html`
+or `Http` namespaces. See [web-internals.md](web-internals.md) for exact compiler,
+ownership, transport, and error contracts.
 
-Routing, HTTP, components, and SSR are deferred, not shipped compiler features.
-Future framework modules follow ordinary explicit bundled imports, for example
-`import http/router as router` and `import http.{Request, Response}`. They do
-not create global `Http`, `Html`, or routing namespaces. Application services
-use `~/services/...`; external packages use `@author/package`. DI sketches below
-remain provisional and are superseded by `dependency-injection.md`.
+Interactive pages require JavaScript; there is no progressive-enhancement form
+mode. `csr = false` explicitly produces noninteractive server HTML. Typed styles,
+schema-generated Form/Field components, API client generation, and TUI rendering
+remain later-milestone designs, identified separately below. Static DI guarantees
+remain deferred to [dependency-injection.md](dependency-injection.md).
 
 ## Routing
 
@@ -20,27 +25,30 @@ SvelteKit's model, copied deliberately. The folder is the route; the file
 name says what the file is.
 
 ```
-src/routes/
-├── +layout.ald                # layout component + universal load for the subtree
-├── +layout.server.ald         # server-only load for the subtree
-├── +page.ald                  # /            page component + universal load
-├── +error.ald                 # error boundary for the subtree
-├── users/
-│   ├── +page.ald              # /users
-│   ├── +page.server.ald       # server load + actions scoped to /users
-│   └── [id]/
-│       ├── +page.ald          # /users/:id
-│       ├── +page.server.ald
-│       └── +server.ald        # HTTP handlers for /users/:id
-├── api/health/+server.ald     # endpoint with no page
-├── lib/
-│   └── users.remote.ald       # remote functions callable from anywhere
-└── hooks.server.ald           # app-wide server hooks (auth, request setup)
+src/
+├── hooks.server.ald           # app-wide server hooks
+├── hooks.client.ald           # browser init/error hooks
+├── lib/users.remote.ald       # typed remote functions
+└── routes/
+    ├── +layout.ald            # layout component + universal load
+    ├── +layout.server.ald     # server-only load for the subtree
+    ├── +page.ald              # / page component + universal load
+    ├── +error.ald             # error boundary for the subtree
+    ├── users/
+    │   ├── +page.ald          # /users
+    │   ├── +page.server.ald   # server load + actions scoped to /users
+    │   └── [id]/
+    │       ├── +page.ald      # /users/:id
+    │       ├── +page.server.ald
+    │       └── +server.ald    # HTTP handlers for /users/:id
+    └── api/health/+server.ald # endpoint with no page
 ```
 
 - `+page.ald` exports a `page` component and may export a universal
-  `load` that runs on the server for the first render and in the browser
-  on navigation.
+  `load` that resolves initial data on the server and runs in the browser on
+  navigation. If a downstream server load depends on ancestor universal data,
+  that ancestor is also evaluated on the server to preserve trusted inputs;
+  the browser's universal result determines its final PageData.
 - `+page.server.ald` exports a server-only `load` and `actions`, both
   scoped to that page. Anything here may `use Db`; nothing here ships to
   the browser.
@@ -50,13 +58,14 @@ src/routes/
 - `+server.ald` exports `get`, `post`, ... returning typed responses. A
   route may return pure JSON this way with no page at all.
 - `+error.ald` renders when a `load` or page in the subtree fails.
-- `[id]` params are typed from the folder name. The compiler will generate a
-  typed `routes` module, explicitly imported from the application, so
-  `href(routes.users.show, { id })` is checked
-  and links to unknown routes fail at compile time.
-- API-only packages can use a code-defined router builder (hono-like)
-  with typed path params parsed from the string literal. Both systems
-  share handler and middleware types.
+- `[id]`, `[[optional]]`, and `[...rest]` params are typed from folder names.
+  Route groups `(group)` do not add URL segments. The generated `~/routes`
+  module exports typed link functions and a `Routes` record. Names reversibly
+  encode the route ID (`route_2f` names `/`); links take exactly that route's
+  typed parameter record. Embedded parameters and parameter matchers are
+  rejected explicitly.
+- A code-defined API router builder remains deferred. Filesystem endpoints
+  work without pages.
 
 ## Server hooks
 
@@ -67,17 +76,14 @@ handled centrally instead of in every `load`.
 ```alder
 // src/hooks.server.ald
 import http.{RequestEvent, Response}
-import ~/services/auth
+import ~/session.{Session}
 
-pub fn handle(event: RequestEvent, resolve: fn(RequestEvent) Task[Response]) Task[Response] {
-    let session = auth.fromCookie(event.cookies).await
-    provide Session = session {
+pub async fn handle(event: RequestEvent[p], resolve: fn(RequestEvent[p]) Task[Response]) Response {
+    provide Session = { user: "Alder visitor" } {
         resolve(event).await
     }
 }
 
-pub fn handleError(err: Error, event: RequestEvent) ErrorResponse { ... }
-pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) Task[Response] { ... }
 ```
 
 - `handle` wraps every request: pages, endpoints, remote functions, and
@@ -92,10 +98,12 @@ pub fn handleFetch(event: RequestEvent, request: Request, fetch: Fetch) Task[Res
   `init`).
 - **Open:** a `sequence` helper for composing several `handle` hooks, and
   per-subtree hooks (SvelteKit does not have them either).
-- **Open (M2):** `provide … { }` is a statement in the M1 parser, so the
-  `handle` body above has no value. M2 either promotes `provide` to an
-  expression whose value is its body's value, or this example writes an
-  explicit `return` / tail (see `language.md`, Context).
+
+The example's `Session` is a shared record alias `{ user: String }`; its fixed
+viewer is a demonstration, not authentication. Existing runtime context follows
+Task fibers and render owners. This does not promise the deferred static DI
+availability checks. Exact `handleError`, `handleFetch`, client-hook, and typed
+error-boundary signatures are in [web-hooks.md](web-hooks.md).
 
 ## Page options
 
@@ -108,36 +116,67 @@ is where app-wide choices go.
 pub let prerender = true      // build-time render (SSG); default false
 pub let ssr = false           // skip server render for this subtree; default true
 pub let csr = false           // ship no JS for this subtree; default true
-pub let trailingSlash = Never // Never | Always | Ignore
+pub let trailingSlash = TrailingSlash::Never // Never | Always | Ignore
 ```
 
 - `prerender = true` on a dynamic route requires `entries` to enumerate
   params, as in SvelteKit.
 - `ssr = false` makes the page render only in the browser; `csr = false`
   makes it static HTML. Both false is a compile error.
+- Initial data still resolves on the server when SSR markup is disabled.
+  Entries may be an `Array[Params]` or a zero-argument function/Task returning
+  that array. Builds emit HTML and navigation data for the enumerated paths;
+  unlisted paths continue through the dynamic server route. Prerendering uses
+  local target providers, not live Cloudflare credentials or production data.
+
+## Public assets and build output
+
+Files under the project's `public/` directory are served at their exact root
+paths on both targets: `public/images/logo.png` becomes `/images/logo.png`.
+Public files take precedence over application routes at the same exact path;
+they bypass application hooks. GET and HEAD are supported, including URLs with
+query strings. Common file extensions receive their MIME type; unknown formats
+use `application/octet-stream`. Binary bytes are preserved.
+
+Builds copy these files into `dist/client/` and embed them in the server artifact
+so standalone execution does not require an external asset server. Development
+watches public files alongside source files. The `_alder/` namespace is reserved;
+symlinks and public/prerender output collisions are rejected. Put only public
+content in `public/`, never credentials or private application files.
+
+Web builds stage and validate all artifacts before replacing compiler-owned
+`dist/client/`, `server.mjs`, `worker.mjs`, and `wrangler.jsonc` entries. Rebuilding
+removes stale public files, prerender HTML/data, and obsolete target artifacts.
+Unrelated files directly under `dist/` are preserved. Publication uses
+same-filesystem renames with rollback on failure, not a single atomic directory
+swap across all entries. Development never falls back to stale build assets.
 
 ## Loading data
 
 ```alder
 // users/[id]/+page.server.ald
-pub fn load(event: LoadEvent) Result[{ user: User, posts: Array[Post] }] {
-    use Db
-    let user = db.run(query { select * from users where users.id == ^event.params.id }).await?
-    let posts = loadPosts(user.id).await?
-    Ok({ user, posts })
+pub fn load(event: LoadEvent) Result[{ name: String }, [:missing(String)]] {
+    if event.params.id == "missing" {
+        Err(:missing("That user does not exist"))
+    } else {
+        Ok({ name: event.params.id })
+    }
 }
 
 // users/[id]/+page.ald
 pub component page(props: { data: PageData }) {
-    <h1>{props.data.user.name}</h1>
+    <h1>{props.data.name}</h1>
 }
 ```
 
 - `PageData` for a route is generated from the return types of its own
   `load` functions merged with every parent layout's, so `props.data` is
-  fully typed with no annotation.
+  fully typed through the generated alias.
 - `event.params` is typed from the folder names on the way down.
-- Errors from `load` are open `:tag` errors; `+error.ald` matches on them.
+- Expected load errors use tagged Result payloads; `+error.ald` receives a
+  generated `PageError` enum alias, distinct from unexpected failures. All
+  explicitly returned load data is public transport data, never a place for
+  credentials or private handles.
 
 ## Remote functions
 
@@ -148,30 +187,27 @@ components, and the compiler replaces the call with a typed stub over
 HTTP when the caller runs in the browser. The `Result` type crosses the
 wire intact.
 
-```alder
-// lib/users.remote.ald
-pub fn getUser(id: Id) Result[User] { ... }                 // query
-pub fn deleteUser(id: Id) Result[()] { ... }                // command
-pub fn signUp(input: SignUp) Result[User] { ... }           // form action, typed by schema
+Remote functions are Task-producing on both targets, including declarations
+written with `fn` rather than `async fn`. Use `.await` or pass the Task to
+`html.resource`. `#[command]` selects mutation/invalidation semantics;
+`#[query]` and an absent annotation select queries. Function names do not infer
+effects. See the working [greeting module](../examples/web-full/src/greetings.remote.ald).
 
-// any component
-component UserCard(props: { id: Id }) {
-    let user = resource(() -> getUser(props.id))
-    <button onClick={() -> deleteUser(props.id)}>Delete</button>
-}
-```
-
-- Queries and commands are just functions; the framework caches queries
-  by arguments and invalidates them when a command in the same module
-  runs, following SvelteKit's `query`/`command` semantics. **Open:** the
-  exact cache and invalidation API.
-- A remote function whose argument is a `schema` type is usable as a
-  `Form` action.
-- Remote modules and `+page.server.ald` are the only server-only
-  boundaries; there is no per-function attribute. The compiler performs
-  whole-program reachability from each entry point and rejects
-  server-only stdlib (Db, Kv) in client code with a path explaining how it
-  got there. Components are isomorphic by default.
+- Browser query results are cached by module, function, and encoded arguments
+  for at most 30 seconds, with a 256-entry bound. Navigation clears
+  the page cache and prevents old in-flight queries from repopulating it.
+  Commands invalidate their module's cache and live resources; actions invalidate
+  all query modules. Explicit `html.refresh(resource)` bypasses query caches.
+  Server calls execute directly in their request scope without cross-request
+  caching. Cached transport values are decoded afresh for callers.
+- Typed M6 actions and text forms use [web-actions.md](web-actions.md), not the
+  deferred schema-generated Form/Field language.
+- Remote modules, `+page.server.ald`, `+layout.server.ald`, `+server.ald`,
+  and `hooks.server.ald` are server-only boundaries; there is no per-function
+  boundary attribute. The compiler checks reachability from browser roots and
+  rejects server modules and Cloudflare bindings with a path explaining how
+  they became reachable. Remote imports are replaced with typed client stubs.
+  Components are isomorphic by default.
 
 ## Reactivity
 
@@ -184,8 +220,9 @@ runes style). Components run once.
 - Markup compiles to direct DOM operations bound to signals; `if`, `for`,
   and `match` blocks become reactive regions.
 - Hydration reuses server-rendered DOM.
-- **Open:** effects (`effect { ... }`), resources/async data, and
-  transitions.
+- `html.resource` owns a cancellable Task, suspends SSR, and hydrates its result
+  without an initial refetch. Reactive `@if`, `@match`, and keyed `@for` own and
+  dispose their regions. General effect syntax and transitions remain deferred.
 
 ## Stores (out-of-tree state)
 
@@ -193,17 +230,20 @@ Module-level stores with plain syntax that the compiler makes
 request-scoped during SSR, so state never leaks between requests.
 
 ```alder
-// src/stores/cart.ald
-pub let items = state([])
-pub fn add(item: Item) { items.push(item) }
+// src/counter.ald
+pub let count: Number = state(0)
+pub fn increment() { count = count + 1 }
 ```
 
 - In the browser this is a singleton signal graph.
 - On the server each request gets its own instance (AsyncLocalStorage
   style through the fiber scheduler).
 - Components subscribe by importing.
+- Replace aggregate state values rather than mutating nested fields. Compiler
+  dependency metadata includes private helpers; server-only stores are excluded
+  from hydration by a browser-reachable store allowlist.
 
-## Styles
+## Styles (M8 design, not implemented)
 
 `style` blocks are typed and compile to atomic CSS (StyleX model).
 
@@ -223,7 +263,10 @@ let card = style {
 - Merging is deterministic (last style wins per property).
 - **Open:** `theme` declaration and tokens, keyframes, and dynamic values.
 
-## Forms and validation
+## Schema forms and validation (M7/M8 design, not implemented)
+
+The implemented M6 text-form/action contract is documented separately in
+[web-actions.md](web-actions.md). The schema-driven API below is future work.
 
 Storage shape and input shape are separate. A `schema` declaration
 mirrors `table` syntax, can start from a table, and holds validation
@@ -253,14 +296,14 @@ pub fn signUp(input: SignUp) Result[User] { ... }
 
 ## API
 
-- `+server.ald` handlers with typed request and response bodies. The
-  compiler emits a typed client for Alder frontends and `.d.ts` for
-  TypeScript consumers.
+- `+server.ald` handlers return native typed `http.Response` values, including
+  `http.json` for Json-serializable Alder values. Automatic typed endpoint
+  clients and `.d.ts` emission remain M8 work.
 - Router builder for API-only packages: explicitly `import http/router`, then
   `router.new().get("/users/:id", handler)` (deferred).
 - **Open:** middleware model, OpenAPI export, streaming responses.
 
-## TUI
+## TUI (M10 design, not implemented)
 
 Terminals reuse signals, stores, and the markup grammar, but with their
 own element vocabulary and layout (flexbox via Rust-side layout in the

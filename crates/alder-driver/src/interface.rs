@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::DriverError;
 
-pub const INTERFACE_FORMAT_VERSION: u32 = 8;
+pub const INTERFACE_FORMAT_VERSION: u32 = 11;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InterfaceFile {
@@ -299,6 +299,42 @@ impl InterfaceCache {
 mod tests {
     use super::*;
     use alder_ast::{ModuleId, PackageId};
+
+    #[test]
+    fn private_store_dependencies_survive_cache_and_arena_copy_and_affect_fingerprints() {
+        let stored = {
+            let bump = Bump::new();
+            let interface = compile_interface(
+                &bump,
+                "let count: Number = state(1)\nfn hidden() Number { count }\npub fn read() Number { hidden() }\npub fn increment() { count += 1 }",
+            );
+            InterfaceFile::dehydrate(&interface).unwrap()
+        };
+        assert!(
+            stored
+                .values
+                .iter()
+                .all(|value| value.store_dependencies.len() == 1
+                    && value.store_dependencies[0].name == "count")
+        );
+        let copied_arena = Bump::new();
+        let copied = {
+            let hydrate_arena = Bump::new();
+            let hydrated = stored.hydrate(&hydrate_arena);
+            alder_ast::copy_interface(&copied_arena, &hydrated)
+        };
+        assert_eq!(stored, InterfaceFile::dehydrate(&copied).unwrap());
+        let bump = Bump::new();
+        let independent = compile_interface(
+            &bump,
+            "let count: Number = state(1)\npub fn read() Number { 1 }\npub fn increment() { count += 1 }",
+        );
+        let independent = InterfaceFile::dehydrate(&independent).unwrap();
+        assert_ne!(
+            stored.fingerprint, independent.fingerprint,
+            "changing a hidden store capture invalidates dependent module caches"
+        );
+    }
 
     fn compile_interface<'a>(bump: &'a Bump, source: &str) -> alder_ast::Interface<'a> {
         let source = bump.alloc_str(source);

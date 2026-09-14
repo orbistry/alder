@@ -1,0 +1,72 @@
+// Native Fetch objects retain their streaming bodies and host identity.
+#[extern]
+pub type Request
+#[extern]
+pub type Response
+#[extern]
+pub type Url
+
+pub type ResponseOptions = { status?: Number, headers?: Map[String, String] }
+pub type RequestOptions = { method?: String, headers?: Map[String, String], body?: String }
+pub type Fetch = fn(Request) Task[Result[Response, [:network_error(String)]]]
+pub type RequestEvent[params] = { request: Request, url: Url, params: params, fetch: Fetch }
+pub type LoadEvent[params, data] = { request: Request, url: Url, params: params, data: data, fetch: Fetch }
+
+// Reporting detail stays local; only PublicError crosses a defect boundary.
+pub type Error = { name: String, message: String, stack: Option[String] }
+pub type PublicError = { status: Number, message: String }
+pub enum PageError[expected] { Expected(expected), Unexpected(PublicError) }
+
+#[extern("alder:kernel", "$httpText")]
+pub fn text(body: String, options?: ResponseOptions) Response
+
+#[extern("alder:kernel", "$httpJson")]
+pub fn json(body: a, options?: ResponseOptions) Response where a: Json
+
+#[extern("alder:kernel", "$httpEmpty")]
+pub fn empty(status?: Number) Response
+
+#[extern("alder:kernel", "$httpRedirect")]
+pub fn redirect(location: String, status?: Number) Response
+
+#[extern("alder:kernel", "$httpStatus")]
+pub fn status(response: Response) Number
+
+#[extern("alder:kernel", "$httpResponseHeader")]
+pub fn responseHeader(response: Response, name: String) Option[String]
+
+#[extern("alder:kernel", "$httpWithHeader")]
+pub fn withHeader(response: Response, name: String, value: String) Response
+
+#[extern("alder:kernel", "$httpRequest")]
+pub fn request(url: String, options?: RequestOptions) Request
+
+#[extern("alder:kernel", "$httpMethod")]
+pub fn method(request: Request) String
+
+#[extern("alder:kernel", "$httpRequestUrl")]
+pub fn requestUrl(request: Request) String
+
+#[extern("alder:kernel", "$httpRequestHeader")]
+pub fn requestHeader(request: Request, name: String) Option[String]
+
+#[extern("alder:kernel", "$httpPathname")]
+pub fn pathname(url: Url) String
+
+#[extern("alder:kernel", "$httpSearchParam")]
+pub fn searchParam(url: Url, name: String) Option[String]
+
+#[extern("alder:kernel", "$httpReadText")]
+pub fn readText(request: Request) Task[Result[String, [:body_error(String)]]]
+
+#[extern("alder:kernel", "$httpReadForm")]
+pub fn readForm(request: Request) Task[Result[Map[String, Array[String]], [:body_error(String) | :file_field(String)]]]
+
+#[extern("alder:kernel", "$httpReadJson")]
+pub fn readJson(request: Request) Task[Result[a, [:body_error(String) | :invalid_json(String)]]] where a: Json
+
+#[extern("alder:kernel", "$httpResponseText")]
+pub fn responseText(response: Response) Task[Result[String, [:body_error(String)]]]
+
+#[extern("alder:kernel", "$httpFetch")]
+pub fn fetch(request: Request) Task[Result[Response, [:network_error(String)]]]

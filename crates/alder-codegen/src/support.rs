@@ -7,6 +7,12 @@ use rolldown_ecmascript::EcmaAst;
 
 use crate::{EmittedModule, js_ast::JsAst};
 
+pub mod actions;
+pub mod cloudflare;
+pub mod prerender;
+pub mod remote;
+pub mod web;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EntryKind {
     Standalone,
@@ -125,6 +131,7 @@ fn generated_module(
         module_id: module_id.to_owned(),
         ast,
         dependencies: Vec::new(),
+        store_keys: Vec::new(),
     }
 }
 

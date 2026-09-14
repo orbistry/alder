@@ -1,0 +1,16 @@
+import http.{PageError as ErrorKind}
+
+fn message(problem: PageError) String {
+    match problem {
+        ErrorKind::Expected(value) => match value { :missing(detail) => detail },
+        ErrorKind::Unexpected(value) => value.message,
+    }
+}
+
+pub component error(props: { error: PageError }) {
+    <main>
+        <h2>We could not load that page</h2>
+        <p id="page-error">{message(props.error)}</p>
+        <a href="/">Return home</a>
+    </main>
+}

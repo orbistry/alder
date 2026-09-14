@@ -4,6 +4,27 @@ pub const KERNEL_SPECIFIER: &str = "alder:kernel";
 pub const KERNEL_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/kernel.mjs"));
 
 #[cfg(test)]
+mod web_tests;
+
+#[cfg(test)]
+mod transport_tests;
+
+#[cfg(test)]
+mod application_tests;
+
+#[cfg(test)]
+mod http_tests;
+
+#[cfg(test)]
+mod wire_validate_tests;
+
+#[cfg(test)]
+mod cloudflare_tests;
+
+#[cfg(test)]
+mod forms_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -62,6 +83,12 @@ mod tests {
             "$fiberAddFinalizer",
             "$fiberAddFinalizerExit",
             "$fiberUninterruptible",
+            "$webComponent",
+            "$webState",
+            "$webMemo",
+            "$webSsr",
+            "$webMount",
+            "$webHydrate",
         ] {
             assert!(KERNEL_JS.contains(&format!("export function {symbol}")));
         }

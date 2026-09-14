@@ -39,6 +39,8 @@ pub struct EmittedModule {
     pub extern_regions: Vec<(String, Region)>,
     pub ast: EcmaAst,
     pub dependencies: Vec<String>,
+    /// Local scoped stores, for client-reachability-controlled hydration.
+    pub store_keys: Vec<String>,
 }
 
 impl EmittedModule {
@@ -57,6 +59,7 @@ impl Clone for EmittedModule {
             extern_regions: self.extern_regions.clone(),
             ast: self.ast.clone_with_another_arena(),
             dependencies: self.dependencies.clone(),
+            store_keys: self.store_keys.clone(),
         }
     }
 }
@@ -78,6 +81,7 @@ impl PartialEq for EmittedModule {
             && self.source_text == other.source_text
             && self.extern_regions == other.extern_regions
             && self.dependencies == other.dependencies
+            && self.store_keys == other.store_keys
             && self.code() == other.code()
     }
 }
@@ -128,10 +132,16 @@ fn emit_module_with_solution(
         extern_regions: vec![],
         ast: generated.ast,
         dependencies: generated.dependencies,
+        store_keys: module
+            .store_bindings
+            .iter()
+            .filter(|name| name.module == module.id)
+            .map(|name| format!("{}#{}", module_specifier(name.module), name.name))
+            .collect(),
     })
 }
 
-fn module_specifier(module: ModuleId<'_>) -> String {
+pub fn module_specifier(module: ModuleId<'_>) -> String {
     let mut result = match module.package {
         PackageId::Application => "alder://app".to_owned(),
         PackageId::ApplicationMember(member) => {
@@ -168,7 +178,7 @@ fn type_named(typ: &Located<alder_ast::Type<'_>>, expected: &str) -> bool {
     }
 }
 
-fn qualified_key(name: QualifiedName<'_>) -> String {
+pub fn qualified_key(name: QualifiedName<'_>) -> String {
     format!("{}::{}", module_specifier(name.module), name.name)
 }
 fn top_name(name: QualifiedName<'_>) -> String {

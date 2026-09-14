@@ -738,7 +738,7 @@ ComponentDecl {
                                             },
                                         },
                                         value: Text(
-                                            ")\n    ",
+                                            ")",
                                         ),
                                     },
                                 ],

@@ -8,8 +8,8 @@
 //! or `path` (components). Attributes are code mode (whitespace between
 //! them is chomped); children are **text mode**: nothing is chomped, every
 //! byte that is not `<`, `{`, `}` or a directive-starting `@` is text, and
-//! the only text dropped is a whitespace-only run containing a newline
-//! (the JSX rule, §10.22).
+//! literal text folds source lines under docs/markup-whitespace.md. Pure
+//! multiline layout disappears; pre/textarea subtrees preserve literal text.
 //!
 //! `@` is position-dependent, and deliberately so. At a **child start**
 //! (right after `>`, a hole, a nested element or a directive block) `@` +
@@ -87,7 +87,12 @@ impl<'a> Parser<'a> {
         let children = if self_closing {
             &[][..]
         } else {
-            let children = self.element_children()?;
+            let previous = self.preserve_markup_whitespace;
+            self.preserve_markup_whitespace |=
+                matches!(name.value, ElementName::Tag("pre" | "textarea"));
+            let children = self.element_children();
+            self.preserve_markup_whitespace = previous;
+            let children = children?;
             if self.is_eof() {
                 return Err(error::Markup::Unclosed {
                     name: self.element_name_text(name.value),
@@ -360,7 +365,8 @@ impl<'a> Parser<'a> {
     }
 
     /// A text run until `<`, `{`, `}`, EOF or a directive-starting `@`.
-    /// None when the run is whitespace-only and contains a newline.
+    /// Folds source lines, or preserves text beneath pre/textarea. None when
+    /// an ordinary run contains only multiline layout whitespace.
     ///
     /// `}` ends a run under both terminators: in an element it is the next
     /// child's `StrayBrace`. The bytes are advanced one at a time (newline
@@ -369,22 +375,24 @@ impl<'a> Parser<'a> {
     fn text(&mut self) -> Option<&'a Located<Child<'a>>> {
         let start = self.get_position();
         let start_pos = self.pos;
-        let mut only_whitespace = true;
-        let mut has_newline = false;
         while let Some(b) = self.peek() {
             match b {
                 b'<' | b'{' | b'}' => break,
                 b'@' if self.at_directive_word() => break,
-                b'\n' => has_newline = true,
-                b' ' | b'\t' | b'\r' => {}
-                _ => only_whitespace = false,
+                _ => {}
             }
             self.advance();
         }
-        if only_whitespace && has_newline {
+        let text = self.slice_from(start_pos);
+        let normalized = normalize_text(text, self.preserve_markup_whitespace);
+        if normalized.is_empty() {
             return None;
         }
-        let text = self.slice_from(start_pos);
+        let text = if normalized == text {
+            text
+        } else {
+            self.bump.alloc_str(&normalized)
+        };
         Some(self.add_end(start, Child::Text(text)))
     }
 
@@ -457,6 +465,45 @@ impl<'a> Parser<'a> {
     }
 }
 
+/// Fold literal source lines without changing runtime expression strings.
+fn normalize_text(text: &str, preserve: bool) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
+    let text = if text.contains('\r') {
+        Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
+    } else {
+        Cow::Borrowed(text)
+    };
+    if preserve || !text.contains('\n') {
+        return text;
+    }
+    if text
+        .bytes()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\n'))
+    {
+        return Cow::Borrowed("");
+    }
+    let last = text.split('\n').count() - 1;
+    Cow::Owned(
+        text.split('\n')
+            .enumerate()
+            .filter_map(|(index, line)| {
+                let line = if index > 0 {
+                    line.trim_start_matches([' ', '\t'])
+                } else {
+                    line
+                };
+                let line = if index < last {
+                    line.trim_end_matches([' ', '\t'])
+                } else {
+                    line
+                };
+                (!line.is_empty()).then_some(line)
+            })
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
+}
+
 /// Snapshot test macro for successful markup parsing.
 #[cfg(test)]
 macro_rules! assert_markup_snapshot {
@@ -510,6 +557,31 @@ pub(crate) use assert_markup_snapshot;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn multiline_prose_folds_lines() {
+        assert_markup_snapshot!("<p>\n  Hello\n\n  world\n</p>");
+    }
+
+    #[test]
+    fn inline_boundaries_and_explicit_spaces() {
+        assert_markup_snapshot!("<p>Hello <strong>Ada</strong>! {name}{\" \"}\n  end</p>");
+    }
+
+    #[test]
+    fn pre_preserves_blank_lines_and_nested_text() {
+        assert_markup_snapshot!("<pre>\n  A\n\n <b> B\n C </b>\n</pre>");
+    }
+
+    #[test]
+    fn textarea_preserves_literal_whitespace() {
+        assert_markup_snapshot!("<textarea>\n  A\n B  </textarea>");
+    }
+
+    #[test]
+    fn expression_strings_are_not_folded() {
+        assert_markup_snapshot!("<p>{\"  A\\n B  \"}</p>");
+    }
+
     // ---- elements ---------------------------------------------------------
 
     #[test]
@@ -693,6 +765,23 @@ mod tests {
     #[test]
     fn text_keeps_inner_spaces() {
         assert_markup_snapshot!("<p>  a   b  </p>");
+    }
+
+    #[test]
+    fn text_line_endings_fold_consistently() {
+        for input in ["\n  A\n  B\n", "\r\n  A\r\n  B\r\n", "\r  A\r  B\r"] {
+            assert_eq!(super::normalize_text(input, false), "A B");
+            assert_eq!(super::normalize_text(input, true), "\n  A\n  B\n");
+        }
+    }
+
+    #[test]
+    fn text_non_ascii_spaces_are_content() {
+        assert_eq!(
+            super::normalize_text("\n \u{a0}A\u{a0} \n", false),
+            "\u{a0}A\u{a0}"
+        );
+        assert_eq!(super::normalize_text("  A  B\tC  ", false), "  A  B\tC  ");
     }
 
     #[test]

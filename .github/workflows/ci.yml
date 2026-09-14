@@ -9,6 +9,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  release-packaging:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Test compiler support host selection
+        run: node --test .github/scripts/prepare-alder-support.test.mjs
+      - name: Test checked installers and release checksums
+        run: python -m unittest discover -s .github/scripts -p '*_test.py'
+
   check:
     runs-on: ubuntu-latest
     steps:

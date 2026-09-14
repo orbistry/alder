@@ -1,0 +1,12 @@
+pub let prerender = true
+
+pub component page() {
+    <main>
+        <h2>About this example</h2>
+        <p>
+            This static route and the Ada/Grace dynamic entries are prerendered by the same
+            application that serves live requests.
+        </p>
+        <p>No user JavaScript bootstrap, database, or schema-generated form system is required.</p>
+    </main>
+}

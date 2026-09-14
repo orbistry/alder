@@ -1,0 +1,194 @@
+---
+source: crates/alder-parse/src/markup/mod.rs
+description: "<p>Hello <strong>Ada</strong>! {name}{\" \"}\n  end</p>"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 2,
+            column: 10,
+        },
+    },
+    value: Markup(
+        Element(
+            Element {
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 2,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 3,
+                        },
+                    },
+                    value: Tag(
+                        "p",
+                    ),
+                },
+                attrs: [],
+                children: [
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 4,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                        },
+                        value: Text(
+                            "Hello ",
+                        ),
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 10,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 30,
+                            },
+                        },
+                        value: Element(
+                            Element {
+                                name: Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 11,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 17,
+                                        },
+                                    },
+                                    value: Tag(
+                                        "strong",
+                                    ),
+                                },
+                                attrs: [],
+                                children: [
+                                    Located {
+                                        region: Region {
+                                            start: Position {
+                                                line: 1,
+                                                column: 18,
+                                            },
+                                            end: Position {
+                                                line: 1,
+                                                column: 21,
+                                            },
+                                        },
+                                        value: Text(
+                                            "Ada",
+                                        ),
+                                    },
+                                ],
+                                self_closing: false,
+                            },
+                        ),
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 30,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 32,
+                            },
+                        },
+                        value: Text(
+                            "! ",
+                        ),
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 32,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 38,
+                            },
+                        },
+                        value: Hole(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 33,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 37,
+                                    },
+                                },
+                                value: Var(
+                                    "name",
+                                ),
+                            },
+                        ),
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 38,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 43,
+                            },
+                        },
+                        value: Hole(
+                            Located {
+                                region: Region {
+                                    start: Position {
+                                        line: 1,
+                                        column: 39,
+                                    },
+                                    end: Position {
+                                        line: 1,
+                                        column: 42,
+                                    },
+                                },
+                                value: Str(
+                                    " ",
+                                ),
+                            },
+                        ),
+                    },
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 43,
+                            },
+                            end: Position {
+                                line: 2,
+                                column: 6,
+                            },
+                        },
+                        value: Text(
+                            "end",
+                        ),
+                    },
+                ],
+                self_closing: false,
+            },
+        ),
+    ),
+}

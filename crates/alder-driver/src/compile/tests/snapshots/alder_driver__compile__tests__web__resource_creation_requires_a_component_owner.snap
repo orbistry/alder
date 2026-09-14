@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "import html\nasync fn load() Result[Number, [:missing]] { Ok(1) }\npub fn outside() { html.resource(() -> load()) }"
+---
+alder::codegen
+
+  × resource must initialize a direct component or directive let binding
+   ╭─[/project/src/main.ald:3:20]
+ 2 │ async fn load() Result[Number, [:missing]] { Ok(1) }
+ 3 │ pub fn outside() { html.resource(() -> load()) }
+   ·                    ─────────────┬─────────────
+   ·                                 ╰── code generation failed here
+   ╰────

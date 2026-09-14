@@ -516,6 +516,27 @@ impl<'a> JsAst<'a> {
         )
     }
 
+    pub(crate) fn namespace_import(&self, source: &str, local: &str) -> Statement<'a> {
+        let specifier = self
+            .builder
+            .import_declaration_specifier_import_namespace_specifier(
+                SPAN,
+                self.builder
+                    .binding_identifier(SPAN, self.builder.allocator.alloc_str(local)),
+            );
+        Statement::from(
+            self.builder.module_declaration_import_declaration(
+                SPAN,
+                Some(self.builder.vec1(specifier)),
+                self.builder
+                    .string_literal(SPAN, self.builder.allocator.alloc_str(source), None),
+                None,
+                NONE,
+                ImportOrExportKind::Value,
+            ),
+        )
+    }
+
     pub(crate) fn side_effect_import(&self, source: &str) -> Statement<'a> {
         Statement::from(
             self.builder.module_declaration_import_declaration(
@@ -561,6 +582,19 @@ impl<'a> JsAst<'a> {
         Statement::from(
             self.builder
                 .module_declaration_export_default_declaration(SPAN, expression.into()),
+        )
+    }
+
+    pub(crate) fn export_all(&self, source: &str) -> Statement<'a> {
+        Statement::from(
+            self.builder.module_declaration_export_all_declaration(
+                SPAN,
+                None,
+                self.builder
+                    .string_literal(SPAN, self.builder.allocator.alloc_str(source), None),
+                NONE,
+                ImportOrExportKind::Value,
+            ),
         )
     }
 

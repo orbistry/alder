@@ -821,7 +821,7 @@ pub enum AttrValue<'a> {
 pub enum Child<'a> {
     Element(&'a Element<'a>),
     Fragment(&'a [&'a Located<Child<'a>>]),
-    /// Raw text; whitespace-only runs containing a newline are dropped by the parser.
+    /// Parser-normalized literal text; source lines fold except beneath pre/textarea.
     Text(&'a str),
     /// `{expr}`
     Hole(&'a Located<Expr<'a>>),

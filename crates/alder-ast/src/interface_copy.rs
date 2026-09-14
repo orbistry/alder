@@ -8,18 +8,26 @@ use crate::*;
 pub fn copy_interface<'a>(bump: &'a Bump, interface: &Interface<'_>) -> Interface<'a> {
     Interface {
         home: copy_module_id(bump, interface.home),
-        values: bump.alloc_slice_fill_iter(interface.values.iter().map(|value| InterfaceValue {
-            exported_as: copy_str(bump, value.exported_as),
-            identity: match value.identity {
-                InterfaceValueIdentity::Binding(name) => {
-                    InterfaceValueIdentity::Binding(copy_qualified_name(bump, name))
-                }
-                InterfaceValueIdentity::TraitMethod(method) => {
-                    InterfaceValueIdentity::TraitMethod(copy_method_id(bump, method))
-                }
-            },
-            annotation: copy_annotation(bump, value.annotation),
-            kind: value.kind,
+        values: bump.alloc_slice_fill_iter(interface.values.iter().map(|value| {
+            InterfaceValue {
+                store_dependencies: bump.alloc_slice_fill_iter(
+                    value
+                        .store_dependencies
+                        .iter()
+                        .map(|name| copy_qualified_name(bump, *name)),
+                ),
+                exported_as: copy_str(bump, value.exported_as),
+                identity: match value.identity {
+                    InterfaceValueIdentity::Binding(name) => {
+                        InterfaceValueIdentity::Binding(copy_qualified_name(bump, name))
+                    }
+                    InterfaceValueIdentity::TraitMethod(method) => {
+                        InterfaceValueIdentity::TraitMethod(copy_method_id(bump, method))
+                    }
+                },
+                annotation: copy_annotation(bump, value.annotation),
+                kind: value.kind,
+            }
         })),
         types: bump.alloc_slice_fill_iter(interface.types.iter().map(|typ| InterfaceType {
             exported_as: copy_str(bump, typ.exported_as),

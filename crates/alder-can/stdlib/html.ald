@@ -1,0 +1,139 @@
+// A component call produces Html. The body runs once for each render or hydrate.
+#[extern("alder:kernel", "$webSsr")]
+pub fn renderToString(view: Html) String
+
+#[extern("alder:kernel", "$webSsrAsyncString")]
+pub fn renderToStringAsync(view: Html) Task[String]
+
+// Resource bindings are owned by their component or directive region.
+pub enum Resource[a, e] { Loading, Ready(a), Failed(e) }
+
+#[extern("alder:kernel", "$webResourceDeclaration")]
+pub fn resource(load: fn() Task[Result[a, e]]) Resource[a, e]
+
+#[extern("alder:kernel", "$webResourceRefresh")]
+pub fn refresh(value: Resource[a, e]) ()
+
+#[extern("alder:kernel", "$webResourceCancel")]
+pub fn cancel(value: Resource[a, e]) ()
+
+// Read during the synchronous submit handler, before its first await.
+#[extern("alder:kernel", "$webPreventDefault")]
+pub fn preventDefault(event: Event) ()
+
+#[extern("alder:kernel", "$webFormValues")]
+pub fn formValues(event: Event) Result[Map[String, Array[String]], [:invalid_form(String) | :file_field(String)]]
+
+#[extern("alder:kernel", "$webSubmit")]
+pub fn submit(handle: fn(Result[Map[String, Array[String]], [:invalid_form(String) | :file_field(String)]]) Task[()]) fn(Event) Task[()]
+
+// Readable DOM event fields. Opaque DOM targets and nullable host properties
+// are intentionally absent until their FFI and ownership contracts are defined.
+pub type Event = {
+    timeStamp: Number,
+    bubbles: Bool,
+    cancelable: Bool,
+    defaultPrevented: Bool,
+    isTrusted: Bool,
+}
+
+pub type FocusEvent = {
+    timeStamp: Number,
+    bubbles: Bool,
+    cancelable: Bool,
+    defaultPrevented: Bool,
+    isTrusted: Bool,
+}
+
+pub type MouseEvent = {
+    timeStamp: Number,
+    bubbles: Bool,
+    cancelable: Bool,
+    defaultPrevented: Bool,
+    isTrusted: Bool,
+    altKey: Bool,
+    ctrlKey: Bool,
+    metaKey: Bool,
+    shiftKey: Bool,
+    clientX: Number,
+    clientY: Number,
+    screenX: Number,
+    screenY: Number,
+    button: Number,
+    buttons: Number,
+}
+
+pub type KeyboardEvent = {
+    timeStamp: Number,
+    bubbles: Bool,
+    cancelable: Bool,
+    defaultPrevented: Bool,
+    isTrusted: Bool,
+    altKey: Bool,
+    ctrlKey: Bool,
+    metaKey: Bool,
+    shiftKey: Bool,
+    key: String,
+    code: String,
+    repeat: Bool,
+    isComposing: Bool,
+}
+
+pub type InputEvent = {
+    timeStamp: Number,
+    bubbles: Bool,
+    cancelable: Bool,
+    defaultPrevented: Bool,
+    isTrusted: Bool,
+    inputType: String,
+    isComposing: Bool,
+}
+
+pub type PointerEvent = {
+    timeStamp: Number,
+    bubbles: Bool,
+    cancelable: Bool,
+    defaultPrevented: Bool,
+    isTrusted: Bool,
+    altKey: Bool,
+    ctrlKey: Bool,
+    metaKey: Bool,
+    shiftKey: Bool,
+    clientX: Number,
+    clientY: Number,
+    screenX: Number,
+    screenY: Number,
+    button: Number,
+    buttons: Number,
+    pointerId: Number,
+    width: Number,
+    height: Number,
+    pressure: Number,
+    tiltX: Number,
+    tiltY: Number,
+    twist: Number,
+    pointerType: String,
+    isPrimary: Bool,
+}
+
+pub type WheelEvent = {
+    timeStamp: Number,
+    bubbles: Bool,
+    cancelable: Bool,
+    defaultPrevented: Bool,
+    isTrusted: Bool,
+    altKey: Bool,
+    ctrlKey: Bool,
+    metaKey: Bool,
+    shiftKey: Bool,
+    clientX: Number,
+    clientY: Number,
+    screenX: Number,
+    screenY: Number,
+    button: Number,
+    buttons: Number,
+    deltaX: Number,
+    deltaY: Number,
+    deltaZ: Number,
+    deltaMode: Number,
+}

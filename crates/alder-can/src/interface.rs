@@ -14,7 +14,10 @@ const BUILTIN_VALUE_SOURCES: &[(&str, &str)] = &[
     ("array", include_str!("../stdlib/array.ald")),
     ("bigint", include_str!("../stdlib/bigint.ald")),
     ("cli", include_str!("../stdlib/cli.ald")),
+    ("cloudflare", include_str!("../stdlib/cloudflare.ald")),
     ("fiber", include_str!("../stdlib/fiber.ald")),
+    ("html", include_str!("../stdlib/html.ald")),
+    ("http", include_str!("../stdlib/http.ald")),
     ("io", include_str!("../stdlib/io.ald")),
     ("json", include_str!("../stdlib/json.ald")),
     ("map", include_str!("../stdlib/map.ald")),
@@ -48,7 +51,7 @@ pub(crate) fn builtin_type_interface<'a>(
         bump,
         crate::Context {
             home: module,
-            imports: &[],
+            imports: crate::resolve_imports(bump, &parsed, alder_ast::PackageId::Builtin),
             interfaces: &[],
         },
         &parsed,
@@ -68,6 +71,7 @@ pub fn builtin_module_interface<'a>(
     interface.values =
         bump.alloc_slice_fill_iter(builtin_value_annotations(bump, module).into_iter().map(
             |(name, annotation)| InterfaceValue {
+                store_dependencies: &[],
                 exported_as: name,
                 identity: InterfaceValueIdentity::Binding(alder_ast::QualifiedName {
                     module,
@@ -81,6 +85,7 @@ pub fn builtin_module_interface<'a>(
         ["array"] => &["Array", "ArrayIterator"],
         ["bigint"] => &["BigInt"],
         ["fiber"] => &["Fiber"],
+        ["html"] => &["Html"],
         ["map"] => &["Map"],
         ["number"] => &["Number"],
         ["option"] => &["Option"],
@@ -176,22 +181,51 @@ fn builtin_value_annotations_from_source<'a>(
         alder_parse::parse_module(bump, source).expect("packaged stdlib declarations must parse");
     // Use the builtin environment, never the importing module's shadowed names.
     let mut env = crate::environment::Env::new(bump, module);
-    if parsed
-        .items
-        .iter()
-        .any(|item| matches!(item.value.kind, alder_source::ItemKind::TypeAlias(_)))
-    {
+    let imports = crate::resolve_imports(bump, &parsed, alder_ast::PackageId::Builtin);
+    let errors = crate::canonicalize::load_imports(bump, &mut env, imports, &[]);
+    assert!(
+        errors.is_empty(),
+        "packaged stdlib imports must canonicalize: {errors:?}"
+    );
+    if parsed.items.iter().any(|item| {
+        matches!(
+            item.value.kind,
+            alder_source::ItemKind::TypeAlias(_)
+                | alder_source::ItemKind::OpaqueType(_)
+                | alder_source::ItemKind::Enum(_)
+        )
+    }) {
         let headers = crate::canonicalize_headers(
             bump,
             crate::Context {
                 home: module,
-                imports: &[],
+                imports,
                 interfaces: &[],
             },
             &parsed,
         )
         .expect("packaged stdlib type declarations must canonicalize");
         for item in headers.module.items {
+            if let ItemKind::Enum(declaration) = &item.value.kind {
+                env.types.insert(
+                    declaration.name.name,
+                    crate::environment::Candidate::Unique(crate::environment::TypeBinding {
+                        reference: declaration.name,
+                        arity: declaration.params.len(),
+                        region: item.region,
+                    }),
+                );
+            }
+            if let ItemKind::Extern(alder_ast::ExternDecl::Type { name }) = &item.value.kind {
+                env.types.insert(
+                    name.name,
+                    crate::environment::Candidate::Unique(crate::environment::TypeBinding {
+                        reference: *name,
+                        arity: 0,
+                        region: item.region,
+                    }),
+                );
+            }
             let ItemKind::TypeAlias(alias) = &item.value.kind else {
                 continue;
             };
@@ -344,7 +378,11 @@ fn interface_from_module<'a>(
                             annotations,
                             public,
                             *binding,
-                            ValueKind::Let,
+                            if matches!(decl.value.value, alder_ast::Expr::State(_)) {
+                                ValueKind::Store
+                            } else {
+                                ValueKind::Let
+                            },
                             &mut values,
                             &mut private_names,
                         );
@@ -428,6 +466,7 @@ fn interface_from_module<'a>(
                         alder_ast::TraitItem::Fn(method) => Some(*method),
                     }) {
                         values.push(InterfaceValue {
+                            store_dependencies: &[],
                             exported_as: method.name.value,
                             identity: InterfaceValueIdentity::TraitMethod(method.id),
                             annotation: method.scheme,
@@ -637,6 +676,16 @@ fn interface_from_module<'a>(
     deduplicate_exports(&mut traits, |trait_| (trait_.exported_as, trait_.id));
     deduplicate_exports(&mut modules, |module| (module.exported_as, module.module));
 
+    for value in &mut values {
+        if let InterfaceValueIdentity::Binding(name) = value.identity
+            && let Some((_, stores)) = module
+                .value_store_dependencies
+                .iter()
+                .find(|(binding, _)| *binding == name)
+        {
+            value.store_dependencies = stores;
+        }
+    }
     Interface {
         home: module.id,
         values: bump.alloc_slice_copy(&values),
@@ -784,6 +833,7 @@ fn value<'a>(
 ) {
     if public {
         values.push(InterfaceValue {
+            store_dependencies: &[],
             exported_as: name.name,
             identity: InterfaceValueIdentity::Binding(name),
             annotation: annotations[&name],

@@ -30,6 +30,7 @@ const request = load("ext:deno_fetch/23_request.js");
 const response = load("ext:deno_fetch/23_response.js");
 const fetchApi = load("ext:deno_fetch/26_fetch.js");
 const cryptoApi = load("ext:deno_crypto/00_crypto.js");
+const timers = load("ext:deno_web/02_timers.js");
 
 Deno.core.setWasmStreamingCallback(fetchApi.handleWasmStreaming);
 Object.assign(globalThis, {
@@ -57,4 +58,24 @@ Object.assign(globalThis, {
   CryptoKey: cryptoApi.CryptoKey,
   SubtleCrypto: cryptoApi.SubtleCrypto,
   crypto: cryptoApi.crypto,
+  setTimeout: timers.setTimeout,
+  clearTimeout: timers.clearTimeout,
+  setInterval: timers.setInterval,
+  clearInterval: timers.clearInterval,
 });
+
+// Alder's standalone HTTP adapter uses deno_http over deno_net. It does not
+// install Deno's CLI globals or depend on a separate JavaScript runtime.
+const http = load("ext:deno_http/00_serve.ts");
+Object.defineProperty(globalThis, "__alderServe", {value: (handler, options = {}) => {
+  const abort = new AbortController();
+  const server = http.serve({hostname: options.hostname ?? "127.0.0.1", port: options.port ?? 3000,
+    signal: abort.signal, onListen: options.onListen ?? (() => {}),
+    onError: error => {console.error(error); return new Response("Internal server error", {status: 500});},
+  }, handler);
+  let shutdown;
+  const stop = () => shutdown ??= (async () => {abort.abort(); await server.finished;})();
+  options.signal?.addEventListener("abort", () => {stop().catch(console.error);}, {once: true});
+  if (options.signal?.aborted) stop().catch(console.error);
+  return {addr: server.addr, finished: server.finished, shutdown: stop};
+}, configurable: false, enumerable: false, writable: false});

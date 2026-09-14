@@ -1,0 +1,16 @@
+pub component Counter(props: { initial: Number, label: String }) {
+    let count = state(props.initial)
+    let doubled = count * 2
+    <section title={props.label}>
+        <button
+            onClick={() -> {
+                count += 1
+            }}
+            disabled={count >= 5}
+        >
+            {props.label}
+        </button>
+        <span title={`Count ${count}`}>{count}</span>
+        <strong>{doubled}</strong>
+    </section>
+}

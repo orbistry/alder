@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <a><span><a href=\"/\" /></span></a> }"
+---
+alder::type::invalid_markup
+
+  × `<a>` is not a valid descendant of `<a>`
+   ╭─[/project/src/main.ald:1:34]
+ 1 │ pub component View() { <a><span><a href="/" /></span></a> }
+   ·                                  ┬
+   ·                                  ╰── these types are incompatible
+   ╰────

@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <div title=\"a\" title=\"b\" /> }"
+---
+alder::type::invalid_markup
+
+  × duplicate markup attribute `title`
+   ╭─[/project/src/main.ald:1:39]
+ 1 │ pub component View() { <div title="a" title="b" /> }
+   ·                                       ──┬──
+   ·                                         ╰── these types are incompatible
+   ╰────

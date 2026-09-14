@@ -1,0 +1,28 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "type Session = { user: String }\nfn read() { let before = Session.user\nuse Session\nbefore }"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 2,
+                column: 26,
+            },
+            end: Position {
+                line: 2,
+                column: 33,
+            },
+        },
+        kind: Pattern(
+            Name(
+                Unknown {
+                    namespace: Constructor,
+                    qualifier: None,
+                    name: "Session",
+                    suggestions: [],
+                },
+            ),
+        ),
+    },
+]

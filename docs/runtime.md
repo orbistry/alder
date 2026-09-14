@@ -23,7 +23,8 @@ a library or a framework switch, not a target.
 - A CLI is `fn main()`. A proposed TUI imports `tui` and calls
   `tui.run(App)`; a proposed server imports `http` and calls
   `http.serve(handler).await` inside `async fn main()`. Same target, same
-  toolchain; these future modules require explicit imports.
+  toolchain; these modules require explicit imports. `http.serve` is implemented;
+  TUI rendering remains deferred.
 - The web framework switches on when `src/routes/` exists. A purely
   client-side app is the web framework with `ssr = false` and
   `prerender = true` on the root layout, producing static files; there is
@@ -56,13 +57,11 @@ a library or a framework switch, not a target.
 The runtime is a hand-written TypeScript kernel shipped by the compiler,
 exposed to the Alder stdlib through `extern` (Elm's kernel model). It
 contains the value ABI, structural equality, Option and Result helpers,
-collection primitives, the test registry, and M4's task/fiber scheduler.
-Later milestones add:
-
-- The signal graph used by components and stores.
-- The SSR renderer and hydration.
-- Compile-time context (`provide`/`use`) validation and render-tree
-  propagation. Fiber-local runtime context inheritance is already in place.
+collection primitives, the test registry, M4's task/fiber scheduler, and M6's
+signals, stores, DOM/SSR/hydration, routing, resource and HTTP orchestration.
+Render owners capture runtime provider context, including asynchronous SSR.
+Static context-availability/provider checking remains deferred; runtime context
+inheritance is not a claim that the services/layers redesign has landed.
 
 Everything above the kernel is written in Alder.
 
@@ -145,45 +144,41 @@ Rustls's process provider, avoiding feature-unification-dependent TLS startup.
   until wrapped by a first-party package.
 
 The only direct generated-entry/host boundary is the frozen, non-enumerable
-`globalThis.__alderHost` object (`args` and `exit` in M2). Alder modules use
+`globalThis.__alderHost` object (including args, exit, HTTP serving, and the
+structured build-report sink). Alder modules use
 stdlib/kernel functions rather than Deno ops. Standalone execution loads the
 bundled ESM as the main module and drives V8's event loop to completion.
 
 ## Cloudflare
 
 Cloudflare concepts are ordinary types implementing traits, marked with
-attributes. The grammar stays generic; the `@alder/cloudflare` package
-interprets them and the compiler emits `wrangler.jsonc` and bindings.
+attributes. The bundled `cloudflare` module supplies the types and traits;
+the compiler extracts their metadata and emits Worker adapters and
+`wrangler.jsonc`. Exact working declarations, supported binding handles,
+Durable Object storage, queues, and workflows are in
+[cloudflare-web.md](cloudflare-web.md).
 
-```alder
-import cloudflare/kv
-import cloudflare/kv.{Kv}
-
-#[durable_object]
-type Counter = { count: Number }
-
-impl DurableObject[Counter] {
-    fn fetch(obj: Counter, req: Request) Response { ... }
-}
-
-fn handler(req: Request) Response {
-    use Kv                      // bound to the worker's KV namespace via wrangler config
-    kv.get(cache, "key").await
-}
-```
-
-- Bindings (KV, D1, R2, Queues, Hyperdrive, Workflows) are available
-  through context (`use Kv`), provided by the generated entry point.
+- Binding aliases (KV, D1, R2, Queues, Hyperdrive, Workflows) retain distinct
+  provider identities and are installed by the generated request entry point.
+  Declaring a handle does not implement an entire service-specific data API;
+  the D1/Hyperdrive query layer remains M7.
 - Development runs on a vendored miniflare shipped as compiler support
   files, never by delegating to `wrangler dev` or Vite. `standalone`
   targets use deno_core with HMR.
 
 ## Deployment
 
-`alder deploy` owns the whole path:
+`alder deploy PATH --name EXACT_WORKER --account-id EXACT_ACCOUNT` builds a
+Cloudflare web application and invokes the pinned Wrangler deployment path
+with generated config, no rebundling/autoconfiguration, and `--keep-vars`.
+Credentials remain in Wrangler's auth environment/store, not generated client
+code. `--dry-run` validates and packages locally without an upload. Existing
+Durable Object migration history can be supplied explicitly with `--migrations`;
+the compiler does not invent destructive history. New object classes use the
+declarative exports config.
 
-- Generates `wrangler.jsonc` from the package and its attributes.
-- Runs pending D1/Hyperdrive migrations as part of deploy.
-- Builds container images for `standalone` targets that serve HTTP.
-- **Open:** how secrets and environments (`preview`, `production`) are
-  modeled in `alder.jsonc`.
+Choose a dedicated preview Worker explicitly before deploying. D1/Hyperdrive
+schema migrations, standalone container-image builds, and named environment
+inheritance are not implemented M6 deploy features. Standalone built servers
+run directly with `alder run dist/server.mjs -- --port 3000`. See
+[web-development.md](web-development.md) for exact commands and external gates.

@@ -1,0 +1,7 @@
+pub component page() {
+    <main>
+        <h1>About Alder</h1>
+        <p>Server-rendered pages with hydrated components.</p>
+        <a href="/">Back to the counter</a>
+    </main>
+}

@@ -75,6 +75,8 @@ pub struct Parser<'a> {
     in_query: bool,
     /// Set in if/while/for/match/provide/@directive heads: `Path {` is not a record constructor.
     no_record_ctor: bool,
+    /// Literal text beneath a whitespace-sensitive markup element.
+    preserve_markup_whitespace: bool,
     /// Current nesting of the recursive parsers (`nest`), capped at `MAX_NESTING`.
     depth: u32,
     /// Transactional comment side table. Backtracking truncates it alongside
@@ -119,6 +121,7 @@ impl<'a> Parser<'a> {
             col: 1,
             in_query: false,
             no_record_ctor: false,
+            preserve_markup_whitespace: false,
             depth: 0,
             comments: BumpVec::new_in(bump),
             verbatim: BumpVec::new_in(bump),

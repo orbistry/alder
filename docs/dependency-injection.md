@@ -145,9 +145,13 @@ environments are implementation options, not a user-accessible service locator.
 
 The compiler currently has top-level value dependency groups for inference and
 recursion, not a complete higher-order call graph. Provider requirement inference
-is absent: `Stmt::Use` is ignored by the solver and provider references currently
-infer as `Any`. Existing runtime code carries fiber-local context and scoped
-restoration/inheritance. That is infrastructure, not the proposed DI system.
+is absent. The existing `use Service` statement binds subsequent reads of
+`Service` in its lexical block to the current provider. Reads retain the declared
+concrete service type, including imported aliases; `provide` checks its value
+against that type. A conditional/block-local use does not bind names outside its
+scope. Availability remains checked at runtime, not through inferred function
+requirements. Runtime code carries fiber-local context and scoped restoration/
+inheritance. That is infrastructure, not the proposed DI system.
 
 The current parser accepts `use` and a value-producing `provide` expression.
 Do not remove or change that runtime behavior as part of documenting this design.

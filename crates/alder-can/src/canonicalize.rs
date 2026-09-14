@@ -193,12 +193,85 @@ fn canonicalize_mode<'a>(
 
     let items = bump.alloc_slice_copy(&items);
     let value_sccs = crate::value_scc::build(bump, context.home, items);
+    let mut store_bindings = BTreeSet::new();
+    let mut value_dependencies = std::collections::BTreeMap::new();
+    for interface in context.interfaces {
+        for value in interface.values {
+            store_bindings.extend(value.store_dependencies);
+            if let alder_ast::InterfaceValueIdentity::Binding(name) = value.identity {
+                value_dependencies.insert(
+                    name,
+                    value
+                        .store_dependencies
+                        .iter()
+                        .copied()
+                        .collect::<BTreeSet<_>>(),
+                );
+            }
+            if value.kind == alder_ast::ValueKind::Store
+                && let alder_ast::InterfaceValueIdentity::Binding(name) = value.identity
+            {
+                store_bindings.insert(name);
+            }
+        }
+    }
+    for item in items.iter() {
+        match &item.value.kind {
+            ItemKind::Fn(function) => {
+                value_dependencies.insert(
+                    function.name,
+                    crate::callable_value_dependencies(
+                        context.home,
+                        function.params,
+                        function.body,
+                    ),
+                );
+            }
+            ItemKind::Let(decl) => {
+                let dependencies = crate::expression_value_dependencies(context.home, decl.value);
+                for binding in decl.bindings {
+                    value_dependencies.insert(*binding, dependencies.clone());
+                }
+            }
+            _ => {}
+        }
+        if let ItemKind::Let(decl) = &item.value.kind
+            && matches!(decl.value.value, alder_ast::Expr::State(_))
+        {
+            store_bindings.extend(decl.bindings.iter().copied());
+        }
+    }
+    loop {
+        let previous = value_dependencies.clone();
+        for dependencies in value_dependencies.values_mut() {
+            for dependency in dependencies.clone() {
+                if let Some(nested) = previous.get(&dependency) {
+                    dependencies.extend(nested);
+                }
+            }
+        }
+        if previous == value_dependencies {
+            break;
+        }
+    }
+    let value_store_dependencies =
+        bump.alloc_slice_fill_iter(value_dependencies.into_iter().map(|(name, dependencies)| {
+            let stores: &'a [alder_ast::QualifiedName<'a>] = bump.alloc_slice_fill_iter(
+                dependencies
+                    .intersection(&store_bindings)
+                    .copied()
+                    .collect::<Vec<_>>(),
+            );
+            (name, stores)
+        }));
     let module = bump.alloc(Module {
         id: context.home,
         imports: context.imports,
         items,
         value_sccs,
         assigned_bindings: env.assigned_bindings(bump),
+        store_bindings: bump.alloc_slice_fill_iter(store_bindings),
+        value_store_dependencies,
     });
 
     Ok(CanResult {
@@ -423,7 +496,7 @@ fn canonical_type_mentions(typ: &Type<'_>, variable: &str) -> bool {
     }
 }
 
-fn load_imports<'a>(
+pub(crate) fn load_imports<'a>(
     bump: &'a Bump,
     env: &mut Env<'a>,
     imports: &'a [ResolvedImport<'a>],
@@ -2792,6 +2865,53 @@ mod tests {
     }
 
     #[test]
+    fn use_provider_binds_typed_reads_in_the_following_lexical_scope() {
+        let bump = Bump::new();
+        let result = can(
+            &bump,
+            "type Session = { user: String }\nfn read() { use Session\nSession.user }",
+        );
+        let ItemKind::Fn(function) = &result.module.items[1].value.kind else {
+            panic!("function")
+        };
+        assert!(
+            matches!(function.body.value.statements[0].value, Stmt::Use { provider } if provider.name == "Session")
+        );
+        let Expr::Access { record, .. } = function.body.value.tail.unwrap().value else {
+            panic!("provider field")
+        };
+        assert!(
+            matches!(record.value, Expr::Var { reference: alder_ast::ValueRef::Provider { provider, typ }, .. } if provider.name == "Session" && matches!(typ.value, Type::Alias { reference, .. } if reference.name == "Session"))
+        );
+    }
+
+    #[test]
+    fn conditional_use_provider_does_not_escape_its_branch() {
+        assert_can_error_snapshot!(
+            "type Session = { user: String }\nfn read(flag: Bool) { if flag { use Session }\nSession.user }"
+        );
+    }
+
+    #[test]
+    fn use_provider_does_not_escape_its_function() {
+        assert_can_error_snapshot!(
+            "type Session = { user: String }\nfn first() { use Session\nSession.user }\nfn second() { Session.user }"
+        );
+    }
+
+    #[test]
+    fn provider_reads_before_use_are_not_implicitly_bound() {
+        assert_can_error_snapshot!(
+            "type Session = { user: String }\nfn read() { let before = Session.user\nuse Session\nbefore }"
+        );
+    }
+
+    #[test]
+    fn provider_types_require_complete_type_arguments() {
+        assert_can_error_snapshot!("type Session[a] = { user: a }\nfn read() { use Session }");
+    }
+
+    #[test]
     fn abort_extern_accepts_a_transparent_task_alias() {
         let bump = Bump::new();
         can(
@@ -3988,6 +4108,7 @@ mod tests {
                 let source_text = bump.alloc_str(&source);
                 let source = alder_parse::parse_module(&bump, source_text).expect("source parses");
                 let name = bump.alloc_str(path.file_stem().unwrap().to_str().unwrap());
+                let imports = crate::resolve_imports(&bump, &source, PackageId::Builtin);
                 canonicalize(
                     &bump,
                     Context {
@@ -3995,7 +4116,7 @@ mod tests {
                             package: PackageId::Builtin,
                             path: bump.alloc_slice_copy(&[&*name]),
                         },
-                        imports: &[],
+                        imports,
                         interfaces: &[],
                     },
                     &source,

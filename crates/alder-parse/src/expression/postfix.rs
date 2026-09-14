@@ -135,7 +135,7 @@ impl<'a> Parser<'a> {
                 },
             ));
         }
-        let field = self.located_lower(error::Expr::Access)?;
+        let field = self.field_name(error::Expr::Access)?;
         Ok(self.expr_at(
             start,
             self.get_position(),

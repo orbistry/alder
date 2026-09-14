@@ -10,8 +10,9 @@
 //!
 //! The name is `Counter` for an ordinary component or `page` for a
 //! route-file component (web.md's `pub component page(props: …)`); a
-//! lowercase name goes through `lower_name`, so a reserved word (`component
-//! for()`) is `Component::Name`. Parameters reuse `params()` and the body is
+//! lowercase name goes through `lower_name`, except the conventional route
+//! boundary name `error`. Other reserved words (`component for()`) are
+//! `Component::Name`. Parameters reuse `params()` and the body is
 //! always a `block()` (§2.2: `component` bodies never consult the
 //! record-vs-block heuristic).
 //!
@@ -27,7 +28,9 @@ impl<'a> Parser<'a> {
     /// After `component`.
     pub(crate) fn component_decl(&mut self) -> Result<&'a ComponentDecl<'a>, error::Component<'a>> {
         self.chomp();
-        let name = if self.peek_upper() {
+        let name = if self.peek_keyword(b"error") {
+            self.raw_lower(error::Component::Name)?
+        } else if self.peek_upper() {
             self.located_upper(error::Component::Name)?
         } else {
             self.located_lower(error::Component::Name)?
@@ -118,6 +121,11 @@ mod tests {
     #[test]
     fn component_lowercase_page() {
         assert_component_snapshot!("component page(props: { data: PageData }) { props.data }");
+    }
+
+    #[test]
+    fn component_reserved_route_error_name() {
+        assert_component_snapshot!("component error() {}");
     }
 
     #[test]

@@ -23,6 +23,7 @@ trait References<'a> {
     ) {
     }
     fn use_local(&mut self, _name: alder_ast::LocalName<'a>) {}
+    fn use_value(&mut self, _name: QualifiedName<'a>) {}
 }
 
 impl<'a> References<'a> for BTreeSet<&'a str> {
@@ -230,6 +231,54 @@ pub fn expression_local_dependencies<'a>(
     locals.uses
 }
 
+/// All resolved module value references, including foreign stores and captures.
+pub fn expression_value_dependencies<'a>(
+    home: ModuleId<'a>,
+    expression: Node<'a, Expr<'a>>,
+) -> BTreeSet<QualifiedName<'a>> {
+    #[derive(Default)]
+    struct Values<'a>(BTreeSet<QualifiedName<'a>>);
+    impl<'a> References<'a> for Values<'a> {
+        fn insert(&mut self, _name: &'a str) {}
+        fn use_value(&mut self, name: QualifiedName<'a>) {
+            self.0.insert(name);
+        }
+    }
+    let mut values = Values::default();
+    expr(home, expression, &mut values);
+    values.0
+}
+
+pub fn callable_value_dependencies<'a>(
+    home: ModuleId<'a>,
+    parameters: &[alder_ast::Param<'a>],
+    body: Node<'a, Block<'a>>,
+) -> BTreeSet<QualifiedName<'a>> {
+    #[derive(Default)]
+    struct Values<'a>(BTreeSet<QualifiedName<'a>>);
+    impl<'a> References<'a> for Values<'a> {
+        fn insert(&mut self, _name: &'a str) {}
+        fn use_value(&mut self, name: QualifiedName<'a>) {
+            self.0.insert(name);
+        }
+    }
+    let mut values = Values::default();
+    params(home, parameters, &mut values);
+    block(home, body, &mut values);
+    values.0
+}
+
+/// Local storage introduced by a pattern, without treating nested expression
+/// reads (for example pins) as declarations.
+pub fn pattern_local_bindings<'a>(
+    home: ModuleId<'a>,
+    binding: Node<'a, Pattern<'a>>,
+) -> BTreeSet<alder_ast::LocalId> {
+    let mut locals = Locals::default();
+    pattern(home, binding, &mut locals);
+    locals.bindings.into_keys().collect()
+}
+
 fn collect_item<'a>(home: ModuleId<'a>, item: &ItemKind<'a>, out: &mut impl References<'a>) {
     match item {
         ItemKind::Fn(function) => {
@@ -388,10 +437,11 @@ fn stmt<'a>(home: ModuleId<'a>, value: Node<'a, Stmt<'a>>, out: &mut impl Refere
             }
             // A write constrains the target's type even without a read. Keep
             // writers in the same dependency analysis as ordinary references.
-            if let alder_ast::BindingName::TopLevel(reference) = place.root
-                && reference.module == home
-            {
-                out.insert(reference.name);
+            if let alder_ast::BindingName::TopLevel(reference) = place.root {
+                out.use_value(reference);
+                if reference.module == home {
+                    out.insert(reference.name);
+                }
             }
             for step in place.steps {
                 if let alder_ast::PlaceStep::Index(index) = step {
@@ -447,10 +497,13 @@ fn expr<'a>(home: ModuleId<'a>, value: Node<'a, Expr<'a>>, out: &mut impl Refere
             }
         }
         Expr::Var {
-            reference: ValueRef::TopLevel(reference),
+            reference: ValueRef::TopLevel(reference) | ValueRef::Foreign { reference, .. },
             ..
-        } if reference.module == home => {
-            out.insert(reference.name);
+        } => {
+            out.use_value(*reference);
+            if reference.module == home {
+                out.insert(reference.name);
+            }
         }
         Expr::Var {
             reference: ValueRef::Local(local),

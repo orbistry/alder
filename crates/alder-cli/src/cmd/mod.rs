@@ -1,14 +1,22 @@
 pub mod build;
 pub mod check;
+pub mod deploy;
+pub mod dev;
 pub mod fmt;
 pub mod lsp;
+pub(crate) mod platform;
 pub mod run;
 pub mod test;
+pub(crate) mod web;
 
 #[derive(clap::Subcommand)]
 pub enum Cmd {
     /// Build a bundled ESM artifact
     Build(build::Args),
+    /// Serve a web application with automatic compilation and state-preserving updates
+    Dev(dev::Args),
+    /// Build and deploy a Cloudflare web application, or validate with --dry-run
+    Deploy(deploy::Args),
     /// Check a Alder project for errors
     #[clap(visible_alias = "c")]
     Check(check::Args),
@@ -28,6 +36,8 @@ impl Cmd {
 
         let operation = match &self {
             Cmd::Build(_) => "build",
+            Cmd::Dev(_) => "dev",
+            Cmd::Deploy(_) => "deploy",
             Cmd::Check(_) => "check",
             Cmd::Fmt(_) => "fmt",
             Cmd::Lsp(_) => "lsp",
@@ -39,6 +49,8 @@ impl Cmd {
 
         let result = match self {
             Cmd::Build(args) => args.exec(&output).await,
+            Cmd::Dev(args) => args.exec(&output).await,
+            Cmd::Deploy(args) => args.exec(&output).await,
             Cmd::Check(args) => args.exec(&output).await,
             Cmd::Fmt(args) => args.exec(&output).await,
             Cmd::Lsp(args) => lsp::exec(args).await,

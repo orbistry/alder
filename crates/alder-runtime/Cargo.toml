@@ -14,6 +14,7 @@ deno_crypto = "=0.264.0"
 deno_fetch = "=0.274.0"
 deno_fs = "=0.160.0"
 deno_http = { version = "=0.248.0", features = ["default_property_extractor"] }
+deno_telemetry = "=0.72.0"
 deno_net = "=0.242.0"
 deno_permissions = "=0.109.0"
 deno_web = "=0.281.0"
@@ -22,4 +23,11 @@ deno_websocket = "=0.255.0"
 deno_features = "=0.47.0"
 sys_traits = { version = "=0.1.28", features = ["libc", "real", "winapi"] }
 rustls = { version = "=0.23.40", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
-tokio = { workspace = true, features = ["time"] }
+tokio = { workspace = true, features = ["time", "sync"] }
+oxc_allocator = "=0.95.0"
+oxc_codegen = "=0.95.0"
+oxc_parser = "=0.95.0"
+oxc_semantic = "=0.95.0"
+oxc_span = "=0.95.0"
+oxc_transformer = "=0.95.0"
+deno_error = "0.7"

@@ -390,21 +390,29 @@ No macro implementation is part of the current provider/context discussion.
 
 ### M6: Web vertical slice
 
-Start with the typed component/state → DOM → SSR/hydration counter slice in
-`plans/m6-web.md`. Macros/comptime and services/layers DI remain deferred;
+Implementation extends the original counter slice into the routed application
+workflow in `plans/m6-web.md`; requirement-by-requirement evidence lives in
+`plans/m6-acceptance.md`. M6 is not declared complete while the authorized live
+Cloudflare preview verification remains open. Macros/comptime and services/layers DI remain deferred;
 route discovery is a compiler pass. Automated regressions use direct compiler
 and kernel APIs, not CLI subprocess tests; manual CLI fixture checks are allowed.
 
-- [ ] Typed markup checking against an HTML schema
-- [ ] `component` and `state`, compile-time dependency tracking, DOM codegen
-- [ ] SSR renderer and hydration in the kernel
-- [ ] Folder routing: `+page.ald`, `+page.server.ald`, `+layout.ald`, `+layout.server.ald`, `+server.ald`, `+error.ald`, typed `Routes` and generated `PageData`
-- [ ] `*.remote.ald` modules and `+page.server.ald` as server boundaries, reachability analysis, typed HTTP stubs
-- [ ] `hooks.server.ald` / `hooks.client.ald` with `handle` providing typed request context
-- [ ] Module stores, request-scoped on the server
-- [ ] SvelteKit page options (`prerender`, `ssr`, `csr`) inherited down the route tree
-- [ ] `alder dev` on vendored miniflare; `alder deploy` generating `wrangler.jsonc`
-- [ ] Cloudflare bindings via traits and attributes
+- [x] First counter slice: annotated props, bounded typed HTML/zero-argument
+  events, local state and derived cells, direct DOM updates, escaped SSR, strict
+  node-reusing hydration, independent owners, and disposal; contracts in
+  `docs/web-internals.md`, direct compiler/kernel regressions, and `tests/e2e/web`.
+- [x] Typed markup checking against a pinned HTML schema, typed attributes/events and structural diagnostics
+- [x] `component` and `state`, compile-time dependency tracking, direct DOM codegen, composition, children, reactive branches and keyed lists
+- [x] SSR renderer, owned resources, deterministic transport and node-reusing hydration in the kernel
+- [x] Folder routing: `+page.ald`, `+page.server.ald`, `+layout.ald`, `+layout.server.ald`, `+server.ald`, `+error.ald`, typed `Routes` and generated `PageData`; browser navigation and universal loads
+- [x] `*.remote.ald` modules and `+page.server.ald` as server boundaries, reachability analysis, typed HTTP stubs, query/command and action/form integration
+- [x] `hooks.server.ald` / `hooks.client.ald` with `handle` providing typed request context
+- [x] Module stores, request-scoped on the server
+- [x] SvelteKit page options (`prerender`, `ssr`, `csr`) inherited down the route tree; build-time static/dynamic prerender entries
+- [x] `alder dev` on vendored Miniflare, generated browser entries, diagnostics/recovery and state-preserving HMR; `alder deploy` generating `wrangler.jsonc`
+- [x] Cloudflare bindings via traits and attributes
+- [x] Standalone embedded-V8 and local Cloudflare dev/production browser workflow verification
+- [ ] Authorized real Cloudflare preview deployment and smoke verification (exact account, Worker name and authentication required)
 
 ### M7: Data layer
 
@@ -436,6 +444,9 @@ and kernel APIs, not CLI subprocess tests; manual CLI fixture checks are allowed
 ---
 
 ## Grammar
+
+Markup literal whitespace follows the source-line folding and preservation
+contract in `docs/markup-whitespace.md`; string expressions remain unchanged.
 
 EBNF for the new syntax, as implemented by `alder-parse` in M1. Each
 departure from the first draft is a numbered decision in
@@ -548,7 +559,7 @@ impl_item     = 'type' upper_ident '=' type | fn_decl ;              (* line-bre
 error_decl    = 'error' upper_ident '{' [ tag_variant { ',' tag_variant } [ ',' ] ] '}' ;
 tag_variant   = tag [ '(' type { ',' type } [ ',' ] ')' ] ;           (* '(' on the tag's line *)
 
-component_decl = 'component' ( upper_ident | lower_ident ) '(' [ params ] ')' block ;   (* §10.16 *)
+component_decl = 'component' ( upper_ident | lower_ident | 'error' ) '(' [ params ] ')' block ;   (* §10.16; error is a route boundary name *)
 table_decl    = 'table' lower_ident '{' { column } '}' ;
 column        = lower_ident ':' expression { modifier } ;             (* next column starts at `name :` (§10.28) *)   (* ? *)
 modifier      = lower_ident [ '(' [ expression { ',' expression } [ ',' ] ] ')' ] ;
@@ -605,7 +616,7 @@ statement     = let_decl
               | 'assert' expression                      (* §10.6 *)
               | expression ;
 assign        = place ( '=' | '+=' | '-=' | '*=' | '/=' ) expression ;   (* operator on the target's line *)
-place         = lower_ident { '.' lower_ident | '.' digits | '[' expression ']' } ;
+place         = lower_ident { '.' field_name | '.' digits | '[' expression ']' } ;
 ```
 
 ### Expressions
@@ -615,7 +626,7 @@ expression    = unary { operator unary } ;               (* flat chain; nesting 
 operator      = '|>' | '??' | '||' | '&&' | '==' | '!=' | '<' | '<=' | '>' | '>=' | 'in'
               | '+' | '-' | '*' | '/' | '%' ;            (* 'in' only inside query { } *)
 unary         = [ '-' | '!' ] postfix ;
-postfix       = primary { call | '.' lower_ident | '.' digits | '.await' | '?'
+postfix       = primary { call | '.' field_name | '.' digits | '.await' | '?'
                         | '[' expression ']' | template | record } ;
                                                          (* template adjacent (tagged, §10.12); record only after a path, '{' on the same line *)
 call          = '(' [ call_arg { ',' call_arg } [ ',' ] ] ')' ;
@@ -640,7 +651,8 @@ match_arm     = pattern { '|' pattern } [ 'if' expression ] '=>' ( block | expre
 loop_expr     = 'loop' block ;
 provide_expr  = 'provide' path '=' expression block ;
 record        = '{' [ record_field { ',' record_field } [ ',' ] ] '}' ;
-record_field  = lower_ident [ ':' expression ] | '..' expression ;
+field_name    = lower_ident | 'error' ;                               (* error remains reserved outside field/component-name positions *)
+record_field  = field_name [ ':' expression ] | '..' expression ;
 macro_call    = lower_ident '!' '(' raw_tokens ')' ;     (* '!(' adjacent; balanced raw text (§10.29) *)
 style_block   = '{' { style_key ':' style_value [ ',' ] } '}' ;   (* entries may also be line-break separated *)
 style_key     = lower_ident | string ;
@@ -696,8 +708,10 @@ text          = (* any run of characters not containing '<', '{' or '}'; a '@' e
 
 Inside a `child_block`, `let` / `use` are setup and do not
 render; markup and `{expr}` holes become children; any other statement
-form is written as `{expr}`. Whitespace-only text runs containing a
-newline are dropped; all other text is kept verbatim (§10.22). `@else`
+form is written as `{expr}`. Ordinary literal text folds source lines under
+`docs/markup-whitespace.md`; whitespace-only multiline runs disappear, while
+same-line spaces and runtime string expressions remain intentional. Literal
+`pre`/`textarea` subtrees preserve text whitespace. `@else`
 and `@empty` may start on the line after the previous block.
 
 ### Queries
@@ -735,7 +749,7 @@ pattern_atom  = '_' | lower_ident | '^' postfix
               | '[' { pattern ',' } [ pattern | '..' [ lower_ident ] [ ',' ] ] ']'   (* a comma before '..' is required *)
               | pattern_record ;
 pattern_record = '{' { field_pattern ',' } [ field_pattern | '..' [ ',' ] ] '}' ;   (* a comma before '..' is required *)
-field_pattern = lower_ident [ ':' pattern ] ;
+field_pattern = field_name [ ':' pattern ] ;
 ```
 
 ### Types
@@ -751,7 +765,7 @@ type_app      = path [ type_args ]
               | error_row ;
 type_args     = '[' type { ',' type } [ ',' ] ']' ;                    (* '[' on the name's line *)
 record_type   = '{' [ lower_ident '|' ] [ field_type { ',' field_type } [ ',' ] ] '}' ;
-field_type    = lower_ident [ '?' ] ':' type ;                         (* '?' adjacent to the name *)
+field_type    = field_name [ '?' ] ':' type ;                         (* '?' adjacent to the name *)
 error_row     = '[' [ tag_variant { '|' tag_variant } [ '|' lower_ident ] | lower_ident ] ']' ;   (* '[r]' is open and empty; '[| r]' is an error *)
 ```
 

@@ -1,0 +1,28 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "type Session = { user: String }\nfn first() { use Session\nSession.user }\nfn second() { Session.user }"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 4,
+                column: 15,
+            },
+            end: Position {
+                line: 4,
+                column: 22,
+            },
+        },
+        kind: Pattern(
+            Name(
+                Unknown {
+                    namespace: Constructor,
+                    qualifier: None,
+                    name: "Session",
+                    suggestions: [],
+                },
+            ),
+        ),
+    },
+]

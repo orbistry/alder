@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 _ => {
-                    let name = self.located_lower(PRecord::Field)?;
+                    let name = self.field_name(PRecord::Field)?;
                     self.chomp();
                     let pattern = if self.peek() == Some(b':') {
                         self.advance();

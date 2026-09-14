@@ -85,9 +85,16 @@ its workspace/CI references were also removed. See
 ## Deferred syntax versus executable behavior
 
 The provisional M2 checking model is not a claim that later milestones execute.
-Build/Test codegen rejects queries (M7), reactive state/components/markup (M6),
-and styles (M8), rather than emitting runtime placeholders. Parsing and the
-existing provisional Check-mode handling remain available.
+Build/Test codegen rejects queries (M7), styles and schema-generated forms (M8),
+rather than emitting runtime placeholders. Components
+with annotated props, direct state/derived lets, and final supported markup now
+lower through `oxc_backend/web.rs` into the kernel's real DOM/SSR/hydration
+operations, including typed composition, reactive directives/keyed lists,
+resources and stores. Driver web passes generate route/load/action/remote types
+and enforce client boundaries; generated entries wire browser hydration and both
+server adapters. Standalone markup outside components, unsupported nested state,
+and other unsupported executable forms retain explicit diagnostics. See
+`web-internals.md` for the supported checking and execution contracts.
 
 Source macro invocations and comptime items fail in canonicalization. Therefore
 the remaining canonical-AST MacroCall Any branch and ignored Comptime item in

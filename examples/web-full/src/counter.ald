@@ -1,0 +1,5 @@
+// One store per server request; one shared store per browser application.
+pub let count: Number = state(0)
+
+pub fn increment() { count += 1 }
+pub fn read() Number { count }

@@ -1,0 +1,14 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { let count = 0\n<button onClick={() -> { count += 1 }}>{count}</button> }"
+---
+alder::codegen
+
+  × component props and setup bindings are read-only; use state for values
+  │ changed by events
+   ╭─[/project/src/main.ald:2:26]
+ 1 │ pub component View() { let count = 0
+ 2 │ <button onClick={() -> { count += 1 }}>{count}</button> }
+   ·                          ─────┬────
+   ·                               ╰── code generation failed here
+   ╰────

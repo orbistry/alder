@@ -1,0 +1,10 @@
+pub component page() {
+    let count = state(0)
+    let doubled = count * 2
+    <main>
+        <h1>Alder web</h1>
+        <button id="counter" onClick={() -> { count += 1 }}>Count: {count}</button>
+        <p id="doubled">Doubled: {doubled}</p>
+        <a href="/about">About this application</a>
+    </main>
+}

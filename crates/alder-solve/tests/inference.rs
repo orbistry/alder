@@ -8,6 +8,188 @@ use bumpalo::Bump;
 use indoc::indoc;
 
 #[test]
+fn provider_reads_infer_the_declared_type_and_reject_wrong_fields_and_values() {
+    let bump = Bump::new();
+    solve_input(
+        &bump,
+        "type Session = { user: String }\npub fn read() String { use Session\nSession.user }",
+    )
+    .unwrap();
+    for source in [
+        "type Session = { user: String }\npub fn read() Number { use Session\nSession.user }",
+        "type Session = { user: String }\npub fn read() { use Session\nSession.missing }",
+        "type Session = { user: String }\npub fn main() { provide Session = { user: 42 } { Session.user } }",
+    ] {
+        let bump = Bump::new();
+        assert!(solve_input(&bump, source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn web_schema_accepts_standard_elements_and_typed_attributes() {
+    for markup in [
+        "<main><nav><a href=\"/\">Home</a></nav><article><h2>Title</h2><p><em>Text</em><br /></p></article></main>",
+        "<form action=\"/save\"><label for=\"name\">Name</label><input id=\"name\" required maxlength={20} /><button disabled={false}>Save</button></form>",
+        "<table><tbody><tr><th scope=\"row\">Name</th><td colspan={2}>Alder</td></tr></tbody></table>",
+        "<my-widget variant=\"large\" data-count=\"2\" aria-label=\"Widget\" />",
+        "<video src=\"movie.mp4\" controls width={640} />",
+    ] {
+        let bump = Bump::new();
+        let source = format!("pub component View() {{ {markup} }}");
+        solve_input(&bump, &source).unwrap_or_else(|error| panic!("{source}: {error:?}"));
+    }
+}
+
+#[test]
+fn web_schema_rejects_invalid_attributes_and_nesting() {
+    for markup in [
+        "<nothtml />",
+        "<div href=\"/\" />",
+        "<input required=\"yes\" />",
+        "<canvas width=\"wide\" />",
+        "<div aria-nonsense=\"true\" />",
+        "<br>child</br>",
+        "<p>@if true { <section /> }</p>",
+        "<table><tr><td>Cell</td></tr></table>",
+        "<ul><div /></ul>",
+        "<table>text</table>",
+        "<div onClik={() -> ()} />",
+        "<textarea>@if true { text }</textarea>",
+        "<textarea>{<span />}</textarea>",
+        "<title>@for item in [1] { {item} }</title>",
+    ] {
+        let bump = Bump::new();
+        let source = format!("pub component View() {{ {markup} }}");
+        assert!(solve_input(&bump, &source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn web_events_accept_typed_fields_and_unit_tasks() {
+    for handler in [
+        "onClick={() -> ()}",
+        "onClick={event -> { let x: Number = event.clientX\n() }}",
+        "onKeyDown={event -> { let key: String = event.key\n() }}",
+        "onClick={() -> async { () }}",
+        "onClick={event -> async { let x = event.clientX\n() }}",
+        "onClick={(event: MouseEvent) -> ()}",
+    ] {
+        let bump = Bump::new();
+        let source =
+            format!("import html.{{MouseEvent}}\npub component View() {{ <button {handler} /> }}");
+        solve_input(&bump, &source).unwrap_or_else(|error| panic!("{source}: {error:?}"));
+    }
+}
+
+#[test]
+fn web_events_reject_wrong_fields_arity_and_results() {
+    for handler in [
+        "onClick={event -> event.key}",
+        "onClick={() -> 42}",
+        "onClick={() -> async { 42 }}",
+        "onClick={(a, b) -> ()}",
+        "onClick={42}",
+        "onKeyDown={event -> event.clientX}",
+    ] {
+        let bump = Bump::new();
+        let source = format!("pub component View() {{ <button {handler} /> }}");
+        assert!(solve_input(&bump, &source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn input_event_fields_require_a_known_text_control() {
+    for markup in [
+        "<input onInput={event -> { let kind: String = event.inputType\n() }} />",
+        "<input type=\"text\" onInput={event -> { let kind: String = event.inputType\n() }} />",
+        "<textarea onInput={event -> { let kind: String = event.inputType\n() }} />",
+        "<input type=\"checkbox\" onInput={event -> { let trusted: Bool = event.isTrusted\n() }} />",
+    ] {
+        let bump = Bump::new();
+        solve_input(&bump, &format!("pub component View() {{ {markup} }}")).unwrap();
+    }
+    for markup in [
+        "<input type=\"checkbox\" onInput={event -> { let kind = event.inputType\n() }} />",
+        "<select onInput={event -> { let kind = event.inputType\n() }} />",
+        "<input type={\"text\"} onInput={event -> { let kind = event.inputType\n() }} />",
+    ] {
+        let bump = Bump::new();
+        assert!(
+            solve_input(&bump, &format!("pub component View() {{ {markup} }}")).is_err(),
+            "{markup}"
+        );
+    }
+}
+
+#[test]
+fn interactive_and_form_nesting_checks_cross_literal_regions() {
+    for markup in [
+        "<a><span><a /></span></a>",
+        "<button><span><button /></span></button>",
+        "<form><div><form /></div></form>",
+        "<a href=\"/\">@if true { <input /> }</a>",
+        "<button><><span tabindex={0} /></></button>",
+        "<a>@for item in [1] { <video controls /> }</a>",
+        "<button>@match true { true => <select />, false => <span /> }</button>",
+    ] {
+        let bump = Bump::new();
+        assert!(
+            solve_input(&bump, &format!("pub component View() {{ {markup} }}")).is_err(),
+            "{markup}"
+        );
+    }
+    for markup in [
+        "<button><span>Save</span></button>",
+        "<a><input type=\"hidden\" /></a>",
+        "<a><audio /></a>",
+        "<form><input /></form>",
+    ] {
+        let bump = Bump::new();
+        solve_input(&bump, &format!("pub component View() {{ {markup} }}")).unwrap();
+    }
+}
+
+#[test]
+fn web_component_props_children_and_optional_field_evidence() {
+    let bump = Bump::new();
+    let result = solve_input(&bump, indoc! {r#"
+        import html.{Html}
+        component Panel(props: { title: String, count?: Number, children: Html }) {
+            <section><h2>{props.title}</h2>{props.children}</section>
+        }
+        pub component View() {
+            <><Panel title="First"><span>Child</span></Panel><Panel title="Second" count={2}><span /></Panel></>
+        }
+    "#}).unwrap();
+    assert_eq!(
+        result
+            .omitted_record_fields
+            .values()
+            .flatten()
+            .filter(|name| **name == "count")
+            .count(),
+        1
+    );
+    assert_eq!(result.field_lifts.values().copied().sum::<usize>(), 1);
+}
+
+#[test]
+fn web_component_props_reject_missing_unknown_wrong_and_duplicate_children() {
+    for markup in [
+        "<Panel />",
+        "<Panel title={42} />",
+        "<Panel title=\"X\" unknown={2} />",
+        "<Panel title=\"X\"><span /></Panel>",
+    ] {
+        let bump = Bump::new();
+        let source = format!(
+            "component Panel(props: {{ title: String }}) {{ <h2>{{props.title}}</h2> }}\npub component View() {{ {markup} }}"
+        );
+        assert!(solve_input(&bump, &source).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn coalesce_unwraps_exactly_one_option_layer() {
     let bump = Bump::new();
     solve_input(
@@ -7402,6 +7584,8 @@ fn foreign_trait_for_foreign_subject_is_an_orphan() {
         items: &[],
         value_sccs: &[],
         assigned_bindings: &[],
+        store_bindings: &[],
+        value_store_dependencies: &[],
     };
     let interfaces = bump.alloc_slice_copy(&[interface]);
     let database = alder_solve::TraitDatabase::build(&bump, &module, interfaces);

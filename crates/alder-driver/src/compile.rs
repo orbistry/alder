@@ -229,6 +229,24 @@ fn build_sync_reported(
     dependencies: BuildDependencies,
     reporter: &dyn Reporter,
 ) -> BuildResult {
+    build_sync_for_web(
+        sources,
+        mode,
+        dependencies,
+        reporter,
+        &BTreeMap::new(),
+        false,
+    )
+}
+
+pub(crate) fn build_sync_for_web(
+    sources: Vec<(Url, Result<String, String>)>,
+    mode: BuildMode,
+    dependencies: BuildDependencies,
+    reporter: &dyn Reporter,
+    web_modules: &BTreeMap<Url, crate::web_build::ModuleOptions>,
+    provisional: bool,
+) -> BuildResult {
     let identities = match source_identities(sources.iter().map(|(uri, _)| uri), &dependencies) {
         Ok(identities) => identities,
         Err(error) => {
@@ -290,6 +308,7 @@ fn build_sync_reported(
                 &interfaces,
                 package_instances,
                 BuildMode::Check,
+                web_modules.get(uri),
             );
             if let Some(interface) = discovered.interface {
                 let existing = interfaces
@@ -325,6 +344,8 @@ fn build_sync_reported(
         items: &[],
         value_sccs: &[],
         assigned_bindings: &[],
+        store_bindings: &[],
+        value_store_dependencies: &[],
     });
     let registry = alder_solve::TraitDatabase::build_with_package_instances(
         &store,
@@ -386,6 +407,7 @@ fn build_sync_reported(
                         &interfaces,
                         package_instances,
                         BuildMode::Check,
+                        web_modules.get(uri),
                     )
                     .0
                     .result
@@ -465,6 +487,7 @@ fn build_sync_reported(
             &interfaces,
             package_instances,
             mode,
+            web_modules.get(uri),
         );
         if discovered.solved
             && let Some(interface) = discovered.interface
@@ -492,7 +515,9 @@ fn build_sync_reported(
     // to impl headers whose bodies failed in another source module.
     if success != total {
         artifacts.clear();
-        interface_files.clear();
+        if !provisional {
+            interface_files.clear();
+        }
     }
     let package_instance_indexes = package_indexes(&interface_files);
 
@@ -569,6 +594,7 @@ async fn fetch_sources(
 ///
 /// On success the module's interface is deep-copied into the build-wide
 /// `store` arena so it outlives this module's arena.
+#[allow(clippy::too_many_arguments)]
 fn compile_module<'s>(
     uri: &Url,
     source: &Result<String, String>,
@@ -577,6 +603,7 @@ fn compile_module<'s>(
     interfaces: &[Interface<'s>],
     package_instances: &'s [alder_ast::InterfaceImpl<'s>],
     mode: BuildMode,
+    web: Option<&crate::web_build::ModuleOptions>,
 ) -> (CompileOutput, InterfaceOutput<'s>) {
     let report_source = Source::new(
         uri.path(),
@@ -611,6 +638,7 @@ fn compile_module<'s>(
         Ok(module) => module,
         Err(e) => return failed(vec![crate::report::parse(report_source, &e)]),
     };
+    let module = crate::web_build::prepare_module(&module_arena, module, web);
 
     let home = ModuleId {
         package: hydrate_package_id(&module_arena, &identity.package),
@@ -707,6 +735,8 @@ fn compile_module<'s>(
     let warnings: Vec<Diagnostic> = can_result
         .warnings
         .iter()
+        // Generated route aliases have no user source location.
+        .filter(|warning| web.is_none() || warning.region != alder_region::Region::zero())
         .map(|warning| crate::report::warning(report_source.clone(), warning))
         .collect();
 
@@ -755,6 +785,8 @@ fn compile_module<'s>(
         &solved.annotations,
         interfaces,
     );
+    let module_interface =
+        crate::web_build::prepare_interface(&module_arena, module_interface, web);
     let artifact = match mode {
         BuildMode::Check => None,
         BuildMode::Build | BuildMode::Test => {
@@ -765,7 +797,28 @@ fn compile_module<'s>(
                     alder_codegen::EmitMode::Build
                 },
             };
-            match alder_codegen::emit_solved_module(can_result.module, &solved, options) {
+            // Synthetic alias imports are type-only and must not create an
+            // executable dependency on a nonexistent generated header module.
+            let runtime_module = alder_ast::Module {
+                id: can_result.module.id,
+                imports: module_arena.alloc_slice_fill_iter(
+                    can_result
+                        .module
+                        .imports
+                        .iter()
+                        .copied()
+                        .filter(|import| {
+                            web.is_none() || import.region != alder_region::Region::zero()
+                        })
+                        .collect::<Vec<_>>(),
+                ),
+                items: can_result.module.items,
+                value_sccs: can_result.module.value_sccs,
+                assigned_bindings: can_result.module.assigned_bindings,
+                store_bindings: can_result.module.store_bindings,
+                value_store_dependencies: can_result.module.value_store_dependencies,
+            };
+            match alder_codegen::emit_solved_module(&runtime_module, &solved, options) {
                 Ok(mut artifact) => {
                     artifact.source_path = uri.to_file_path().ok();
                     artifact.source_text = Some(source.clone());
@@ -1009,6 +1062,11 @@ macro_rules! assert_parser_diagnostic_snapshot {
 
 #[cfg(test)]
 mod tests {
+    mod actions;
+    mod cloudflare;
+    mod hooks;
+    mod http;
+    mod web;
     use super::*;
     use crate::source::InMemorySource;
 
@@ -6446,9 +6504,16 @@ mod tests {
     }
 
     #[test]
-    fn unimplemented_component_cannot_produce_executable_artifact() {
-        let source = "pub component Counter() { <div /> }";
-        assert_rendered_diagnostic_snapshot!(source, unavailable_codegen(source));
+    fn component_directive_produces_executable_artifact() {
+        let source = "pub component Counter() { <div>@if true { <span /> }</div> }";
+        let uri = url("project/src/main.ald");
+        let built = build_fixture_sync(
+            vec![(uri.clone(), Ok(source.to_owned()))],
+            BuildMode::Build,
+            BuildDependencies::default(),
+        );
+        assert!(built.is_success(), "{built:?}");
+        assert!(built.artifacts.contains_key(&uri));
     }
 
     fn unavailable_codegen(source: &str) -> Diagnostic {

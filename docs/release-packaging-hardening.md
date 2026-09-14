@@ -1,5 +1,9 @@
 # Release packaging verification
 
+Workers support distribution now has a separate current contract in
+[Compiler support in binary releases](release-packaging.md). The historical
+Cargo-package checkpoints below do not verify those new native support trees.
+
 Current workspace note: union-find cleanup removed the empty `tasks/stub`
 package. New packaging commands use `cargo package --workspace` without
 `--exclude stub`; commands below are historical evidence, not current recipes.

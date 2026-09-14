@@ -1,0 +1,107 @@
+---
+source: crates/alder-parse/src/item/attribute.rs
+description: "#[query] fn cached() { 1 }"
+---
+Located {
+    region: Region {
+        start: Position {
+            line: 1,
+            column: 1,
+        },
+        end: Position {
+            line: 1,
+            column: 27,
+        },
+    },
+    value: Item {
+        attributes: [
+            Located {
+                region: Region {
+                    start: Position {
+                        line: 1,
+                        column: 1,
+                    },
+                    end: Position {
+                        line: 1,
+                        column: 9,
+                    },
+                },
+                value: Attribute {
+                    name: Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 3,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 8,
+                            },
+                        },
+                        value: "query",
+                    },
+                    args: [],
+                },
+            },
+        ],
+        visibility: Private,
+        kind: Fn(
+            FnDecl {
+                is_async: false,
+                name: Located {
+                    region: Region {
+                        start: Position {
+                            line: 1,
+                            column: 13,
+                        },
+                        end: Position {
+                            line: 1,
+                            column: 19,
+                        },
+                    },
+                    value: "cached",
+                },
+                params: [],
+                ret: None,
+                where_clause: [],
+                body: Some(
+                    Located {
+                        region: Region {
+                            start: Position {
+                                line: 1,
+                                column: 22,
+                            },
+                            end: Position {
+                                line: 1,
+                                column: 27,
+                            },
+                        },
+                        value: Block {
+                            stmts: [],
+                            tail: Some(
+                                Located {
+                                    region: Region {
+                                        start: Position {
+                                            line: 1,
+                                            column: 24,
+                                        },
+                                        end: Position {
+                                            line: 1,
+                                            column: 25,
+                                        },
+                                    },
+                                    value: Number(
+                                        NumberLit {
+                                            value: 1.0,
+                                            text: "1",
+                                        },
+                                    ),
+                                },
+                            ),
+                        },
+                    },
+                ),
+            },
+        ),
+    },
+}

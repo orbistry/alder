@@ -13,3 +13,6 @@ dist/
 elm/
 polarity/
 scratch/
+node_modules/
+crates/alder-cli/support/release-support.json
+.github/scripts/__pycache__/

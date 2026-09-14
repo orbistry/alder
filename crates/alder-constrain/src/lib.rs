@@ -272,6 +272,9 @@ impl Error {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
+    InvalidMarkup {
+        message: String,
+    },
     AmbiguousOptionLifting,
     RecursiveErrorGroup {
         name: String,

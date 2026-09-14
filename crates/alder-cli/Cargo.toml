@@ -17,6 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 alder-bundle = { path = "../alder-bundle", version = "0.4.1" }
+alder-codegen = { path = "../alder-codegen", version = "0.5.1" }
 alder-config = { path = "../alder-config", version = "0.2.1" }
 alder-driver = { path = "../alder-driver", version = "0.7.0" }
 alder-fmt = { path = "../alder-fmt", version = "0.3.0" }
@@ -31,9 +32,12 @@ futures.workspace = true
 glob.workspace = true
 miette.workspace = true
 octocrab.workspace = true
+serde.workspace = true
+serde_json = "1"
 supports-hyperlinks = "3.2"
 tar.workspace = true
-tokio = { workspace = true, features = ["io-std", "macros", "rt-multi-thread"] }
+tempfile = "3"
+tokio = { workspace = true, features = ["io-std", "macros", "rt-multi-thread", "signal"] }
 tower-lsp-server.workspace = true
 url.workspace = true
 xz2.workspace = true

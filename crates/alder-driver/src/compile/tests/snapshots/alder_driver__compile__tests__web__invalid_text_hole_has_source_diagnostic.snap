@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <span>{[1, 2]}</span> }"
+---
+alder::type::invalid_markup
+
+  × markup holes require a concrete String, Number, BigInt, Bool, or Html
+  │ value
+   ╭─[/project/src/main.ald:1:31]
+ 1 │ pub component View() { <span>{[1, 2]}</span> }
+   ·                               ───┬──
+   ·                                  ╰── these types are incompatible
+   ╰────

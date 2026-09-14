@@ -1,0 +1,10 @@
+import (
+    html,
+    io,
+
+    ~/counter.{Counter},
+)
+
+pub fn main() {
+    io.print(html.renderToString(Counter({ initial: 2, label: "Counter" })))
+}

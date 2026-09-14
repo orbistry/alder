@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component Counter(props: { initial: Number, label: String }) {\n    let count = state(props.initial)\n    let doubled = count * 2\n    <section title={props.label}>\n        <button\n            onClick={() -> {\n                count += 1\n            }}\n            disabled={count >= 5}\n        >\n            {props.label}\n        </button>\n        <span title={`Count ${count}`}>{count}</span>\n        <strong>{doubled}</strong>\n    </section>\n}\n\npub fn bad() { Counter({ initial: \"wrong\", label: \"counter\" }) }"
+---
+alder::type::type_mismatch
+
+  × type mismatch: expected `Number`, found `String`
+    ╭─[/project/src/main.ald:18:35]
+ 17 │ 
+ 18 │ pub fn bad() { Counter({ initial: "wrong", label: "counter" }) }
+    ·                                   ───┬───
+    ·                                      ╰── argument 1 of `Counter` has an incompatible type
+    ╰────

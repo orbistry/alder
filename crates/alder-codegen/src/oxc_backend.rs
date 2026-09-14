@@ -1,5 +1,7 @@
 //! Direct canonical-AST to Oxc-AST lowering.
 
+mod web;
+
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
@@ -106,6 +108,17 @@ struct Emitter<'src, 'js> {
     self_dictionary: Option<String>,
     pattern_captures: Option<PatternCaptures>,
     solved: Option<&'src SolveOutput<'src>>,
+    web_cells: BTreeMap<alder_ast::LocalId, (String, bool)>,
+    in_component: bool,
+    web_setup_locals: BTreeSet<alder_ast::LocalId>,
+    web_computation: bool,
+    web_signature: Vec<String>,
+    web_resources: BTreeSet<alder_ast::LocalId>,
+    in_resource_loader: bool,
+    web_stores: BTreeSet<alder_ast::QualifiedName<'src>>,
+    web_store_cells: BTreeMap<alder_ast::QualifiedName<'src>, String>,
+    web_value_dependencies:
+        BTreeMap<alder_ast::QualifiedName<'src>, BTreeSet<alder_ast::QualifiedName<'src>>>,
 }
 
 struct PatternCaptures {
@@ -142,6 +155,16 @@ pub(crate) fn emit_module_ast(
             self_dictionary: None,
             pattern_captures: None,
             solved,
+            web_cells: BTreeMap::new(),
+            in_component: false,
+            web_setup_locals: BTreeSet::new(),
+            web_signature: Vec::new(),
+            web_resources: BTreeSet::new(),
+            in_resource_loader: false,
+            web_stores: BTreeSet::new(),
+            web_store_cells: BTreeMap::new(),
+            web_value_dependencies: BTreeMap::new(),
+            web_computation: false,
         };
         match emitter.module(module, options) {
             Ok((program, metadata)) => {
@@ -262,6 +285,50 @@ impl<'src, 'js> Emitter<'src, 'js> {
         module: &Module<'src>,
         options: EmitOptions,
     ) -> Result<(Program<'js>, Metadata), Error> {
+        self.web_stores.extend(module.store_bindings);
+        for (name, stores) in module.value_store_dependencies {
+            self.web_value_dependencies
+                .insert(*name, stores.iter().copied().collect());
+        }
+        if !self.web_stores.is_empty() {
+            self.kernel.insert("$webStoreCell");
+        }
+        for item in module.items {
+            match &item.value.kind {
+                ItemKind::Fn(function) => {
+                    self.web_value_dependencies.insert(
+                        function.name,
+                        alder_can::callable_value_dependencies(
+                            self.home,
+                            function.params,
+                            function.body,
+                        ),
+                    );
+                }
+                ItemKind::Let(decl) => {
+                    let dependencies =
+                        alder_can::expression_value_dependencies(self.home, decl.value);
+                    for binding in decl.bindings {
+                        self.web_value_dependencies
+                            .insert(*binding, dependencies.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+        loop {
+            let previous = self.web_value_dependencies.clone();
+            for dependencies in self.web_value_dependencies.values_mut() {
+                for dependency in dependencies.clone() {
+                    if let Some(nested) = previous.get(&dependency) {
+                        dependencies.extend(nested);
+                    }
+                }
+            }
+            if previous == self.web_value_dependencies {
+                break;
+            }
+        }
         let mut body = self.js.vec();
         let mut declarations = self.js.vec();
         let mut exports = Vec::new();
@@ -302,14 +369,21 @@ impl<'src, 'js> Emitter<'src, 'js> {
                         exports.push((top_name(function.name), function.name.name.to_owned()));
                     }
                 }
-                ItemKind::Component(_) => {
-                    return Err(Error {
-                        region: item.region,
-                        message: "components are not executable yet; component compilation is planned for M6",
-                    });
+                ItemKind::Component(component) => {
+                    declarations.push(self.component(component)?);
+                    if public {
+                        exports.push((top_name(component.name), component.name.name.to_owned()));
+                    }
                 }
                 ItemKind::Let(decl) => {
                     declarations.extend(self.top_let(decl)?);
+                    if matches!(decl.value.value, Expr::State(_)) {
+                        exports.extend(
+                            decl.bindings
+                                .iter()
+                                .map(|name| (top_name(*name), format!("$store${}", name.name))),
+                        );
+                    }
                     if public {
                         exports.extend(
                             decl.bindings
@@ -1213,6 +1287,21 @@ impl<'src, 'js> Emitter<'src, 'js> {
         &mut self,
         decl: &alder_ast::TopLevelLet<'src>,
     ) -> Result<ArenaVec<'js, Statement<'js>>, Error> {
+        if let Expr::State(initial) = decl.value.value {
+            return self.web_store_declaration(decl, initial);
+        }
+        if !matches!(decl.value.value, Expr::Lambda { .. })
+            && !self
+                .web_store_dependencies(alder_can::expression_value_dependencies(
+                    self.home, decl.value,
+                ))
+                .is_empty()
+        {
+            return Err(Error {
+                region: decl.value.region,
+                message: "module stores cannot be read by eager module initializers; read them inside a function or component",
+            });
+        }
         let value = self.expr(decl.value)?;
         let mut statements = value.prefix;
         let temp = self.temp();
@@ -1225,6 +1314,22 @@ impl<'src, 'js> Emitter<'src, 'js> {
     }
 
     fn expr(&mut self, node: &Located<Expr<'src>>) -> Result<Value<'js>, Error> {
+        if self.web_computation
+            && matches!(
+                node.value,
+                Expr::Async(_)
+                    | Expr::Loop(_)
+                    | Expr::Markup(_)
+                    | Expr::Provide { .. }
+                    | Expr::Await(_)
+                    | Expr::Try(_)
+            )
+        {
+            return Err(Error {
+                region: node.region,
+                message: "reactive computations require synchronous expressions with explicit value dependencies; control effects are not supported yet",
+            });
+        }
         let value = match &node.value {
             Expr::Number { text, .. } => self.pure(self.js.number_source(text)),
             Expr::BigInt(text) => self.pure(self.js.bigint_source(text)),
@@ -1337,7 +1442,13 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 use_id,
                 function,
                 arguments,
-            } => self.call(*use_id, function, arguments, self.js.vec(), None)?,
+            } => {
+                if let Some(value) = self.web_resource_call(function, arguments, node.region)? {
+                    value
+                } else {
+                    self.call(*use_id, function, arguments, self.js.vec(), None)?
+                }
+            }
             Expr::Access { record, field } => {
                 let record = self.expr(record)?;
                 let expr = self.js.member(record.expr, field.value);
@@ -1378,7 +1489,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
             Expr::State(_) => {
                 return Err(Error {
                     region: node.region,
-                    message: "reactive state is not executable yet; signal compilation is planned for M6",
+                    message: "state is supported only in direct component-body let bindings",
                 });
             }
             Expr::Negate {
@@ -1411,6 +1522,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 provider,
                 value,
                 body,
+                ..
             } => self.provide(*provider, value, body)?,
             Expr::Style(_) => {
                 return Err(Error {
@@ -1424,12 +1536,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     message: "queries are not executable yet; query compilation is planned for M7",
                 });
             }
-            Expr::Markup(_) => {
-                return Err(Error {
-                    region: node.region,
-                    message: "markup is not executable yet; rendering compilation is planned for M6",
-                });
-            }
+            Expr::Markup(markup) => self.markup(markup, node.region)?,
             Expr::MacroCall { .. } => {
                 return Err(Error {
                     region: node.region,
@@ -1941,7 +2048,11 @@ impl<'src, 'js> Emitter<'src, 'js> {
             self.checked_bind_pattern(param.pattern, arg, &mut statements)?;
         }
         let outer_loops = std::mem::take(&mut self.loop_results);
+        // Constructing a callback is pure; its body runs later under the caller,
+        // not while evaluating the derived computation that returns it.
+        let outer_computation = std::mem::replace(&mut self.web_computation, false);
         let value = self.expr(body);
+        self.web_computation = outer_computation;
         self.loop_results = outer_loops;
         let value = value?;
         statements.extend(value.prefix);
@@ -2214,6 +2325,12 @@ impl<'src, 'js> Emitter<'src, 'js> {
         &mut self,
         statement: &Located<alder_ast::Stmt<'src>>,
     ) -> Result<ArenaVec<'js, Statement<'js>>, Error> {
+        if self.web_computation {
+            return Err(Error {
+                region: statement.region,
+                message: "reactive computations cannot contain statements or assignments",
+            });
+        }
         let mut statements = self.js.vec();
         match &statement.value {
             alder_ast::Stmt::Let(decl) => {
@@ -2241,6 +2358,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                 op,
                 value,
             } => {
+                self.check_web_assignment(place, statement.region)?;
                 let value = self.expr(value)?;
                 let evidence = use_id.and_then(|use_id| {
                     self.solved
@@ -2399,7 +2517,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
     }
 
     fn place(&mut self, place: &alder_ast::Place<'src>) -> Result<Expression<'js>, Error> {
-        let mut target = self.js.identifier(&binding_name(place.root));
+        let mut target = self.web_binding(place.root);
         for step in place.steps {
             target = match step {
                 alder_ast::PlaceStep::Field(field) => self.js.member(target, field.value),
@@ -2433,8 +2551,8 @@ impl<'src, 'js> Emitter<'src, 'js> {
         Error,
     > {
         let mut prefix = self.js.vec();
-        let mut read = self.js.identifier(&binding_name(place.root));
-        let mut write = self.js.identifier(&binding_name(place.root));
+        let mut read = self.web_binding(place.root);
+        let mut write = self.web_binding(place.root);
         for step in place.steps {
             // Capture each receiver before an index or RHS can mutate the
             // root or an intermediate member. Read and write share that place.
@@ -2967,19 +3085,19 @@ impl<'src, 'js> Emitter<'src, 'js> {
 
     fn reference(&mut self, reference: ValueRef<'src>) -> Expression<'js> {
         match reference {
-            ValueRef::Local(local) => self.js.identifier(&super::local_name(local)),
+            ValueRef::Local(local) => self.web_binding(alder_ast::BindingName::Local(local)),
             ValueRef::TopLevel(name) if name.module == self.home => {
-                self.js.identifier(&top_name(name))
+                self.web_store_value(name, self.js.identifier(&top_name(name)))
             }
             ValueRef::TopLevel(name) => {
                 // Other modules export the public Alder name, not their local
                 // `$v_` binding. Direct dictionary calls also take this path.
                 let local = self.value_import(name, name.name.to_owned());
-                self.js.identifier(&local)
+                self.web_store_value(name, self.js.identifier(&local))
             }
             ValueRef::Foreign { reference, .. } => {
                 let local = self.value_import(reference, reference.name.to_owned());
-                self.js.identifier(&local)
+                self.web_store_value(reference, self.js.identifier(&local))
             }
             ValueRef::TraitMethod { method, .. } => {
                 let reference = alder_ast::QualifiedName {
@@ -2993,7 +3111,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
                     self.js.identifier(&local)
                 }
             }
-            ValueRef::Provider(provider) => {
+            ValueRef::Provider { provider, .. } => {
                 self.kernel.insert("$providerGet");
                 self.js.call(
                     self.js.identifier("$providerGet"),
@@ -3273,6 +3391,7 @@ impl<'src, 'js> Emitter<'src, 'js> {
         let mut properties = self.js.vec();
         match intrinsic {
             Intrinsic::EqNumber
+            | Intrinsic::EqCloudflareHandle
             | Intrinsic::EqString
             | Intrinsic::EqBool
             | Intrinsic::EqBigInt

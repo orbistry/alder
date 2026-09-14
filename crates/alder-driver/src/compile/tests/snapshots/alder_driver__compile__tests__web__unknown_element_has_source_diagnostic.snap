@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <nothtml>unknown</nothtml> }"
+---
+alder::type::invalid_markup
+
+  × unknown HTML element `<nothtml>`; custom element names must contain a dash
+   ╭─[/project/src/main.ald:1:25]
+ 1 │ pub component View() { <nothtml>unknown</nothtml> }
+   ·                         ───┬───
+   ·                            ╰── these types are incompatible
+   ╰────

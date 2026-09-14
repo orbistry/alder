@@ -5,6 +5,7 @@
 
 mod doc;
 mod imports;
+mod markup;
 
 use bumpalo::Bump;
 
@@ -43,7 +44,8 @@ pub fn format_source(source: &str) -> Result<String, Error> {
 
 pub fn format_with(source: &str, options: Options) -> Result<String, Error> {
     let imports = imports::format(source, options.indent_width).map_err(Error::Parse)?;
-    let source = imports.as_str();
+    let markup = markup::format(&imports, options)?;
+    let source = markup.as_str();
     let (before, ranges) = parse_info(source).map_err(Error::Parse)?;
     let mut masked = source.as_bytes().to_vec();
     for &(start, end) in &ranges {
@@ -414,14 +416,17 @@ mod tests {
     }
 
     #[test]
-    fn preserves_markup_text_whitespace() {
+    fn folds_markup_prose_whitespace() {
         let source = indoc! {r#"
             let view = <div>first
             <spaces>
             last</div>
         "#}
         .replace("<spaces>", "   ");
-        assert_eq!(format_source(&source).unwrap(), source);
+        assert_eq!(
+            format_source(&source).unwrap(),
+            "let view = <div>first last</div>\n"
+        );
     }
 
     #[test]

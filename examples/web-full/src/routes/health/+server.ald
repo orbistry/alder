@@ -1,0 +1,14 @@
+import (
+    http,
+    http.{RequestEvent, Response},
+
+    ~/counter,
+)
+
+#[derive(Json)]
+enum Health { Health { ok: Bool, requestCount: Number, path: String } }
+
+pub fn get(event: RequestEvent[Params]) Response {
+    let health = Health::Health { ok: true, requestCount: counter.read(), path: http.pathname(event.url) }
+    http.json(health)
+}

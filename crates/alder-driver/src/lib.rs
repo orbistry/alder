@@ -47,6 +47,7 @@
 //! }
 //! ```
 
+pub mod cloudflare;
 pub mod compile;
 pub mod database;
 pub mod error;
@@ -56,6 +57,10 @@ pub mod progress;
 pub mod project;
 mod report;
 pub mod source;
+pub mod web_actions;
+pub mod web_build;
+pub mod web_hooks;
+pub mod web_routes;
 
 // Re-export main types
 pub use compile::{

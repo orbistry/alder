@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { let value = state({ count: 0 })\n<button onClick={() -> { value.count += 1 }}>{value.count}</button> }"
+---
+alder::codegen
+
+  × replace the whole state value; nested state mutation is not supported yet
+   ╭─[/project/src/main.ald:2:26]
+ 1 │ pub component View() { let value = state({ count: 0 })
+ 2 │ <button onClick={() -> { value.count += 1 }}>{value.count}</button> }
+   ·                          ────────┬───────
+   ·                                  ╰── code generation failed here
+   ╰────

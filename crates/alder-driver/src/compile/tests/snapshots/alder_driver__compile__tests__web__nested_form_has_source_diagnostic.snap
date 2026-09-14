@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <form><div><form /></div></form> }"
+---
+alder::type::invalid_markup
+
+  × `<form>` is not a valid descendant of `<form>`
+   ╭─[/project/src/main.ald:1:36]
+ 1 │ pub component View() { <form><div><form /></div></form> }
+   ·                                    ──┬─
+   ·                                      ╰── these types are incompatible
+   ╰────

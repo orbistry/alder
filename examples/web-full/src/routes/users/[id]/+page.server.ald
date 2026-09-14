@@ -1,0 +1,26 @@
+import (
+    string,
+
+    ~/counter,
+    ~/session.{Session},
+)
+
+pub fn load(event: LoadEvent) Result[{ id: String, viewer: String, requestCount: Number }, [:missing(String)]] {
+    use Session
+    if event.params.id == "missing" {
+        Err(:missing("That user does not exist. This is a typed loader error."))
+    } else {
+        Ok({ id: event.params.id, viewer: Session.user, requestCount: counter.read() })
+    }
+}
+
+async fn save(input: { name: String }) Result[{ message: String }, [:invalid_name(String)]] {
+    use Session
+    if string.length(input.name) < 2 {
+        Err(:invalid_name("Use at least two characters."))
+    } else {
+        Ok({ message: string.concat(string.concat(Session.user, " submitted: "), input.name) })
+    }
+}
+
+pub let actions = { save }

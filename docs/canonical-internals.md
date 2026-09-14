@@ -448,7 +448,7 @@ pub enum ValueRef<'a> {
     Foreign { reference: QualifiedName<'a>, annotation: &'a Annotation<'a> },
     TraitMethod { method: MethodId<'a>, annotation: &'a Annotation<'a> },
     Module(ModuleId<'a>),
-    Provider(QualifiedName<'a>),
+    Provider { provider: QualifiedName<'a>, typ: Node<'a, Type<'a>> },
     QueryName(&'a str),
 }
 
@@ -502,7 +502,7 @@ pub enum Expr<'a> {
     If { branches: &'a [IfBranch<'a>], final_else: Option<Node<'a, Block<'a>>> },
     Match { scrutinee: Node<'a, Expr<'a>>, arms: &'a [MatchArm<'a>] },
     Loop(Node<'a, Block<'a>>),
-    Provide { provider: QualifiedName<'a>, value: Node<'a, Expr<'a>>, body: Node<'a, Block<'a>> },
+    Provide { provider: QualifiedName<'a>, typ: Node<'a, Type<'a>>, value: Node<'a, Expr<'a>>, body: Node<'a, Block<'a>> },
     State(Node<'a, Expr<'a>>),
     Style(&'a Style<'a>),
     Query(&'a Query<'a>),

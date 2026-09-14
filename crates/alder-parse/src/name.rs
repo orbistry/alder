@@ -54,6 +54,19 @@ impl<'a> Parser<'a> {
         Ok(self.located(start, name))
     }
 
+    /// `error` remains an item keyword, but is also a conventional record
+    /// field (error boundaries and Resource::Error payloads).
+    pub(crate) fn field_name<E>(
+        &mut self,
+        to_error: impl FnOnce(Row, Col) -> E,
+    ) -> Result<Name<'a>, E> {
+        if self.peek_keyword(b"error") {
+            self.raw_lower(to_error)
+        } else {
+            self.located_lower(to_error)
+        }
+    }
+
     /// `upper_name` with its region.
     pub(crate) fn located_upper<E>(
         &mut self,

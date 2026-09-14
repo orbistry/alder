@@ -22,6 +22,9 @@ pub struct Args {
 impl Args {
     pub(super) async fn exec(self, output: &crate::reporting::Output) -> Result<()> {
         let compiled = compile(&self.path, BuildMode::Build, output).await?;
+        if compiled.web.is_some() {
+            return super::web::write_build(&compiled, output).await;
+        }
         let kind = match compiled.target {
             Target::Standalone => EntryKind::Standalone,
             Target::Cloudflare => EntryKind::Cloudflare,
@@ -50,6 +53,17 @@ pub(super) struct Compiled {
     pub root: PathBuf,
     pub target: Target,
     pub result: BuildResult,
+    pub web: Option<alder_driver::web_routes::RouteManifest>,
+    pub remotes: Vec<alder_driver::web_build::RemoteModule>,
+    pub cloudflare: alder_driver::cloudflare::Metadata,
+    pub actions: Vec<alder_driver::web_actions::PageActions>,
+    pub web_generated: std::collections::HashMap<String, alder_codegen::EmittedModule>,
+    pub server_replacements: std::collections::HashMap<url::Url, alder_codegen::EmittedModule>,
+    pub server_implementations: std::collections::HashMap<String, alder_codegen::EmittedModule>,
+    pub page_options:
+        std::collections::BTreeMap<String, alder_driver::web_build::ResolvedRouteOptions>,
+    pub client_replacements: std::collections::HashMap<url::Url, alder_codegen::EmittedModule>,
+    pub client_store_keys: Vec<String>,
 }
 
 pub(super) async fn compile(
@@ -78,17 +92,107 @@ pub(super) async fn compile(
     modules.extend(dependencies.source_modules.iter().cloned());
     modules.sort();
     modules.dedup();
-    let graph = build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+    let roots = project
+        .source_directories()
+        .into_iter()
+        .filter(|root| root.join("routes").is_dir())
+        .collect::<Vec<_>>();
+    if roots.len() > 1 {
+        return Err(miette!("web routes must belong to one source directory"));
+    }
+    let (
+        result,
+        web,
+        remotes,
+        actions,
+        web_generated,
+        client_replacements,
+        server_replacements,
+        server_implementations,
+        page_options,
+        client_store_keys,
+    ) = if let Some(root) = roots.into_iter().next() {
+        let mut sources = Vec::new();
+        {
+            let mut db = db.lock().await;
+            for uri in modules {
+                let source = db
+                    .source(&uri)
+                    .await
+                    .map(str::to_owned)
+                    .map_err(|error| error.to_string());
+                sources.push((uri, source));
+            }
+        }
+        let reporter = output.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            alder_driver::web_build::build_sources_with_reporter(
+                &root,
+                sources,
+                mode,
+                dependencies,
+                &reporter,
+            )
+        })
         .await
         .into_diagnostic()?;
-    let result =
-        build_with_reporter(db, &graph, mode, dependencies, Arc::new(output.clone())).await;
+        let mut generated = result.validation_artifacts;
+        generated.extend(result.action_artifacts);
+        (
+            result.build,
+            result.manifest,
+            result.remotes,
+            result.actions,
+            generated,
+            result.client_replacements,
+            result.server_replacements,
+            result.server_implementations,
+            result.page_options,
+            result.client_store_keys,
+        )
+    } else {
+        let graph = build_graph_with_dependencies(db.clone(), &modules, &dependencies)
+            .await
+            .into_diagnostic()?;
+        (
+            build_with_reporter(db, &graph, mode, dependencies, Arc::new(output.clone())).await,
+            None,
+            Vec::new(),
+            Vec::new(),
+            std::collections::HashMap::new(),
+            std::collections::HashMap::new(),
+            std::collections::HashMap::new(),
+            std::collections::HashMap::new(),
+            std::collections::BTreeMap::new(),
+            Vec::new(),
+        )
+    };
     report_diagnostics(&project.root, &result, output)?;
+    let cloudflare = alder_driver::cloudflare::extract_build(&result).map_err(|errors| {
+        miette!(
+            "{}",
+            errors
+                .iter()
+                .map(|error| format!("{}: {}", error.source_uri, error.message))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    })?;
     persist_semantic_artifacts(&project.root, &result)?;
     Ok(Compiled {
         root: project.root,
         target,
         result,
+        web,
+        remotes,
+        cloudflare,
+        actions,
+        web_generated,
+        server_replacements,
+        server_implementations,
+        page_options,
+        client_replacements,
+        client_store_keys,
     })
 }
 

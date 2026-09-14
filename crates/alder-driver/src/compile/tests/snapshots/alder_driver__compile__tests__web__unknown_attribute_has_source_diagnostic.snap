@@ -1,0 +1,12 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "pub component View() { <div mystery=\"value\" /> }"
+---
+alder::type::invalid_markup
+
+  × attribute `mystery` is not supported on `<div>`
+   ╭─[/project/src/main.ald:1:29]
+ 1 │ pub component View() { <div mystery="value" /> }
+   ·                             ───┬───
+   ·                                ╰── these types are incompatible
+   ╰────

@@ -1,0 +1,13 @@
+import (
+    http.{RequestEvent, Response},
+
+    ~/counter,
+    ~/session.{Session},
+)
+
+pub async fn handle(event: RequestEvent[p], resolve: fn(RequestEvent[p]) Task[Response]) Response {
+    counter.increment()
+    provide Session = { user: "Alder visitor" } {
+        resolve(event).await
+    }
+}

@@ -1,0 +1,13 @@
+---
+source: crates/alder-driver/src/compile/tests/web.rs
+description: "import html.{Resource}\nimport html\npub component View() { let data: Resource[Number, [:missing]] = Resource::Ready(1)\n<button onClick={() -> html.refresh(data)}>refresh</button> }"
+---
+alder::codegen
+
+  × resource operations require a direct resource binding
+   ╭─[/project/src/main.ald:4:37]
+ 3 │ pub component View() { let data: Resource[Number, [:missing]] = Resource::Ready(1)
+ 4 │ <button onClick={() -> html.refresh(data)}>refresh</button> }
+   ·                                     ──┬─
+   ·                                       ╰── code generation failed here
+   ╰────

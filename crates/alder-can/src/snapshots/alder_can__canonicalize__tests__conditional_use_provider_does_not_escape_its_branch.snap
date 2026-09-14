@@ -1,0 +1,28 @@
+---
+source: crates/alder-can/src/canonicalize.rs
+description: "type Session = { user: String }\nfn read(flag: Bool) { if flag { use Session }\nSession.user }"
+---
+[
+    Error {
+        region: Region {
+            start: Position {
+                line: 3,
+                column: 1,
+            },
+            end: Position {
+                line: 3,
+                column: 8,
+            },
+        },
+        kind: Pattern(
+            Name(
+                Unknown {
+                    namespace: Constructor,
+                    qualifier: None,
+                    name: "Session",
+                    suggestions: [],
+                },
+            ),
+        ),
+    },
+]

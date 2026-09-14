@@ -256,6 +256,7 @@ fn constrain(source: Source, error: &alder_constrain::Error) -> Diagnostic {
         _ => {}
     }
     let (code, message) = match &error.kind {
+        ErrorKind::InvalidMarkup { message } => ("invalid_markup", message.clone()),
         ErrorKind::Mismatch { actual, expected } => (
             "type_mismatch",
             format!("type mismatch: expected `{expected}`, found `{actual}`"),

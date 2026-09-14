@@ -1,0 +1,19 @@
+import (
+    html.{Html},
+
+    ~/counter,
+)
+
+pub component layout(props: { children: Html }) {
+    <div>
+        <header>
+            <h1>Alder: the full web example</h1>
+            <nav>
+                <a href="/">Home</a> · <a href="/users/ada">Ada</a> · <a href="/users/grace">Grace</a> · <a href="/about">About</a>
+            </nav>
+            <p>Shared browser count: <strong id="layout-count">{counter.count}</strong></p>
+        </header>{props.children}<footer>
+            <a href="/health">JSON health</a> · <a href="/users/missing">Try the typed error boundary</a>
+        </footer>
+    </div>
+}

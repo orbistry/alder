@@ -1,0 +1,13 @@
+{
+  "name": "alder-web-support",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "miniflare": "5.20260911.1-alpha",
+    "wrangler": "4.131.2"
+  },
+  "devDependencies": {
+    "playwright-core": "1.63.0"
+  }
+}

@@ -207,6 +207,7 @@ pub enum OwnedValueKind {
     Schema,
     Extern,
     TraitMethod,
+    Store,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -217,6 +218,7 @@ pub enum OwnedValueIdentity {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OwnedValue {
+    pub store_dependencies: Vec<OwnedQualifiedName>,
     pub exported_as: String,
     pub identity: OwnedValueIdentity,
     pub scheme: OwnedScheme,
@@ -383,6 +385,11 @@ pub(crate) fn own_interface(interface: &ast::Interface<'_>) -> super::InterfaceF
 
 fn own_value(value: &ast::InterfaceValue<'_>) -> OwnedValue {
     OwnedValue {
+        store_dependencies: value
+            .store_dependencies
+            .iter()
+            .map(|name| own_qualified_name(*name))
+            .collect(),
         exported_as: value.exported_as.to_owned(),
         identity: match value.identity {
             ast::InterfaceValueIdentity::Binding(name) => {
@@ -794,6 +801,7 @@ fn own_value_kind(kind: ast::ValueKind) -> OwnedValueKind {
         ast::ValueKind::Schema => OwnedValueKind::Schema,
         ast::ValueKind::Extern => OwnedValueKind::Extern,
         ast::ValueKind::TraitMethod => OwnedValueKind::TraitMethod,
+        ast::ValueKind::Store => OwnedValueKind::Store,
     }
 }
 
@@ -836,6 +844,12 @@ pub(crate) fn hydrate_interface<'a>(
         home: hydrate_module_id(bump, &interface.module),
         values: bump.alloc_slice_fill_iter(interface.values.iter().map(|value| {
             ast::InterfaceValue {
+                store_dependencies: bump.alloc_slice_fill_iter(
+                    value
+                        .store_dependencies
+                        .iter()
+                        .map(|name| hydrate_qualified_name(bump, name)),
+                ),
                 exported_as: bump.alloc_str(&value.exported_as),
                 identity: match &value.identity {
                     OwnedValueIdentity::Binding(name) => {
@@ -1264,6 +1278,7 @@ fn hydrate_value_kind(kind: OwnedValueKind) -> ast::ValueKind {
         OwnedValueKind::Schema => ast::ValueKind::Schema,
         OwnedValueKind::Extern => ast::ValueKind::Extern,
         OwnedValueKind::TraitMethod => ast::ValueKind::TraitMethod,
+        OwnedValueKind::Store => ast::ValueKind::Store,
     }
 }
 

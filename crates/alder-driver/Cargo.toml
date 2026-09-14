@@ -14,6 +14,7 @@ bumpalo.workspace = true
 glob.workspace = true
 miette.workspace = true
 serde.workspace = true
+serde_json = "1.0"
 sha2.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync", "fs"] }
@@ -31,6 +32,10 @@ alder-solve = { path = "../alder-solve", version = "0.5.2" }
 alder-source = { path = "../alder-source", version = "0.4.0" }
 
 [dev-dependencies]
+alder-fmt = { path = "../alder-fmt" }
+alder-bundle = { path = "../alder-bundle" }
+alder-kernel = { path = "../alder-kernel" }
+alder-runtime = { path = "../alder-runtime" }
 indoc.workspace = true
 insta.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
