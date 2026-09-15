@@ -11,11 +11,13 @@ try {
   const errors = [], remotes = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("request", request => {if (request.url().includes("/_alder/remote/")) remotes.push(request.url());});
-  await page.route("**/_alder/client.mjs*", async route => {
+  await page.route(/\/_alder\/(?:client|entry-[^/]+)\.mjs(?:\?.*)?$/, async route => {
     await page.evaluate(() => {window.__originalGreeting=document.getElementById("greeting");window.__originalCount=document.getElementById("layout-count");});
     await route.continue();
   });
   const initial = await page.goto(origin);
+  // The production entry loads route chunks asynchronously after document load.
+  await page.waitForLoadState("networkidle");
   assert.equal(initial.status(),200);
   assert.match(await initial.text(),/Hello, /);
   await page.locator("#greeting").waitFor();
@@ -55,6 +57,14 @@ try {
   await page.waitForFunction(()=>document.getElementById("form-status")?.textContent==="Alder visitor submitted: Ada Lovelace");
   assert.equal(await page.evaluate(()=>performance.timeOrigin),time);
   console.log("PASS: client navigation preserves stores; native form submission uses typed server validation and hook context");
+
+  for (const name of ["Grace", "Ada", "Grace", "Ada"]) {
+    await page.getByRole("link",{name,exact:true}).click();
+    await page.waitForFunction(id => document.getElementById("user-id")?.textContent === `User: ${id}`,name.toLowerCase());
+    assert.equal(await page.locator("#layout-count").textContent(),"2");
+    assert.equal(await page.evaluate(()=>performance.timeOrigin),time);
+  }
+  console.log("PASS: repeated Ada/Grace prerender navigation keeps the same document and browser store");
 
   await page.getByRole("link",{name:"Try the typed error boundary"}).click();
   await page.locator("#page-error").waitFor();

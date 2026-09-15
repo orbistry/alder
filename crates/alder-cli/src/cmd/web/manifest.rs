@@ -298,7 +298,18 @@ pub fn load(event: LoadEvent) Result[{ message: String }, [:missing(String)]] {
             serde_json::to_string(repeated.manifest.as_ref().unwrap()).unwrap()
         );
         super::super::write_build(&compiled, &output).await.unwrap();
+        let published: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(path.join("dist/manifest.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(published["build"], manifest.build);
         let html = std::fs::read_to_string(path.join("dist/client/index.html")).unwrap();
+        let data =
+            std::fs::read_to_string(path.join("dist/client/_alder/data/index.json")).unwrap();
+        assert!(html.contains(&manifest.build));
+        assert!(data.contains(&manifest.build));
+        let server = std::fs::read_to_string(path.join("dist/server.mjs")).unwrap();
+        assert!(server.contains(&manifest.build));
         assert!(html.contains(&manifest.entry));
         assert!(!html.contains("/_alder/client.mjs"));
         for file in initial {

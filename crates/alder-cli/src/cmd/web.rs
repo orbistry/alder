@@ -256,7 +256,17 @@ async fn bundle_with_pages(
         // generated module text misses changes in server-only JS dependencies;
         // hashing the final server would make the manifest identity circular.
         let mut identity_modules = modules.clone();
-        identity_modules.push(alder_codegen::support::web::entry(&application, false));
+        // Prerendered documents already contain this identity. They are build
+        // outputs, not inputs: including them changes the ID on the second
+        // bundling pass and makes navigation mistake its own pages for an update.
+        let identity_application = Application {
+            prerendered: Vec::new(),
+            ..application.clone()
+        };
+        identity_modules.push(alder_codegen::support::web::entry(
+            &identity_application,
+            false,
+        ));
         if !compiled.cloudflare.adapters.is_empty() {
             identity_modules.push(alder_codegen::support::cloudflare::adapters(
                 &compiled.cloudflare.adapters,

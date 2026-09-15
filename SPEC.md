@@ -419,6 +419,7 @@ and kernel APIs, not CLI subprocess tests; manual CLI fixture checks are allowed
 - [x] Structured multi-file bundles, production minification, lazy route chunks,
   hashed assets/manifests, preload/cache integration, source-map policy, and
   deployment-safe recovery. Design and acceptance: `plans/production-bundling.md`.
+- [x] Keep production build identity consistent between prerendered pages and the live server.
 
 ### M7: Data layer
 

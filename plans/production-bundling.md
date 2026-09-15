@@ -362,3 +362,23 @@ remain explicit: maps target generated JavaScript, compression reports are not
 latency measurements, standalone embedding increases raw/Brotli server size,
 reload recovery can discard unsaved state, and no external deployment or
 cross-platform release-matrix execution is claimed. No commit or push was made.
+
+### Deployment follow-up: stable prerender identity
+
+The subsequently authorized `alder-test` deployment exposed a missed regression:
+the final server identity included prerendered pages, whereas those pages carried
+the identity from the first bundling pass. Navigation therefore interpreted its
+own prerender output as a new deployment and reloaded, resetting browser stores.
+The identity graph now excludes prerender output while retaining resolved
+server-only JavaScript dependencies. The compiler regression checks the initial
+manifest against the published manifest, prerender HTML/data, and final server;
+it failed before the fix and passes afterward.
+
+The browser acceptance helper now intercepts hashed production entries, waits
+for asynchronous initial loading, and explicitly checks repeated Ada/Grace
+navigation without document replacement or store loss. All checks pass against
+both the local built Worker and the live deployment. Workspace tests, strict
+Clippy, and formatting pass. The live home/about/Ada/Grace documents and navigation
+responses all report the same build ID. Cloudflare version
+`796e9d1b-34bb-499f-9e34-244659d399c7` is deployed at
+<https://alder-test.rvcas.workers.dev>.
