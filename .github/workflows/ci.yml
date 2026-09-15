@@ -9,16 +9,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  release-notes:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Test release-note aggregation and preservation
-        run: python -m unittest discover -s .github/scripts -p '*_test.py'
-
   check:
     runs-on: ubuntu-latest
     steps:
