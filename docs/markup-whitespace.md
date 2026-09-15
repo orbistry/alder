@@ -60,7 +60,7 @@ Verified on 2026-09-14:
 - `cargo clippy --all-targets --all-features -- -D warnings` passed.
 - `cargo test --quiet` passed across the workspace (two existing ignored doctests).
 - `alder fmt --check examples/web-full` passed for 12 files;
-  `alder fmt --check tests/e2e/web` passed for two files.
+  `alder fmt --check examples/web-counter` passed for two files.
 - `alder build examples/web-full` built both bundles and prerendered About,
   Ada, and Grace. About's generated HTML contains folded prose without layout
   whitespace between its elements.

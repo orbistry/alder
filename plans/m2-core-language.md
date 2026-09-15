@@ -260,14 +260,14 @@ Design panel producing `docs/codegen-internals.md`:
 
 ### M2b, wave 2: integration and sweep
 
-- End-to-end tests: a `tests/e2e/` directory of small `standalone`
+- End-to-end tests: a `examples/` directory of small `standalone`
   projects (hello world, enums and match, records with optional fields,
   loops and assignment, externs to `node:`-free web APIs like `fetch` against a
   local `deno_http` server) run through `alder build` and `alder run`
   with expected stdout.
 - Every docs example that is a full `standalone` module compiles and,
   where it has a `main`, runs.
-- `alder fmt --check` runs in CI over `std/` and `tests/e2e/`.
+- `alder fmt --check` runs in CI over `std/` and `examples/`.
 - Critic pass, docs and SPEC updates, changeset.
 
 ## Tests to add (minimum)

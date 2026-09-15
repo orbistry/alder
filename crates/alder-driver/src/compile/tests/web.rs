@@ -1,12 +1,12 @@
 use super::*;
 
-const COUNTER: &str = include_str!("../../../../../tests/e2e/web/src/counter.ald");
+const COUNTER: &str = include_str!("../../../../../examples/web-counter/src/counter.ald");
 
 #[tokio::test(flavor = "current_thread")]
 async fn markup_whitespace_before_and_after_formatting_renders_and_hydrates_identically() {
     let source = indoc::indoc! {r#"
         import html.{Html}
-        #[extern("../../../support/web-harness.js", "checkWhitespace")]
+        #[extern("../../../tests/support/web-harness.js", "checkWhitespace")]
         fn checkWhitespace(factory: fn() Html) Task[()]
         pub component View() {
             let name = state("Ada")
@@ -51,7 +51,7 @@ async fn named_task_handlers_and_read_closures_capture_live_state_without_runnin
     run_compiled_web(
         indoc::indoc! {r#"
         import html.{Html}
-        #[extern("../../../support/web-harness.js", "checkNamedHandlers")]
+        #[extern("../../../tests/support/web-harness.js", "checkNamedHandlers")]
         fn checkNamedHandlers(factory: fn() Html) Task[()]
         pub component View() {
             let count = state(0)
@@ -99,7 +99,7 @@ async fn imported_module_stores_are_request_scoped_and_reactive_after_hydration(
     let source = indoc::indoc! {r#"
         import html.{Html}
         import ~/store as store
-        #[extern("../../../support/web-harness.js", "checkStores")]
+        #[extern("../../../tests/support/web-harness.js", "checkStores")]
         fn checkStores(factory: fn() Html, read: fn() Number, increment: fn() ()) Task[()]
         pub component View() {
             let doubled = store.count * 2
@@ -117,7 +117,7 @@ async fn imported_helpers_track_transitive_private_store_captures() {
     let source = indoc::indoc! {r#"
         import html.{Html}
         import ~/helper
-        #[extern("../../../support/web-harness.js", "checkStores")]
+        #[extern("../../../tests/support/web-harness.js", "checkStores")]
         fn checkStores(factory: fn() Html, read: fn() Number, increment: fn() ()) Task[()]
         pub component View() {
             let doubled = helper.read() * 2
@@ -163,11 +163,11 @@ async fn compiled_resources_suspend_ssr_hydrate_without_fetch_and_refresh() {
         indoc::indoc! {r#"
         import html.{Html, Resource}
         import html
-        #[extern("../../../support/web-harness.js", "resourceLoad")]
+        #[extern("../../../tests/support/web-harness.js", "resourceLoad")]
         fn load(value: Number) Task[Result[Number, [:missing(String)]]]
-        #[extern("../../../support/web-harness.js", "resourceSetup")]
+        #[extern("../../../tests/support/web-harness.js", "resourceSetup")]
         fn setup() ()
-        #[extern("../../../support/web-harness.js", "checkResources")]
+        #[extern("../../../tests/support/web-harness.js", "checkResources")]
         fn checkResources(factory: fn() Html) Task[()]
 
         pub component View() {
@@ -196,7 +196,7 @@ async fn compiled_resources_suspend_ssr_hydrate_without_fetch_and_refresh() {
 async fn compiled_composition_directives_and_keyed_rows_reuse_hydrated_nodes() {
     run_compiled_web(indoc::indoc! {r#"
         import html.{Html}
-        #[extern("../../../support/web-harness.js", "checkComposition")]
+        #[extern("../../../tests/support/web-harness.js", "checkComposition")]
         fn checkComposition(factory: fn() Html) ()
 
         component Frame(props: { title: String, children: Html }) {
@@ -365,7 +365,7 @@ fn derived_assignment_has_source_diagnostic() {
 #[tokio::test(flavor = "current_thread")]
 async fn compiled_counter_ssr_hydrates_updates_and_disposes() {
     let source = format!(
-        "import html.{{Html}}\n{COUNTER}\n#[extern(\"../../../support/web-harness.js\", \"checkCounter\")]\nfn checkCounter(factory: fn({{ initial: Number, label: String }}) Html) ()\npub fn main() {{ checkCounter(Counter) }}\n"
+        "import html.{{Html}}\n{COUNTER}\n#[extern(\"../../../tests/support/web-harness.js\", \"checkCounter\")]\nfn checkCounter(factory: fn({{ initial: Number, label: String }}) Html) ()\npub fn main() {{ checkCounter(Counter) }}\n"
     );
     run_compiled_web(source).await;
 }
@@ -376,7 +376,7 @@ async fn run_compiled_web(source: String) {
 
 async fn run_compiled_web_with_modules(source: String, modules: &[(&str, &str)]) {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/e2e/web/src/counter.ald");
+        .join("../../examples/web-counter/src/counter.ald");
     let uri = Url::from_file_path(&fixture).unwrap();
     let mut sources = vec![(uri.clone(), Ok(source))];
     for (name, source) in modules {
@@ -409,11 +409,11 @@ async fn run_compiled_web_with_modules(source: String, modules: &[(&str, &str)])
 async fn compiled_setup_runs_once_and_derived_tracks_only_its_dependencies() {
     run_compiled_web(indoc::indoc! {r#"
         import html.{Html}
-        #[extern("../../../support/web-harness.js", "recordSetup")]
+        #[extern("../../../tests/support/web-harness.js", "recordSetup")]
         fn recordSetup(value: Number) Number
-        #[extern("../../../support/web-harness.js", "recordDerived")]
+        #[extern("../../../tests/support/web-harness.js", "recordDerived")]
         fn recordDerived(value: Number) Number
-        #[extern("../../../support/web-harness.js", "checkReactivity")]
+        #[extern("../../../tests/support/web-harness.js", "checkReactivity")]
         fn checkReactivity(factory: fn(Number) Html) ()
 
         pub component Probe(initial: Number) {

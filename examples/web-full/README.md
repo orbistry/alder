@@ -20,7 +20,7 @@ dev server, install the pinned platform support dependencies once, and switch
 the example's configuration:
 
 ```sh
-npm ci --prefix crates/alder-cli/support
+cargo run -p alder-cli -- cloudflare setup
 cp examples/web-full/alder.cloudflare.jsonc examples/web-full/alder.jsonc
 cargo run -p alder-cli -- dev examples/web-full
 ```

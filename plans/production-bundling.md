@@ -211,9 +211,9 @@ and failed-build preservation tests remain in the suite.
   6 passed, 2 skipped (PowerShell unavailable and optional live cargo-dist
   installer output not supplied). These skipped environments are not claimed.
 - `python3 tools/generate-html-schema.py --check`: pinned schema matches.
-- `alder fmt examples --check`: 18 correct after formatting the existing
-  `examples/web/src/routes/+page.ald` button; formatting-only change.
-- `alder fmt tests/e2e --check`: 63 correct.
+- Alder format checks covered 18 web-example files (after the formatting-only
+  `examples/web/src/routes/+page.ald` button change) and 63 standalone files.
+  Following consolidation, `alder fmt examples --check` passes for all 81 files.
 - `cargo fmt --all -- --check` and strict workspace Clippy: passed after the new
   publication test.
 - `cargo test --quiet`: full workspace passed again, including 17 CLI tests and

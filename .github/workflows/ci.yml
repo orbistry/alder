@@ -9,19 +9,14 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  release-packaging:
+  release-notes:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-      - name: Test compiler support host selection
-        run: node --test .github/scripts/prepare-alder-support.test.mjs
-      - name: Test checked installers and release checksums
+      - name: Test release-note aggregation and preservation
         run: python -m unittest discover -s .github/scripts -p '*_test.py'
 
   check:
@@ -44,6 +39,16 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Tests
         run: cargo test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Explicit Cloudflare tooling setup
+        run: cargo run --locked -p alder-cli -- cloudflare setup
+      - name: Test offline setup isolation and cache publication
+        run: cargo test --locked -p alder-cli real_npm_setup_is_local -- --ignored --nocapture
+      - name: Remove CI Cloudflare tooling
+        if: always()
+        run: cargo run --locked -p alder-cli -- cloudflare setup --remove
       - name: Verify release packages
         # Use a fresh target directory: unreleased local versions can otherwise
         # reuse stale dependency artifacts from an earlier package verification.
@@ -60,3 +65,15 @@ jobs:
           cache-targets: "false"
       - name: Build CLI
         run: cargo build --locked -p alder-cli
+      - name: Test CLI cache and installer behavior
+        run: cargo test --locked -p alder-cli
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Explicit Cloudflare tooling setup
+        run: cargo run --locked -p alder-cli -- cloudflare setup
+      - name: Test offline setup isolation and cache publication
+        run: cargo test --locked -p alder-cli real_npm_setup_is_local -- --ignored --nocapture
+      - name: Remove CI Cloudflare tooling
+        if: always()
+        run: cargo run --locked -p alder-cli -- cloudflare setup --remove

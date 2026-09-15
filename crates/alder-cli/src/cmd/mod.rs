@@ -1,5 +1,7 @@
 pub mod build;
 pub mod check;
+pub mod cloudflare;
+pub mod cloudflare_process;
 pub mod deploy;
 pub mod dev;
 pub mod fmt;
@@ -11,6 +13,8 @@ pub(crate) mod web;
 
 #[derive(clap::Subcommand)]
 pub enum Cmd {
+    /// Set up Cloudflare tooling or authenticate through Wrangler
+    Cloudflare(cloudflare::Args),
     /// Build a bundled ESM artifact
     Build(build::Args),
     /// Serve a web application with automatic compilation and state-preserving updates
@@ -35,6 +39,7 @@ impl Cmd {
         output.begin();
 
         let operation = match &self {
+            Cmd::Cloudflare(_) => "cloudflare",
             Cmd::Build(_) => "build",
             Cmd::Dev(_) => "dev",
             Cmd::Deploy(_) => "deploy",
@@ -48,6 +53,7 @@ impl Cmd {
         let started = std::time::Instant::now();
 
         let result = match self {
+            Cmd::Cloudflare(args) => args.exec(&output).await,
             Cmd::Build(args) => args.exec(&output).await,
             Cmd::Dev(args) => args.exec(&output).await,
             Cmd::Deploy(args) => args.exec(&output).await,

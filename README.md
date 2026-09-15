@@ -21,13 +21,13 @@ Cloudflare setup, production artifacts, browser checks, and deployment. The
 [M6 acceptance ledger](plans/m6-acceptance.md) separates implemented/local
 verification from the explicitly authorized live-preview deployment gate.
 
-Runnable examples live in [`tests/e2e/`](tests/e2e/) alongside their assertions.
+Runnable examples live in [`examples/`](examples/) alongside their assertions.
 For example:
 
 ```sh
-cargo run --bin alder -- run tests/e2e/hello
-cargo run --bin alder -- run tests/e2e/pipes
-cargo run --bin alder -- run tests/e2e/explicit_async
+cargo run --bin alder -- run examples/hello
+cargo run --bin alder -- run examples/pipes
+cargo run --bin alder -- run examples/explicit_async
 ```
 
 Run the development checks with:

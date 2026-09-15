@@ -1,5 +1,10 @@
 # Full M6 acceptance ledger
 
+Historical milestone evidence follows. Its bundled-support release design and
+packaging tests are superseded by [explicit shared Cloudflare
+setup](cloudflare-tooling-setup.md); they are not evidence for the current
+binary-only release implementation.
+
 Active goal: finish `plans/m6-web.md`, not only its existing counter slice.
 Unchecked items are not proven complete. Record implementation paths and actual
 test/manual evidence next to each gate as it lands. Browser, standalone, and

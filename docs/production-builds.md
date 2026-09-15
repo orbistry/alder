@@ -105,7 +105,7 @@ increment the count, edit a heading, and verify the update retains state.
 
 Automated regression gates are `cargo test`,
 `cargo clippy --all-targets --all-features -- -D warnings`,
-`cargo fmt --all -- --check`, and Alder format checks on `examples` and `tests/e2e`.
+`cargo fmt --all -- --check`, and Alder format checks on `examples`.
 Release-package verification uses `cargo package --workspace --allow-dirty
 --target-dir /absolute/fresh/temporary/directory`; a fresh target prevents stale
 unreleased dependency artifacts from masking package failures.

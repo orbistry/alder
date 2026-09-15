@@ -59,7 +59,7 @@ validation remain tracked by the compiler-hardening plan.
 
 ## Compiled collection/Option boundary
 
-`tests/e2e/record_options/src/collections.ald`, imported and called by the
+`examples/record_options/src/collections.ald`, imported and called by the
 fixture's main module, now executes the following through the CLI pipeline:
 
 - Map lookup distinguishes a missing entry from a present None, Some payload,

@@ -205,7 +205,7 @@ Implementation locations:
 - `tests/support/dom-shim.js`: test-only parser for this SSR grammar and a
   deterministic DOM with identity, allocation, mutation, and listener checks.
 
-The [counter fixture](../tests/e2e/web/src/counter.ald) is shared by compiler
+The [counter fixture](../examples/web-counter/src/counter.ald) is shared by compiler
 regressions and optional manual CLI checks. The JS test bridge only asserts
 behavior of the compiled component; it does not implement a substitute counter.
 No test launches the CLI, nested Cargo, browser, or platform processes.

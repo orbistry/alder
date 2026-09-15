@@ -45,3 +45,6 @@ tower-lsp-server.workspace = true
 url.workspace = true
 xz2.workspace = true
 zip.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

@@ -201,7 +201,7 @@ Current kernel tests map the principal obligations:
 
 The stored traversal-function test in the driver retains callback/result types
 and optional options through serialization and rejects non-unit forEach
-callbacks. `tests/e2e/explicit_async/src/traversals.ald` executes all public
+callbacks. `examples/explicit_async/src/traversals.ald` executes all public
 variants, ordinary Result collection, typed propagation, per-run laziness, and
 parent interruption/typed failure waiting for both active item finalizers.
 The freshly packaged CLI executes that project successfully.

@@ -400,7 +400,7 @@ and kernel APIs, not CLI subprocess tests; manual CLI fixture checks are allowed
 - [x] First counter slice: annotated props, bounded typed HTML/zero-argument
   events, local state and derived cells, direct DOM updates, escaped SSR, strict
   node-reusing hydration, independent owners, and disposal; contracts in
-  `docs/web-internals.md`, direct compiler/kernel regressions, and `tests/e2e/web`.
+  `docs/web-internals.md`, direct compiler/kernel regressions, and `examples/web-counter`.
 - [x] Typed markup checking against a pinned HTML schema, typed attributes/events and structural diagnostics
 - [x] `component` and `state`, compile-time dependency tracking, direct DOM codegen, composition, children, reactive branches and keyed lists
 - [x] SSR renderer, owned resources, deterministic transport and node-reusing hydration in the kernel
@@ -420,6 +420,8 @@ and kernel APIs, not CLI subprocess tests; manual CLI fixture checks are allowed
   hashed assets/manifests, preload/cache integration, source-map policy, and
   deployment-safe recovery. Design and acceptance: `plans/production-bundling.md`.
 - [x] Keep production build identity consistent between prerendered pages and the live server.
+- [x] Explicit shared Cloudflare setup/login and stock binary releases; see
+  `plans/cloudflare-tooling-setup.md` for implementation and verification gates.
 
 ### M7: Data layer
 

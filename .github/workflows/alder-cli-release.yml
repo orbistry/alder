@@ -127,21 +127,6 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           fi
-      - name: "Install Node.js for compiler support"
-        uses: "actions/setup-node@v6"
-        with:
-          "cache": "npm"
-          "cache-dependency-path": "crates/alder-cli/support/package-lock.json"
-          "node-version": "22"
-      - name: "Verify native compiler support target"
-        run: "node .github/scripts/prepare-alder-support.mjs --check-host \"${{ join(matrix.targets, ' ') }}\""
-        shell: "bash"
-      - name: "Install locked compiler support dependencies"
-        run: "npm ci --prefix crates/alder-cli/support --omit=dev --bin-links=false --no-audit --no-fund"
-        shell: "bash"
-      - name: "Validate release support tree and native workerd"
-        run: "node .github/scripts/prepare-alder-support.mjs --verify \"${{ join(matrix.targets, ' ') }}\""
-        shell: "bash"
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
       # Get the dist-manifest
@@ -158,7 +143,6 @@ jobs:
         run: |
           # Actually do builds and make zips and whatnot
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
-          python .github/scripts/package-alder-installers.py --verify-local dist-manifest.json
           echo "dist ran successfully"
       - id: cargo-dist
         name: Post-build
@@ -212,7 +196,6 @@ jobs:
         shell: bash
         run: |
           dist build ${{ needs.plan.outputs.tag-flag }} --output-format=json "--artifacts=global" > dist-manifest.json
-          python3 .github/scripts/package-alder-installers.py dist-manifest.json
           echo "dist ran successfully"
 
           # Parse out what we just built and upload it to scratch storage

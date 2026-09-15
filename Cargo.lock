@@ -145,6 +145,7 @@ dependencies = [
  "flate2",
  "futures",
  "glob",
+ "libc",
  "miette",
  "octocrab",
  "serde",

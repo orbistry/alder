@@ -18,7 +18,7 @@ missed Elm's shared retention of pre-whitespace expression endpoints.
   construct or apply Elm's indentation rules to Alder.
 - Preserve accepted syntax, nested leaf errors, source identity, Unicode/CRLF
   coordinates, and valid multiline/comment-heavy constructs.
-- Preserve the user's intentionally broken `tests/e2e/async/src/main.ald` fixture.
+- Preserve the user's intentionally broken `examples/async/src/main.ald` fixture.
 
 ## Acceptance
 

@@ -62,7 +62,7 @@ interface. Existing context runtime behavior remains intact until migration.
   recursion, async capture, and indirect calls cannot erase requirements.
 - [ ] Direct compiler/kernel tests check construction order, sharing, lexical
   capture, fresh test roots, overrides, and absence of context leakage. Optional
-  manual CLI runs on `tests/e2e/` fixtures supplement these checks; Rust tests
+  manual CLI runs on `examples/` fixtures supplement these checks; Rust tests
   must not invoke the CLI or nest Cargo builds/runs.
 - [ ] Runtime tests cover failed/cancelled startup, exactly-once cleanup,
   dependency-ordered teardown, scoped work, and escaped-resource rejection.

@@ -36,7 +36,7 @@ These flags and `--color auto|always|never` can appear before or after the
 subcommand. Arguments following `run --` belong to the program, not the CLI.
 
 ```text
-    Checking async (tests/e2e/async)
+    Checking async (examples/async)
     Finished check in 0.18s · 2 modules
 
    Compiling api (apps/api)
@@ -69,8 +69,8 @@ compiler versions must themselves support those options.
 
 ## Dev server
 
-- `cloudflare` target: a vendored miniflare shipped as compiler support
-  files (not a static part of the binary). No delegation to `wrangler dev`
+- `cloudflare` target: pinned Miniflare installed separately with
+  `alder cloudflare setup`, using user-provided Node.js >=22. No delegation to `wrangler dev`
   or Vite.
 - `standalone` web applications: embedded V8/deno_http with HMR.
 - HMR preserves compatible signal and store state; incompatible component

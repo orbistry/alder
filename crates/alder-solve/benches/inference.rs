@@ -170,7 +170,7 @@ fn cases() -> Vec<(&'static str, String)> {
 
 fn fixture(path: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/e2e")
+        .join("../../examples")
         .join(path);
     std::fs::read_to_string(path).expect("run inference benchmarks from an Alder source checkout")
 }

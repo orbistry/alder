@@ -4,10 +4,15 @@ Components with compile-time-tracked signals, typed markup checked against
 an HTML schema, SSR with hydration, SvelteKit-style folder routing with
 generated `PageData` and typed `Routes`, remote functions and
 `+page.server.ald` as the server boundary, server hooks with typed context,
-request-scoped module stores, page options, `alder dev` on vendored
+request-scoped module stores, page options, `alder dev` on pinned
 miniflare, `alder deploy` generating `wrangler.jsonc`, and Cloudflare
 bindings via traits and attributes. The slice ends with a deployed page on
 Workers and the same app running self-hosted on `standalone`.
+
+The original bundled-tooling distribution described in this milestone is
+superseded by [explicit shared Cloudflare setup](cloudflare-tooling-setup.md).
+Miniflare remains the development runtime; its dependencies are now installed
+separately with `alder cloudflare setup`, not shipped in compiler archives.
 
 ## Current scope and sequencing
 
@@ -50,7 +55,7 @@ Acceptance for this first slice:
 - [x] Verify initial SSR output, safe escaping, hydration node reuse, event
   attachment, state/derived updates, independent component instances, and cleanup.
 - [x] Add direct compiler and kernel regression tests, plus a fixture under
-  `tests/e2e/` for optional manual CLI/browser confirmation.
+  `examples/` for optional manual CLI/browser confirmation.
 - [x] Pass workspace formatting, strict Clippy, and tests; update docs, SPEC
   progress, and a changeset for the implementation without marking all M6 done.
 
@@ -75,7 +80,7 @@ Verification (2026-09-14): `cargo fmt --all`,
 `cargo test --quiet` pass. The focused coverage includes 26 driver web tests
 and five kernel web tests. A manual
 `cargo run --manifest-path ../../../Cargo.toml -p alder-cli -- run` from
-`tests/e2e/web` also passed and printed the expected SSR counter with values
+`examples/web-counter` also passed and printed the expected SSR counter with values
 2 and 4. Hydration was verified with the deterministic DOM shim, not a real
 browser or platform deployment. No CLI subprocess tests were added.
 
@@ -145,7 +150,7 @@ and verification supersede that scope; DI and macros remain intentionally deferr
   are server boundaries; no per-function boundary attribute.
 - Cloudflare concepts are traits plus attributes; bindings arrive through
   context; `alder deploy` owns wrangler config and migrations.
-- Dev server: vendored miniflare for cloudflare, deno_core with HMR for
+- Dev server: explicitly installed pinned miniflare for cloudflare, deno_core with HMR for
   standalone; never `wrangler dev` or Vite.
 
 ## Resolved implementation decisions
@@ -254,7 +259,7 @@ acceptance requirements.
   exercise fixtures; do not restore the removed CLI subprocess E2E harness.
 - Exercise emitted JavaScript in the existing runtime test harness and use a
   deterministic DOM shim for fast component/hydration regressions in CI.
-- Manual CLI invocations on `tests/e2e/` fixtures are allowed for development
+- Manual CLI invocations on `examples/` fixtures are allowed for development
   confirmation. Record commands and results separately from automated coverage.
 - Platform process/deployment smoke checks belong to explicit, opt-in manual
   validation, not the ordinary `cargo test` acceptance path. Deployments still

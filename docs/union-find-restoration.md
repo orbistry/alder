@@ -72,7 +72,7 @@ profile and the same eight sources. Development-profile changes do not affect it
 The synthetic cases exercise a 200-link function chain, nine levels of shared
 tuple duplication, 100 polymorphic callers, 80 record-overlay callers, and 80
 nested trait-heavy callers. The real inputs are the pipes program, async trait
-methods, and Result instances from `tests/e2e`. Fixture reads occur before the
+methods, and Result instances from `examples`. Fixture reads occur before the
 timer; benchmark compilation does not require out-of-package `include_str!` files.
 
 ## Union-find measurements

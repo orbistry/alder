@@ -124,14 +124,14 @@ fn extract_tar_xz(data: &[u8], dest_dir: &std::path::Path) -> Result<()> {
         }
         if !kind.is_file() {
             return Err(miette!(
-                "Compiler archive contains a non-regular support entry: {}",
+                "Compiler archive contains a non-regular binary entry: {}",
                 path.display()
             ));
         }
         let mode = entry.header().mode().into_diagnostic()?;
         copy_entry(&mut entry, dest_dir, &relative, mode, &mut layout)?;
     }
-    layout.finish(dest_dir)
+    layout.finish()
 }
 
 fn extract_zip(data: &[u8], dest_dir: &std::path::Path) -> Result<()> {
@@ -152,13 +152,13 @@ fn extract_zip(data: &[u8], dest_dir: &std::path::Path) -> Result<()> {
         let mode = file.unix_mode().unwrap_or(0o644);
         if mode & 0o170000 != 0 && mode & 0o170000 != 0o100000 {
             return Err(miette!(
-                "Compiler archive contains a non-regular support entry: {}",
+                "Compiler archive contains a non-regular binary entry: {}",
                 path.display()
             ));
         }
         copy_entry(&mut file, dest_dir, &relative, mode, &mut layout)?;
     }
-    layout.finish(dest_dir)
+    layout.finish()
 }
 
 fn binary_name() -> &'static str {
@@ -170,12 +170,11 @@ struct ArchiveLayout {
     prefix: Option<PathBuf>,
     files: BTreeSet<PathBuf>,
     bytes: u64,
-    has_support: bool,
 }
 
 impl ArchiveLayout {
     /// cargo-dist tarballs have one enclosing directory; zip and historical
-    /// archives may be flat. Only the compiler and its sibling support tree
+    /// archives may be flat. Only the compiler binary
     /// are installed, never arbitrary files from a release asset.
     fn select(&mut self, path: &Path) -> Result<Option<PathBuf>> {
         let mut parts = Vec::new();
@@ -193,15 +192,9 @@ impl ArchiveLayout {
                 }
             }
         }
-        let index = if parts
-            .first()
-            .is_some_and(|part| *part == "support" || *part == binary_name())
-        {
+        let index = if parts.first().is_some_and(|part| *part == binary_name()) {
             0
-        } else if parts
-            .get(1)
-            .is_some_and(|part| *part == "support" || *part == binary_name())
-        {
+        } else if parts.get(1).is_some_and(|part| *part == binary_name()) {
             1
         } else {
             return Ok(None);
@@ -218,39 +211,12 @@ impl ArchiveLayout {
             return Err(miette!("Compiler archive mixes different root directories"));
         }
         self.prefix = Some(prefix);
-        self.has_support |= parts[index] == "support";
         Ok(Some(parts[index..].iter().collect()))
     }
 
-    fn finish(self, dest_dir: &Path) -> Result<()> {
+    fn finish(self) -> Result<()> {
         if !self.files.contains(Path::new(binary_name())) {
             return Err(miette!("Could not find {} in archive", binary_name()));
-        }
-        // Historical binary-only releases remain installable. New support
-        // trees must be complete enough to run without a project npm install.
-        if self.has_support {
-            for file in [
-                "package.json",
-                "release-support.json",
-                "cloudflare-dev.mjs",
-                "node_modules/miniflare/package.json",
-                "node_modules/wrangler/bin/wrangler.js",
-                "node_modules/workerd/package.json",
-                "node_modules/workerd/bin/workerd",
-            ] {
-                if !dest_dir.join("support").join(file).is_file() {
-                    return Err(miette!(
-                        "Incomplete compiler support archive: missing support/{file}"
-                    ));
-                }
-            }
-            let metadata: serde_json::Value = serde_json::from_slice(
-                &std::fs::read(dest_dir.join("support/release-support.json")).into_diagnostic()?,
-            )
-            .into_diagnostic()?;
-            if metadata["target"].as_str() != Some(platform_target()?) {
-                return Err(miette!("Compiler support archive targets another platform"));
-            }
         }
         Ok(())
     }
@@ -383,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn archive_installs_support_and_preserves_native_executable_permissions() {
+    fn archive_installs_only_binary_and_preserves_executable_permissions() {
         for root in ["", "alder-cli-platform/"] {
             for (ext, data) in [
                 ("tar.xz", tar(&files(true), root)),
@@ -403,14 +369,17 @@ mod tests {
                     std::fs::read(dest.join(binary_name())).unwrap(),
                     b"compiler"
                 );
-                let runtime = dest.join("support/node_modules/workerd/bin/workerd");
-                assert_eq!(std::fs::read(&runtime).unwrap(), b"native runtime");
+                assert!(!dest.join("support").exists());
                 assert!(!dest.join("README.md").exists());
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
                     assert_eq!(
-                        std::fs::metadata(runtime).unwrap().permissions().mode() & 0o777,
+                        std::fs::metadata(dest.join(binary_name()))
+                            .unwrap()
+                            .permissions()
+                            .mode()
+                            & 0o777,
                         0o755
                     );
                 }
@@ -440,9 +409,8 @@ mod tests {
     }
 
     #[test]
-    fn incomplete_support_and_duplicate_binaries_are_not_published() {
-        let mut incomplete = files(false);
-        incomplete.push(("support/package.json".into(), b"{}".to_vec(), 0o644));
+    fn missing_and_duplicate_binaries_are_not_published() {
+        let incomplete = vec![("README.md".into(), b"no compiler".to_vec(), 0o644)];
         let mut duplicate = files(false);
         duplicate.push((format!("./{}", binary_name()), b"duplicate".to_vec(), 0o755));
         for files in [incomplete, duplicate] {
@@ -485,13 +453,13 @@ mod tests {
             .unwrap();
         assert!(
             layout
-                .select(Path::new("two/support/package.json"))
+                .select(&Path::new("two").join(binary_name()))
                 .is_err()
         );
     }
 
     #[test]
-    fn support_symlinks_are_rejected_before_publication() {
+    fn binary_symlinks_are_rejected_before_publication() {
         let xz = xz2::write::XzEncoder::new(Vec::new(), 1);
         let mut archive = tar::Builder::new(xz);
         let mut header = tar::Header::new_gnu();
@@ -501,7 +469,7 @@ mod tests {
         header.set_link_name("../../outside").unwrap();
         header.set_cksum();
         archive
-            .append_data(&mut header, "support/escape", std::io::empty())
+            .append_data(&mut header, binary_name(), std::io::empty())
             .unwrap();
         let data = archive.into_inner().unwrap().finish().unwrap();
         let temp = tempfile::tempdir().unwrap();
@@ -518,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn support_for_another_platform_is_not_published() {
+    fn legacy_support_is_ignored_without_modifying_existing_installations() {
         let mut archive_files = files(true);
         archive_files
             .iter_mut()
@@ -527,17 +495,30 @@ mod tests {
             .1 = br#"{"target":"wrong-platform"}"#.to_vec();
         let temporary = tempfile::tempdir().unwrap();
         let destination = temporary.path().join("version");
-        assert!(
-            install_archive(
-                "bad",
-                &destination,
-                "zip",
-                &zip(&archive_files, ""),
-                &crate::reporting::Output::default()
-            )
-            .is_err()
+        install_archive(
+            "bad",
+            &destination,
+            "zip",
+            &zip(&archive_files, ""),
+            &crate::reporting::Output::default(),
+        )
+        .unwrap();
+        assert!(destination.join(binary_name()).is_file());
+        assert!(!destination.join("support").exists());
+        std::fs::create_dir(destination.join("support")).unwrap();
+        std::fs::write(destination.join("support/legacy"), "keep").unwrap();
+        install_archive(
+            "same",
+            &destination,
+            "zip",
+            &zip(&files(false), ""),
+            &crate::reporting::Output::silent(),
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(destination.join("support/legacy")).unwrap(),
+            "keep"
         );
-        assert!(!destination.exists());
     }
 
     #[test]

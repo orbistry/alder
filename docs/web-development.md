@@ -80,10 +80,10 @@ output is separate from the structured build-result channel.
 
 ## Cloudflare development and build
 
-Source checkouts need Node.js 22+ and the compiler-owned pinned dependencies:
+Cloudflare commands need user-provided Node.js 22+ and explicitly installed tooling:
 
 ```sh
-npm ci --prefix crates/alder-cli/support
+target/debug/alder cloudflare setup
 cp examples/web-full/alder.cloudflare.jsonc examples/web-full/alder.jsonc
 target/debug/alder dev examples/web-full --port 3000
 ```
@@ -91,8 +91,8 @@ target/debug/alder dev examples/web-full --port 3000
 Stop dev before switching targets. The same Alder sources run in a directly
 controlled local Miniflare/workerd instance; neither `wrangler dev` nor Vite is
 used. Local binding state persists under the project's `.alder` directory.
-Compiler binary releases package their support tree; this npm setup is only
-for source checkouts/custom distributions. See [release packaging](release-packaging.md).
+Source checkouts and binary releases use the same shared tooling cache; release
+archives do not contain an npm tree. See [release packaging](release-packaging.md).
 
 Build the Worker and validate deployment packaging without uploading:
 

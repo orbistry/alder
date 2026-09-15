@@ -3,13 +3,13 @@ use super::*;
 #[tokio::test(flavor = "current_thread")]
 async fn cloudflare_owned_native_handle_equality_executes_as_identity() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/e2e/web/src/platform.ald");
+        .join("../../examples/web-counter/src/platform.ald");
     let uri = Url::from_file_path(fixture).unwrap();
     let source = indoc::indoc! {r#"
         import cloudflare.{DurableObjectState, WorkflowStep}
         enum ObjectState { ObjectState(DurableObjectState) }
         enum Checkpoint { Checkpoint(WorkflowStep) }
-        #[extern("../../../support/cloudflare-handles.js", "checkHandleIdentity")]
+        #[extern("../../../tests/support/cloudflare-handles.js", "checkHandleIdentity")]
         fn checkHandleIdentity(states: fn(DurableObjectState, DurableObjectState) Bool, steps: fn(WorkflowStep, WorkflowStep) Bool) ()
         pub fn main() {
             checkHandleIdentity(

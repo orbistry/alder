@@ -1764,7 +1764,7 @@ Root cause: virtual module imports lack a physical importer location.
   CLI validation is currently red: existing `modules` fixture passes a fresh
   nested record literal to an optional-field parameter and is over-rejected.
   Extend contextual construction to call arguments and nested records instead
-  of weakening mutable-alias checks. Added `tests/e2e/records` and registered
+  of weakening mutable-alias checks. Added `examples/records` and registered
   it for execution to cover renamed row tails and optional missing/present reads.
   Running that new fixture directly compiles but exits with an assertion
   failure. Code inspection shows Access still emits raw member reads while

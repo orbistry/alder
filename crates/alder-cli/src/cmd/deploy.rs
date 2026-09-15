@@ -1,4 +1,4 @@
-use std::{path::PathBuf, process::Stdio};
+use std::path::PathBuf;
 
 use alder_config::Target;
 use alder_driver::BuildMode;
@@ -32,7 +32,7 @@ impl Args {
                 "alder deploy requires a Cloudflare application with filesystem routes"
             ));
         }
-        let support = super::platform::support_directory()?;
+        let support = super::cloudflare::resolve().await?;
         let mut config = super::web::cloudflare_config(
             &compiled,
             self.name,
@@ -85,16 +85,11 @@ impl Args {
             },
             config["name"].as_str().expect("validated Worker name"),
         );
-        let mut command = tokio::process::Command::new("node");
+        let mut command = support.wrangler();
         command
-            .arg(support.join("node_modules/wrangler/bin/wrangler.js"))
             .args(["deploy", "--config"])
             .arg(&path)
             .args(["--no-bundle", "--keep-vars", "--autoconfig=false"])
-            .env("WRANGLER_SEND_METRICS", "false")
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
             .kill_on_drop(true);
         if self.dry_run {
             command

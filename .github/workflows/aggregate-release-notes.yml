@@ -1,7 +1,7 @@
 # Invoked by the dist-generated release workflow (post-announce-jobs in
 # dist-workspace.toml) after the GitHub Release exists. Replaces the
-# release body (which dist fills from alder-cli's CHANGELOG.md alone) with
-# notes aggregated across every crate co-released at this tag. If this job
+# changelog portion of the release body with notes aggregated across every
+# crate co-released at this tag, preserving generated installers. If this job
 # fails, the release simply keeps alder-cli's notes.
 name: aggregate-release-notes
 
@@ -26,8 +26,15 @@ jobs:
           # release tags pointing at this commit.
           fetch-depth: 0
       - name: Aggregate per-crate changelogs
+        env:
+          DIST_PLAN: ${{ inputs.plan }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          python3 .github/scripts/aggregate_release_notes.py > "$RUNNER_TEMP/notes.md"
+          printf '%s' "$DIST_PLAN" > "$RUNNER_TEMP/plan.json"
+          gh release view "$RELEASE_TAG" --json body > "$RUNNER_TEMP/current-notes.json"
+          python3 .github/scripts/aggregate_release_notes.py --body "$RUNNER_TEMP/current-notes.json" --plan "$RUNNER_TEMP/plan.json" > "$RUNNER_TEMP/notes.md"
           cat "$RUNNER_TEMP/notes.md"
       - name: Update release notes
-        run: gh release edit "${{ github.ref_name }}" --notes-file "$RUNNER_TEMP/notes.md"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release edit "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"

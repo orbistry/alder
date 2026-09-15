@@ -1,78 +1,92 @@
-# Compiler support in binary releases
+# Binary releases and optional Cloudflare tooling
 
-The compiler's Workers tooling is a versioned part of the compiler distribution,
-not an npm dependency of each Alder project. Official platform archives contain
-`alder` (or `alder.exe`) and a sibling `support/` directory with the bridge,
-locked production npm dependencies, Miniflare, Wrangler, and native workerd.
-`node_modules` is generated during release builds and is never checked in.
+Official Alder archives contain the compiler binary and ordinary release
+metadata, not a third-party npm tree. Miniflare, Wrangler, and workerd are
+installed separately and shared between projects and compatible compiler
+versions. Users supply Node; Alder never bundles or downloads it. Standalone
+execution and ordinary non-Cloudflare builds do not need Node.
 
-Node.js 22 or newer must be available on `PATH` for Workers development,
-prerendering, and deployment. Node is not bundled. Ordinary compiler-only
-operations do not need Node. Source checkouts can populate their compiler-owned
-support directory with `npm ci --prefix crates/alder-cli/support`; users of
-binary releases should not need this command.
+```sh
+alder cloudflare setup
+alder cloudflare setup --check
+alder cloudflare login
+alder deploy app --name EXACT_WORKER --account-id EXACT_ACCOUNT_ID
+```
 
-## Build and validation
+Setup requires Node.js >=22 matching Alder's platform/architecture and npm on
+PATH. It installs locked production dependencies into the user's OS cache
+directory under `alder/cloudflare/`.
+The compatibility key includes the package/lockfile, first-party bridge
+contract, and platform, not the Alder version. Healthy matching installations
+are reused. Commands never implicitly install missing tooling; they explain
+which prerequisite or setup command is needed.
+Successful setup shows only Alder's status lines. If npm fails, the tail of its
+output is included in Alder's error diagnostic; login output remains interactive.
 
-`dist-workspace.toml` includes `crates/alder-cli/support` in platform archives.
-The checked `github-build-setup` steps install Node 22, verify the release target
-matches the runner's actual OS/architecture, run the lockfile-driven
-`npm ci --omit=dev --bin-links=false`, and validate the resulting tree. Optional
-native packages must be installed on the matching target, so merged or
-cross-architecture support builds fail. `workerd --version` and loading Miniflare
-are checked before packaging. `release-support.json` records the target and
-pinned dependency versions.
+`--check` validates without downloading. `--remove` removes only the selected
+installation, leaving other versions and Wrangler credentials alone.
+Setup/removal refuse to run while a command holds a lease on that installation.
+Failed npm installation or validation does not publish a ready installation.
+Replacement preserves the previous installation until publication succeeds;
+explicit setup recovers an interrupted publication on its next run.
+The lockfile retains npm integrity checks; a file inventory detects subsequent
+cache damage. First-party bridge source is embedded in the compiler and copied
+out during setup, without embedding third-party dependencies.
+Setup explicitly selects its local staging prefix, platform and dependency
+layout. Lifecycle scripts are disabled; native binaries come from the locked
+optional packages and are tested before publication. User registry/proxy
+configuration remains available. See [npm ci configuration](https://docs.npmjs.com/cli/v11/commands/npm-ci/).
 
-After each native archive is built, a second check inspects the actual tar.xz or
-zip output. It requires the bridge, Miniflare, Wrangler, launcher, native workerd,
-and matching support metadata. Missing files, mixed roots, links, duplicate
-files, or wrong-platform support stop the release before upload.
+`alder cloudflare login` invokes the cached Wrangler with inherited terminal
+streams. Wrangler handles its browser login and normal auth storage; Alder
+does not collect or copy credentials. Development and prerendering use local
+Miniflare/workerd. Deployment retains Wrangler and explicit account/Worker
+selection. There is no separate `alder cloudflare deploy` command.
+Cancellation waits for delegated processes before releasing the installation
+lease. On Unix, setup runs in a separate process group; interactive login stays
+in the foreground terminal group. Windows uses normal console cancellation
+with tree termination if a child does not stop.
 
-The npm package is a platform-neutral launcher; its installer keeps the complete
-downloaded native archive. Homebrew installs extra files in
-`share/alder/support`, which the CLI recognizes. The shell and PowerShell
-installers place support at
-`<binary-directory>/.alder-support/<compiler-version>/<target>/` before replacing
-the binary. They do not delete unrelated sibling `support` directories or older
-versioned support trees.
+The explicit integration test requires Node/npm and a primed npm cache:
 
-Cargo-dist 0.32.0 does not install arbitrary archive directories through its
-shell/PowerShell templates. `.github/scripts/package-alder-installers.py`
-therefore applies a deliberately version-pinned, fail-closed adapter to those
-two generated installers. It asserts unique upstream template anchors,
-recomputes modified installer hashes, updates checksum files and the aggregate
-`sha256.sum`, and updates the dist manifest before upload. The npm/Homebrew
-templates are not patched. CI runs adapter tests on Linux and Windows, including
-actual shell/PowerShell support-directory installation and hash consistency.
+```sh
+cargo run -p alder-cli -- cloudflare setup
+cargo test -p alder-cli real_npm_setup_is_local -- --ignored --nocapture
+```
 
-When regenerating release CI, run both commands:
+It installs in a temporary path containing spaces with deliberately conflicting
+npm settings, forces npm offline, validates the result and removes the fixture.
+
+## Stock cargo-dist releases
+
+Shell, PowerShell, npm, and Homebrew installers are generated by pinned
+cargo-dist 0.32.0 without installer patches or checksum rewriting. Binary
+release jobs do not install or package Cloudflare npm dependencies.
 
 ```sh
 dist generate --mode ci
-python3 .github/scripts/package-alder-installers.py --workflow .github/workflows/alder-cli-release.yml
+dist generate --mode ci --check
 ```
 
-The dist `allow-dirty = ["ci"]` setting permits these two checked post-build
-steps. Tests require that both remain in the workflow and that the dist version
-still matches the adapter. Upgrading cargo-dist requires reviewing its
-installer templates and updating the adapter; it must not silently skip
-support installation.
+No workflow patch step or `allow-dirty` exception is required. CI may explicitly
+set up tooling to test Cloudflare independently of binary archive contents.
 
-## Version proxy
+The compiler-version proxy extracts only `alder`/`alder.exe` into staging and
+publishes it after validation. It retains executable permissions and rejects
+unsafe paths, duplicate binaries, mixed roots, and non-regular binary entries.
+Existing cached versions and legacy support directories are not silently
+deleted. Support files in older downloaded archives are ignored, not installed.
+The old `ALDER_SUPPORT_DIR` lookup and installer-specific support locations are
+no longer used by new compilers.
 
-The version proxy downloads the existing platform archive names. It extracts
-only the compiler and its sibling support tree into a fresh staging directory,
-checks support completeness and platform identity, then atomically publishes
-the entire version directory. Permissions on native executables are retained.
-Traversal, absolute paths, archive links, duplicate files, mixed roots, and
-excessive extraction sizes are rejected. Failed extraction cannot leave a
-cached binary that appears ready while its support is incomplete.
+## Release descriptions
 
-Older binary-only compiler releases remain installable. An existing nonempty
-incomplete cache directory is preserved and reported for manual inspection,
-not overwritten. `ALDER_SUPPORT_DIR` remains an explicit override for custom
-compiler distributions.
+Cargo-dist selects one package/workspace changelog, not independently versioned
+sections across a Sampo release. The retained aggregation job deduplicates those
+entries while replacing only the original changelog section identified by the
+release plan. Generated installation commands, downloads, and unrelated text
+are preserved. Markers make reruns idempotent. Missing or ambiguous boundaries
+fail before editing the release.
 
-Primary packaging references: [cargo-dist configuration](https://axodotdev.github.io/cargo-dist/book/reference/config.html),
-[the pinned installer templates](https://github.com/axodotdev/cargo-dist/tree/v0.32.0/cargo-dist/templates/installer),
-and [GitHub native runner labels](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+References: [cargo-dist configuration](https://axodotdev.github.io/cargo-dist/book/reference/config.html)
+and [pinned release-body generation](https://github.com/axodotdev/cargo-dist/blob/v0.32.0/cargo-dist/src/announce.rs).

@@ -36,7 +36,7 @@ rejected correctly and removed, not used to justify expanding the language.
 
 - `later_pin_mutation_cannot_invalidate_captured_payloads` is a source-aware
   direct-AST snapshot showing the Option payload captured before mutation.
-- `tests/e2e/control_flow/src/pattern_capture.ald` executes the original failure,
+- `examples/control_flow/src/pattern_capture.ald` executes the original failure,
   array-rest copying before later mutation, nested alias identity, and an awaited
   pin which replaces an already-matched Option.
 - Existing CLI pattern cases exercise failed shape gates, skipped sibling pins,

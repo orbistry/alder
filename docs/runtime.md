@@ -162,8 +162,8 @@ Durable Object storage, queues, and workflows are in
   provider identities and are installed by the generated request entry point.
   Declaring a handle does not implement an entire service-specific data API;
   the D1/Hyperdrive query layer remains M7.
-- Development runs on a vendored miniflare shipped as compiler support
-  files, never by delegating to `wrangler dev` or Vite. `standalone`
+- Development runs on pinned Miniflare installed with `alder cloudflare setup`,
+  never by delegating to `wrangler dev` or Vite. `standalone`
   targets use deno_core with HMR.
 
 ## Deployment

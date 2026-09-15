@@ -139,7 +139,7 @@ payload never invokes the child codec, and verifies that present null reaches
 the codec as a String. It failed before the fix; all 45 kernel tests pass after.
 
 The initial end-to-end attempt using the then-derived
-`Failure` error group in `tests/e2e/traits` was rejected before execution:
+`Failure` error group in `examples/traits` was rejected before execution:
 
 ```alder
 import json

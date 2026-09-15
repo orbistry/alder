@@ -13,6 +13,7 @@ collapsed into one compact section.
 """
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -24,6 +25,29 @@ SECTION_RE = re.compile(r"^## (?P<version>\d+\.\d+\.\d+(?:[-+][\w.]+)?)(?:\s.*)?
 SUBSECTION_RE = re.compile(r"^### (?P<level>.+?)\s*$")
 TAG_RE = re.compile(r"^(?P<crate>[a-z][a-z0-9-]*)-v(?P<version>\d+\.\d+\.\d+(?:[-+][\w.]+)?)$")
 DEPS_RE = re.compile(r"^- Updated dependencies:\s*(?P<deps>.+?)\s*$")
+NOTES_START = "<!-- alder:aggregate-release-notes:start -->"
+NOTES_END = "<!-- alder:aggregate-release-notes:end -->"
+
+
+def compose_release_body(body: str, plan: dict, notes: str) -> str:
+    """Replace only our notes, never infer boundaries from arbitrary headings."""
+    if NOTES_START in notes or NOTES_END in notes:
+        raise ValueError("Aggregated changelog contains reserved release-note markers")
+    replacement = f"{NOTES_START}\n## Release Notes\n\n{notes.rstrip()}\n{NOTES_END}"
+    starts, ends = body.count(NOTES_START), body.count(NOTES_END)
+    if starts or ends:
+        if starts != 1 or ends != 1 or body.index(NOTES_START) >= body.index(NOTES_END):
+            raise ValueError("Ambiguous aggregate-note markers; release left unchanged")
+        start = body.index(NOTES_START)
+        end = body.index(NOTES_END) + len(NOTES_END)
+        return body[:start] + replacement + body[end:]
+    original = plan.get("announcement_changelog")
+    if not isinstance(original, str) or not original.strip():
+        raise ValueError("Original cargo-dist changelog unavailable; release left unchanged")
+    section = "## Release Notes\n\n" + original.replace("\r\n", "\n") + "\n\n"
+    if body.count(section) != 1:
+        raise ValueError("Original cargo-dist notes missing or ambiguous; release left unchanged")
+    return body.replace(section, replacement + "\n\n", 1)
 
 
 def released_crates() -> list[tuple[str, str]]:
@@ -91,7 +115,13 @@ def parse_entries(section: str) -> list[tuple[str, str]]:
 
 
 def main() -> int:
+    # GitHub descriptions and Sampo changelogs are UTF-8, including on Windows
+    # runners whose default redirected console encoding may be a legacy codepage.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
+    parser.add_argument("--body", type=Path, help="Existing GitHub release JSON containing its body")
+    parser.add_argument("--plan", type=Path, help="Original cargo-dist announcement manifest")
     parser.add_argument(
         "--crate",
         action="append",
@@ -99,6 +129,8 @@ def main() -> int:
         help="override the released set instead of reading git tags at HEAD",
     )
     args = parser.parse_args()
+    if bool(args.body) != bool(args.plan):
+        parser.error("--body and --plan must be supplied together")
 
     if args.crate:
         releases = [tuple(spec.split("@", 1)) for spec in args.crate]
@@ -118,7 +150,7 @@ def main() -> int:
         if not changelog.is_file():
             missing.append(f"{crate} (no changelog)")
             continue
-        section = extract_section(changelog.read_text(), version)
+        section = extract_section(changelog.read_text(encoding="utf-8"), version)
         if section is None:
             missing.append(f"{crate} {version} (no changelog section)")
             continue
@@ -167,7 +199,20 @@ def main() -> int:
     if missing:
         print(f"warning: skipped {', '.join(missing)}", file=sys.stderr)
 
-    print("\n".join(out))
+    notes = "\n".join(out)
+    if args.body:
+        try:
+            body = json.loads(args.body.read_text(encoding="utf-8"))["body"]
+            if not isinstance(body, str):
+                raise ValueError("Release body must be text; release left unchanged")
+            plan = json.loads(args.plan.read_text(encoding="utf-8"))
+            if not isinstance(plan, dict):
+                raise ValueError("Release plan must be an object; release left unchanged")
+            notes = compose_release_body(body, plan, notes)
+        except (ValueError, OSError, KeyError, TypeError) as error:
+            print(str(error), file=sys.stderr)
+            return 1
+    print(notes, end="" if args.body else "\n")
     return 0
 
 

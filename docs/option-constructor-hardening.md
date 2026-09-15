@@ -31,7 +31,7 @@ layer with $optionUnbox, including unit, nested None, and user enums named Some.
 No new Option representation or runtime ABI was introduced. Direct AST emission
 is preserved.
 
-The actual CLI fixture `tests/e2e/traits/src/option_constructors.ald` covers
+The actual CLI fixture `examples/traits/src/option_constructors.ald` covers
 qualified/unqualified constructors, first-class constructor references,
 None/Some/Some(None)/Some(()) matches, and present-value destructuring. The main
 traits fixture also checks a qualified Option constructor wrapping a qualified

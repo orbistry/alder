@@ -40,7 +40,7 @@ fixtures; it is not isolated-commit or final release verification.
 repeated calls, payload exceptions during traversal, mutation, and shared versus
 duplicated children; structural Show/Hash additionally cover raw arrays/records.
 
-`tests/e2e/hash_equality/src/cycles.ald` executes generic enum cycles through
+`examples/hash_equality/src/cycles.ald` executes generic enum cycles through
 Array/Option, nested Options, mutual enum cycles through Array/Result, and
 derived Ord through a user-defined Children ordering and Option dictionaries.
 The sibling JS helper checks the exact error class/message. Both cyclic errors

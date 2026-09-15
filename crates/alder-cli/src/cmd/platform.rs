@@ -1,10 +1,5 @@
-//! Compiler-shipped Node support. Project code never installs or resolves its
-//! own platform toolchain; the pinned compiler support directory owns it.
-use std::{
-    path::{Path, PathBuf},
-    process::Stdio,
-    time::Duration,
-};
+//! Compiler-controlled local runtime using explicitly installed shared tooling.
+use std::{path::Path, process::Stdio, time::Duration};
 
 use miette::{IntoDiagnostic, Result, miette};
 use tokio::{
@@ -13,46 +8,6 @@ use tokio::{
     sync::mpsc,
 };
 
-pub(super) fn support_directory() -> Result<PathBuf> {
-    let executable = std::env::current_exe().ok();
-    let override_dir = std::env::var_os("ALDER_SUPPORT_DIR").map(PathBuf::from);
-    let candidates = support_candidates(
-        override_dir.as_deref(),
-        executable.as_deref(),
-        crate::VERSION,
-        crate::download::platform_target().ok(),
-        Path::new(env!("CARGO_MANIFEST_DIR")),
-    );
-    candidates.into_iter().find(|path| path.join("package.json").is_file() && path.join("node_modules/miniflare/package.json").is_file())
-        .ok_or_else(|| miette!("Alder Cloudflare support files are missing. Reinstall this compiler with its support files, or set ALDER_SUPPORT_DIR. Node.js >=22 is required. For a source checkout, run npm ci --prefix crates/alder-cli/support."))
-}
-
-fn support_candidates(
-    override_dir: Option<&Path>,
-    executable: Option<&Path>,
-    version: &str,
-    target: Option<&str>,
-    source_manifest_dir: &Path,
-) -> Vec<PathBuf> {
-    let mut candidates = override_dir
-        .map(Path::to_owned)
-        .into_iter()
-        .collect::<Vec<_>>();
-    if let Some(parent) = executable.and_then(Path::parent) {
-        if let Some(target) = target {
-            candidates.push(parent.join(".alder-support").join(version).join(target));
-        }
-        candidates.push(parent.join("support"));
-        if let Some(prefix) = parent.parent() {
-            // cargo-dist's Homebrew formula installs nonbinary files in
-            // pkgshare, including support. current_exe resolves the Cellar bin.
-            candidates.push(prefix.join("share/alder/support"));
-        }
-    }
-    candidates.push(source_manifest_dir.join("support"));
-    candidates
-}
-
 pub(super) async fn serve_dev(
     mut receiver: mpsc::Receiver<super::dev::Event>,
     root: &Path,
@@ -60,8 +15,8 @@ pub(super) async fn serve_dev(
     port: u16,
     output: &crate::reporting::Output,
 ) -> Result<()> {
-    let support = support_directory()?;
-    let mut command = Command::new("node");
+    let support = super::cloudflare::resolve().await?;
+    let mut command = Command::new(&support.node);
     command
         .arg(support.join("cloudflare-dev.mjs"))
         .args([
@@ -138,8 +93,8 @@ pub(super) async fn render_once(
     server: String,
     config: serde_json::Value,
 ) -> Result<serde_json::Value> {
-    let support = support_directory()?;
-    let mut child = Command::new("node")
+    let support = super::cloudflare::resolve().await?;
+    let mut child = Command::new(&support.node)
         .arg(support.join("cloudflare-dev.mjs"))
         .args([
             "--root",
@@ -193,31 +148,4 @@ pub(super) async fn render_once(
         return Err(miette!("Cloudflare prerender host exited with {status}"));
     }
     result
-}
-
-#[cfg(test)]
-mod support_path_tests {
-    use super::*;
-
-    #[test]
-    fn installer_archive_homebrew_and_source_paths_are_version_aware() {
-        let paths = support_candidates(
-            Some(Path::new("/override")),
-            Some(Path::new("/cellar/alder/1.2.3/bin/alder")),
-            "1.2.3",
-            Some("native-target"),
-            Path::new("/checkout/crates/alder-cli"),
-        );
-        assert_eq!(
-            paths,
-            [
-                "/override",
-                "/cellar/alder/1.2.3/bin/.alder-support/1.2.3/native-target",
-                "/cellar/alder/1.2.3/bin/support",
-                "/cellar/alder/1.2.3/share/alder/support",
-                "/checkout/crates/alder-cli/support",
-            ]
-            .map(PathBuf::from)
-        );
-    }
 }

@@ -66,7 +66,7 @@ is placed physically inside the generated while. This fix is committed in
 | Separate loop results and statement-loop unit | `loop_break_values_determine_the_result_type`, `incompatible_breaks_and_statement_loop_values_are_rejected`; CLI nested while/for/loop cases |
 | Nested function returns stay local | `returning_lambda_block_has_no_unit_fallthrough`, `explicit_async_block_return_does_not_constrain_outer_function`; CLI callback return |
 | Method/default bodies enforce fallthrough | `method_bodies_reject_zero_iteration_return_paths` checks MissingReturn for sync/async defaults and implementations |
-| Method exits and propagation execute correctly | `tests/e2e/control_flow/src/methods.ald` executes both default/override return branches and Some/None plus awaited Ok/Err propagation through loop break payloads |
+| Method exits and propagation execute correctly | `examples/control_flow/src/methods.ald` executes both default/override return branches and Some/None plus awaited Ok/Err propagation through loop break payloads |
 | Unreachable breaks do not affect results | `unreachable_breaks_do_not_constrain_a_live_loop_result`, short-circuit/false-guard tests, aggregate and assignment operand regressions |
 | Possible exits still agree | `potentially_reached_conditional_breaks_must_agree`, `potentially_reached_aggregate_exits_still_must_agree` |
 | Break payload is evaluated once | CLI `loop_payload_once`, `break_payload_effects` |
@@ -74,7 +74,7 @@ is placed physically inside the generated while. This fix is committed in
 | Composite operand exits execute correctly | CLI array, annotated array, tuple, tag, template, tagged template, index, record, annotated record, and assignment exit assertions |
 
 Solver regressions are in `crates/alder-solve/tests/inference.rs`; the CLI cases
-are in `tests/e2e/control_flow/src/main.ald`. The CLI fixture compiles, bundles,
+are in `examples/control_flow/src/main.ald`. The CLI fixture compiles, bundles,
 and executes from outside the repository, rather than merely comparing emitted
 text. Infinite-loop acceptance cases are compile-only to avoid hanging tests.
 

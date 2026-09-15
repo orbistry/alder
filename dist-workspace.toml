@@ -5,13 +5,6 @@ members = ["cargo:."]
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.32.0"
-# The support directory is populated by npm ci on each native release runner.
-# Never reuse another target's node_modules (workerd/esbuild are native).
-include = ["crates/alder-cli/support"]
-github-build-setup = "../scripts/alder-build-setup.yml"
-# Checked post-build steps verify native archives and adapt pinned installers
-# to install support; CI tests guard against losing either step.
-allow-dirty = ["ci"]
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
@@ -35,8 +28,8 @@ npm-package = "cli"
 install-path = ["$XDG_BIN_HOME/", "~/.local/bin/"]
 # Publish jobs to run in CI
 publish-jobs = ["homebrew", "npm"]
-# After the GitHub Release is announced, replace its notes with an
-# aggregate of every co-released crate's changelog section
+# After announcement, aggregate co-released crate notes while preserving
+# cargo-dist's generated installation instructions and download links.
 post-announce-jobs = ["./aggregate-release-notes"]
 # Whether to install an updater program
 install-updater = false

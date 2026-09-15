@@ -156,7 +156,7 @@ constraint-solving pass must preserve that boundary.
 | Associated equalities | `implementation_cannot_add_a_projection_assumption`, `implementation_inherits_a_method_projection_equality`, `associated_equality_normalizes_a_generic_method_result` |
 | Source-aware failures | Driver snapshots `renders_generic_method_specialization_without_color`, `renders_generic_variable_escape_without_color`, `renders_lambda_specializing_an_enclosing_generic_without_color` contain actual Alder source and labeled diagnostics |
 | Owned interfaces | `stored_method_contract_preserves_independent_universals` serializes a producer, drops it, then deserializes into a fresh consumer; overridden and default methods are independently called at Number and String, alongside an ordinary generic identity |
-| Executable cross-module calls | `tests/e2e/traits` imports `function_instances`; four assertions execute overridden/default `Select` methods at distinct payload types |
+| Executable cross-module calls | `examples/traits` imports `function_instances`; four assertions execute overridden/default `Select` methods at distinct payload types |
 
 At the initial stored-interface checkpoint, the new test and executable
 assertions passed. All twelve tests then selected by
