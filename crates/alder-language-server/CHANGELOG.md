@@ -1,5 +1,11 @@
 # alder-language-server
 
+## 0.2.3 — 2026-09-15
+
+### Patch changes
+
+- Updated dependencies: alder-driver@0.8.0
+
 ## 0.2.2 — 2026-09-11
 
 ### Patch changes

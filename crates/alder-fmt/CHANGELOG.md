@@ -1,5 +1,20 @@
 # alder-fmt
 
+## 0.4.0 — 2026-09-15
+
+### Minor changes
+
+- [ee01c34](https://github.com/orbistry/alder/commit/ee01c34d1568654083951d3d44a232b624bd5cbb) Fold ordinary multiline markup text consistently before DOM/SSR code generation,
+  preserving inline spaces, explicit string expressions, and whitespace-sensitive
+  pre/textarea subtrees. Format nested markup, prose, attributes, directives, and
+  embedded blocks with parsed-structure equivalence checks and idempotence tests.
+  Add compiled before/after formatting coverage for SSR, DOM, and node-reusing
+  hydration, and format the web examples. — Thanks @rvcas!
+
+### Patch changes
+
+- Updated dependencies: alder-parse@0.6.0
+
 ## 0.3.0 — 2026-09-07
 
 ### Minor changes
