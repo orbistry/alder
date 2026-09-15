@@ -1,6 +1,6 @@
 [package]
 name = "alder-language-server"
-version = "0.2.3"
+version = "0.2.4"
 edition.workspace = true
 description = "Language server for the alder programming language"
 homepage.workspace = true
@@ -12,5 +12,5 @@ tower-lsp-server.workspace = true
 tokio.workspace = true
 url.workspace = true
 miette.workspace = true
-alder-driver = { path = "../alder-driver", version = "0.8.0" }
+alder-driver = { path = "../alder-driver", version = "0.8.1" }
 alder-report = { path = "../alder-report", version = "0.3.0" }
