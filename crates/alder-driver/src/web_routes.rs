@@ -95,13 +95,23 @@ pub fn discover(
     source_root: &Path,
     files: &[SourceFile],
 ) -> Result<RouteManifest, Vec<RouteDiagnostic>> {
+    // File URLs discard Windows verbatim prefixes. Normalize both sides of
+    // the source-root comparison, including callers passing canonical paths.
+    let source_root = url::Url::from_file_path(source_root)
+        .ok()
+        .and_then(|uri| uri.to_file_path().ok())
+        .unwrap_or_else(|| source_root.to_path_buf());
     let mut manifest = RouteManifest::default();
     let mut directories: BTreeMap<String, Directory> = BTreeMap::new();
     let mut errors = Vec::new();
     let mut sorted = files.to_vec();
     sorted.sort_by(|a, b| a.path.cmp(&b.path).then(a.uri.cmp(&b.uri)));
     for file in sorted {
-        let Ok(relative) = file.path.strip_prefix(source_root) else {
+        let path = url::Url::from_file_path(&file.path)
+            .ok()
+            .and_then(|uri| uri.to_file_path().ok())
+            .unwrap_or_else(|| file.path.clone());
+        let Ok(relative) = path.strip_prefix(&source_root) else {
             continue;
         };
         if relative
@@ -111,10 +121,17 @@ pub fn discover(
             errors.push(diagnostic(&file, "source path must be normalized"));
             continue;
         }
-        let Some(relative) = relative.to_str() else {
+        let Some(parts) = relative
+            .components()
+            .map(|part| part.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()
+        else {
             errors.push(diagnostic(&file, "route paths must be UTF-8"));
             continue;
         };
+        // Route syntax uses URL separators, not host filesystem separators.
+        let relative = parts.join("/");
+        let relative = relative.as_str();
         let hook = match relative {
             "hooks.server.ald" | "routes/hooks.server.ald" => Some(&mut manifest.hooks_server),
             "hooks.client.ald" | "routes/hooks.client.ald" => Some(&mut manifest.hooks_client),
@@ -825,6 +842,27 @@ impl Route {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canonical_roots_and_native_separators_discover_routes() {
+        let root = std::env::current_dir()
+            .unwrap()
+            .canonicalize()
+            .unwrap()
+            .join("src");
+        let files = ["+page.ald", "+page.server.ald", "nested/+page.ald"].map(|name| {
+            let uri = url::Url::from_file_path(root.join("routes").join(name)).unwrap();
+            SourceFile {
+                path: uri.to_file_path().unwrap(),
+                uri: uri.to_string(),
+            }
+        });
+        let tree = discover(&root, &files).unwrap();
+        assert_eq!(tree.routes.len(), 2);
+        let route = tree.routes.iter().find(|route| route.id == "/").unwrap();
+        assert!(route.page.is_some());
+        assert!(route.page_server.is_some());
+    }
 
     fn source(path: &str) -> SourceFile {
         SourceFile {
