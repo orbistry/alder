@@ -177,6 +177,14 @@ impl ArchiveLayout {
     /// archives may be flat. Only the compiler binary
     /// are installed, never arbitrary files from a release asset.
     fn select(&mut self, path: &Path) -> Result<Option<PathBuf>> {
+        // Archive names use forward slashes on every platform. Check the raw
+        // name before Windows components consume backslashes as separators.
+        if path.as_os_str().to_string_lossy().contains(['\\', ':']) {
+            return Err(miette!(
+                "Unsafe path in compiler archive: {}",
+                path.display()
+            ));
+        }
         let mut parts = Vec::new();
         for component in path.components() {
             match component {
@@ -449,11 +457,11 @@ mod tests {
         }
         let mut layout = ArchiveLayout::default();
         layout
-            .select(&Path::new("one").join(binary_name()))
+            .select(Path::new(&format!("one/{}", binary_name())))
             .unwrap();
         assert!(
             layout
-                .select(&Path::new("two").join(binary_name()))
+                .select(Path::new(&format!("two/{}", binary_name())))
                 .is_err()
         );
     }

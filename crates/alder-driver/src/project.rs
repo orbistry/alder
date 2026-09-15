@@ -101,14 +101,19 @@ impl Project {
     /// A nested workspace member owns its source tree, even when discovery
     /// also reaches it through an enclosing member. Use the same owner for
     /// package identity and source-relative module paths.
-    fn source_owner(&self, path: &Path) -> Option<(&ProjectMember, &Path)> {
+    fn source_owner(&self, path: &Path) -> Option<(&ProjectMember, PathBuf)> {
         self.members
             .iter()
             .flat_map(|member| {
                 member
                     .source_dirs
                     .iter()
-                    .map(move |root| (member, root.as_path()))
+                    // File URLs remove Windows verbatim prefixes. Compare roots
+                    // in the same representation as the discovered module URLs.
+                    .filter_map(move |root| {
+                        let root = path_to_uri(root).ok()?.to_file_path().ok()?;
+                        Some((member, root))
+                    })
             })
             .filter(|(_, root)| path.starts_with(root))
             .max_by_key(|(_, root)| root.components().count())
@@ -159,7 +164,7 @@ impl Project {
                     .source_owner(&path)
                     .ok_or_else(|| DriverError::InvalidModulePath { path: path.clone() })?;
                 let relative = path
-                    .strip_prefix(root)
+                    .strip_prefix(&root)
                     .expect("the selected source root contains the module");
                 let mut parts = relative
                     .with_extension("")
@@ -536,6 +541,26 @@ mod tests {
     use super::*;
     use crate::interface::{InterfaceFile, OwnedModuleId, PackageInstanceIndexFile};
     use crate::source::InMemorySource;
+
+    #[tokio::test]
+    async fn canonical_source_roots_match_file_url_paths() {
+        let temp = temporary_project();
+        std::fs::create_dir_all(temp.join("src/routes")).unwrap();
+        std::fs::write(
+            temp.join("alder.jsonc"),
+            r#"{"type":"application","target":"standalone"}"#,
+        )
+        .unwrap();
+        let project = Project::load(&temp).await.unwrap();
+        let uri = path_to_uri(&project.root.join("src/routes/+page.ald")).unwrap();
+        let modules = vec![uri.clone()];
+        assert_eq!(
+            project.module_paths(&modules).unwrap()[&uri],
+            vec!["routes", "+page"]
+        );
+        assert_eq!(project.module_packages(&modules).len(), 1);
+        std::fs::remove_dir_all(temp).unwrap();
+    }
 
     fn temporary_project() -> PathBuf {
         use std::sync::atomic::{AtomicU64, Ordering};
