@@ -34,6 +34,7 @@ oxc_ast = "=0.95.0"
 thiserror.workspace = true
 
 [dev-dependencies]
+alder-runtime = { path = "../alder-runtime", version = "0.3.0" }
 indoc.workspace = true
 insta.workspace = true
 miette.workspace = true

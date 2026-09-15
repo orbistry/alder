@@ -1,0 +1,7 @@
+import html.{Html}
+
+pub component layout(props: { children: Html }) {
+    <div>
+        <nav><a href="/">Light page</a> · <a href="/catalog">Large catalog</a></nav>{props.children}
+    </div>
+}

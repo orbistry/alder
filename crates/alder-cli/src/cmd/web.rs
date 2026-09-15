@@ -9,9 +9,12 @@ use miette::{IntoDiagnostic, Result, miette};
 use super::build::Compiled;
 
 mod files;
+mod manifest;
 
 pub struct Artifacts {
     pub client: String,
+    pub client_output: Option<alder_bundle::BundleOutput>,
+    pub manifest: Option<manifest::Manifest>,
     pub server: String,
     pub render: Option<String>,
     pub assets: Vec<alder_codegen::support::web::Asset>,
@@ -149,7 +152,7 @@ async fn bundle_with_pages(
                 .collect::<Result<_>>()?,
         });
     }
-    let application = Application {
+    let mut application = Application {
         routes,
         prerendered: pages.to_vec(),
         providers: compiled.cloudflare.providers(),
@@ -181,6 +184,7 @@ async fn bundle_with_pages(
         server_hook: optional(&manifest.hooks_server)?,
         client_hook: optional(&manifest.hooks_client)?,
         development,
+        client_build: None,
     };
     let links = manifest
         .route_links()
@@ -212,8 +216,8 @@ async fn bundle_with_pages(
     modules.extend(compiled.server_implementations.values().cloned());
     modules.push(alder_codegen::support::web::links(&links));
     modules.extend(compiled.web_generated.values().cloned());
-    let client_entry = alder_codegen::support::web::entry(&application, true);
-    let client = alder_bundle::bundle_entry(
+    let client_entry = alder_codegen::support::web::entry_mode(&application, true, !development);
+    let client_output = alder_bundle::bundle_graph(
         compiled
             .result
             .artifacts
@@ -228,9 +232,45 @@ async fn bundle_with_pages(
             .chain(compiled.web_generated.values().cloned())
             .chain([alder_codegen::support::web::links(&links), client_entry]),
         "alder:web-client",
+        if development {
+            alder_bundle::BundleOptions::default()
+        } else {
+            alder_bundle::BundleOptions {
+                sourcemap: true,
+                ..alder_bundle::BundleOptions::production()
+            }
+        },
     )
     .await
     .map_err(|error| miette!(error.to_string()))?;
+    let (client, client_output, build_manifest) = if development {
+        (
+            client_output
+                .into_single_code("alder:web-client")
+                .map_err(|error| miette!(error.to_string()))?,
+            None,
+            None,
+        )
+    } else {
+        // Resolve the server graph before adding client metadata. Hashing only
+        // generated module text misses changes in server-only JS dependencies;
+        // hashing the final server would make the manifest identity circular.
+        let mut identity_modules = modules.clone();
+        identity_modules.push(alder_codegen::support::web::entry(&application, false));
+        if !compiled.cloudflare.adapters.is_empty() {
+            identity_modules.push(alder_codegen::support::cloudflare::adapters(
+                &compiled.cloudflare.adapters,
+                &compiled.cloudflare.providers(),
+            ));
+        }
+        let identity = alder_bundle::bundle_entry(identity_modules, "alder:web-server")
+            .await
+            .map_err(|error| miette!(error.to_string()))?;
+        let build_manifest =
+            manifest::Manifest::create(&client_output, &application.routes, identity.as_bytes())?;
+        application.client_build = Some(build_manifest.client_build());
+        (String::new(), Some(client_output), Some(build_manifest))
+    };
     modules.push(alder_codegen::support::web::entry(&application, false));
     if !compiled.cloudflare.adapters.is_empty() {
         modules.push(alder_codegen::support::cloudflare::adapters(
@@ -299,13 +339,25 @@ async fn bundle_with_pages(
     } else {
         None
     };
+    let mut embedded_assets = assets.clone();
+    if compiled.target == Target::Standalone && !development {
+        for (name, bytes) in &client_output.as_ref().expect("production graph").files {
+            if !name.ends_with(".map") {
+                embedded_assets.push(alder_codegen::support::web::Asset {
+                    path: format!("/_alder/{name}"),
+                    content_type: files::content_type(std::path::Path::new(name)).into(),
+                    bytes: bytes.clone(),
+                });
+            }
+        }
+    }
     let (entry, id) = match if development {
         Target::Cloudflare
     } else {
         compiled.target
     } {
         Target::Standalone => (
-            alder_codegen::support::web::standalone_entry(&client, &assets),
+            alder_codegen::support::web::standalone_entry(&client, &embedded_assets),
             "alder:web-standalone",
         ),
         Target::Cloudflare => (
@@ -319,11 +371,22 @@ async fn bundle_with_pages(
         ),
     };
     modules.push(entry);
-    let server = alder_bundle::bundle_entry(modules, id)
-        .await
-        .map_err(|error| miette!(error.to_string()))?;
+    let server = alder_bundle::bundle_graph(
+        modules,
+        id,
+        alder_bundle::BundleOptions {
+            minify: !development,
+            ..Default::default()
+        },
+    )
+    .await
+    .map_err(|error| miette!(error.to_string()))?
+    .into_single_code(id)
+    .map_err(|error| miette!(error.to_string()))?;
     Ok(Artifacts {
         client,
+        client_output,
+        manifest: build_manifest,
         server,
         render,
         assets,
@@ -374,7 +437,14 @@ pub(super) async fn write_build(
         artifacts = bundle_with_pages(compiled, false, &pages).await?;
     }
     let dist = compiled.root.join("dist");
-    let client = dist.join("client/_alder/client.mjs");
+    let client = dist.join("client").join(
+        artifacts
+            .manifest
+            .as_ref()
+            .map_or("_alder/client.mjs", |manifest| {
+                manifest.entry.trim_start_matches('/')
+            }),
+    );
     let server_name = match compiled.target {
         Target::Standalone => "server.mjs",
         Target::Cloudflare => "worker.mjs",
@@ -405,5 +475,16 @@ pub(super) async fn write_build(
     }
     output.status("Built", crate::reporting::display_path(&server));
     output.status("Built", crate::reporting::display_path(&client));
+    if let Some(manifest) = &artifacts.manifest {
+        for (name, file) in &manifest.files {
+            output.status(
+                "Bundle",
+                format!(
+                    "{} {name}: {} bytes · gzip {} · brotli {}",
+                    file.kind, file.sizes.raw, file.sizes.gzip, file.sizes.brotli
+                ),
+            );
+        }
+    }
     Ok(())
 }

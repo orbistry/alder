@@ -32,6 +32,9 @@ not production services; this example needs no account credentials or bindings.
 Deployment is separate and requires an explicitly chosen Worker/account.
 For production artifacts, HMR behavior, browser checks, and exact deploy
 commands, see [web development](../../docs/web-development.md).
+Production builds use minified, hashed route chunks and active-route preloads;
+see [production builds](../../docs/production-builds.md) for the manifest,
+source-map and caching policies, measured sizes, and local verification commands.
 
 ## Things to try
 

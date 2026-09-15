@@ -1,0 +1,6 @@
+pub component page() {
+    <main>
+        <h1>Light page</h1>
+        <p>This route does not use or download the catalog dataset.</p>
+    </main>
+}

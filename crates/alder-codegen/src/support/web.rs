@@ -32,6 +32,21 @@ pub struct Application {
     pub server_hook: Option<String>,
     pub client_hook: Option<String>,
     pub development: bool,
+    pub client_build: Option<ClientBuild>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ClientBuild {
+    pub entry: String,
+    pub build: String,
+    pub files: Vec<String>,
+    pub routes: BTreeMap<String, RoutePreloads>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RoutePreloads {
+    pub normal: Vec<String>,
+    pub errors: Vec<Vec<String>>,
 }
 
 #[derive(Clone, Debug)]
@@ -184,6 +199,13 @@ pub fn worker_entry(
 /// Browser entries never import server companions, endpoints, or server hooks.
 /// The driver separately verifies the transitive client dependency boundary.
 pub fn entry(application: &Application, browser: bool) -> EmittedModule {
+    entry_mode(application, browser, false)
+}
+
+/// Lazy production entry. The eager form is retained for revision-based HMR
+/// and direct synchronous bootstrap tests.
+pub fn entry_mode(application: &Application, browser: bool, lazy: bool) -> EmittedModule {
+    let lazy = browser && lazy;
     super::generated_module(
         if browser {
             "alder:web-client"
@@ -230,17 +252,34 @@ pub fn entry(application: &Application, browser: bool) -> EmittedModule {
                 .map(|(index, module)| (module, format!("$module{index}")))
                 .collect();
             for (module, alias) in &aliases {
-                body.push(js.namespace_import(module, alias));
+                if !lazy || hook.as_ref() == Some(module) {
+                    body.push(js.namespace_import(module, alias));
+                }
             }
             let reference = |module: &Option<String>| {
-                module
-                    .as_ref()
-                    .map_or_else(|| js.undefined(), |module| js.identifier(&aliases[module]))
+                module.as_ref().map_or_else(
+                    || js.undefined(),
+                    |module| {
+                        if lazy && hook.as_ref() != Some(module) {
+                            js.arrow(
+                                &[],
+                                js.builder
+                                    .vec1(js.return_statement(js.dynamic_import(module))),
+                                false,
+                            )
+                        } else {
+                            js.identifier(&aliases[module])
+                        }
+                    },
+                )
             };
             let routes =
                 application.routes.iter().map(|route| {
                     let mut properties = js.vec();
                     properties.push(js.property("id", js.string(&route.id)));
+                    if lazy {
+                        properties.push(js.property("lazy", js.boolean(true)));
+                    }
                     properties.push(
                         js.property(
                             "segments",
@@ -270,7 +309,7 @@ pub fn entry(application: &Application, browser: bool) -> EmittedModule {
                                 route
                                     .errors
                                     .iter()
-                                    .map(|module| js.identifier(&aliases[module])),
+                                    .map(|module| reference(&Some(module.clone()))),
                             ),
                         ),
                     );
@@ -306,7 +345,55 @@ pub fn entry(application: &Application, browser: bool) -> EmittedModule {
             config.push(js.property("routes", js.array(routes)));
             config.push(js.property("hook", reference(hook)));
             config.push(js.property("development", js.boolean(application.development)));
+            if lazy {
+                config.push(js.property("entryUrl", js.import_meta_url()));
+            }
             if !browser {
+                if let Some(client) = &application.client_build {
+                    config.push(js.property(
+                        "client",
+                        js.object(js.builder.vec_from_iter([
+                            js.property("entry", js.string(&client.entry)),
+                            js.property("build", js.string(&client.build)),
+                            js.property(
+                                "files",
+                                js.array(client.files.iter().map(|file| js.string(file))),
+                            ),
+                            js.property(
+                                "routes",
+                                js.object(js.builder.vec_from_iter(client.routes.iter().map(
+                                    |(id, route)| {
+                                        js.property(
+                                            id,
+                                            js.object(
+                                                js.builder.vec_from_iter([
+                                                    js.property(
+                                                        "normal",
+                                                        js.array(
+                                                            route
+                                                                .normal
+                                                                .iter()
+                                                                .map(|url| js.string(url)),
+                                                        ),
+                                                    ),
+                                                    js.property(
+                                                        "errors",
+                                                        js.array(route.errors.iter().map(|urls| {
+                                                            js.array(
+                                                                urls.iter()
+                                                                    .map(|url| js.string(url)),
+                                                            )
+                                                        })),
+                                                    ),
+                                                ]),
+                                            ),
+                                        )
+                                    },
+                                ))),
+                            ),
+                        ])),
+                    ));
+                }
                 config.push(
                     js.property(
                         "clientStoreKeys",
@@ -397,7 +484,9 @@ pub fn entry(application: &Application, browser: bool) -> EmittedModule {
                     })),
                 ));
             }
-            let runtime = if browser {
+            let runtime = if lazy {
+                "$webStartLazyClient"
+            } else if browser {
                 "$webStartClient"
             } else {
                 "$webApplication"
@@ -406,7 +495,14 @@ pub fn entry(application: &Application, browser: bool) -> EmittedModule {
             body.push(js.variable(
                 VariableDeclarationKind::Const,
                 "$application",
-                Some(js.call(js.identifier(runtime), [js.object(config)])),
+                Some({
+                    let call = js.call(js.identifier(runtime), [js.object(config)]);
+                    if lazy {
+                        js.await_expression(call)
+                    } else {
+                        call
+                    }
+                }),
             ));
             body.push(js.export_default(js.identifier("$application")));
             js.program(body)

@@ -59,7 +59,7 @@ pub(super) fn read_public(root: &Path) -> Result<Vec<Asset>> {
     Ok(assets)
 }
 
-fn content_type(path: &Path) -> &'static str {
+pub(super) fn content_type(path: &Path) -> &'static str {
     match path
         .extension()
         .and_then(|value| value.to_str())
@@ -138,11 +138,29 @@ pub(super) fn write_output(
         .prefix("web-build-")
         .tempdir_in(&cache)
         .into_diagnostic()?;
-    write_new(
-        stage.path(),
-        Path::new("client/_alder/client.mjs"),
-        artifacts.client.as_bytes(),
-    )?;
+    if let Some(bundle) = &artifacts.client_output {
+        for (name, bytes) in &bundle.files {
+            let directory = if name.ends_with(".map") {
+                "maps/client"
+            } else {
+                "client/_alder"
+            };
+            write_new(stage.path(), &Path::new(directory).join(name), bytes)?;
+        }
+    } else {
+        write_new(
+            stage.path(),
+            Path::new("client/_alder/client.mjs"),
+            artifacts.client.as_bytes(),
+        )?;
+    }
+    if let Some(manifest) = &artifacts.manifest {
+        write_new(
+            stage.path(),
+            Path::new("manifest.json"),
+            &serde_json::to_vec_pretty(manifest).into_diagnostic()?,
+        )?;
+    }
     write_new(
         stage.path(),
         Path::new(server_name),
@@ -192,7 +210,14 @@ pub(super) fn write_output(
 /// Each rename is atomic on the same filesystem. A publication error restores
 /// the previous entries; generation/validation errors never touch dist.
 fn publish(root: &Path, stage: &Path) -> Result<()> {
-    const MANAGED: [&str; 4] = ["client", "server.mjs", "worker.mjs", "wrangler.jsonc"];
+    const MANAGED: [&str; 6] = [
+        "client",
+        "server.mjs",
+        "worker.mjs",
+        "wrangler.jsonc",
+        "manifest.json",
+        "maps",
+    ];
     let dist = root.join("dist");
     directory(&dist)?;
     let backup = tempfile::Builder::new()
@@ -249,6 +274,8 @@ mod tests {
     fn artifacts() -> Artifacts {
         Artifacts {
             client: "client".into(),
+            client_output: None,
+            manifest: None,
             server: "server".into(),
             render: None,
             assets: Vec::new(),
@@ -273,6 +300,61 @@ mod tests {
         assert_eq!(assets[1].bytes, [0, 255, 128]);
         fs::create_dir(root.path().join("public/_alder")).unwrap();
         assert!(read_public(root.path()).is_err());
+    }
+
+    #[test]
+    fn split_outputs_publish_all_bytes_and_remove_old_chunks_maps_and_manifest() {
+        let root = tempfile::tempdir().unwrap();
+        let mut split = artifacts();
+        split.client_output = Some(alder_bundle::BundleOutput {
+            files: [
+                ("entry-old.mjs".into(), b"entry".to_vec()),
+                ("chunk-old.mjs".into(), b"chunk".to_vec()),
+                ("entry-old.mjs.map".into(), b"map".to_vec()),
+                ("nested/data.bin".into(), vec![0, 128, 255]),
+            ]
+            .into(),
+            ..Default::default()
+        });
+        split.manifest = Some(super::super::manifest::Manifest {
+            version: 1,
+            build: "old".into(),
+            entry: "/_alder/entry-old.mjs".into(),
+            files: Default::default(),
+            routes: Default::default(),
+            source_maps: "hidden-generated-javascript",
+        });
+        write_output(root.path(), "server.mjs", &split, &[], None).unwrap();
+        for (path, expected) in [
+            ("client/_alder/entry-old.mjs", b"entry".as_slice()),
+            ("client/_alder/chunk-old.mjs", b"chunk".as_slice()),
+            ("maps/client/entry-old.mjs.map", b"map".as_slice()),
+            ("client/_alder/nested/data.bin", &[0, 128, 255]),
+        ] {
+            assert_eq!(
+                fs::read(root.path().join("dist").join(path)).unwrap(),
+                expected
+            );
+        }
+        assert!(
+            !root
+                .path()
+                .join("dist/client/_alder/entry-old.mjs.map")
+                .exists()
+        );
+        assert!(root.path().join("dist/manifest.json").is_file());
+
+        write_output(root.path(), "server.mjs", &artifacts(), &[], None).unwrap();
+        for stale in [
+            "client/_alder/entry-old.mjs",
+            "client/_alder/chunk-old.mjs",
+            "client/_alder/nested",
+            "maps",
+            "manifest.json",
+        ] {
+            assert!(!root.path().join("dist").join(stale).exists(), "{stale}");
+        }
+        assert!(root.path().join("dist/client/_alder/client.mjs").is_file());
     }
 
     #[test]

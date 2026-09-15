@@ -488,6 +488,20 @@ impl<'a> JsAst<'a> {
             .expression_arrow_function(SPAN, false, r#async, NONE, parameters, NONE, body)
     }
 
+    pub(crate) fn dynamic_import(&self, source: &str) -> Expression<'a> {
+        self.builder
+            .expression_import(SPAN, self.string(source), None, None)
+    }
+
+    pub(crate) fn import_meta_url(&self) -> Expression<'a> {
+        let meta = self.builder.expression_meta_property(
+            SPAN,
+            self.builder.identifier_name(SPAN, "import"),
+            self.builder.identifier_name(SPAN, "meta"),
+        );
+        self.member(meta, "url")
+    }
+
     pub(crate) fn import(&self, source: &str, names: &[(String, String)]) -> Statement<'a> {
         let specifiers = self
             .builder

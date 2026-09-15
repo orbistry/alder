@@ -228,17 +228,30 @@ export async function $webServe(application, client, assets = []) {
 
 export function $webWorker(application, client, queue, assets = [], assetBinding = true) {
   const publicAssets = new Map(assets.map(([path, type, bytes]) => [path, {type, bytes: new Uint8Array(bytes)}]));
+  const generated = new Set(application.client?.files ?? []);
   const worker = {async fetch(request, env, context) {
-    if (new URL(request.url).pathname === "/_alder/client.mjs") {
+    if (client && new URL(request.url).pathname === "/_alder/client.mjs") {
       if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", {status: 405});
-      return new Response(request.method === "HEAD" ? null : client, {headers:{"content-type":"text/javascript; charset=utf-8", "x-content-type-options":"nosniff"}});
+      return new Response(request.method === "HEAD" ? null : client, {headers:{"content-type":"text/javascript; charset=utf-8", "x-content-type-options":"nosniff", "cache-control":"no-store"}});
     }
     let path;
     try {path = decodeURIComponent(new URL(request.url).pathname);} catch {return new Response("Invalid asset path", {status: 400});}
     const asset = publicAssets.get(path);
     if (asset) {
       if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", {status: 405, headers:{allow:"GET, HEAD"}});
-      return new Response(request.method === "HEAD" ? null : asset.bytes, {headers:{"content-type":asset.type, "content-length":String(asset.bytes.byteLength), "x-content-type-options":"nosniff"}});
+      return new Response(request.method === "HEAD" ? null : asset.bytes, {headers:{"content-type":asset.type, "content-length":String(asset.bytes.byteLength), "x-content-type-options":"nosniff", "cache-control":generated.has(path) ? "public, max-age=31536000, immutable" : "no-cache"}});
+    }
+    if (generated.has(path)) {
+      if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", {status:405,headers:{allow:"GET, HEAD"}});
+      if (!assetBinding || !env?.ASSETS) return new Response("Asset not found", {status:404,headers:{"cache-control":"no-store"}});
+      const response = await env.ASSETS.fetch(request);
+      const headers = new Headers(response.headers);
+      headers.set("cache-control", response.ok || response.status === 304 ? "public, max-age=31536000, immutable" : "no-store");
+      headers.set("x-content-type-options", "nosniff");
+      return new Response(request.method === "HEAD" ? null : response.body, {status:response.status, statusText:response.statusText, headers});
+    }
+    if (application.client && path.startsWith("/_alder/") && !path.startsWith("/_alder/remote/")) {
+      return new Response("Asset not found", {status:404,headers:{"cache-control":"no-store"}});
     }
     const response = await application.fetch(request, env, context);
     if (assetBinding && response.status === 404 && env?.ASSETS && (request.method === "GET" || request.method === "HEAD")) return env.ASSETS.fetch(request);
@@ -319,13 +332,48 @@ function webView(route, data, error = null, boundary = -1) {
   return view;
 }
 
-function webDocument(content, payload, options) {
-  const client = options.csr ? `<script type="application/json" id="alder-data">${$webEncode(payload)}</script><script type="module" src="/_alder/client.mjs"></script>` : "";
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="alder-app">${content}</div>${client}</body></html>`;
+// Self-contained because the same handler is emitted in the document loader:
+// it must run even when the entry chunk itself cannot be downloaded.
+function webRecover(href, error, automatic = true) {
+  console.error(error);
+  const url = new URL(href, location.href);
+  const key = "alder.production.recovery";
+  if (url.origin !== location.origin) throw new Error("Alder recovery must stay on the same origin");
+  try {
+    if (automatic && sessionStorage.getItem(key) !== url.href) {
+      sessionStorage.setItem(key, url.href);
+      location.assign(url.href);
+      return;
+    }
+  } catch { /* Without durable retry protection, do not automatically reload. */ }
+  const previous = document.querySelector?.("#alder-load-error");
+  if (previous) previous.remove();
+  const notice = document.createElement("div");
+  notice.id = "alder-load-error";
+  notice.setAttribute("role", "alert");
+  notice.appendChild(document.createTextNode("This page could not load its application files. Check your connection and retry. "));
+  const retry = document.createElement("button");
+  retry.appendChild(document.createTextNode("Reload page"));
+  retry.addEventListener("click", () => location.assign(url.href));
+  notice.appendChild(retry);
+  document.body.appendChild(notice);
+}
+
+function webDocument(content, payload, options, build) {
+  const entry = build?.entry ?? "/_alder/client.mjs";
+  const route = build?.routes?.[payload.route];
+  const urls = options.csr ? (payload.boundary >= 0 ? route?.errors?.[payload.boundary] : route?.normal) ?? [] : [];
+  const preload = urls.map(url => `<link rel="modulepreload" href="${webEscape(url, true)}">`).join("");
+  const script = build
+    ? `<script type="module">import(${JSON.stringify(entry).replace(/</g,"\\u003c")}).catch(error=>(${webRecover.toString()})(location.href,error));</script>`
+    : `<script type="module" src="${webEscape(entry, true)}"></script>`;
+  const client = options.csr ? `<script type="application/json" id="alder-data">${$webEncode(payload)}</script>${script}` : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${preload}</head><body><div id="alder-app">${content}</div>${client}</body></html>`;
 }
 
 export function $webApplication(config) {
   return {
+    client: config.client,
     async entries(call, env) {
       return $cloudflareRun(env, config.providers ?? [], () => $webWithStoreScope(null, () => webInvoke(call)));
     },
@@ -435,7 +483,12 @@ export function $webApplication(config) {
           if (boundary < 0) throw cause;
         }
         const payload = {route: route.id, params, data, serverData, boundary, error, options, resources, stores:$webStoreSnapshot(storeScope, config.clientStoreKeys ?? [])};
-        return new Response(method === "head" ? null : prerender ? JSON.stringify({html:webDocument(content, payload, options), data:$webEncode(payload)}) : dataRequest ? $webEncode(payload) : webDocument(content, payload, options), {
+        if (config.client) {
+          payload.build = config.client.build;
+          payload.entry = config.client.entry;
+          payload.preloads = config.client.routes[route.id];
+        }
+        return new Response(method === "head" ? null : prerender ? JSON.stringify({html:webDocument(content, payload, options, config.client), data:$webEncode(payload)}) : dataRequest ? $webEncode(payload) : webDocument(content, payload, options, config.client), {
           status: error === null ? 200 : 500,
           headers: {"content-type": prerender ? "application/json" : dataRequest ? "application/x-alder-data" : "text/html; charset=utf-8", "vary": "accept, x-alder-navigation", "cache-control":"no-store"},
         });
@@ -484,6 +537,47 @@ export function $webPrerenderWorker(application, targets, queue) {
   return worker;
 }
 
+async function webPrepareRoute(route, payload) {
+  if (!route?.lazy) return;
+  const boundary = payload.boundary ?? -1;
+  const urls = boundary < 0 ? payload.preloads?.normal : payload.preloads?.errors?.[boundary];
+  if (urls?.length) {
+    // Start the complete static closure together, before import() discovers it
+    // incrementally. Do not await link events: import() owns loading failures.
+    const existing = new Set(Array.from(document.querySelectorAll('link[rel="modulepreload"]'), link => link.getAttribute("href")));
+    for (const url of urls) {
+      if (existing.has(url)) continue;
+      const link = document.createElement("link");
+      link.setAttribute("rel", "modulepreload");
+      link.setAttribute("href", url);
+      document.head.appendChild(link);
+      existing.add(url);
+    }
+  }
+  const load = async (object, key) => {
+    if (typeof object[key] === "function") object[key] = await object[key]();
+  };
+  const layoutCount = boundary < 0 ? route.layouts.length : route.errorLayouts?.[boundary] ?? route.layouts.length;
+  const pending = route.layouts.slice(0, layoutCount).map(pair => load(pair, 0));
+  if (boundary < 0) pending.push(load(route, "page"));
+  else pending.push(load(route.errors, boundary));
+  await Promise.all(pending);
+}
+
+/** Production imports only the initial view's modules before attaching to SSR. */
+export async function $webStartLazyClient(config) {
+  const serialized = document.getElementById("alder-data");
+  if (!serialized) throw new Error("Alder bootstrap document is missing");
+  const payload = $webDecode(serialized.textContent);
+  if (config.entryUrl && new URL(config.entryUrl).pathname !== payload.entry) throw new Error("Alder document and client entry belong to different builds");
+  const route = config.routes.find(route => route.id === payload.route);
+  if (!route) throw new Error(`Alder client route is missing: ${payload.route}`);
+  await webPrepareRoute(route, payload);
+  const session = $webStartClient(config);
+  try {sessionStorage.removeItem("alder.production.recovery");} catch {}
+  return session;
+}
+
 export function $webStartClient(config) {
   const sessionKey = Symbol.for("alder.dev.session"), transferKey = Symbol.for("alder.dev.transfer");
   const transfer = config.development ? globalThis[transferKey] : null;
@@ -515,7 +609,7 @@ export function $webStartClient(config) {
   try {render(initial, !transfer && initial.options.ssr, transfer?.state ? $webDecode(transfer.state) : undefined);}
   catch (error) {report(error); throw error;}
   previousSession?.dispose();
-  const navigate = async (href, historyMode = "push") => {
+  const performNavigation = async (href, historyMode = "push") => {
     controller?.abort();
     const navigationController = controller = new AbortController();
     const current = ++generation;
@@ -524,9 +618,20 @@ export function $webStartClient(config) {
     if (response.headers.get("content-type") !== "application/x-alder-data") { location.assign(response.url || href); return; }
     let payload = $webDecode(await response.text());
     if (disposed || current !== generation) return;
+    if (initial.build && payload.build !== initial.build) {
+      webRecover(href, new Error("Alder application was updated; loading the current build"));
+      return;
+    }
     if (!payload.options.csr) { location.assign(href); return; }
     const route = config.routes.find(route => route.id === payload.route);
     if (!route) throw new Error(`Alder client route is missing: ${payload.route}`);
+    try {await webPrepareRoute(route, payload);}
+    catch (error) {
+      if (disposed || current !== generation || navigationController.signal.aborted) return;
+      if (initial.build) {webRecover(href, error); return;}
+      throw error;
+    }
+    if (disposed || current !== generation || navigationController.signal.aborted) return;
     webResetRemoteCache();
     $webRestoreStores(payload.stores ?? [], true);
     try {
@@ -542,6 +647,8 @@ export function $webStartClient(config) {
         if (!(cause instanceof WebLoadFailure)) report(cause);
         try {
           payload = {...payload, error:webPageError(cause, config.development), boundary:index, resources:[]};
+          await webPrepareRoute(route, payload);
+          if (disposed || current !== generation || navigationController.signal.aborted) return;
           render(payload, false);
           handled = true; break;
         } catch (next) {cause = next;}
@@ -550,6 +657,15 @@ export function $webStartClient(config) {
     }
     if (historyMode === "push") history.pushState(null, "", response.url || href);
     window.scrollTo(0, 0);
+  };
+  const navigate = async (href, historyMode = "push") => {
+    const expected = generation + 1;
+    try {return await performNavigation(href, historyMode);}
+    catch (error) {
+      if (disposed || generation !== expected || error?.name === "AbortError") return;
+      if (!initial.build) throw error;
+      webRecover(href, error, false);
+    }
   };
   const click = event => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

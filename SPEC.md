@@ -414,6 +414,12 @@ and kernel APIs, not CLI subprocess tests; manual CLI fixture checks are allowed
 - [x] Standalone embedded-V8 and local Cloudflare dev/production browser workflow verification
 - [x] Authorized real Cloudflare preview deployment and smoke verification (`alder-test.rvcas.workers.dev`, 2026-09-14; evidence in the acceptance ledger)
 
+### Production build hardening (before M7)
+
+- [x] Structured multi-file bundles, production minification, lazy route chunks,
+  hashed assets/manifests, preload/cache integration, source-map policy, and
+  deployment-safe recovery. Design and acceptance: `plans/production-bundling.md`.
+
 ### M7: Data layer
 
 - [ ] `table` declarations with dialect modules (`@alder/sqlite`, `@alder/postgres`, `@alder/mysql`)

@@ -1,6 +1,177 @@
 use super::KERNEL_JS;
 
 #[tokio::test(flavor = "current_thread")]
+async fn navigation_preloads_selected_static_graph_before_imports_without_duplicates() {
+    run_navigation(r#"
+      document.head=document.createElement("head");
+      document.querySelectorAll=()=>document.head.childNodes;
+      const urls=()=>Array.from(document.head.childNodes,node=>node.getAttribute("href"));
+      const text=value=>$webComponent(()=>r=>r.text(()=>value,[]));
+      const preloads={normal:["/_alder/entry.mjs","/_alder/shared.mjs","/_alder/other.mjs"],errors:[["/_alder/entry.mjs","/_alder/error.mjs"]]};
+      const routes=[
+        {id:"/initial",segments:[["static","initial"]],page:{page:()=>text("initial")},layouts:[],errors:[]},
+        {id:"/other",segments:[["static","other"]],lazy:true,layouts:[],errors:[async()=>{
+          $assert(urls().includes("/_alder/error.mjs"));return {error:()=>text("error")};
+        }],page:async()=>{
+          $assert(JSON.stringify(urls())===JSON.stringify(preloads.normal));
+          return {page:()=>text("other")};
+        }},
+      ];
+      const bootstrap={build:"build",route:"/initial",data:{},params:{},error:null,boundary:-1,options:{ssr:false,csr:true},stores:[],resources:[]};
+      const session=await $webStartLazyClient({routes});
+      let boundary=-1;
+      globalThis.fetch=async()=>new Response($webEncode({...bootstrap,route:"/other",preloads,boundary,serverData:[{}]}),{headers:{"content-type":"application/x-alder-data"}});
+      await session.navigate("http://localhost/other");
+      await session.navigate("http://localhost/other");
+      $assert(urls().length===3 && target.textContent==="other");
+      boundary=0;
+      await session.navigate("http://localhost/other");
+      $assert(urls().length===4 && target.textContent==="error");
+      session.dispose();
+    "#).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn deployment_mismatch_recovers_once_without_rendering_mixed_build_data() {
+    run_navigation(r#"
+      document.body=document.createElement("body");
+      const redirects=[],storage=new Map();
+      globalThis.sessionStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
+      location.assign=href=>redirects.push(href);
+      const text=value=>$webComponent(()=>r=>r.text(()=>value,[]));
+      const route={id:"/initial",segments:[["static","initial"]],lazy:true,page:{page:()=>text("old")},layouts:[],errors:[]};
+      const bootstrap={build:"old-build",route:"/initial",data:{},params:{},error:null,boundary:-1,options:{ssr:false,csr:true},stores:[],resources:[]};
+      const session=await $webStartLazyClient({routes:[route]});
+      document.querySelectorAll=()=>{throw new Error("Must not preload a different build");};
+      globalThis.fetch=async()=>new Response($webEncode({...bootstrap,build:"new-build",preloads:{normal:["/_alder/new-build.mjs"]}}),{headers:{"content-type":"application/x-alder-data"}});
+      const log=console.error;console.error=()=>{};
+      try {
+        await session.navigate(location.href);
+        await session.navigate(location.href);
+        $assert(redirects.length===1 && target.textContent==="old" && historyEntries.length===0);
+        $assert(document.body.textContent.includes("Check your connection") && document.body.textContent.includes("Reload page"));
+      } finally {console.error=log;session.dispose();}
+    "#).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn mismatched_initial_entry_rejects_before_loading_or_hydrating() {
+    run_navigation(r#"
+      let loaded=0;
+      const bootstrap={entry:"/_alder/new.mjs",route:"/initial"};
+      let rejected=false;
+      try {await $webStartLazyClient({entryUrl:"http://localhost/_alder/old.mjs",routes:[{id:"/initial",lazy:true,layouts:[],page:async()=>{loaded++;return {};}}]});}
+      catch(error){rejected=error.message.includes("different builds");}
+      $assert(rejected && loaded===0 && target.childNodes.length===0);
+    "#).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn missing_lazy_chunk_recovers_once_and_storage_denial_never_reloads() {
+    run_navigation(r#"
+      document.body=document.createElement("body");
+      const redirects=[],storage=new Map();
+      globalThis.sessionStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)};
+      location.assign=href=>redirects.push(href);
+      const routes=[
+        {id:"/initial",segments:[["static","initial"]],page:{page:()=>$webComponent(()=>r=>r.text(()=>"old",[]))},layouts:[],errors:[]},
+        {id:"/missing",segments:[["static","missing"]],lazy:true,page:async()=>{throw new TypeError("Failed to fetch dynamically imported module");},layouts:[],errors:[]},
+      ];
+      const bootstrap={build:"build",route:"/initial",data:{},params:{},error:null,boundary:-1,options:{ssr:false,csr:true},stores:[],resources:[]};
+      const session=await $webStartLazyClient({routes});
+      globalThis.fetch=async()=>new Response($webEncode({...bootstrap,route:"/missing"}),{headers:{"content-type":"application/x-alder-data"}});
+      const log=console.error;console.error=()=>{};
+      try {
+        await session.navigate("http://localhost/missing");
+        await session.navigate("http://localhost/missing");
+        $assert(redirects.length===1 && target.textContent==="old" && historyEntries.length===0);
+        globalThis.sessionStorage={getItem(){throw new Error("denied");}};
+        webRecover("http://localhost/another",new Error("offline"));
+        $assert(redirects.length===1 && document.body.textContent.includes("Reload page"));
+      } finally {console.error=log;session.dispose();}
+    "#).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn production_documents_preload_only_selected_graph_and_assets_have_safe_cache_headers() {
+    run(r#"
+      const client={entry:"/_alder/entry-123.mjs",build:"build-1",files:["/_alder/entry-123.mjs","/_alder/chunk-456.mjs"],routes:{"/":{normal:["/_alder/entry-123.mjs","/_alder/chunk-456.mjs"],errors:[]}}};
+      const route={id:"/",segments:[],page:{page:()=>$webComponent(()=>r=>r.text(()=>"home",[]))},layouts:[],errors:[],options:[]};
+      const app=$webApplication({routes:[route],client});
+      const response=await app.fetch(new Request("http://localhost/"));
+      const html=await response.text();
+      $assert(html.includes('import("/_alder/entry-123.mjs")') && html.includes('rel="modulepreload" href="/_alder/chunk-456.mjs"'));
+      $assert(!html.includes('/_alder/client.mjs') && response.headers.get("cache-control")==="no-store");
+      const payload=$webDecode(await(await app.fetch(new Request("http://localhost/",{headers:{accept:"application/x-alder-data"}}))).text());
+      $assert(payload.build==="build-1" && payload.entry===client.entry);
+      $assert(JSON.stringify(payload.preloads.normal)===JSON.stringify(client.routes["/"].normal));
+      $assert(payload.preloads.errors.length===0);
+      const worker=$webWorker(app,"",undefined,[[client.entry,"text/javascript",[65,66]]]);
+      const get=await worker.fetch(new Request("http://localhost"+client.entry),{},{});
+      $assert(await get.text()==="AB" && get.headers.get("cache-control").includes("immutable"));
+      const head=await worker.fetch(new Request("http://localhost"+client.entry,{method:"HEAD"}),{},{});
+      $assert(await head.text()==="" && head.headers.get("content-length")==="2");
+      let fallback=0;
+      const env={ASSETS:{fetch:async()=>{fallback++;return new Response("js",{headers:{"content-type":"text/javascript"}});}}};
+      const remote=await worker.fetch(new Request("http://localhost/_alder/chunk-456.mjs"),env,{});
+      $assert(await remote.text()==="js" && remote.headers.get("cache-control").includes("immutable") && fallback===1);
+      for(const path of ["/_alder/removed.mjs","/_alder/chunk-456.mjs.map","/_alder/client.mjs"]) {
+        const missing=await worker.fetch(new Request("http://localhost"+path),env,{});
+        $assert(missing.status===404 && missing.headers.get("cache-control")==="no-store" && fallback===1);
+      }
+    "#).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn lazy_route_startup_hydrates_only_active_modules_and_navigation_loads_on_demand() {
+    run_navigation(r#"
+      const calls=[];
+      const text=value=>$webComponent(()=>r=>r.text(()=>value,[]));
+      const page={page:()=>text("initial")}, other={page:()=>text("other"),load:()=>{calls.push("load");return {};}};
+      const lazy=(name,value)=>async()=>{calls.push(name);return value;};
+      const routes=[
+        {id:"/initial",segments:[["static","initial"]],page:lazy("initial",page),layouts:[],errors:[lazy("error",{error:()=>text("error")})],lazy:true},
+        {id:"/other",segments:[["static","other"]],page:lazy("other",other),layouts:[],errors:[],lazy:true},
+      ];
+      const bootstrap={route:"/initial",data:{},params:{},error:null,boundary:-1,options:{ssr:true,csr:true},stores:[],resources:[]};
+      const parsed=parseSsr(document,(await $webSsrAsync(page.page())).html);
+      while(parsed.firstChild)target.appendChild(parsed.firstChild);
+      const original=nodes(target);
+      const session=await $webStartLazyClient({routes});
+      $assert(calls.join(",")==="initial");
+      $assert(original.every((node,index)=>nodes(target)[index]===node));
+      globalThis.fetch=async()=>new Response($webEncode({...bootstrap,route:"/other",serverData:[{}]}),{headers:{"content-type":"application/x-alder-data"}});
+      await session.navigate("http://localhost/other");
+      $assert(calls.join(",")==="initial,other,load" && target.textContent==="other");
+      session.dispose();
+    "#).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn superseded_lazy_import_does_not_mount_or_change_history() {
+    run_navigation(r#"
+      const text=value=>$webComponent(()=>r=>r.text(()=>value,[]));
+      let resolveSlow,started;
+      const waiting=new Promise(resolve=>started=resolve);
+      const routes=[
+        {id:"/initial",segments:[["static","initial"]],page:{page:()=>text("initial")},layouts:[],errors:[]},
+        {id:"/slow",segments:[["static","slow"]],page:()=>{started();return new Promise(resolve=>resolveSlow=resolve);},layouts:[],errors:[],lazy:true},
+        {id:"/fast",segments:[["static","fast"]],page:async()=>({page:()=>text("fast")}),layouts:[],errors:[],lazy:true},
+      ];
+      const bootstrap={route:"/initial",data:{},params:{},error:null,boundary:-1,options:{ssr:false,csr:true},stores:[],resources:[]};
+      globalThis.fetch=async href=>new Response($webEncode({...bootstrap,route:new URL(href).pathname,serverData:[{}]}),{headers:{"content-type":"application/x-alder-data"}});
+      const session=await $webStartLazyClient({routes});
+      const slow=session.navigate("http://localhost/slow");
+      await waiting;
+      await session.navigate("http://localhost/fast");
+      resolveSlow({page:()=>text("slow")});
+      await slow;
+      $assert(target.textContent==="fast" && historyEntries.length===1 && historyEntries[0].endsWith("/fast"));
+      session.dispose();
+    "#).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn nested_layout_failures_recover_at_ancestor_boundaries_in_ssr_and_navigation() {
     run_navigation(r#"
       let mode="initial";

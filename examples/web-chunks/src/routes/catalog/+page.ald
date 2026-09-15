@@ -1,0 +1,17 @@
+import ~/catalog
+
+pub component page() {
+    let index = state(0)
+
+    <main>
+        <h1>Large catalog</h1>
+        <p id="catalog-record">{catalog.lookup(index)}</p>
+        <button
+            onClick={() -> {
+                index += 1
+            }}
+        >
+            Next record
+        </button>
+    </main>
+}

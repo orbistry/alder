@@ -19,6 +19,11 @@ use rolldown_plugin::{
     HookUsage, Plugin, PluginContext, PluginContextResolveOptions,
 };
 
+mod output;
+pub use output::{AssetInfo, BundleOptions, BundleOutput, Chunk};
+#[cfg(test)]
+mod output_tests;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EntryKind {
     Standalone,
@@ -38,6 +43,8 @@ pub enum Error {
     Rolldown(String),
     #[error("rolldown did not emit a JavaScript chunk")]
     MissingChunk,
+    #[error("invalid bundle output: {0}")]
+    InvalidOutput(String),
     #[error("Node compatibility imports are not supported: {0}")]
     NodeImport(String),
 }
@@ -73,6 +80,16 @@ pub async fn bundle_entry(
     modules: impl IntoIterator<Item = EmittedModule>,
     entry_module: &str,
 ) -> Result<String, Error> {
+    bundle_graph(modules, entry_module, BundleOptions::default())
+        .await?
+        .into_single_code(entry_module)
+}
+
+pub async fn bundle_graph(
+    modules: impl IntoIterator<Item = EmittedModule>,
+    entry_module: &str,
+    options: BundleOptions,
+) -> Result<BundleOutput, Error> {
     let mut modules: Vec<_> = modules.into_iter().collect();
     modules.sort_by(|left, right| left.module_id.cmp(&right.module_id));
     if !modules
@@ -113,14 +130,29 @@ pub async fn bundle_entry(
             })
         })
         .collect();
-    let asts: BTreeMap<_, _> = modules
+    let mut asts: BTreeMap<_, _> = modules
         .into_iter()
         .map(|module| (module.module_id, module.ast))
         .collect();
+    if options.sourcemap {
+        // Generated ASTs have synthetic positions. Print them once and let
+        // Rolldown parse that JavaScript so maps have real generated-JS spans.
+        for (id, ast) in std::mem::take(&mut asts) {
+            let code = rolldown_ecmascript::EcmaCompiler::print_with(
+                &ast,
+                rolldown_ecmascript::PrintOptions {
+                    print_legal_comments: true,
+                    ..Default::default()
+                },
+            )
+            .code;
+            sources.insert(id, code);
+        }
+    }
     let resolution_errors = Arc::new(Mutex::new(Vec::new()));
     let plugin = Arc::new(VirtualModules {
         resolution_errors: resolution_errors.clone(),
-        ids: asts.keys().cloned().collect(),
+        ids: asts.keys().chain(sources.keys()).cloned().collect(),
         origins,
         asts: Mutex::new(asts),
         sources,
@@ -134,6 +166,29 @@ pub async fn bundle_entry(
             }]),
             cwd: Some(std::env::current_dir()?),
             format: Some(OutputFormat::Esm),
+            inline_dynamic_imports: Some(!options.splitting),
+            minify: Some(options.minify.into()),
+            entry_filenames: Some(
+                if options.hashed_names {
+                    "entry-[hash].mjs"
+                } else {
+                    "main.mjs"
+                }
+                .to_owned()
+                .into(),
+            ),
+            chunk_filenames: Some(
+                if options.hashed_names {
+                    "chunk-[hash].mjs"
+                } else {
+                    "[name].mjs"
+                }
+                .to_owned()
+                .into(),
+            ),
+            sourcemap: options
+                .sourcemap
+                .then_some(rolldown_common::SourceMapType::Hidden),
             ..Default::default()
         },
         vec![plugin],
@@ -159,14 +214,9 @@ pub async fn bundle_entry(
                 .fold(primary, Diagnostic::with_related),
         ))
     })?;
-    output
-        .assets
-        .into_iter()
-        .find_map(|asset| match asset {
-            rolldown_common::Output::Chunk(chunk) => Some(chunk.code.to_string()),
-            rolldown_common::Output::Asset(_) => None,
-        })
-        .ok_or(Error::MissingChunk)
+    let output = BundleOutput::from_rolldown(output.assets)?;
+    output.entry(entry_module)?;
+    Ok(output)
 }
 
 fn node_import(ast: &EcmaAst) -> Option<&str> {

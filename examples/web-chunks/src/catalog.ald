@@ -1,0 +1,2 @@
+#[extern("./catalog.js", "lookup")]
+pub fn lookup(index: Number) String
