@@ -1,6 +1,6 @@
 [package]
 name = "alder-bundle"
-version = "0.5.0"
+version = "0.5.1"
 edition.workspace = true
 description = "Isolated Rolldown integration for Alder ESM artifacts"
 homepage.workspace = true
@@ -8,7 +8,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
-alder-codegen = { path = "../alder-codegen", version = "0.6.0" }
+alder-codegen = { path = "../alder-codegen", version = "0.6.1" }
 alder-report = { path = "../alder-report", version = "0.3.0" }
 alder-region = { path = "../alder-region", version = "0.2.0" }
 alder-kernel = { path = "../alder-kernel", version = "0.5.0" }

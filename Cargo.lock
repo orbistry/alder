@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "alder-bundle"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "alder-codegen",
  "alder-kernel",
@@ -127,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "alder-cli"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "alder-bundle",
  "alder-codegen",
@@ -163,7 +163,7 @@ dependencies = [
 
 [[package]]
 name = "alder-codegen"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "alder-ast",
  "alder-can",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "alder-driver"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "alder-ast",
  "alder-bundle",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "alder-language-server"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "alder-driver",
  "alder-report",
@@ -330,7 +330,7 @@ dependencies = [
 
 [[package]]
 name = "alder-solve"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "alder-ast",
  "alder-can",
@@ -848,9 +848,9 @@ dependencies = [
 
 [[package]]
 name = "camino"
-version = "1.2.5"
+version = "1.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb1307f12aa967b5a58416e87b3653360e0fd614a016b6e970db08fecbb1b80d"
+checksum = "bbbad30e4b4c14a39e3cc8aed085a12a327257c316619c93581e017bc52be591"
 dependencies = [
  "serde_core",
 ]
@@ -6786,13 +6786,13 @@ checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 
 [[package]]
 name = "synstructure"
-version = "0.13.2"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
+checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -8017,13 +8017,13 @@ dependencies = [
 
 [[package]]
 name = "yoke-derive"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de844c262c8848816172cef550288e7dc6c7b7814b4ee56b3e1553f275f1858e"
+checksum = "33811428bee40dbceb6d545e95754741d17a6aef9a4849f0fd62e2ba4f412a78"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.5",
  "synstructure",
 ]
 
@@ -8058,13 +8058,13 @@ dependencies = [
 
 [[package]]
 name = "zerofrom-derive"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11532158c46691caf0f2593ea8358fed6bbf68a0315e80aae9bd41fbade684a1"
+checksum = "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.5",
  "synstructure",
 ]
 
@@ -8155,9 +8155,9 @@ dependencies = [
 
 [[package]]
 name = "zlib-rs"
-version = "0.6.7"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34b31d188d9d685a4f9c7b46d6e36631b07058d2cfe190267adce54dc230bf12"
+checksum = "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112"
 
 [[package]]
 name = "zmij"

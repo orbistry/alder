@@ -1,6 +1,6 @@
 [package]
 name = "alder-solve"
-version = "0.6.0"
+version = "0.6.1"
 edition.workspace = true
 description = "The entry point of alder's type inference system. Implements type inference and specialization of traits."
 homepage.workspace = true

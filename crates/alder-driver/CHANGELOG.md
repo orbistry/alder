@@ -1,5 +1,17 @@
 # alder-driver
 
+## 0.8.1 — 2026-09-16
+
+### Patch changes
+
+- [355ab9b](https://github.com/orbistry/alder/commit/355ab9b80f4681c0976fa23888aa6081ad033e2c) Recognize routes on Windows by normalizing canonical source roots and native
+  path separators before route discovery, preserving generated route types. — Thanks @rvcas!
+- [dca31d3](https://github.com/orbistry/alder/commit/dca31d3f75ea784108f8d1c10b8e8be7a25a4821) Consolidate runnable projects under `examples/` and use those shared sources in
+  compiler regressions and inference benchmarks. — Thanks @rvcas!
+- [a9ea854](https://github.com/orbistry/alder/commit/a9ea854d6cebed289229f4e7be47827079995e57) Match canonical Windows source roots to file URL paths during module discovery,
+  and reject unsafe archive path separators consistently across platforms. — Thanks @rvcas!
+- Updated dependencies: alder-codegen@0.6.1, alder-solve@0.6.1
+
 ## 0.8.0 — 2026-09-15
 
 ### Minor changes

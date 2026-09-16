@@ -1,5 +1,12 @@
 # alder-solve
 
+## 0.6.1 — 2026-09-16
+
+### Patch changes
+
+- [dca31d3](https://github.com/orbistry/alder/commit/dca31d3f75ea784108f8d1c10b8e8be7a25a4821) Consolidate runnable projects under `examples/` and use those shared sources in
+  compiler regressions and inference benchmarks. — Thanks @rvcas!
+
 ## 0.6.0 — 2026-09-15
 
 ### Minor changes
