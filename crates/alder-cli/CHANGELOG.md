@@ -1,5 +1,24 @@
 # alder-cli
 
+## 0.7.0 — 2026-09-16
+
+### Minor changes
+
+- [dca31d3](https://github.com/orbistry/alder/commit/dca31d3f75ea784108f8d1c10b8e8be7a25a4821) Install shared Cloudflare tooling explicitly with `alder cloudflare setup` and
+  authenticate with `alder cloudflare login`. Keep Node user-managed, reuse pinned
+  tooling across compatible compiler versions, and ship stock binary-only releases
+  without custom installer patches. Preserve existing legacy support directories.
+  Keep cargo-dist's generated installation instructions and download links when
+  composing aggregated release notes.
+  Keep successful setup output in Alder's status format, showing npm diagnostics
+  only when installation fails; leave interactive login output unchanged. — Thanks @rvcas!
+
+### Patch changes
+
+- [a9ea854](https://github.com/orbistry/alder/commit/a9ea854d6cebed289229f4e7be47827079995e57) Match canonical Windows source roots to file URL paths during module discovery,
+  and reject unsafe archive path separators consistently across platforms. — Thanks @rvcas!
+- Updated dependencies: alder-bundle@0.5.1, alder-codegen@0.6.1, alder-driver@0.8.1, alder-language-server@0.2.4
+
 ## 0.6.0 — 2026-09-15
 
 ### Minor changes
